@@ -13,8 +13,8 @@ const connection = mysql.createConnection({
 
 // SSL/TLS 옵션을 설정합니다.
 const options = {
-  key: fs.readFileSync('./server.key'),
-  cert: fs.readFileSync('./server.crt')
+  key: fs.readFileSync('/root/server.key'),
+  cert: fs.readFileSync('/root/server.crt')
 };
 
 // HTTPS 서버를 생성합니다.
