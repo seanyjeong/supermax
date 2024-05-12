@@ -1,5 +1,6 @@
-const http = require('http');
+const https = require('https');
 const mysql = require('mysql');
+const fs = require('fs');
 
 // 데이터베이스 연결을 설정합니다.
 const connection = mysql.createConnection({
@@ -10,11 +11,17 @@ const connection = mysql.createConnection({
   port: 3306
 });
 
-// HTTP 서버를 생성합니다.
-const server = http.createServer((req, res) => {
+// SSL/TLS 옵션을 설정합니다.
+const options = {
+  key: fs.readFileSync('./server.key'),
+  cert: fs.readFileSync('./server.crt')
+};
+
+// HTTPS 서버를 생성합니다.
+const server = https.createServer(options, (req, res) => {
   // CORS 헤더를 설정합니다.
   res.setHeader('Access-Control-Allow-Origin', '*');
-    // Content-Type 헤더를 설정합니다.
+  // Content-Type 헤더를 설정합니다.
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
 
   // 데이터베이스에 쿼리를 실행합니다.
@@ -31,5 +38,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at http://0.0.0.0:3000/');
+  console.log('Server running at https://0.0.0.0:3000/');
 });
