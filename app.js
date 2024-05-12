@@ -22,7 +22,7 @@ const server = https.createServer(options, (req, res) => {
   // CORS 헤더를 설정합니다.
   res.setHeader('Access-Control-Allow-Origin', '*');
   // Content-Type 헤더를 설정합니다.
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
   // 데이터베이스에 쿼리를 실행합니다.
   connection.query('SELECT * FROM 25정시', (error, results) => {
