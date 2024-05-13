@@ -1,6 +1,5 @@
-const https = require('https');
+const http = require('http');
 const mysql = require('mysql');
-const fs = require('fs');
 
 // 데이터베이스 연결을 설정합니다.
 const connection = mysql.createConnection({
@@ -8,32 +7,32 @@ const connection = mysql.createConnection({
   user: 'maxilsan',
   password: 'q141171616!',
   database: 'supermax',
-  port: 3306
+  charset: 'utf8mb4'
+  
 });
 
-// SSL/TLS 옵션을 설정합니다.
-const options = {
-  key: fs.readFileSync('/root/server.key'),
-  cert: fs.readFileSync('/root/server.crt')
-};
-
-// HTTPS 서버를 생성합니다.
-const server = https.createServer(options, (req, res) => {
+// HTTP 서버를 생성합니다.
+const server = http.createServer((req, res) => {
   // CORS 헤더를 설정합니다.
   res.setHeader('Access-Control-Allow-Origin', '*');
-  // Content-Type 헤더를 설정합니다.
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-  // 데이터베이스에 쿼리를 실행합니다.
-  connection.query('SELECT * FROM 25정시', (error, results) => {
-    if (error) {
-      console.error('An error occurred while executing the query: ' + error.stack);
-      res.end();
+  // 대학정보기본 테이블과 반영비율 테이블을 조인하는 쿼리를 작성합니다.
+  const query = `
+  SELECT * FROM 25정시
+  `;
+
+  connection.query(query, (err, rows, fields) => {
+    if (err) {
+      res.writeHead(500, {'Content-Type': 'text/plain'});
+      res.end('Database query failed');
       return;
     }
+      // 각 컬럼의 이름을 가져옵니다.
+  const columnNames = fields.map(field => field.name);
 
-    // 결과를 응답으로 보냅니다.
-    res.end(JSON.stringify(results));
+    // 응답 헤더에 'Content-Type'을 'text/html; charset=utf-8'로 설정합니다.
+    res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
+    res.end(JSON.stringify(rows));
   });
 });
 
