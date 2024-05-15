@@ -30,29 +30,9 @@
             background-color: #0056b3;
         }
     </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
 <body>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
-    <button id="loadPage3">25정시요강으로 이동</button>
-
-    <script>
-        $(document).ready(function() {
-            $('#loadPage3').click(function(e) {
-                e.preventDefault();
-                $.ajax({
-                    url: 'https://supermax.kr/page3', // 서버의 새 라우트로 변경
-                    type: 'GET',
-                    success: function(data) {
-                        // 현재 페이지에 3.html의 내용을 표시
-                        $('body').html(data);
-                    },
-                    error: function(err) {
-                        console.error(err);
-                    }
-                });
-            });
-        });
-    </script>
+    <a href="https://github.com/seanyjeong/supermax/blob/main/3.html">25정시요강으로 이동</a>
 </body>
 </html>
