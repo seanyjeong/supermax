@@ -4,8 +4,8 @@ const mysql = require('mysql');
 
 // SSL/TLS 설정을 불러옵니다.
 const sslOptions = {
-  key: fs.readFileSync('/etc/letsencrypt/live/your_domain_name/privkey.pem'),
-  cert: fs.readFileSync('/etc/letsencrypt/live/your_domain_name/fullchain.pem')
+  key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
+  cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
 };
 
 // 데이터베이스 연결을 설정합니다.
