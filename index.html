@@ -30,25 +30,6 @@
             background-color: #0056b3;
         }
     </style>
-    <script>
-        // 페이지가 로드될 때 실행될 함수를 정의합니다.
-        function init() {
-            // 버튼 클릭 이벤트 리스너를 추가합니다.
-            document.querySelector('a').addEventListener('click', function(event) {
-                // 기본 이벤트를 방지합니다.
-                event.preventDefault();
-
-                // 새로운 페이지로의 내용 변경 로직을 여기에 추가합니다.
-                // 예: AJAX 요청, 페이지 내용 교체 등
-
-                // 주소창의 URL을 변경하지 않고 히스토리에 상태를 추가합니다.
-                window.history.pushState(null, null, 'https://supermax.co.kr');
-            });
-        }
-
-        // 페이지 로드 시 init 함수를 호출합니다.
-        window.onload = init;
-    </script>
 </head>
 <body>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
