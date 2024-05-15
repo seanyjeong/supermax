@@ -1,6 +1,10 @@
 const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
 // SSL/TLS 설정을 불러옵니다.
 const sslOptions = {
@@ -41,28 +45,28 @@ function handleDisconnect() {
 
 handleDisconnect();
 
-// HTTPS 서버를 생성합니다.
-const server = https.createServer(sslOptions, (req, res) => {
-  // CORS 헤더를 설정합니다.
-  res.setHeader('Access-Control-Allow-Origin', '*');
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-  // 대학정보기본 테이블과 반영비율 테이블을 조인하는 쿼리를 작성합니다.
+// 대학정보기본 테이블과 반영비율 테이블을 조인하는 쿼리를 작성합니다.
+app.get('/data', function(req, res) {
   const query = `
   SELECT * FROM 25정시
   `;
 
   connection.query(query, (err, rows, fields) => {
     if (err) {
-      res.writeHead(500, {'Content-Type': 'application/json'});
-      res.end(JSON.stringify({ message: 'Database query failed', error: err }));
+      res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
 
-    // 응답 헤더에 'Content-Type'을 'application/json'로 설정합니다.
-    res.writeHead(200, {'Content-Type': 'application/json'});
-    res.end(JSON.stringify(rows));
+    res.json(rows);
   });
 });
+
+// HTTPS 서버를 생성합니다.
+const server = https.createServer(sslOptions, app);
 
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at https://0.0.0.0:3000/');
