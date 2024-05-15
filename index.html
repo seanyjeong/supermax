@@ -34,18 +34,21 @@
 </head>
 <body>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
-    <a href="#" id="myLink">25정시요강으로 이동</a>
+    <button id="loadPage3">25정시요강으로 이동</button>
 
     <script>
         $(document).ready(function() {
-            $('#myLink').click(function(e) {
+            $('#loadPage3').click(function(e) {
                 e.preventDefault();
                 $.ajax({
-                    url: 'https://seanyjeong.github.io/supermax/3.html',
+                    url: 'https://supermax.kr/page3', // 서버의 새 라우트로 변경
                     type: 'GET',
-                    success: function(res) {
-                        var content = $(res.responseText).text();
-                        $('body').html(content);
+                    success: function(data) {
+                        // 현재 페이지에 3.html의 내용을 표시
+                        $('body').html(data);
+                    },
+                    error: function(err) {
+                        console.error(err);
                     }
                 });
             });
