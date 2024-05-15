@@ -1,5 +1,12 @@
-const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const mysql = require('mysql');
+
+// SSL/TLS 설정을 불러옵니다.
+const sslOptions = {
+  key: fs.readFileSync('/etc/letsencrypt/live/your_domain_name/privkey.pem'),
+  cert: fs.readFileSync('/etc/letsencrypt/live/your_domain_name/fullchain.pem')
+};
 
 // 데이터베이스 연결을 설정합니다.
 const connection = mysql.createConnection({
@@ -10,8 +17,8 @@ const connection = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// HTTP 서버를 생성합니다.
-const server = http.createServer((req, res) => {
+// HTTPS 서버를 생성합니다.
+const server = https.createServer(sslOptions, (req, res) => {
   // CORS 헤더를 설정합니다.
   res.setHeader('Access-Control-Allow-Origin', '45.115.154.148');
 
@@ -34,5 +41,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at http://0.0.0.0:3000/');
+  console.log('Server running at https://0.0.0.0:3000/');
 });
