@@ -20,7 +20,7 @@ const connection = mysql.createConnection({
 // HTTPS 서버를 생성합니다.
 const server = https.createServer(sslOptions, (req, res) => {
   // CORS 헤더를 설정합니다.
-  res.setHeader('Access-Control-Allow-Origin', '45.115.154.148');
+  res.setHeader('Access-Control-Allow-Origin', '*');
 
   // 대학정보기본 테이블과 반영비율 테이블을 조인하는 쿼리를 작성합니다.
   const query = `
