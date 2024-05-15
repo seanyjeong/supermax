@@ -5,6 +5,7 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const path = require('path');
 
 // SSL/TLS 설정을 불러옵니다.
 const sslOptions = {
@@ -24,15 +25,13 @@ var db_config = {
 var connection;
 
 function handleDisconnect() {
-  connection = mysql.createConnection(db_config); // Recreate the connection, since the old one cannot be reused.
-
+  connection = mysql.createConnection(db_config);
   connection.connect(function(err) {              
     if(err) {                                    
       console.log('error when connecting to db:', err);
       setTimeout(handleDisconnect, 2000); 
     }                                     
   });                                     
-
   connection.on('error', function(err) {
     console.log('db error', err);
     if(err.code === 'PROTOCOL_CONNECTION_LOST') { 
@@ -49,25 +48,18 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 대학정보기본 테이블과 반영비율 테이블을 조인하는 쿼리를 작성합니다.
-app.get('/data', function(req, res) {
-  const query = `
-  SELECT * FROM 25정시
-  `;
+// 정적 파일 제공을 위한 라우트 설정
+app.use('/static', express.static(path.join(__dirname, 'supermax')));
 
-  connection.query(query, (err, rows, fields) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-
-    res.json(rows);
-  });
+// 3.html 파일의 내용을 반환하는 라우트
+app.get('/page3', function(req, res) {
+  const filePath = path.join(__dirname, 'supermax', '3.html');
+  res.sendFile(filePath);
 });
 
 // HTTPS 서버를 생성합니다.
 const server = https.createServer(sslOptions, app);
 
 server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at https://0.0.0.0:3000/');
+  console.log('Server running at https://supermax.kr:3000/');
 });
