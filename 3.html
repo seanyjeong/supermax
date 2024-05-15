@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Records</title>
+<style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  table, th, td {
+    border: 1px solid black;
+  }
+  th, td {
+    padding: 8px;
+    text-align: left;
+  }
+  th {
+    background-color: #f2f2f2;
+  }
+</style>
+</head>
+<body>
+<h1>Database Records</h1>
+<table id="data-table">
+  <thead>
+    <tr id="headers"></tr>
+  </thead>
+  <tbody id="table-body"></tbody>
+</table>
+
+<script>
+// 서버의 API를 호출하여 데이터를 가져오는 함수입니다.
+function fetchData() {
+  fetch('https://supermax.kr:3000') // 여기서 your-server.com은 실제 서버의 도메인이나 IP 주소로 대체해야 합니다.
+    .then(response => response.json())
+    .then(data => {
+      const headers = Object.keys(data[0]);
+      const tableHead = document.getElementById('headers');
+      const tableBody = document.getElementById('table-body');
+
+      // 테이블 헤더를 생성합니다.
+      headers.forEach(header => {
+        const headerElement = document.createElement('th');
+        headerElement.textContent = header;
+        tableHead.appendChild(headerElement);
+      });
+
+      // 테이블 바디를 생성합니다.
+      data.forEach(row => {
+        const rowElement = document.createElement('tr');
+        headers.forEach(header => {
+          const cell = document.createElement('td');
+          cell.textContent = row[header];
+          rowElement.appendChild(cell);
+        });
+        tableBody.appendChild(rowElement);
+      });
+    })
+    .catch(error => console.error('Error fetching data:', error));
+}
+
+// 페이지가 로드될 때 fetchData 함수를 호출합니다.
+window.onload = fetchData;
+</script>
+</body>
+</html>
