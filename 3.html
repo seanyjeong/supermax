@@ -5,24 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>25학년도 정시모집요강 -일산맥스-</title>
 <style>
+  .filter-option {
+    display: inline-block;
+    margin: 5px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    background-color: white; /* 선택되지 않은 상태의 배경색을 하얀색으로 설정 */
+  }
+  .filter-option.selected {
+    background-color: #007bff;
+    color: white;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
+    margin-top: 20px; /* 검색 버튼과 표 사이에 공간을 추가 */
   }
   table, th, td {
     border: 1px solid black;
   }
   th, td {
     padding: 8px;
-    text-align: left;
+    text-align: center;
   }
   th {
     background-color: #f2f2f2;
+  }
+  button {
+    padding: 10px 20px; /* 버튼 크기 조정 */
+    margin-top: 10px; /* 버튼과 필터 사이에 공간을 추가 */
+  }
+  h1 {
+    text-align: center; /* 제목 가운데 정렬 */
   }
 </style>
 </head>
 <body>
 <h1>25학년도 정시모집요강 -일산맥스-</h1>
+
+<div id="filters"></div>
+<button onclick="clearFilters()">모두 해제</button> <!-- 모든 필터링 해제 버튼 추가 -->
+<button onclick="applyFilters()">검색</button>
+
 <table id="data-table">
   <thead>
     <tr id="headers"></tr>
@@ -31,37 +56,171 @@
 </table>
 
 <script>
-// 서버의 API를 호출하여 데이터를 가져오는 함수입니다.
 function fetchData() {
-  fetch('https://supermax.kr:3000') // 여기서 your-server.com은 실제 서버의 도메인이나 IP 주소로 대체해야 합니다.
+  fetch('https://supermax.kr:3000')
     .then(response => response.json())
     .then(data => {
-      const headers = Object.keys(data[0]);
-      const tableHead = document.getElementById('headers');
-      const tableBody = document.getElementById('table-body');
-
-      // 테이블 헤더를 생성합니다.
-      headers.forEach(header => {
-        const headerElement = document.createElement('th');
-        headerElement.textContent = header;
-        tableHead.appendChild(headerElement);
-      });
-
-      // 테이블 바디를 생성합니다.
-      data.forEach(row => {
-        const rowElement = document.createElement('tr');
-        headers.forEach(header => {
-          const cell = document.createElement('td');
-          cell.textContent = row[header];
-          rowElement.appendChild(cell);
-        });
-        tableBody.appendChild(rowElement);
-      });
+      createFilterOptions(data, '군');
+      createFilterOptions(data, '형태');
+      createFilterOptions(data, '지역');
+      createFilterOptions(data, '교직');
+      createFilterOptions(data, '기타');
+      createNumericFilterOptions(data, '수능');
+      createNumericFilterOptions(data, '내신');
+      createNumericFilterOptions(data, '실기');
+      createSubjectExclusionFilter(data, ['국어', '수학', '영어', '탐구']);
     })
     .catch(error => console.error('Error fetching data:', error));
 }
 
-// 페이지가 로드될 때 fetchData 함수를 호출합니다.
+function createNumericFilterOptions(data, field) {
+  const uniqueValues = Array.from(new Set(data.map(item => item[field]))).sort((a, b) => a - b);
+  const filterContainer = document.getElementById('filters');
+  const fieldSet = document.createElement('div');
+  const legend = document.createElement('span');
+  legend.textContent = field;
+  fieldSet.appendChild(legend);
+
+  // '없음' 옵션 추가
+  const noneOption = document.createElement('div');
+  noneOption.classList.add('filter-option');
+  noneOption.textContent = '없음';
+  noneOption.onclick = function() {
+    this.classList.toggle('selected');
+  };
+  fieldSet.appendChild(noneOption);
+
+  uniqueValues.forEach(value => {
+    if (value !== 0 && value !== null) { // 0과 null 값 제외
+      const filterOption = document.createElement('div');
+      filterOption.classList.add('filter-option');
+      filterOption.textContent = value;
+      filterOption.onclick = function() {
+        this.classList.toggle('selected');
+      };
+      fieldSet.appendChild(filterOption);
+    }
+  });
+
+  filterContainer.appendChild(fieldSet);
+}
+
+function createFilterOptions(data, field) {
+  const uniqueValues = Array.from(new Set(data.map(item => item[field]))).sort();
+  const filterContainer = document.getElementById('filters');
+  const fieldSet = document.createElement('div');
+  const legend = document.createElement('span');
+  legend.textContent = field;
+  fieldSet.appendChild(legend);
+
+  uniqueValues.forEach(value => {
+    if (value !== 0 && value !== null) { // 0과 null 값 제외
+      const filterOption = document.createElement('div');
+      filterOption.classList.add('filter-option');
+      filterOption.textContent = value;
+      filterOption.onclick = function() {
+        this.classList.toggle('selected');
+      };
+      fieldSet.appendChild(filterOption);
+    }
+  });
+
+  filterContainer.appendChild(fieldSet);
+}
+
+function createSubjectExclusionFilter(data, fields) {
+  const filterContainer = document.getElementById('filters');
+  const fieldSet = document.createElement('div');
+  const legend = document.createElement('span');
+  legend.textContent = '과목 제외';
+  fieldSet.appendChild(legend);
+
+  fields.forEach(field => {
+    const filterOption = document.createElement('div');
+    filterOption.classList.add('filter-option');
+    filterOption.textContent = field;
+    filterOption.onclick = function() {
+      this.classList.toggle('selected');
+    };
+    fieldSet.appendChild(filterOption);
+  });
+
+  filterContainer.appendChild(fieldSet);
+}
+
+function applyFilters() {
+  fetch('https://supermax.kr:3000')
+    .then(response => response.json())
+    .then(data => {
+      const selectedFilters = {};
+      document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
+        const field = filterOption.parentNode.querySelector('span').textContent.replace(' 제외', '');
+        if (!selectedFilters[field]) {
+          selectedFilters[field] = [];
+        }
+        selectedFilters[field].push(filterOption.textContent);
+      });
+
+      const filteredData = data.filter(item => {
+        return Object.keys(selectedFilters).every(field => {
+          if (['수능', '내신', '실기'].includes(field)) {
+            if (selectedFilters[field].includes('없음')) {
+              return item[field] === null || item[field] === '';
+            }
+            return selectedFilters[field].includes(String(item[field]));
+          }
+
+          if (field === '과목') {
+            return selectedFilters[field].some(subject => {
+              return (
+                item[subject] === null || 
+                item[subject] === '' || 
+                /\(.*?\)/.test(item[subject])
+              );
+            });
+          }
+
+          return selectedFilters[field].includes(item[field]);
+        });
+      });
+
+      updateTable(filteredData);
+    })
+    .catch(error => console.error('Error fetching data:', error));
+}
+
+function clearFilters() {
+  document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
+    filterOption.classList.remove('selected');
+  });
+  applyFilters(); // 필터링 해제 후 바로 테이블 업데이트
+}
+
+function updateTable(data) {
+  const headers = Object.keys(data[0] || {}).filter(header => header !== 'ID');
+  const tableHead = document.getElementById('headers');
+  const tableBody = document.getElementById('table-body');
+
+  tableHead.innerHTML = '';
+  tableBody.innerHTML = '';
+
+  headers.forEach(header => {
+    const headerElement = document.createElement('th');
+    headerElement.textContent = header;
+    tableHead.appendChild(headerElement);
+  });
+
+  data.forEach(row => {
+    const rowElement = document.createElement('tr');
+    headers.forEach(header => {
+      const cell = document.createElement('td');
+      cell.textContent = row[header];
+      rowElement.appendChild(cell);
+    });
+    tableBody.appendChild(rowElement);
+  });
+}
+
 window.onload = fetchData;
 </script>
 </body>
