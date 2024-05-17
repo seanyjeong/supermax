@@ -64,45 +64,10 @@ function fetchData() {
       createFilterOptions(data, '형태');
       createFilterOptions(data, '지역');
       createFilterOptions(data, '교직');
-      createFilterOptions(data, '기타');
-      createNumericFilterOptions(data, '수능');
-      createNumericFilterOptions(data, '내신');
-      createNumericFilterOptions(data, '실기');
       createSubjectExclusionFilter(data, ['국어', '수학', '영어', '탐구']);
+      createSkillExclusionFilter(data, ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6']);
     })
     .catch(error => console.error('Error fetching data:', error));
-}
-
-function createNumericFilterOptions(data, field) {
-  const uniqueValues = Array.from(new Set(data.map(item => item[field]))).sort((a, b) => a - b);
-  const filterContainer = document.getElementById('filters');
-  const fieldSet = document.createElement('div');
-  const legend = document.createElement('span');
-  legend.textContent = field;
-  fieldSet.appendChild(legend);
-
-  // '없음' 옵션 추가
-  const noneOption = document.createElement('div');
-  noneOption.classList.add('filter-option');
-  noneOption.textContent = '없음';
-  noneOption.onclick = function() {
-    this.classList.toggle('selected');
-  };
-  fieldSet.appendChild(noneOption);
-
-  uniqueValues.forEach(value => {
-    if (value !== 0 && value !== null) { // 0과 null 값 제외
-      const filterOption = document.createElement('div');
-      filterOption.classList.add('filter-option');
-      filterOption.textContent = value;
-      filterOption.onclick = function() {
-        this.classList.toggle('selected');
-      };
-      fieldSet.appendChild(filterOption);
-    }
-  });
-
-  filterContainer.appendChild(fieldSet);
 }
 
 function createFilterOptions(data, field) {
@@ -148,6 +113,36 @@ function createSubjectExclusionFilter(data, fields) {
   filterContainer.appendChild(fieldSet);
 }
 
+function createSkillExclusionFilter(data, fields) {
+  const filterContainer = document.getElementById('filters');
+  const fieldSet = document.createElement('div');
+  const legend = document.createElement('span');
+  legend.textContent = '실기 제외';
+  fieldSet.appendChild(legend);
+
+  const allSkills = [];
+  data.forEach(item => {
+    fields.forEach(skill => {
+      const value = item[skill];
+      if (value && !allSkills.includes(value)) {
+        allSkills.push(value);
+      }
+    });
+  });
+
+  allSkills.forEach(skill => {
+    const filterOption = document.createElement('div');
+    filterOption.classList.add('filter-option');
+    filterOption.textContent = skill;
+    filterOption.onclick = function() {
+      this.classList.toggle('selected');
+    };
+    fieldSet.appendChild(filterOption);
+  });
+
+  filterContainer.appendChild(fieldSet);
+}
+
 function applyFilters() {
   fetch('https://supermax.kr:3000')
     .then(response => response.json())
@@ -163,13 +158,6 @@ function applyFilters() {
 
       const filteredData = data.filter(item => {
         return Object.keys(selectedFilters).every(field => {
-          if (['수능', '내신', '실기'].includes(field)) {
-            if (selectedFilters[field].includes('없음')) {
-              return item[field] === null || item[field] === '';
-            }
-            return selectedFilters[field].includes(String(item[field]));
-          }
-
           if (field === '과목') {
             return selectedFilters[field].some(subject => {
               return (
@@ -178,8 +166,17 @@ function applyFilters() {
                 /\(.*?\)/.test(item[subject])
               );
             });
+          } else if (field === '실기') {
+            const excludedSkills = selectedFilters[field];
+            return !excludedSkills.some(skill => {
+              for (let i = 1; i <= 6; i++) {
+                if (item[`실기${i}`] === skill) {
+                  return true;
+                }
+              }
+              return false;
+            });
           }
-
           return selectedFilters[field].includes(item[field]);
         });
       });
@@ -188,7 +185,6 @@ function applyFilters() {
     })
     .catch(error => console.error('Error fetching data:', error));
 }
-
 function clearFilters() {
   document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
     filterOption.classList.remove('selected');
