@@ -39,6 +39,16 @@
   h1 {
     text-align: center; /* 제목 가운데 정렬 */
   }
+  table {
+    background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 100%; /* 테이블의 너비를 화면에 꽉 차도록 설정. */
+    height: 100%; /* 테이블의 높이도 화면에 꽉 차도록 설정. */
+    
+}
+
 </style>
 </head>
 <body>
@@ -213,9 +223,22 @@ function updateTable(data) {
       cell.textContent = row[header];
       rowElement.appendChild(cell);
     });
+
+    // 클릭 이벤트를 추가하여 행을 강조합니다.
+    rowElement.addEventListener('click', function() {
+      // 모든 행에서 강조 효과를 제거합니다.
+      const allRows = document.querySelectorAll('tr');
+      allRows.forEach(row => {
+        row.classList.remove('highlighted-row');
+      });
+      // 클릭한 행에 강조 효과를 추가합니다.
+      this.classList.add('highlighted-row');
+    });
+
     tableBody.appendChild(rowElement);
   });
 }
+
 
 window.onload = fetchData;
 </script>
