@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>25수시(Demo)</title>
+<style>
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  table, th, td {
+    border: 1px solid black;
+  }
+  th, td {
+    padding: 8px;
+    text-align: left;
+  }
+  th {
+    background-color: #f2f2f2;
+  }
+  .filter-container {
+    margin-bottom: 20px;
+  }
+  .filter-title {
+    font-weight: bold;
+    margin-right: 10px;
+  }
+  .filter-box {
+    display: inline-block;
+    padding: 10px;
+    margin: 5px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+  }
+  .filter-box.selected {
+    background-color: #007bff;
+    color: white;
+  }
+</style>
+</head>
+<body>
+<h1>25수시 (Demo)</h1>
+<div class="filter-container" id="filter-container">
+  <!-- 필터링 옵션이 여기에 채워집니다. -->
+</div>
+<button onclick="applyFilter()">검색</button>
+<table id="data-table">
+  <thead id="table-head">
+    <!-- 테이블 헤더가 여기에 채워집니다. -->
+  </thead>
+  <tbody id="table-body">
+    <!-- 테이블 바디가 여기에 채워집니다. -->
+  </tbody>
+</table>
+
+<script>
+// 데이터를 가져오고 테이블로 출력하는 함수
+function fetchData() {
+  fetch('https://supermax.kr:3000/25susi')
+    .then(response => response.json())
+    .then(data => {
+      fullData = data;
+      createFilterOptions(data, '종류');
+      createFilterOptions(data, '형태');
+      createFilterOptions(data, '지역');
+      createFilterOptions(data, '교직');
+      displayTable(data);
+    })
+    .catch(error => console.error('데이터 가져오기 오류:', error));
+}
+
+// 필터 옵션 박스 생성 함수
+function createFilterOptions(data, category) {
+  const filterContainer = document.getElementById('filter-container');
+  // 비어있지 않은 값만을 포함하는 Set을 생성합니다.
+  const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
+
+  // 필터 제목을 추가합니다.
+  const title = document.createElement('span');
+  title.textContent = category;
+  title.className = 'filter-title';
+  filterContainer.appendChild(title);
+
+  // 비어있지 않은 각 값에 대해 필터 박스를 생성합니다.
+  uniqueValues.forEach(value => {
+    const filterBox = document.createElement('div');
+    filterBox.className = 'filter-box';
+    filterBox.textContent = value;
+    filterBox.dataset.category = category;
+    filterBox.dataset.value = value;
+    filterBox.onclick = () => filterBox.classList.toggle('selected');
+    filterContainer.appendChild(filterBox);
+  });
+  filterContainer.appendChild(document.createElement('br'));
+}
+
+// 필터 적용 함수
+function applyFilter() {
+  const selectedFilters = {};
+  document.querySelectorAll('.filter-box.selected').forEach(box => {
+    const category = box.dataset.category;
+    const value = box.dataset.value;
+    if (!selectedFilters[category]) {
+      selectedFilters[category] = [];
+    }
+    selectedFilters[category].push(value);
+  });
+
+  filteredData = fullData.filter(item => {
+    return Object.keys(selectedFilters).every(category => 
+      selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category])
+    );
+  });
+  displayTable(filteredData);
+}
+
+// 테이블 표시 함수
+function displayTable(data) {
+  const tableHead = document.getElementById('table-head');
+  const tableBody = document.getElementById('table-body');
+
+  // 테이블 헤더 생성
+  tableHead.innerHTML = '';
+  if (data.length > 0) {
+    const headers = Object.keys(data[0]);
+    const tr = document.createElement('tr');
+    headers.forEach(header => {
+      const th = document.createElement('th');
+      th.textContent = header;
+      tr.appendChild(th);
+    });
+    tableHead.appendChild(tr);
+  }
+
+  // 테이블 바디 생성
+  tableBody.innerHTML = '';
+  data.forEach(row => {
+    const tr = document.createElement('tr');
+    Object.values(row).forEach(value => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+    tableBody.appendChild(tr);
+  });
+}
+
+// 페이지 로드 시 데이터를 가져옵니다.
+document.addEventListener('DOMContentLoaded', fetchData);
+</script>
+</body>
+</html>
