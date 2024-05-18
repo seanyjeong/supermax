@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>25수시(Demo)</title>
+<title>25수시 (Demo)</title>
 <style>
   table {
     width: 100%;
@@ -44,6 +44,7 @@
 <div class="filter-container" id="filter-container">
   <!-- 필터링 옵션이 여기에 채워집니다. -->
 </div>
+<button onclick="clearFilters()">모두 해제</button>
 <button onclick="applyFilter()">검색</button>
 <table id="data-table">
   <thead id="table-head">
@@ -112,6 +113,13 @@ function applyFilter() {
       selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category])
     );
   });
+  displayTable(filteredData);
+}
+
+// 선택 해제 함수
+function clearFilters() {
+  document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
+  filteredData = fullData;
   displayTable(filteredData);
 }
 
