@@ -5,58 +5,137 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>25학년도 정시모집요강 -일산맥스-</title>
 <style>
+  body {
+    background-color: black;
+    color: white;
+    margin: 0;
+    padding: 0;
+  }
   .filter-option {
     display: inline-block;
     margin: 5px;
     padding: 5px;
     border: 1px solid #ddd;
     cursor: pointer;
-    background-color: white; /* 선택되지 않은 상태의 배경색을 하얀색으로 설정 */
+    background-color: black;
+    color: white;
   }
   .filter-option.selected {
     background-color: #007bff;
     color: white;
   }
+  .filter-legend {
+    font-weight: bold;
+    color: white;
+  }
+  .filter-legend.red {
+    color: red;
+  }
   table {
     width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
-    margin-top: 20px; /* 검색 버튼과 표 사이에 공간을 추가 */
-  }
-  table, th, td {
-    border: 1px solid black;
-  }
-  th, td {
-    padding: 8px;
-    text-align: center;
-  }
-  th {
-    background-color: #f2f2f2;
-  }
-  button {
-    padding: 10px 20px; /* 버튼 크기 조정 */
-    margin-top: 10px; /* 버튼과 필터 사이에 공간을 추가 */
-  }
-  h1 {
-    text-align: center; /* 제목 가운데 정렬 */
-  }
-  table {
+    margin-top: 20px;
+    color: white;
     background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
     background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
-    width: 100%; /* 테이블의 너비를 화면에 꽉 차도록 설정. */
-    height: 100%; /* 테이블의 높이도 화면에 꽉 차도록 설정. */
-    
-}
-
+  }
+  table, th, td {
+    border: 1px solid white;
+  }
+  th, td {
+    padding: 8px;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  th {
+    background-color: #333;
+  }
+  .col-1 { width: 30px; }
+  .col-2 { width: 60px; }
+  .col-3 { width: 60px; }
+  .col-4 { width: 60px; }
+  .col-5 { width: 120px; }
+  .col-6 { width: 135px; }
+  .col-7 { width: auto; }
+  button {
+    padding: 10px 20px;
+    margin-top: 10px;
+    background-color: black;
+    color: white;
+    border: 1px solid white;
+    cursor: pointer;
+  }
+  h1 {
+    text-align: center;
+    color: white;
+  }
+  .pagination {
+    text-align: center;
+    margin-top: 20px;
+  }
+  .pagination button {
+    margin: 0 5px;
+    padding: 5px 10px;
+    background-color: black;
+    color: white;
+    border: 1px solid white;
+    cursor: pointer;
+  }
+  .pagination button.active {
+    background-color: #007bff;
+    color: white;
+  }
+  .highlighted-row {
+    background-color: #555;
+  }
+  .full-text {
+    overflow: visible;
+    white-space: normal;
+  }
+  .header-group-1 {
+    background-color: #ffcccb; /* Light red */
+    color: black;
+  }
+  .header-group-2 {
+    background-color: #add8e6; /* Light blue */
+    color: black;
+  }
+  .header-group-3 {
+    background-color: #90ee90; /* Light green */
+    color: black;
+  }
+  .header-group-4 {
+    background-color: #dda0dd; /* Light purple */
+    color: black;
+  }
+  .header-group-5 {
+    background-color: #ffcc99; /* Light orange */
+    color: black;
+  }
+  .header-group-6 {
+    background-color: #ffb6c1; /* Light pink */
+    color: black;
+  }
+  .screenshot-button {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+  }
 </style>
 </head>
 <body>
 <h1>25학년도 정시모집요강 -일산맥스-</h1>
 
 <div id="filters"></div>
-<button onclick="clearFilters()">모두 해제</button> <!-- 모든 필터링 해제 버튼 추가 -->
+<button onclick="clearFilters()">모두 해제</button>
 <button onclick="applyFilters()">검색</button>
+<button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
 
 <table id="data-table">
   <thead>
@@ -65,7 +144,16 @@
   <tbody id="table-body"></tbody>
 </table>
 
+<div class="pagination" id="pagination"></div>
+
+<!-- 최신 버전의 html2canvas 라이브러리 CDN 추가 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <script>
+let currentPage = 1;
+const itemsPerPage = 10;
+let filteredData = [];
+
 function fetchData() {
   fetch('https://supermax.kr:3000')
     .then(response => response.json())
@@ -75,29 +163,58 @@ function fetchData() {
       createFilterOptions(data, '지역');
       createFilterOptions(data, '교직');
       createSubjectExclusionFilter(data, ['국어', '수학', '영어', '탐구']);
+      createFilterOptionsFromData(data, '탐구반영갯수');
       createSkillExclusionFilter(data, ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6']);
+      filteredData = data;
+      updateTable();
+      updatePagination();
     })
     .catch(error => console.error('Error fetching data:', error));
 }
 
-function createFilterOptions(data, field) {
-  const uniqueValues = Array.from(new Set(data.map(item => item[field]))).sort();
+function createFilterOptionsFromData(data, field) {
+  const uniqueValues = Array.from(new Set(data.map(item => item[field])))
+    .filter(value => value !== 0 && value !== null)
+    .sort((a, b) => a - b);
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
   const legend = document.createElement('span');
+  legend.classList.add('filter-legend');
   legend.textContent = field;
   fieldSet.appendChild(legend);
 
   uniqueValues.forEach(value => {
-    if (value !== 0 && value !== null) { // 0과 null 값 제외
-      const filterOption = document.createElement('div');
-      filterOption.classList.add('filter-option');
-      filterOption.textContent = value;
-      filterOption.onclick = function() {
-        this.classList.toggle('selected');
-      };
-      fieldSet.appendChild(filterOption);
-    }
+    const filterOption = document.createElement('div');
+    filterOption.classList.add('filter-option');
+    filterOption.textContent = value;
+    filterOption.onclick = function() {
+      this.classList.toggle('selected');
+    };
+    fieldSet.appendChild(filterOption);
+  });
+
+  filterContainer.appendChild(fieldSet);
+}
+
+function createFilterOptions(data, field) {
+  const uniqueValues = Array.from(new Set(data.map(item => item[field])))
+    .filter(value => value !== 0 && value !== null)
+    .sort();
+  const filterContainer = document.getElementById('filters');
+  const fieldSet = document.createElement('div');
+  const legend = document.createElement('span');
+  legend.classList.add('filter-legend');
+  legend.textContent = field;
+  fieldSet.appendChild(legend);
+
+  uniqueValues.forEach(value => {
+    const filterOption = document.createElement('div');
+    filterOption.classList.add('filter-option');
+    filterOption.textContent = value;
+    filterOption.onclick = function() {
+      this.classList.toggle('selected');
+    };
+    fieldSet.appendChild(filterOption);
   });
 
   filterContainer.appendChild(fieldSet);
@@ -107,6 +224,7 @@ function createSubjectExclusionFilter(data, fields) {
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
   const legend = document.createElement('span');
+  legend.classList.add('filter-legend', 'red');
   legend.textContent = '과목 제외';
   fieldSet.appendChild(legend);
 
@@ -127,6 +245,7 @@ function createSkillExclusionFilter(data, fields) {
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
   const legend = document.createElement('span');
+  legend.classList.add('filter-legend', 'red');
   legend.textContent = '실기 제외';
   fieldSet.appendChild(legend);
 
@@ -166,7 +285,7 @@ function applyFilters() {
         selectedFilters[field].push(filterOption.textContent);
       });
 
-      const filteredData = data.filter(item => {
+      filteredData = data.filter(item => {
         return Object.keys(selectedFilters).every(field => {
           if (field === '과목') {
             return selectedFilters[field].every(subject => {
@@ -186,12 +305,17 @@ function applyFilters() {
               }
               return false;
             });
+          } else if (field === '탐구반영갯수') {
+            const selectedNumbers = selectedFilters[field].map(Number);
+            return selectedNumbers.includes(item[field]);
           }
           return selectedFilters[field].includes(item[field]);
         });
       });
 
-      updateTable(filteredData);
+      currentPage = 1;
+      updateTable();
+      updatePagination();
     })
     .catch(error => console.error('Error fetching data:', error));
 }
@@ -200,46 +324,97 @@ function clearFilters() {
   document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
     filterOption.classList.remove('selected');
   });
-  applyFilters(); // 필터링 해제 후 바로 테이블 업데이트
+  applyFilters();
 }
 
-function updateTable(data) {
-  const headers = Object.keys(data[0] || {}).filter(header => header !== 'ID');
+function updateTable() {
+  const headers = Object.keys(filteredData[0] || {}).filter(header => header !== 'ID');
   const tableHead = document.getElementById('headers');
   const tableBody = document.getElementById('table-body');
 
   tableHead.innerHTML = '';
   tableBody.innerHTML = '';
 
-  headers.forEach(header => {
+  headers.forEach((header, index) => {
     const headerElement = document.createElement('th');
     headerElement.textContent = header;
+
+    if (['군', '형태', '지역', '교직'].includes(header)) {
+      headerElement.classList.add('header-group-1');
+    } else if (['대학명', '학과명'].includes(header)) {
+      headerElement.classList.add('header-group-2');
+    } else if (['전형명', '모집인원', '반영방법'].includes(header)) {
+      headerElement.classList.add('header-group-3');
+    } else if (['수능', '내신', '실기', '기타'].includes(header)) {
+      headerElement.classList.add('header-group-4');
+    } else if (['국어', '수학', '영어', '탐구', '탐구반영갯수', '한국사'].includes(header)) {
+      headerElement.classList.add('header-group-5');
+    } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6'].includes(header)) {
+      headerElement.classList.add('header-group-6');
+    }
+    headerElement.classList.add(`col-${index + 1}`);
     tableHead.appendChild(headerElement);
   });
 
-  data.forEach(row => {
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPageData = filteredData.slice(startIndex, endIndex);
+
+  currentPageData.forEach(row => {
     const rowElement = document.createElement('tr');
-    headers.forEach(header => {
+    headers.forEach((header, index) => {
       const cell = document.createElement('td');
       cell.textContent = row[header];
+      cell.classList.add(`col-${index + 1}`);
       rowElement.appendChild(cell);
     });
 
-    // 클릭 이벤트를 추가하여 행을 강조합니다.
     rowElement.addEventListener('click', function() {
-      // 모든 행에서 강조 효과를 제거합니다.
       const allRows = document.querySelectorAll('tr');
       allRows.forEach(row => {
         row.classList.remove('highlighted-row');
+        row.querySelectorAll('td').forEach(cell => {
+          cell.classList.remove('full-text');
+        });
       });
-      // 클릭한 행에 강조 효과를 추가합니다.
       this.classList.add('highlighted-row');
+      this.querySelectorAll('td').forEach(cell => {
+        cell.classList.add('full-text');
+      });
     });
 
     tableBody.appendChild(rowElement);
   });
 }
 
+function updatePagination() {
+  const pagination = document.getElementById('pagination');
+  pagination.innerHTML = '';
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  for (let i = 1; i <= totalPages; i++) {
+    const pageButton = document.createElement('button');
+    pageButton.textContent = i;
+    if (i === currentPage) {
+      pageButton.classList.add('active');
+    }
+    pageButton.onclick = function() {
+      currentPage = i;
+      updateTable();
+      updatePagination();
+    };
+    pagination.appendChild(pageButton);
+  }
+}
+
+function captureScreenshot() {
+  html2canvas(document.body).then(canvas => {
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = 'screenshot.png';
+    link.click();
+  });
+}
 
 window.onload = fetchData;
 </script>
