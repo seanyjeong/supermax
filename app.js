@@ -59,8 +59,22 @@ const server = https.createServer(sslOptions, (req, res) => {
       res.writeHead(200, {'Content-Type': 'application/json'});
       res.end(JSON.stringify(rows));
     });
+  } else if (req.url === '/25susi') {
+    // '25수시' 테이블 데이터를 가져오는 쿼리를 실행합니다.
+    const query = 'SELECT * FROM 25수시';
+    connection.query(query, (err, rows, fields) => {
+      if (err) {
+        res.writeHead(500, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({ message: 'Database query failed', error: err }));
+        return;
+      }
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify(rows));
+    });
   } else {
     // 다른 엔드포인트에 대한 처리...
+    res.writeHead(404, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify({ message: 'Endpoint not found' }));
   }
 });
 
