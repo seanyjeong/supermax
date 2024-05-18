@@ -259,6 +259,9 @@ function createSkillExclusionFilter(data, fields) {
     });
   });
 
+  // 오름차순으로 정렬
+  allSkills.sort();
+
   allSkills.forEach(skill => {
     const filterOption = document.createElement('div');
     filterOption.classList.add('filter-option');
