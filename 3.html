@@ -278,7 +278,7 @@ function createSkillExclusionFilter(data, fields) {
 }
 
 function applyFilters() {
-  fetch('https://supermax.kr:3000')
+  fetch('https://supermax.kr:3000/25jeongsi')
     .then(response => response.json())
     .then(data => {
       const selectedFilters = {};
