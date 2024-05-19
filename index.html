@@ -31,48 +31,11 @@
             background-color: #0056b3;
         }
     </style>
-    <script>
-        function navigateTo(page) {
-            history.pushState(null, '', page);
-            loadPage(page);
-        }
-
-        function loadPage(page) {
-            fetch(page)
-                .then(response => response.text())
-                .then(html => {
-                    document.body.innerHTML = html;
-                })
-                .catch(err => {
-                    console.error('Failed to load page:', err);
-                });
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            var path = window.location.pathname;
-            if (path !== '/') {
-                navigateTo(path);
-            }
-
-            document.querySelectorAll('a').forEach(a => {
-                a.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    var href = e.target.getAttribute('href');
-                    navigateTo(href);
-                });
-            });
-        });
-
-        window.addEventListener('popstate', function() {
-            var path = window.location.pathname;
-            loadPage(path);
-        });
-    </script>
 </head>
 <body>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
     
-    <a href="/25susi.html">25수시요강 Demo.</a>
-    <a href="/25jungsi.html">25정시요강</a>
+    <a href="/25susi">25수시요강 Demo.</a>
+    <a href="/25jungsi">25정시요강</a>
 </body>
 </html>
