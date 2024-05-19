@@ -190,7 +190,7 @@
   }
   .close-button {
     display: block;
-    margin: 20px auto 0;
+    margin: 0 auto 20px; /* 중앙에 배치 */
     padding: 10px 20px;
     background-color: #007bff;
     color: white;
@@ -198,6 +198,7 @@
     cursor: pointer;
     border-radius: 10px;
     text-align: center;
+    font-size: 18px; /* 버튼 폰트 크기 증가 */
   }
 </style>
 </head>
@@ -226,8 +227,8 @@
 <!-- 모달 창 -->
 <div id="myModal" class="modal">
   <div class="modal-content">
-    <div id="modal-content-container"></div>
     <button class="close-button" onclick="closeModal()">닫기</button> <!-- 닫기 버튼 추가 -->
+    <div id="modal-content-container"></div>
   </div>
 </div>
 
