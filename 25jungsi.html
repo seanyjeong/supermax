@@ -462,6 +462,7 @@ function handleRowClick(event) {
 
     modalContentContainer.appendChild(table);
     document.getElementById('myModal').style.display = 'block';
+    document.body.style.overflow = 'hidden'; // 모달이 열릴 때 배경 스크롤 비활성화
   } else {
     // PC에서는 행 강조 및 전체 텍스트 표시
     const allRows = document.querySelectorAll('tr');
@@ -480,6 +481,7 @@ function handleRowClick(event) {
 
 function closeModal() {
   document.getElementById('myModal').style.display = 'none';
+  document.body.style.overflow = 'auto'; // 모달이 닫힐 때 배경 스크롤 활성화
 }
 
 function updateTable() {
