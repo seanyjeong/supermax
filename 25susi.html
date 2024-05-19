@@ -58,12 +58,7 @@
 
 <script>
 
-          document.addEventListener('DOMContentLoaded', function() {
-            var referrer = document.referrer;
-            if (!referrer.includes(window.location.hostname)) {
-                window.location.href = '/';
-            }
-        });
+
 // 데이터를 가져오고 테이블로 출력하는 함수
 function fetchData() {
   fetch('https://supermax.kr:3000/25susi')
@@ -165,6 +160,6 @@ function displayTable(data) {
 // 페이지 로드 시 데이터를 가져옵니다.
 document.addEventListener('DOMContentLoaded', fetchData);
 </script>
-      <a href="/index.html">Home</a>
+
 </body>
 </html>
