@@ -176,6 +176,7 @@
     max-width: 600px;
     color: white;
     overflow-x: auto; /* 가로 스크롤 활성화 */
+    position: relative; /* 닫기 버튼 위치를 위해 상대 위치 지정 */
   }
   .modal-content table {
     width: 100%;
@@ -187,17 +188,16 @@
     text-align: left;
     white-space: nowrap; /* 텍스트 줄바꿈 방지 */
   }
-  .close {
+  .close-button {
+    display: block;
+    margin: 20px auto 0;
+    padding: 10px 20px;
+    background-color: #007bff;
     color: white;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-  }
-  .close:hover,
-  .close:focus {
-    color: #007bff;
-    text-decoration: none;
+    border: none;
     cursor: pointer;
+    border-radius: 10px;
+    text-align: center;
   }
 </style>
 </head>
@@ -226,8 +226,8 @@
 <!-- 모달 창 -->
 <div id="myModal" class="modal">
   <div class="modal-content">
-    <span class="close" onclick="closeModal()">&times;</span>
     <div id="modal-content-container"></div>
+    <button class="close-button" onclick="closeModal()">닫기</button> <!-- 닫기 버튼 추가 -->
   </div>
 </div>
 
