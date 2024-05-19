@@ -174,15 +174,13 @@
     border: 1px solid white;
     width: 90%;
     max-width: 600px;
+    color: white;
   }
-  .modal-content table {
-    width: 100%;
-    border-collapse: collapse;
+  .modal-content .field-group {
+    margin-bottom: 15px;
   }
-  .modal-content th, .modal-content td {
-    border: 1px solid white;
-    padding: 8px;
-    text-align: center;
+  .modal-content .field-group p {
+    margin: 5px 0;
   }
   .close {
     color: white;
@@ -224,7 +222,7 @@
 <div id="myModal" class="modal">
   <div class="modal-content">
     <span class="close" onclick="closeModal()">&times;</span>
-    <div id="modal-table-container"></div>
+    <div id="modal-content-container"></div>
   </div>
 </div>
 
@@ -427,32 +425,33 @@ function handleRowClick(event) {
     const rowContent = Array.from(event.currentTarget.cells).map(cell => cell.textContent);
     const headers = Array.from(document.getElementById('headers').children).map(header => header.textContent);
     
-    const modalTable = document.createElement('table');
-    const modalTableHead = document.createElement('thead');
-    const modalTableBody = document.createElement('tbody');
-    
-    const headerRow = document.createElement('tr');
-    headers.forEach(headerText => {
-      const th = document.createElement('th');
-      th.textContent = headerText;
-      headerRow.appendChild(th);
+    const modalContentContainer = document.getElementById('modal-content-container');
+    modalContentContainer.innerHTML = '';
+
+    const fieldGroups = [
+      ['군', '형태', '지역', '교직'],
+      ['대학명', '학과명'],
+      ['전형명', '모집인원', '반영방법'],
+      ['수능', '내신', '실기', '기타'],
+      ['국어', '수학', '영어', '탐구', '탐구반영갯수', '한국사'],
+      ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6']
+    ];
+
+    fieldGroups.forEach((group, groupIndex) => {
+      const groupDiv = document.createElement('div');
+      groupDiv.classList.add('field-group');
+      
+      group.forEach(field => {
+        const index = headers.indexOf(field);
+        if (index !== -1) {
+          const p = document.createElement('p');
+          p.textContent = `${field}: ${rowContent[index]}`;
+          groupDiv.appendChild(p);
+        }
+      });
+
+      modalContentContainer.appendChild(groupDiv);
     });
-    modalTableHead.appendChild(headerRow);
-    
-    const bodyRow = document.createElement('tr');
-    rowContent.forEach(cellText => {
-      const td = document.createElement('td');
-      td.textContent = cellText;
-      bodyRow.appendChild(td);
-    });
-    modalTableBody.appendChild(bodyRow);
-    
-    modalTable.appendChild(modalTableHead);
-    modalTable.appendChild(modalTableBody);
-    
-    const modalTableContainer = document.getElementById('modal-table-container');
-    modalTableContainer.innerHTML = '';
-    modalTableContainer.appendChild(modalTable);
     
     document.getElementById('myModal').style.display = 'block';
   } else {
