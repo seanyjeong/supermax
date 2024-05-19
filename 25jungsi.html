@@ -147,7 +147,6 @@
     top: 10px;
     right: 10px;
     z-index: 1000;
-    border-radius: 10px;
   }
 </style>
 </head>
@@ -157,7 +156,7 @@
 <div id="filters" class="filter-container"></div>
 
 <div class="button-container">
-  <button onclick="clearFilters()">필터 해제</button>
+  <button onclick="clearFilters()">모두 해제</button>
   <button onclick="applyFilters()">검색</button>
 </div>
 
@@ -358,7 +357,30 @@ function clearFilters() {
   document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
     filterOption.classList.remove('selected');
   });
+  applyFilters();
+}
 
+function handleRowClick(event) {
+  const isMobile = window.innerWidth <= 768; // 모바일 화면 너비 기준 설정
+
+  if (isMobile) {
+    // 모바일에서는 팝업으로 표시
+    const rowContent = Array.from(event.currentTarget.cells).map(cell => cell.textContent).join(' ');
+    alert(rowContent); // 팝업 대신 모달 등을 사용할 수 있습니다.
+  } else {
+    // PC에서는 행 강조 및 전체 텍스트 표시
+    const allRows = document.querySelectorAll('tr');
+    allRows.forEach(row => {
+      row.classList.remove('highlighted-row');
+      row.querySelectorAll('td').forEach(cell => {
+        cell.classList.remove('full-text');
+      });
+    });
+    event.currentTarget.classList.add('highlighted-row');
+    event.currentTarget.querySelectorAll('td').forEach(cell => {
+      cell.classList.add('full-text');
+    });
+  }
 }
 
 function updateTable() {
@@ -403,19 +425,7 @@ function updateTable() {
       rowElement.appendChild(cell);
     });
 
-    rowElement.addEventListener('click', function() {
-      const allRows = document.querySelectorAll('tr');
-      allRows.forEach(row => {
-        row.classList.remove('highlighted-row');
-        row.querySelectorAll('td').forEach(cell => {
-          cell.classList.remove('full-text');
-        });
-      });
-      this.classList.add('highlighted-row');
-      this.querySelectorAll('td').forEach(cell => {
-        cell.classList.add('full-text');
-      });
-    });
+    rowElement.addEventListener('click', handleRowClick); // 클릭 이벤트 리스너 설정
 
     tableBody.appendChild(rowElement);
   });
