@@ -78,6 +78,7 @@
   .button-container {
     display: flex;
     justify-content: center;
+    align-items: center; /* 세로 가운데 정렬 */
     margin-top: 10px;
   }
   .button-container button {
@@ -90,6 +91,11 @@
     border-radius: 10px;
     width: 150px; /* 버튼의 너비를 지정 */
     text-align: center; /* 텍스트를 중앙에 정렬 */
+  }
+  .count-display {
+    font-size: 16px;
+    margin-left: 10px;
+    color: white;
   }
   h1 {
     text-align: center;
@@ -148,6 +154,48 @@
     right: 10px;
     z-index: 1000;
   }
+  .modal {
+    display: none; /* 모달 기본적으로 숨기기 */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0,0,0);
+    background-color: rgba(0,0,0,0.4);
+    padding-top: 60px;
+  }
+  .modal-content {
+    background-color: black;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid white;
+    width: 90%;
+    max-width: 600px;
+  }
+  .modal-content table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .modal-content th, .modal-content td {
+    border: 1px solid white;
+    padding: 8px;
+    text-align: center;
+  }
+  .close {
+    color: white;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+  }
+  .close:hover,
+  .close:focus {
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -158,6 +206,7 @@
 <div class="button-container">
   <button onclick="clearFilters()">모두 해제</button>
   <button onclick="applyFilters()">검색</button>
+  <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
 </div>
 
 <button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
@@ -170,6 +219,14 @@
 </table>
 
 <div class="pagination" id="pagination"></div>
+
+<!-- 모달 창 -->
+<div id="myModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal()">&times;</span>
+    <div id="modal-table-container"></div>
+  </div>
+</div>
 
 <!-- 최신 버전의 html2canvas 라이브러리 CDN 추가 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -194,6 +251,7 @@ function fetchData() {
       filteredData = data;
       updateTable();
       updatePagination();
+      updateCountDisplay(); // 데이터 로드 후 개수 업데이트
     })
     .catch(error => console.error('Error fetching data:', error));
 }
@@ -349,6 +407,7 @@ function applyFilters() {
       currentPage = 1;
       updateTable();
       updatePagination();
+      updateCountDisplay(); // 필터 적용 후 개수 업데이트
     })
     .catch(error => console.error('Error fetching data:', error));
 }
@@ -364,9 +423,38 @@ function handleRowClick(event) {
   const isMobile = window.innerWidth <= 768; // 모바일 화면 너비 기준 설정
 
   if (isMobile) {
-    // 모바일에서는 팝업으로 표시
-    const rowContent = Array.from(event.currentTarget.cells).map(cell => cell.textContent).join(' ');
-    alert(rowContent); // 팝업 대신 모달 등을 사용할 수 있습니다.
+    // 모바일에서는 모달 창으로 표시
+    const rowContent = Array.from(event.currentTarget.cells).map(cell => cell.textContent);
+    const headers = Array.from(document.getElementById('headers').children).map(header => header.textContent);
+    
+    const modalTable = document.createElement('table');
+    const modalTableHead = document.createElement('thead');
+    const modalTableBody = document.createElement('tbody');
+    
+    const headerRow = document.createElement('tr');
+    headers.forEach(headerText => {
+      const th = document.createElement('th');
+      th.textContent = headerText;
+      headerRow.appendChild(th);
+    });
+    modalTableHead.appendChild(headerRow);
+    
+    const bodyRow = document.createElement('tr');
+    rowContent.forEach(cellText => {
+      const td = document.createElement('td');
+      td.textContent = cellText;
+      bodyRow.appendChild(td);
+    });
+    modalTableBody.appendChild(bodyRow);
+    
+    modalTable.appendChild(modalTableHead);
+    modalTable.appendChild(modalTableBody);
+    
+    const modalTableContainer = document.getElementById('modal-table-container');
+    modalTableContainer.innerHTML = '';
+    modalTableContainer.appendChild(modalTable);
+    
+    document.getElementById('myModal').style.display = 'block';
   } else {
     // PC에서는 행 강조 및 전체 텍스트 표시
     const allRows = document.querySelectorAll('tr');
@@ -381,6 +469,10 @@ function handleRowClick(event) {
       cell.classList.add('full-text');
     });
   }
+}
+
+function closeModal() {
+  document.getElementById('myModal').style.display = 'none';
 }
 
 function updateTable() {
@@ -449,6 +541,11 @@ function updatePagination() {
     };
     pagination.appendChild(pageButton);
   }
+}
+
+function updateCountDisplay() {
+  const countDisplay = document.querySelector('.count-display');
+  countDisplay.textContent = `선택된 학교 : ${filteredData.length} 개`;
 }
 
 function captureScreenshot() {
