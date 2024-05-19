@@ -11,6 +11,25 @@
     margin: 0;
     padding: 0;
   }
+  .filter-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-group {
+    display: inline-block;
+    margin-right: 20px;
+    margin-left: 20px; /* 필터 그룹을 오른쪽으로 이동 */
+  }
+  .filter-legend {
+    display: block;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 5px;
+  }
+  .filter-legend.red {
+    color: red;
+  }
   .filter-option {
     display: inline-block;
     margin: 5px;
@@ -23,13 +42,6 @@
   .filter-option.selected {
     background-color: #007bff;
     color: white;
-  }
-  .filter-legend {
-    font-weight: bold;
-    color: white;
-  }
-  .filter-legend.red {
-    color: red;
   }
   table {
     width: 100%;
@@ -127,12 +139,14 @@
     right: 10px;
     z-index: 1000;
   }
+
+  
 </style>
 </head>
 <body>
 <h1>25학년도 정시모집요강 -일산맥스-</h1>
 
-<div id="filters"></div>
+<div id="filters" class="filter-container"></div>
 <button onclick="clearFilters()">모두 해제</button>
 <button onclick="applyFilters()">검색</button>
 <button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
@@ -173,13 +187,13 @@ function fetchData() {
     .catch(error => console.error('Error fetching data:', error));
 }
 
-
 function createFilterOptionsFromData(data, field) {
   const uniqueValues = Array.from(new Set(data.map(item => item[field])))
     .filter(value => value !== 0 && value !== null)
     .sort((a, b) => a - b);
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
+  fieldSet.classList.add('filter-group');
   const legend = document.createElement('span');
   legend.classList.add('filter-legend');
   legend.textContent = field;
@@ -204,6 +218,7 @@ function createFilterOptions(data, field) {
     .sort();
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
+  fieldSet.classList.add('filter-group');
   const legend = document.createElement('span');
   legend.classList.add('filter-legend');
   legend.textContent = field;
@@ -225,6 +240,7 @@ function createFilterOptions(data, field) {
 function createSubjectExclusionFilter(data, fields) {
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
+  fieldSet.classList.add('filter-group');
   const legend = document.createElement('span');
   legend.classList.add('filter-legend', 'red');
   legend.textContent = '과목 제외';
@@ -246,6 +262,7 @@ function createSubjectExclusionFilter(data, fields) {
 function createSkillExclusionFilter(data, fields) {
   const filterContainer = document.getElementById('filters');
   const fieldSet = document.createElement('div');
+  fieldSet.classList.add('filter-group');
   const legend = document.createElement('span');
   legend.classList.add('filter-legend', 'red');
   legend.textContent = '실기 제외';
