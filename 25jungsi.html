@@ -175,12 +175,17 @@
     width: 90%;
     max-width: 600px;
     color: white;
+    overflow-x: auto; /* 가로 스크롤 활성화 */
   }
-  .modal-content .field-group {
-    margin-bottom: 15px;
+  .modal-content table {
+    width: 100%;
+    border-collapse: collapse;
   }
-  .modal-content .field-group p {
-    margin: 5px 0;
+  .modal-content th, .modal-content td {
+    border: 1px solid white;
+    padding: 5px;
+    text-align: left;
+    white-space: nowrap; /* 텍스트 줄바꿈 방지 */
   }
   .close {
     color: white;
@@ -437,22 +442,25 @@ function handleRowClick(event) {
       ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6']
     ];
 
-    fieldGroups.forEach((group, groupIndex) => {
-      const groupDiv = document.createElement('div');
-      groupDiv.classList.add('field-group');
-      
+    const table = document.createElement('table');
+
+    fieldGroups.forEach(group => {
       group.forEach(field => {
         const index = headers.indexOf(field);
         if (index !== -1) {
-          const p = document.createElement('p');
-          p.textContent = `${field}: ${rowContent[index]}`;
-          groupDiv.appendChild(p);
+          const tr = document.createElement('tr');
+          const th = document.createElement('th');
+          const td = document.createElement('td');
+          th.textContent = field;
+          td.textContent = rowContent[index];
+          tr.appendChild(th);
+          tr.appendChild(td);
+          table.appendChild(tr);
         }
       });
-
-      modalContentContainer.appendChild(groupDiv);
     });
-    
+
+    modalContentContainer.appendChild(table);
     document.getElementById('myModal').style.display = 'block';
   } else {
     // PC에서는 행 강조 및 전체 텍스트 표시
