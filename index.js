@@ -45,19 +45,20 @@ pool.getConnection((err, connection) => {
 
 // 배점 조회 API
 app.post('/get-score', (req, res) => {
+    const event = req.body.event;
     const record = parseFloat(req.body.record);
     const gender = req.body.gender;
 
-    console.log(`Received request with record: ${record}, gender: ${gender}`);
+    console.log(`Received request with event: ${event}, record: ${record}, gender: ${gender}`);
 
     let column = gender === 'male' ? 'male_record' : 'female_record';
     const sql = `SELECT score FROM performance_scores
-                 WHERE university_name = 'University A' AND event_name = '100m'
+                 WHERE university_name = 'University A' AND event_name = ? 
                  AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
 
-    console.log(`Executing SQL: ${sql} with value ${record}`);
+    console.log(`Executing SQL: ${sql} with values ${event}, ${record}`);
 
-    pool.query(sql, [record], (err, results) => {
+    pool.query(sql, [event, record], (err, results) => {
         if (err) {
             console.error('Query error:', err);
             res.status(500).json({ error: err.message });
