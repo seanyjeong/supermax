@@ -1,8 +1,10 @@
 const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
-const path = require('path');
 const cors = require('cors');
+const fs = require('fs');
+const https = require('https');
+const path = require('path');
 
 const app = express();
 app.use(bodyParser.json());
@@ -55,8 +57,14 @@ app.post('/get-score', (req, res) => {
     });
 });
 
-// 서버 시작
+// SSL 인증서 로드
+const sslOptions = {
+    key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
+    cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
+};
+
+// HTTPS 서버 시작
 const PORT = 4000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`HTTPS Server running on port ${PORT}`);
 });
