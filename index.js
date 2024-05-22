@@ -4,11 +4,18 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const fs = require('fs');
 const https = require('https');
-const path = require('path');
+const helmet = require('helmet');
 
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
+app.use(helmet());
+
+// Permissions-Policy 헤더 설정
+app.use((req, res, next) => {
+    res.setHeader("Permissions-Policy", "interest-cohort=()");
+    next();
+});
 
 const dbConfig = {
     host: 'my8003.gabiadb.com',
@@ -41,17 +48,24 @@ app.post('/get-score', (req, res) => {
     const record = parseFloat(req.body.record);
     const gender = req.body.gender;
 
+    console.log(`Received request with record: ${record}, gender: ${gender}`);
+
     let column = gender === 'male' ? 'male_record' : 'female_record';
     const sql = `SELECT score FROM performance_scores
                  WHERE university_name = 'University A' AND event_name = '100m'
                  AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
 
+    console.log(`Executing SQL: ${sql} with value ${record}`);
+
     pool.query(sql, [record], (err, results) => {
         if (err) {
+            console.error('Query error:', err);
             res.status(500).json({ error: err.message });
         } else if (results.length > 0) {
+            console.log('Query results:', results);
             res.json({ score: results[0].score });
         } else {
+            console.log('No matching score found');
             res.json({ error: 'No matching score found' });
         }
     });
