@@ -52,9 +52,20 @@ app.post('/get-score', (req, res) => {
     console.log(`Received request with event: ${event}, record: ${record}, gender: ${gender}`);
 
     let column = gender === 'male' ? 'male_record' : 'female_record';
-    const sql = `SELECT score FROM performance_scores
-                 WHERE university_name = 'University A' AND event_name = ? 
-                 AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
+    let sql;
+
+    if (event === '100m') {
+        sql = `SELECT score FROM performance_scores
+               WHERE university_name = 'University A' AND event_name = ?
+               AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
+    } else if (event === '제멀') {
+        sql = `SELECT score FROM performance_scores
+               WHERE university_name = 'University A' AND event_name = ?
+               AND ${column} <= ? ORDER BY ${column} DESC LIMIT 1`;
+    } else {
+        res.status(400).json({ error: 'Unknown event' });
+        return;
+    }
 
     console.log(`Executing SQL: ${sql} with values ${event}, ${record}`);
 
