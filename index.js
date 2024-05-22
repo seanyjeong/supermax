@@ -1,11 +1,11 @@
 const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
-const path = require('path');
+const cors = require('cors');
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
 
 const db = mysql.createConnection({
     host: 'my8003.gabiadb.com',
@@ -18,11 +18,6 @@ const db = mysql.createConnection({
 db.connect((err) => {
     if (err) throw err;
     console.log('MySQL Connected...');
-});
-
-// HTML 파일 서빙
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // 배점 조회 API
@@ -47,7 +42,7 @@ app.post('/get-score', (req, res) => {
 });
 
 // 서버 시작
-const PORT = 3000;
+const PORT = 4000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
