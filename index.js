@@ -43,14 +43,8 @@ pool.getConnection((err, connection) => {
     }
 });
 
-// 배점 조회 API
-app.post('/get-score', (req, res) => {
-    const event = req.body.event;
-    const record = parseFloat(req.body.record);
-    const gender = req.body.gender;
-
-    console.log(`Received request with event: ${event}, record: ${record}, gender: ${gender}`);
-
+// 종목별 점수 조회 함수
+function getScore(event, record, gender, callback) {
     let column = gender === 'male' ? 'male_record' : 'female_record';
     let sql;
 
@@ -63,23 +57,46 @@ app.post('/get-score', (req, res) => {
                WHERE university_name = 'University A' AND event_name = ?
                AND ${column} <= ? ORDER BY ${column} DESC LIMIT 1`;
     } else {
-        res.status(400).json({ error: 'Unknown event' });
+        callback('Unknown event', null);
         return;
     }
 
-    console.log(`Executing SQL: ${sql} with values ${event}, ${record}`);
-
     pool.query(sql, [event, record], (err, results) => {
         if (err) {
-            console.error('Query error:', err);
-            res.status(500).json({ error: err.message });
+            callback(err, null);
         } else if (results.length > 0) {
-            console.log('Query results:', results);
-            res.json({ score: results[0].score });
+            callback(null, results[0].score);
         } else {
-            console.log('No matching score found');
-            res.json({ error: 'No matching score found' });
+            callback('No matching score found', null);
         }
+    });
+}
+
+// 배점 조회 API
+app.post('/get-total-score', (req, res) => {
+    const records = req.body.records;
+
+    let totalScore = 0;
+    let processed = 0;
+    let errors = [];
+
+    records.forEach(record => {
+        getScore(record.event, parseFloat(record.record), record.gender, (err, score) => {
+            if (err) {
+                errors.push(err);
+            } else {
+                totalScore += score;
+            }
+
+            processed++;
+            if (processed === records.length) {
+                if (errors.length > 0) {
+                    res.json({ error: errors.join(', ') });
+                } else {
+                    res.json({ totalScore: totalScore });
+                }
+            }
+        });
     });
 });
 
