@@ -1,23 +1,37 @@
 const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
+const path = require('path');
 const cors = require('cors');
 
 const app = express();
 app.use(bodyParser.json());
 app.use(cors());
 
-const db = mysql.createConnection({
+const dbConfig = {
     host: 'my8003.gabiadb.com',
     user: 'maxilsan',
     password: 'q141171616!',
     database: 'supermax',
     charset: 'utf8mb4'
+};
+
+// MySQL 연결 설정
+const pool = mysql.createPool({
+    ...dbConfig,
+    connectionLimit: 10,
+    waitForConnections: true,
+    queueLimit: 0
 });
 
-db.connect((err) => {
-    if (err) throw err;
-    console.log('MySQL Connected...');
+// MySQL 연결 테스트
+pool.getConnection((err, connection) => {
+    if (err) {
+        console.error('MySQL connection failed:', err);
+    } else {
+        console.log('MySQL Connected...');
+        connection.release();
+    }
 });
 
 // 배점 조회 API
@@ -30,7 +44,7 @@ app.post('/get-score', (req, res) => {
                  WHERE university_name = 'University A' AND event_name = '100m'
                  AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
 
-    db.query(sql, [record], (err, results) => {
+    pool.query(sql, [record], (err, results) => {
         if (err) {
             res.status(500).json({ error: err.message });
         } else if (results.length > 0) {
