@@ -88,30 +88,37 @@ app.post('/get-total-score', (req, res) => {
 
     let processed = 0;
     let errors = [];
-    let totalScores = [];
+    let results = [];
 
     students.forEach(student => {
-        let totalScore = 0;
-        getScore(student.university, student.event, parseFloat(student.record), student.gender, (err, score) => {
-            if (err) {
-                errors.push(err);
-            } else {
-                totalScore += score;
-            }
+        let studentResult = { name: student.name, scores: {}, totalScore: 0 };
+        let processedEvents = 0;
+        const events = ['제멀', '메던', '10m', '배근력'];
 
-            processed++;
-            if (processed === students.length) {
-                totalScores.push({ name: student.name, totalScore: totalScore });
-                if (totalScores.length === students.length) {
-                    if (errors.length > 0) {
-                        console.error('Errors:', errors);
-                        res.json({ error: errors.join(', ') });
-                    } else {
-                        console.log('Total scores:', totalScores);
-                        res.json(totalScores);
+        events.forEach(event => {
+            getScore(student.university, event, parseFloat(student.record[event]), student.gender, (err, score) => {
+                if (err) {
+                    errors.push(err);
+                } else {
+                    studentResult.scores[event] = score;
+                    studentResult.totalScore += score;
+                }
+
+                processedEvents++;
+                if (processedEvents === events.length) {
+                    results.push(studentResult);
+                    processed++;
+                    if (processed === students.length) {
+                        if (errors.length > 0) {
+                            console.error('Errors:', errors);
+                            res.json({ error: errors.join(', ') });
+                        } else {
+                            console.log('Results:', results);
+                            res.json(results);
+                        }
                     }
                 }
-            }
+            });
         });
     });
 });
@@ -125,36 +132,39 @@ app.post('/save-scores', (req, res) => {
     let errors = [];
 
     students.forEach(student => {
-        getScore(student.university, student.event, parseFloat(student.record), student.gender, (err, score) => {
-            if (err) {
-                errors.push(err);
-            } else {
-                const sql = `
-                    INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                    university_name = VALUES(university_name),
-                    gender = VALUES(gender),
-                    record = VALUES(record),
-                    score = VALUES(score),
-                    created_at = CURRENT_TIMESTAMP`;
-                pool.query(sql, [student.name, student.university, student.event, student.gender, student.record, score], (err, result) => {
-                    if (err) {
-                        errors.push(err);
-                    }
-                });
-            }
-
-            processed++;
-            if (processed === students.length) {
-                if (errors.length > 0) {
-                    console.error('Errors:', errors);
-                    res.json({ error: errors.join(', ') });
+        const events = ['제멀', '메던', '10m', '배근력'];
+        events.forEach(event => {
+            getScore(student.university, event, parseFloat(student.record[event]), student.gender, (err, score) => {
+                if (err) {
+                    errors.push(err);
                 } else {
-                    console.log('All scores saved successfully');
-                    res.json({ message: 'All scores saved successfully' });
+                    const sql = `
+                        INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                        university_name = VALUES(university_name),
+                        gender = VALUES(gender),
+                        record = VALUES(record),
+                        score = VALUES(score),
+                        created_at = CURRENT_TIMESTAMP`;
+                    pool.query(sql, [student.name, student.university, event, student.gender, student.record[event], score], (err, result) => {
+                        if (err) {
+                            errors.push(err);
+                        }
+                    });
                 }
-            }
+
+                processed++;
+                if (processed === students.length * events.length) {
+                    if (errors.length > 0) {
+                        console.error('Errors:', errors);
+                        res.json({ error: errors.join(', ') });
+                    } else {
+                        console.log('All scores saved successfully');
+                        res.json({ message: 'All scores saved successfully' });
+                    }
+                }
+            });
         });
     });
 });
