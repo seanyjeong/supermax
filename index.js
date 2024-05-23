@@ -114,6 +114,42 @@ app.post('/get-total-score', (req, res) => {
     });
 });
 
+app.post('/save-scores', (req, res) => {
+    const students = req.body.students;
+
+    console.log('Received request to save scores for students:', students);
+
+    let processed = 0;
+    let errors = [];
+
+    students.forEach(student => {
+        getScore(student.university, student.event, parseFloat(student.record), student.gender, (err, score) => {
+            if (err) {
+                errors.push(err);
+            } else {
+                const sql = `INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score)
+                             VALUES (?, ?, ?, ?, ?, ?)`;
+                pool.query(sql, [student.name, student.university, student.event, student.gender, student.record, score], (err, result) => {
+                    if (err) {
+                        errors.push(err);
+                    }
+                });
+            }
+
+            processed++;
+            if (processed === students.length) {
+                if (errors.length > 0) {
+                    console.error('Errors:', errors);
+                    res.json({ error: errors.join(', ') });
+                } else {
+                    console.log('All scores saved successfully');
+                    res.json({ message: 'All scores saved successfully' });
+                }
+            }
+        });
+    });
+});
+
 const sslOptions = {
     key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
     cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
