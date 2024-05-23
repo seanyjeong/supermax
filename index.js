@@ -133,36 +133,50 @@ app.post('/save-scores', (req, res) => {
 
     students.forEach(student => {
         const events = ['제멀', '메던', '10m', '배근력'];
+        let studentScores = {};
+        let totalScore = 0;
+
+        let processedEvents = 0;
         events.forEach(event => {
             getScore(student.university, event, parseFloat(student.record[event]), student.gender, (err, score) => {
                 if (err) {
                     errors.push(err);
                 } else {
+                    studentScores[event] = score;
+                    totalScore += score;
+                }
+
+                processedEvents++;
+                if (processedEvents === events.length) {
                     const sql = `
-                        INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score, total_score)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE
                         university_name = VALUES(university_name),
                         gender = VALUES(gender),
                         record = VALUES(record),
                         score = VALUES(score),
+                        total_score = VALUES(total_score),
                         created_at = CURRENT_TIMESTAMP`;
-                    pool.query(sql, [student.name, student.university, event, student.gender, student.record[event], score], (err, result) => {
+
+                    pool.query(sql, [
+                        student.name, student.university, event, student.gender, student.record[event], studentScores[event], totalScore
+                    ], (err, result) => {
                         if (err) {
                             errors.push(err);
                         }
-                    });
-                }
 
-                processed++;
-                if (processed === students.length * events.length) {
-                    if (errors.length > 0) {
-                        console.error('Errors:', errors);
-                        res.json({ error: errors.join(', ') });
-                    } else {
-                        console.log('All scores saved successfully');
-                        res.json({ message: 'All scores saved successfully' });
-                    }
+                        processed++;
+                        if (processed === students.length * events.length) {
+                            if (errors.length > 0) {
+                                console.error('Errors:', errors);
+                                res.json({ error: errors.join(', ') });
+                            } else {
+                                console.log('All scores saved successfully');
+                                res.json({ message: 'All scores saved successfully' });
+                            }
+                        }
+                    });
                 }
             });
         });
