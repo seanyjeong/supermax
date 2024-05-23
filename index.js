@@ -33,7 +33,6 @@ const pool = mysql.createPool({
     queueLimit: 0
 });
 
-// MySQL 연결 테스트
 pool.getConnection((err, connection) => {
     if (err) {
         console.error('MySQL connection failed:', err);
@@ -43,25 +42,24 @@ pool.getConnection((err, connection) => {
     }
 });
 
-// 종목별 점수 조회 함수
-function getScore(event, record, gender, callback) {
+function getScore(universityName, eventName, record, gender, callback) {
     let column = gender === 'male' ? 'male_record' : 'female_record';
     let sql;
 
-    if (event === '100m') {
-        sql = `SELECT score FROM performance_scores
-               WHERE university_name = 'University A' AND event_name = ?
-               AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
-    } else if (event === '제멀') {
-        sql = `SELECT score FROM performance_scores
-               WHERE university_name = 'University A' AND event_name = ?
+    if (eventName === '제멀') { // 제멀
+        sql = `SELECT score FROM \`실기테이블\`
+               WHERE university_name = ? AND event_name = ?
                AND ${column} <= ? ORDER BY ${column} DESC LIMIT 1`;
+    } else if (eventName === '메던') { // 메던
+        sql = `SELECT score FROM \`실기테이블\`
+               WHERE university_name = ? AND event_name = ?
+               AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
     } else {
         callback('Unknown event', null);
         return;
     }
 
-    pool.query(sql, [event, record], (err, results) => {
+    pool.query(sql, [universityName, eventName, record], (err, results) => {
         if (err) {
             callback(err, null);
         } else if (results.length > 0) {
@@ -75,13 +73,14 @@ function getScore(event, record, gender, callback) {
 // 배점 조회 API
 app.post('/get-total-score', (req, res) => {
     const records = req.body.records;
+    const university = req.body.university;
 
     let totalScore = 0;
     let processed = 0;
     let errors = [];
 
     records.forEach(record => {
-        getScore(record.event, parseFloat(record.record), record.gender, (err, score) => {
+        getScore(university, record.event, parseFloat(record.record), record.gender, (err, score) => {
             if (err) {
                 errors.push(err);
             } else {
