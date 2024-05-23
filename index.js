@@ -71,9 +71,9 @@ function getScore(universityName, eventName, record, gender, callback) {
         } else {
             console.log('No matching score found');
             if (eventName === '제멀' || eventName === '배근력' || eventName === '메던') {
-                callback(null, record > 300 ? 100 : 0);
+                callback(null, record >= 300 ? 100 : 0);
             } else if (eventName === '10m') {
-                callback(null, record < 5 ? 0 : 100);
+                callback(null, record <= 5 ? 100 : 0);
             } else {
                 callback('No matching score found', null);
             }
