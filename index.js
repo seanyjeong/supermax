@@ -44,11 +44,11 @@ function getScore(universityName, eventName, record, gender, callback) {
     let column = gender === 'male' ? 'male_record' : 'female_record';
     let sql;
 
-    if (eventName === '제멀' || eventName === '배근력') {
+    if (eventName === '제멀' || eventName === '배근력' || eventName === '메던') {
         sql = `SELECT score FROM \`실기테이블\`
                WHERE university_name = ? AND event_name = ?
                AND ${column} <= ? ORDER BY ${column} DESC LIMIT 1`;
-    } else if (eventName === '메던' || eventName === '10m') {
+    } else if (eventName === '10m') {
         sql = `SELECT score FROM \`실기테이블\`
                WHERE university_name = ? AND event_name = ?
                AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
@@ -70,9 +70,9 @@ function getScore(universityName, eventName, record, gender, callback) {
             callback(null, results[0].score);
         } else {
             console.log('No matching score found');
-            if (eventName === '제멀' || eventName === '배근력') {
+            if (eventName === '제멀' || eventName === '배근력' || eventName === '메던') {
                 callback(null, record > 300 ? 100 : 0);
-            } else if (eventName === '메던' || eventName === '10m') {
+            } else if (eventName === '10m') {
                 callback(null, record < 5 ? 0 : 100);
             } else {
                 callback('No matching score found', null);
