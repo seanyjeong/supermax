@@ -11,7 +11,6 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(helmet());
 
-// Permissions-Policy 헤더 설정
 app.use((req, res, next) => {
     res.setHeader("Permissions-Policy", "interest-cohort=()");
     next();
@@ -25,7 +24,6 @@ const dbConfig = {
     charset: 'utf8mb4'
 };
 
-// MySQL 연결 설정
 const pool = mysql.createPool({
     ...dbConfig,
     connectionLimit: 10,
@@ -55,16 +53,23 @@ function getScore(universityName, eventName, record, gender, callback) {
                WHERE university_name = ? AND event_name = ?
                AND ${column} >= ? ORDER BY ${column} ASC LIMIT 1`;
     } else {
+        console.error(`Unknown event: ${eventName}`);
         callback('Unknown event', null);
         return;
     }
 
+    console.log(`Executing SQL: ${sql}`);
+    console.log(`With parameters: ${universityName}, ${eventName}, ${record}`);
+
     pool.query(sql, [universityName, eventName, record], (err, results) => {
         if (err) {
+            console.error('Query error:', err);
             callback(err, null);
         } else if (results.length > 0) {
+            console.log('Query results:', results);
             callback(null, results[0].score);
         } else {
+            console.log('No matching score found');
             if (eventName === '제멀' || eventName === '배근력') {
                 callback(null, record > 300 ? 100 : 0);
             } else if (eventName === '메던' || eventName === '10m') {
@@ -76,10 +81,12 @@ function getScore(universityName, eventName, record, gender, callback) {
     });
 }
 
-// 배점 조회 API
 app.post('/get-total-score', (req, res) => {
     const records = req.body.records;
     const university = req.body.university;
+
+    console.log(`Received request for university: ${university}`);
+    console.log('Records:', records);
 
     let totalScore = 0;
     let processed = 0;
@@ -96,8 +103,10 @@ app.post('/get-total-score', (req, res) => {
             processed++;
             if (processed === records.length) {
                 if (errors.length > 0) {
+                    console.error('Errors:', errors);
                     res.json({ error: errors.join(', ') });
                 } else {
+                    console.log('Total score:', totalScore);
                     res.json({ totalScore: totalScore });
                 }
             }
@@ -105,13 +114,11 @@ app.post('/get-total-score', (req, res) => {
     });
 });
 
-// SSL 인증서 로드
 const sslOptions = {
     key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
     cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
 };
 
-// HTTPS 서버 시작
 const PORT = 4000;
 https.createServer(sslOptions, app).listen(PORT, () => {
     console.log(`HTTPS Server running on port ${PORT}`);
