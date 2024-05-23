@@ -127,8 +127,15 @@ app.post('/save-scores', (req, res) => {
             if (err) {
                 errors.push(err);
             } else {
-                const sql = `INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score)
-                             VALUES (?, ?, ?, ?, ?, ?)`;
+                const sql = `
+                    INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                    university_name = VALUES(university_name),
+                    gender = VALUES(gender),
+                    record = VALUES(record),
+                    score = VALUES(score),
+                    created_at = CURRENT_TIMESTAMP`;
                 pool.query(sql, [student.name, student.university, student.event, student.gender, student.record, score], (err, result) => {
                     if (err) {
                         errors.push(err);
@@ -147,6 +154,26 @@ app.post('/save-scores', (req, res) => {
                 }
             }
         });
+    });
+});
+
+app.get('/get-student', (req, res) => {
+    const studentName = req.query.name;
+
+    console.log(`Received request to get scores for student: ${studentName}`);
+
+    const sql = `SELECT * FROM student_scores WHERE student_name = ?`;
+
+    pool.query(sql, [studentName], (err, results) => {
+        if (err) {
+            console.error('Query error:', err);
+            res.json({ error: err });
+        } else if (results.length > 0) {
+            console.log('Query results:', results);
+            res.json({ student: results });
+        } else {
+            res.json({ message: 'No data found for the student' });
+        }
     });
 });
 
