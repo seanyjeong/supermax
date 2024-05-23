@@ -58,18 +58,12 @@ function getScore(universityName, eventName, record, gender, callback) {
         return;
     }
 
-    console.log(`Executing SQL: ${sql}`);
-    console.log(`With parameters: ${universityName}, ${eventName}, ${record}`);
-
     pool.query(sql, [universityName, eventName, record], (err, results) => {
         if (err) {
-            console.error('Query error:', err);
             callback(err, null);
         } else if (results.length > 0) {
-            console.log('Query results:', results);
             callback(null, results[0].score);
         } else {
-            console.log('No matching score found');
             if (eventName === '제멀' || eventName === '배근력' || eventName === '메던') {
                 callback(null, record >= 300 ? 100 : 0);
             } else if (eventName === '10m') {
@@ -83,8 +77,6 @@ function getScore(universityName, eventName, record, gender, callback) {
 
 app.post('/get-total-score', (req, res) => {
     const students = req.body.students;
-
-    console.log('Received request to calculate total score for students:', students);
 
     let processed = 0;
     let errors = [];
@@ -110,10 +102,8 @@ app.post('/get-total-score', (req, res) => {
                     processed++;
                     if (processed === students.length) {
                         if (errors.length > 0) {
-                            console.error('Errors:', errors);
                             res.json({ error: errors.join(', ') });
                         } else {
-                            console.log('Results:', results);
                             res.json(results);
                         }
                     }
@@ -125,8 +115,6 @@ app.post('/get-total-score', (req, res) => {
 
 app.post('/save-scores', (req, res) => {
     const students = req.body.students;
-
-    console.log('Received request to save scores for students:', students);
 
     let processed = 0;
     let errors = [];
@@ -149,30 +137,39 @@ app.post('/save-scores', (req, res) => {
                 processedEvents++;
                 if (processedEvents === events.length) {
                     const sql = `
-                        INSERT INTO student_scores (student_name, university_name, event_name, gender, record, score, total_score)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO student_scores (student_name, university_name, gender, record_jemul, score_jemul, record_medun, score_medun, record_10m, score_10m, record_back_strength, score_back_strength, total_score)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE
                         university_name = VALUES(university_name),
                         gender = VALUES(gender),
-                        record = VALUES(record),
-                        score = VALUES(score),
+                        record_jemul = VALUES(record_jemul),
+                        score_jemul = VALUES(score_jemul),
+                        record_medun = VALUES(record_medun),
+                        score_medun = VALUES(score_medun),
+                        record_10m = VALUES(record_10m),
+                        score_10m = VALUES(score_10m),
+                        record_back_strength = VALUES(record_back_strength),
+                        score_back_strength = VALUES(score_back_strength),
                         total_score = VALUES(total_score),
                         created_at = CURRENT_TIMESTAMP`;
 
                     pool.query(sql, [
-                        student.name, student.university, event, student.gender, student.record[event], studentScores[event], totalScore
+                        student.name, student.university, student.gender,
+                        student.record['제멀'], studentScores['제멀'],
+                        student.record['메던'], studentScores['메던'],
+                        student.record['10m'], studentScores['10m'],
+                        student.record['배근력'], studentScores['배근력'],
+                        totalScore
                     ], (err, result) => {
                         if (err) {
                             errors.push(err);
                         }
 
                         processed++;
-                        if (processed === students.length * events.length) {
+                        if (processed === students.length) {
                             if (errors.length > 0) {
-                                console.error('Errors:', errors);
                                 res.json({ error: errors.join(', ') });
                             } else {
-                                console.log('All scores saved successfully');
                                 res.json({ message: 'All scores saved successfully' });
                             }
                         }
@@ -186,16 +183,12 @@ app.post('/save-scores', (req, res) => {
 app.get('/get-student', (req, res) => {
     const studentName = req.query.name;
 
-    console.log(`Received request to get scores for student: ${studentName}`);
-
     const sql = `SELECT * FROM student_scores WHERE student_name = ?`;
 
     pool.query(sql, [studentName], (err, results) => {
         if (err) {
-            console.error('Query error:', err);
             res.json({ error: err });
         } else if (results.length > 0) {
-            console.log('Query results:', results);
             res.json({ student: results });
         } else {
             res.json({ message: 'No data found for the student' });
