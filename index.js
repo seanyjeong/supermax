@@ -82,18 +82,17 @@ function getScore(universityName, eventName, record, gender, callback) {
 }
 
 app.post('/get-total-score', (req, res) => {
-    const records = req.body.records;
-    const university = req.body.university;
+    const students = req.body.students;
 
-    console.log(`Received request for university: ${university}`);
-    console.log('Records:', records);
+    console.log('Received request to calculate total score for students:', students);
 
-    let totalScore = 0;
     let processed = 0;
     let errors = [];
+    let totalScores = [];
 
-    records.forEach(record => {
-        getScore(university, record.event, parseFloat(record.record), record.gender, (err, score) => {
+    students.forEach(student => {
+        let totalScore = 0;
+        getScore(student.university, student.event, parseFloat(student.record), student.gender, (err, score) => {
             if (err) {
                 errors.push(err);
             } else {
@@ -101,13 +100,16 @@ app.post('/get-total-score', (req, res) => {
             }
 
             processed++;
-            if (processed === records.length) {
+            if (processed === students.length) {
                 if (errors.length > 0) {
                     console.error('Errors:', errors);
                     res.json({ error: errors.join(', ') });
                 } else {
-                    console.log('Total score:', totalScore);
-                    res.json({ totalScore: totalScore });
+                    totalScores.push({ name: student.name, totalScore: totalScore });
+                    if (totalScores.length === students.length) {
+                        console.log('Total scores:', totalScores);
+                        res.json(totalScores);
+                    }
                 }
             }
         });
