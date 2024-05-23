@@ -101,12 +101,12 @@ app.post('/get-total-score', (req, res) => {
 
             processed++;
             if (processed === students.length) {
-                if (errors.length > 0) {
-                    console.error('Errors:', errors);
-                    res.json({ error: errors.join(', ') });
-                } else {
-                    totalScores.push({ name: student.name, totalScore: totalScore });
-                    if (totalScores.length === students.length) {
+                totalScores.push({ name: student.name, totalScore: totalScore });
+                if (totalScores.length === students.length) {
+                    if (errors.length > 0) {
+                        console.error('Errors:', errors);
+                        res.json({ error: errors.join(', ') });
+                    } else {
                         console.log('Total scores:', totalScores);
                         res.json(totalScores);
                     }
