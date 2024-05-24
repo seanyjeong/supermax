@@ -21,9 +21,7 @@ db.connect(err => {
     console.log('MySQL Connected...');
 });
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/submit', (req, res) => {
     const { university_name, event_name, gender, record } = req.body;
