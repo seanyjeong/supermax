@@ -3,7 +3,7 @@ const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const https = require('https');
 const fs = require('fs');
-const path = require('path');
+const cors = require('cors'); // CORS 미들웨어 추가
 const app = express();
 
 // MySQL connection
@@ -21,11 +21,15 @@ db.connect(err => {
     console.log('MySQL Connected...');
 });
 
+app.use(cors()); // 모든 요청에 대해 CORS 헤더 추가
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
 // Handle form submission
 app.post('/submit', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*'); // 특정 요청에 대해 CORS 헤더 설정
+
     const { university_name, event_name, gender, record } = req.body;
 
     let query;
@@ -50,6 +54,6 @@ const sslOptions = {
 };
 
 const PORT = 3000;
-https.createServer(sslOptions, app).listen(PORT, '211.37.174.218', () => {
-    console.log(`Server running on https://211.37.174.218:${PORT}`);
+https.createServer(sslOptions, app).listen(PORT, 'supermax.kr', () => {
+    console.log(`Server running on https://supermax.kr:${PORT}`);
 });
