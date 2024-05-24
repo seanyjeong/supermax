@@ -44,8 +44,8 @@ app.post('/submit', (req, res) => {
 
 // SSL options
 const sslOptions = {
-    key: fs.readFileSync('/path/to/supermax/privkey.pem'),
-    cert: fs.readFileSync('/path/to/supermax/fullchain.pem')
+    key: fs.readFileSync('/path/to/supermax.kr/privkey.pem'),
+    cert: fs.readFileSync('/path/to/supermax.kr/fullchain.pem')
 };
 
 const PORT = 3000;
