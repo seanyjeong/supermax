@@ -1,11 +1,9 @@
 const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
-const path = require('path');
+const https = require('https');
+const fs = require('fs');
 const app = express();
-
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
 
 // MySQL connection
 const db = mysql.createConnection({
@@ -21,6 +19,9 @@ db.connect(err => {
     }
     console.log('MySQL Connected...');
 });
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
 // Handle form submission
 app.post('/submit', (req, res) => {
@@ -41,7 +42,13 @@ app.post('/submit', (req, res) => {
     });
 });
 
+// SSL options
+const sslOptions = {
+    key: fs.readFileSync('/path/to/supermax/privkey.pem'),
+    cert: fs.readFileSync('/path/to/supermax/fullchain.pem')
+};
+
 const PORT = 3000;
-app.listen(PORT, '211.37.174.218', () => {
-    console.log(`Server running on http://211.37.174.218:${PORT}`);
+https.createServer(sslOptions, app).listen(PORT, '211.37.174.218', () => {
+    console.log(`Server running on https://211.37.174.218:${PORT}`);
 });
