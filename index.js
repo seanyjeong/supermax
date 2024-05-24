@@ -18,7 +18,7 @@ app.use((req, res, next) => {
 });
 
 const dbConfig = {
-    host: 'my8003.gabiadb.com',
+    host: '211.37.174.218',
     user: 'maxilsan',
     password: 'q141171616!',
     database: 'supermax',
