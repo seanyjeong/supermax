@@ -3,6 +3,7 @@ const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const https = require('https');
 const fs = require('fs');
+const path = require('path');
 const app = express();
 
 // MySQL connection
@@ -44,8 +45,8 @@ app.post('/submit', (req, res) => {
 
 // SSL options
 const sslOptions = {
-    key: fs.readFileSync('/path/to/supermax.kr/privkey.pem'),
-    cert: fs.readFileSync('/path/to/supermax.kr/fullchain.pem')
+    key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
+    cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
 };
 
 const PORT = 3000;
