@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
+const path = require('path');
 const app = express();
 
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -21,7 +22,7 @@ db.connect(err => {
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.post('/submit', (req, res) => {
@@ -43,6 +44,6 @@ app.post('/submit', (req, res) => {
 });
 
 const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '211.37.174.218', () => {
+    console.log(`Server running on http://211.37.174.218:${PORT}`);
 });
