@@ -7,6 +7,7 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// MySQL connection
 const db = mysql.createConnection({
     host: '211.37.174.218',
     user: 'maxilsan',
@@ -21,8 +22,7 @@ db.connect(err => {
     console.log('MySQL Connected...');
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
-
+// Handle form submission
 app.post('/submit', (req, res) => {
     const { university_name, event_name, gender, record } = req.body;
 
