@@ -10,7 +10,7 @@ const sslOptions = {
 
 // 데이터베이스 연결을 설정합니다.
 var db_config = {
-  host: 'my8003.gabiadb.com',
+  host: '211.37.174.218',
   user: 'maxilsan',
   password: 'q141171616!', // 비밀번호는 보안을 위해 숨겨주세요.
   database: 'supermax',
