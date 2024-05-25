@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,19 +19,18 @@
         top: 0;
         background-color: black;
         z-index: 1000;
-        padding: 10px 0;
-        margin-bottom: 0px;
+        padding: 0; /* 상단 고정 부분의 패딩 제거 */
       }
-
-
       .header-container {
         background-color: black;
         text-align: center;
-        padding: 10px 0;
+        padding: 0; /* 패딩 제거 */
+        margin: 0; /* 마진 제거 */
       }
       .header-container h1 {
         font-family: 'Roboto', sans-serif;
         font-size: larger;
+        margin: 0; /* 제목의 마진 제거 */
       }
       .filter-container {
         display: flex;
@@ -40,8 +41,7 @@
         background-size: contain;
         background-position: center;
         background-repeat: no-repeat;
-        margin-top: 0;
-      
+        margin-top: 0; /* 간격 제거 */
       }
       .filter-group {
         display: inline-block;
@@ -75,8 +75,7 @@
         width: 100%;
         table-layout: fixed;
         border-collapse: collapse;
-        margin-top: 0px; /* 간격 조절 */
-    
+        margin-top: 0; /* 테이블 상단 간격 제거 */
         color: white;
       }
       table, th, td {
@@ -104,6 +103,7 @@
         justify-content: center;
         align-items: center; /* 세로 가운데 정렬 */
         padding: 10px;
+        margin: 0; /* 마진 제거 */
       }
       .button-container button {
         padding: 10px 20px;
@@ -205,16 +205,16 @@
         font-size: 18px; /* 버튼 폰트 크기 증가 */
       }
       @media (max-width: 768px) {
-    .fixed-header {
-      position: relative;
-    }
-    .header-container {
-      position: relative;
-    }
-  }
+        .fixed-header {
+          position: relative;
+        }
+        .header-container {
+          position: relative;
+        }
+      }
     </style>
-  </head>
-  <body>
+</head>
+<body>
   <div class="fixed-header">
     <div class="header-container">
       <h1>맥스체대입시 25정시간단요강</h1>
@@ -571,9 +571,8 @@
   window.onload = fetchData;
   </script>
   
-  </body>
-  <footer style="margin-top: 3rem; text-align: center;">
-      <p>© 2024 맥스체대입시 일산교육원.  All rights reserved.</p>
-  </footer>
-  </html>
-  
+</body>
+<footer style="margin-top: 3rem; text-align: center;">
+    <p>© 2024 맥스체대입시 일산교육원.  All rights reserved.</p>
+</footer>
+</html>
