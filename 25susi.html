@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>25수시 (Demo)</title>
-  <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
+<link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
 <style>
   table {
     width: 100%;
@@ -38,6 +38,63 @@
     background-color: #007bff;
     color: white;
   }
+  /* 모달 스타일 */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0,0,0);
+    background-color: rgba(0,0,0,0.4);
+  }
+  .modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+  }
+  .close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+  }
+  .close:hover,
+  .close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .modal-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+  }
+  .modal-table th {
+    background-color: #09b83e;
+    color: white;
+  }
+  .hidden {
+    display: none;
+  }
+  button {
+    margin-bottom: 20px;
+  }
+  /* 각 셀에 개별적인 스타일을 적용하여 셀 너비를 임의로 설정 */
+  .col-1 {
+    width: 20%;
+  }
+  .col-2 {
+    width: 30%;
+  }
+  .col-3 {
+    width: 50%;
+  }
 </style>
 </head>
 <body>
@@ -56,8 +113,19 @@
   </tbody>
 </table>
 
-<script>
+<!-- 모달 -->
+<div id="myModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <div id="modal-body">
+      <!-- 모달 내용이 여기에 채워집니다. -->
+    </div>
+  </div>
+</div>
 
+<script>
+let fullData = [];
+let filteredData = [];
 
 // 데이터를 가져오고 테이블로 출력하는 함수
 function fetchData() {
@@ -77,16 +145,13 @@ function fetchData() {
 // 필터 옵션 박스 생성 함수
 function createFilterOptions(data, category) {
   const filterContainer = document.getElementById('filter-container');
-  // 비어있지 않은 값만을 포함하는 Set을 생성합니다.
   const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
 
-  // 필터 제목을 추가합니다.
   const title = document.createElement('span');
   title.textContent = category;
   title.className = 'filter-title';
   filterContainer.appendChild(title);
 
-  // 비어있지 않은 각 값에 대해 필터 박스를 생성합니다.
   uniqueValues.forEach(value => {
     const filterBox = document.createElement('div');
     filterBox.className = 'filter-box';
@@ -131,12 +196,13 @@ function displayTable(data) {
   const tableHead = document.getElementById('table-head');
   const tableBody = document.getElementById('table-body');
 
-  // 테이블 헤더 생성
   tableHead.innerHTML = '';
   if (data.length > 0) {
-    const headers = Object.keys(data[0]);
+    const headers = Object.keys(data[0]).filter(header => header !== 'id'); // 'id' 제외
     const tr = document.createElement('tr');
-    headers.forEach(header => {
+    headers.filter((header, index) => 
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
+    ).forEach(header => {
       const th = document.createElement('th');
       th.textContent = header;
       tr.appendChild(th);
@@ -144,24 +210,99 @@ function displayTable(data) {
     tableHead.appendChild(tr);
   }
 
-  // 테이블 바디 생성
   tableBody.innerHTML = '';
   data.forEach(row => {
     const tr = document.createElement('tr');
-    Object.values(row).forEach(value => {
+    tr.onclick = () => showModal(row);
+    Object.keys(row).filter((key, index) => 
+      key !== 'id' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
+    ).forEach(key => { // 'id' 제외
       const td = document.createElement('td');
-      td.textContent = value;
+      td.textContent = row[key];
       tr.appendChild(td);
     });
     tableBody.appendChild(tr);
   });
 }
 
+// 모달 표시 함수
+function showModal(data) {
+  const modal = document.getElementById('myModal');
+  const modalBody = document.getElementById('modal-body');
+  modalBody.innerHTML = '';
+
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = `${data['대학명']} - ${data['학과명']}`;
+  modalBody.appendChild(title);
+
+  const table = document.createElement('table');
+  table.className = 'modal-table';
+
+  // 모달 테이블의 내용 구성
+  const rows = [
+    ['종류', '형태', '지역'],
+    ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
+    ['내신', '실기', '면접', '기타', '수능최저'],
+    ['내신반영'],
+    ['1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'],
+    ['과목반영'],
+    ['국', '수', '영', '사', '과', '기타_[1]'],
+    ['등급별점수'],
+    ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'],
+    ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'],
+    ['1단계발표', '실기날짜', '합격자발표'],
+    ['전년도'],
+    ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
+  ];
+
+  rows.forEach((row, rowIndex) => {
+    const trTitle = document.createElement('tr');
+    const trValue = document.createElement('tr');
+    if (rowIndex === 3 || rowIndex === 5 || rowIndex === 7 || rowIndex === 11) {
+      const thTitle = document.createElement('th');
+      thTitle.colSpan = row.length;
+      thTitle.textContent = row[0];
+      trTitle.appendChild(thTitle);
+    } else {
+      row.forEach(cell => {
+        const th = document.createElement('th');
+        th.textContent = cell;
+        trTitle.appendChild(th);
+
+        const td = document.createElement('td');
+        td.textContent = data[cell] || '';
+        trValue.appendChild(td);
+      });
+    }
+    table.appendChild(trTitle);
+    table.appendChild(trValue);
+  });
+
+  modalBody.appendChild(table);
+  modal.style.display = 'block';
+}
+
+// 모달 닫기 함수
+function closeModal() {
+  const modal = document.getElementById('myModal');
+  modal.style.display = 'none';
+}
+
+// 모달 닫기 버튼 이벤트 설정
+document.querySelector('.close').onclick = closeModal;
+window.onclick = function(event) {
+  const modal = document.getElementById('myModal');
+  if (event.target == modal) {
+    modal.style.display = 'none';
+  }
+}
+
 // 페이지 로드 시 데이터를 가져옵니다.
 document.addEventListener('DOMContentLoaded', fetchData);
 </script>
-
 </body>
 <footer style="margin-top: 3rem; text-align: center;">
-    <p>© 2024 맥스체대입시 일산교육원.  All rights reserved.</p>
+  <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
+</footer>
 </html>
