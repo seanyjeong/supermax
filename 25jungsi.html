@@ -12,10 +12,7 @@
     margin: 0;
     padding: 0;
   }
-  .filter-container {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+  .header {
     position: fixed;
     top: 0;
     left: 0;
@@ -24,6 +21,11 @@
     padding: 10px;
     z-index: 1000;
     border-bottom: 1px solid white;
+  }
+  .filter-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
   }
   .filter-group {
     display: inline-block;
@@ -205,12 +207,14 @@
 <body>
 <h1>25학년도 정시모집요강 -일산맥스-</h1>
 
-<div class="filter-container">
-  <div id="filters" class="filter-container"></div>
-  <div class="button-container">
-    <button onclick="clearFilters()">모두 해제</button>
-    <button id="search-button" onclick="applyFilters()">검색</button>
-    <span class="count-display">선택된 학교 : 0 개</span>
+<div class="header">
+  <div class="filter-container">
+    <div id="filters" class="filter-container"></div>
+    <div class="button-container">
+      <button onclick="clearFilters()">모두 해제</button>
+      <button id="search-button" onclick="applyFilters()">검색</button>
+      <span class="count-display">선택된 학교 : 0 개</span>
+    </div>
   </div>
 </div>
 
