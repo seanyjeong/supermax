@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>25학년도 정시모집요강 -일산맥스-</title>
-  <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
+<link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
 <style>
   body {
     background-color: black;
@@ -16,11 +16,19 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: black;
+    padding: 10px;
+    z-index: 1000;
+    border-bottom: 1px solid white;
   }
   .filter-group {
     display: inline-block;
     margin-right: 20px;
-    margin-left: 20px; /* 필터 그룹을 오른쪽으로 이동 */
+    margin-left: 20px;
   }
   .filter-legend {
     display: block;
@@ -39,7 +47,7 @@
     cursor: pointer;
     background-color: black;
     color: white;
-    border-radius: 10px; /* 모서리를 둥글게 */
+    border-radius: 10px;
   }
   .filter-option.selected {
     background-color: #007bff;
@@ -49,7 +57,7 @@
     width: 100%;
     table-layout: fixed;
     border-collapse: collapse;
-    margin-top: 20px;
+    margin-top: 120px;
     color: white;
     background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
     background-size: contain;
@@ -79,19 +87,19 @@
   .button-container {
     display: flex;
     justify-content: center;
-    align-items: center; /* 세로 가운데 정렬 */
+    align-items: center;
     margin-top: 10px;
   }
   .button-container button {
     padding: 10px 20px;
-    margin: 0 10px; /* 버튼 사이의 간격 */
+    margin: 0 10px;
     background-color: black;
     color: white;
     border: 1px solid white;
     cursor: pointer;
     border-radius: 10px;
-    width: 150px; /* 버튼의 너비를 지정 */
-    text-align: center; /* 텍스트를 중앙에 정렬 */
+    width: 150px;
+    text-align: center;
   }
   .count-display {
     font-size: 16px;
@@ -101,22 +109,7 @@
   h1 {
     text-align: center;
     color: white;
-  }
-  .pagination {
-    text-align: center;
-    margin-top: 20px;
-  }
-  .pagination button {
-    margin: 0 5px;
-    padding: 5px 10px;
-    background-color: black;
-    color: white;
-    border: 1px solid white;
-    cursor: pointer;
-  }
-  .pagination button.active {
-    background-color: #007bff;
-    color: white;
+    margin-top: 140px;
   }
   .highlighted-row {
     background-color: #555;
@@ -126,27 +119,27 @@
     white-space: normal;
   }
   .header-group-1 {
-    background-color: #ffcccb; /* Light red */
+    background-color: #ffcccb;
     color: black;
   }
   .header-group-2 {
-    background-color: #add8e6; /* Light blue */
+    background-color: #add8e6;
     color: black;
   }
   .header-group-3 {
-    background-color: #90ee90; /* Light green */
+    background-color: #90ee90;
     color: black;
   }
   .header-group-4 {
-    background-color: #dda0dd; /* Light purple */
+    background-color: #dda0dd;
     color: black;
   }
   .header-group-5 {
-    background-color: #ffcc99; /* Light orange */
+    background-color: #ffcc99;
     color: black;
   }
   .header-group-6 {
-    background-color: #ffb6c1; /* Light pink */
+    background-color: #ffb6c1;
     color: black;
   }
   .screenshot-button {
@@ -154,9 +147,15 @@
     top: 10px;
     right: 10px;
     z-index: 1000;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 10px;
   }
   .modal {
-    display: none; /* 모달 기본적으로 숨기기 */
+    display: none;
     position: fixed;
     z-index: 1000;
     left: 0;
@@ -176,8 +175,8 @@
     width: 90%;
     max-width: 600px;
     color: white;
-    overflow-x: auto; /* 가로 스크롤 활성화 */
-    position: relative; /* 닫기 버튼 위치를 위해 상대 위치 지정 */
+    overflow-x: auto;
+    position: relative;
   }
   .modal-content table {
     width: 100%;
@@ -187,11 +186,11 @@
     border: 1px solid white;
     padding: 5px;
     text-align: left;
-    white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+    white-space: nowrap;
   }
   .close-button {
     display: block;
-    margin: 0 auto 20px; /* 중앙에 배치 */
+    margin: 0 auto 20px;
     padding: 10px 20px;
     background-color: #007bff;
     color: white;
@@ -199,22 +198,23 @@
     cursor: pointer;
     border-radius: 10px;
     text-align: center;
-    font-size: 18px; /* 버튼 폰트 크기 증가 */
+    font-size: 18px;
   }
 </style>
 </head>
 <body>
 <h1>25학년도 정시모집요강 -일산맥스-</h1>
 
-<div id="filters" class="filter-container"></div>
-
-<div class="button-container">
-  <button onclick="clearFilters()">모두 해제</button>
-  <button onclick="applyFilters()">검색</button>
-  <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
+<div class="filter-container">
+  <div id="filters" class="filter-container"></div>
+  <div class="button-container">
+    <button onclick="clearFilters()">모두 해제</button>
+    <button id="search-button" onclick="applyFilters()">검색</button>
+    <span class="count-display">선택된 학교 : 0 개</span>
+  </div>
 </div>
 
-<button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
+<button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button>
 
 <table id="data-table">
   <thead>
@@ -223,12 +223,10 @@
   <tbody id="table-body"></tbody>
 </table>
 
-<div class="pagination" id="pagination"></div>
-
 <!-- 모달 창 -->
 <div id="myModal" class="modal">
   <div class="modal-content">
-    <button class="close-button" onclick="closeModal()">닫기</button> <!-- 닫기 버튼 추가 -->
+    <button class="close-button" onclick="closeModal()">닫기</button>
     <div id="modal-content-container"></div>
   </div>
 </div>
@@ -237,17 +235,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <script>
-
-  
-let currentPage = 1;
-const itemsPerPage = 10;
 let filteredData = [];
 
 function fetchData() {
-  fetch('https://supermax.kr:3000/25jeongsi') // 엔드포인트를 '/25jeongsi'로 변경
+  fetch('https://supermax.kr:3000/25jeongsi')
     .then(response => response.json())
     .then(data => {
-      // '25정시' 테이블 데이터를 사용하여 필터 옵션 생성 및 기타 작업 수행
       createFilterOptions(data, '군');
       createFilterOptions(data, '형태');
       createFilterOptions(data, '지역');
@@ -257,8 +250,7 @@ function fetchData() {
       createSkillExclusionFilter(data, ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6']);
       filteredData = data;
       updateTable();
-      updatePagination();
-      updateCountDisplay(); // 데이터 로드 후 개수 업데이트
+      updateCountDisplay();
     })
     .catch(error => console.error('Error fetching data:', error));
 }
@@ -354,7 +346,6 @@ function createSkillExclusionFilter(data, fields) {
     });
   });
 
-  // 오름차순으로 정렬
   allSkills.sort();
 
   allSkills.forEach(skill => {
@@ -411,10 +402,8 @@ function applyFilters() {
         });
       });
 
-      currentPage = 1;
       updateTable();
-      updatePagination();
-      updateCountDisplay(); // 필터 적용 후 개수 업데이트
+      updateCountDisplay();
     })
     .catch(error => console.error('Error fetching data:', error));
 }
@@ -427,10 +416,9 @@ function clearFilters() {
 }
 
 function handleRowClick(event) {
-  const isMobile = window.innerWidth <= 768; // 모바일 화면 너비 기준 설정
+  const isMobile = window.innerWidth <= 768;
 
   if (isMobile) {
-    // 모바일에서는 모달 창으로 표시
     const rowContent = Array.from(event.currentTarget.cells).map(cell => cell.textContent);
     const headers = Array.from(document.getElementById('headers').children).map(header => header.textContent);
     
@@ -466,9 +454,8 @@ function handleRowClick(event) {
 
     modalContentContainer.appendChild(table);
     document.getElementById('myModal').style.display = 'block';
-    document.body.style.overflow = 'hidden'; // 모달이 열릴 때 배경 스크롤 비활성화
+    document.body.style.overflow = 'hidden';
   } else {
-    // PC에서는 행 강조 및 전체 텍스트 표시
     const allRows = document.querySelectorAll('tr');
     allRows.forEach(row => {
       row.classList.remove('highlighted-row');
@@ -485,7 +472,7 @@ function handleRowClick(event) {
 
 function closeModal() {
   document.getElementById('myModal').style.display = 'none';
-  document.body.style.overflow = 'auto'; // 모달이 닫힐 때 배경 스크롤 활성화
+  document.body.style.overflow = 'auto';
 }
 
 function updateTable() {
@@ -517,11 +504,7 @@ function updateTable() {
     tableHead.appendChild(headerElement);
   });
 
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentPageData = filteredData.slice(startIndex, endIndex);
-
-  currentPageData.forEach(row => {
+  filteredData.forEach(row => {
     const rowElement = document.createElement('tr');
     headers.forEach((header, index) => {
       const cell = document.createElement('td');
@@ -530,30 +513,10 @@ function updateTable() {
       rowElement.appendChild(cell);
     });
 
-    rowElement.addEventListener('click', handleRowClick); // 클릭 이벤트 리스너 설정
+    rowElement.addEventListener('click', handleRowClick);
 
     tableBody.appendChild(rowElement);
   });
-}
-
-function updatePagination() {
-  const pagination = document.getElementById('pagination');
-  pagination.innerHTML = '';
-
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  for (let i = 1; i <= totalPages; i++) {
-    const pageButton = document.createElement('button');
-    pageButton.textContent = i;
-    if (i === currentPage) {
-      pageButton.classList.add('active');
-    }
-    pageButton.onclick = function() {
-      currentPage = i;
-      updateTable();
-      updatePagination();
-    };
-    pagination.appendChild(pageButton);
-  }
 }
 
 function updateCountDisplay() {
@@ -575,5 +538,6 @@ window.onload = fetchData;
 
 </body>
 <footer style="margin-top: 3rem; text-align: center;">
-    <p>© 2024 맥스체대입시 일산교육원.  All rights reserved.</p>
+  <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
+</footer>
 </html>
