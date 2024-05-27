@@ -88,7 +88,7 @@ app.get('/image/:id', (req, res) => {
     }
     if (rows.length > 0) {
       const imageData = rows[0].image_data;
-      res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+      res.writeHead(200, { 'Content-Type': 'image/png' });
       res.end(imageData);
     } else {
       res.status(404).json({ message: 'Image not found' });
