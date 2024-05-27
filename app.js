@@ -77,7 +77,7 @@ app.get('/25susi', (req, res) => {
 });
 
 // 이미지 데이터를 가져오는 엔드포인트
-app.get('/image/:id', (req, res) => {
+app.get('/images/:id', (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
