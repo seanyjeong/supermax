@@ -76,6 +76,12 @@ app.get('/25susi', (req, res) => {
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
+    // 각 행의 image_data를 Base64 인코딩 문자열로 변환
+    rows.forEach(row => {
+      if (row.image_data) {
+        row.image_data = row.image_data.toString('base64');
+      }
+    });
     res.status(200).json(rows);
   });
 });
