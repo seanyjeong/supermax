@@ -6,22 +6,31 @@
 <title>25수시 (Demo)</title>
 <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
 <style>
+  body.modal-open {
+    overflow: hidden;
+  }
   table {
     width: 100%;
+    margin: 0 auto;
     border-collapse: collapse;
+    table-layout: fixed; /* 고정된 테이블 레이아웃 */
   }
   table, th, td {
     border: 1px solid black;
   }
   th, td {
     padding: 8px;
-    text-align: left;
+    text-align: center;
+    white-space: nowrap; /* 줄바꿈 방지 */
+    overflow: hidden; /* 넘칠 경우 숨기기 */
+    text-overflow: ellipsis; /* 줄임표 표시 */
   }
   th {
     background-color: #f2f2f2;
   }
   .filter-container {
     margin-bottom: 20px;
+    text-align: left;
   }
   .filter-title {
     font-weight: bold;
@@ -57,6 +66,7 @@
     padding: 20px;
     border: 1px solid #888;
     width: 80%;
+    max-width: 1200px;
   }
   .close {
     color: #aaa;
@@ -86,24 +96,37 @@
     margin-bottom: 20px;
   }
   /* 각 셀에 개별적인 스타일을 적용하여 셀 너비를 임의로 설정 */
-  .col-1 {
-    width: 20%;
+  .col-1, .col-2, .col-3 {
+    width: 2%;
   }
-  .col-2 {
-    width: 30%;
+  .col-4, .col-5 {
+    width: 10%;
   }
-  .col-3 {
-    width: 50%;
+  .col-6, .col-7, .col-8, .col-9 {
+    width: 5%;
+  }
+  .col-10, .col-11 {
+    width: auto;
+  }
+  .image-modal {
+    width: 800px;
+    max-width: 70%; /* 이미지가 너무 크지 않도록 조절 */
+  }
+  .modal img {
+    max-width: 100%;
+    height: auto;
   }
 </style>
 </head>
 <body>
-<h1>25수시 (Demo)</h1>
+<h1 style="text-align: center;">25수시 (Demo)</h1>
 <div class="filter-container" id="filter-container">
   <!-- 필터링 옵션 -->
 </div>
-<button onclick="clearFilters()">모두 해제</button>
-<button onclick="applyFilter()">검색</button>
+<div style="text-align: center;">
+  <button onclick="clearFilters()">모두 해제</button>
+  <button onclick="applyFilter()">검색</button>
+</div>
 <table id="data-table">
   <thead id="table-head">
     <!-- 테이블 헤더 -->
@@ -124,183 +147,215 @@
 </div>
 
 <script>
-let fullData = [];
-let filteredData = [];
-
-// 데이터를 가져오고 테이블로 출력하는 함수
-function fetchData() {
-  fetch('https://supermax.kr:3000/25susi')
-    .then(response => response.json())
-    .then(data => {
-      fullData = data;
-      createFilterOptions(data, '종류');
-      createFilterOptions(data, '형태');
-      createFilterOptions(data, '지역');
-      createFilterOptions(data, '교직');
-      displayTable(data);
-    })
-    .catch(error => console.error('데이터 가져오기 오류:', error));
-}
-
-// 필터 옵션 박스 생성 함수
-function createFilterOptions(data, category) {
-  const filterContainer = document.getElementById('filter-container');
-  const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
-
-  const title = document.createElement('span');
-  title.textContent = category;
-  title.className = 'filter-title';
-  filterContainer.appendChild(title);
-
-  uniqueValues.forEach(value => {
-    const filterBox = document.createElement('div');
-    filterBox.className = 'filter-box';
-    filterBox.textContent = value;
-    filterBox.dataset.category = category;
-    filterBox.dataset.value = value;
-    filterBox.onclick = () => filterBox.classList.toggle('selected');
-    filterContainer.appendChild(filterBox);
-  });
-  filterContainer.appendChild(document.createElement('br'));
-}
-
-// 필터 적용 함수
-function applyFilter() {
-  const selectedFilters = {};
-  document.querySelectorAll('.filter-box.selected').forEach(box => {
-    const category = box.dataset.category;
-    const value = box.dataset.value;
-    if (!selectedFilters[category]) {
-      selectedFilters[category] = [];
-    }
-    selectedFilters[category].push(value);
-  });
-
-  filteredData = fullData.filter(item => {
-    return Object.keys(selectedFilters).every(category => 
-      selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category])
-    );
-  });
-  displayTable(filteredData);
-}
-
-// 선택 해제 함수
-function clearFilters() {
-  document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
-  filteredData = fullData;
-  displayTable(filteredData);
-}
-
-// 테이블 표시 함수
-function displayTable(data) {
-  const tableHead = document.getElementById('table-head');
-  const tableBody = document.getElementById('table-body');
-
-  tableHead.innerHTML = '';
-  if (data.length > 0) {
-    const headers = Object.keys(data[0]).filter(header => header !== 'id'); // 'id' 제외
-    const tr = document.createElement('tr');
-    headers.filter((header, index) => 
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
-    ).forEach(header => {
-      const th = document.createElement('th');
-      th.textContent = header;
-      tr.appendChild(th);
-    });
-    tableHead.appendChild(tr);
+  let fullData = [];
+  let filteredData = [];
+  
+  // 데이터를 가져오고 테이블로 출력하는 함수
+  function fetchData() {
+    fetch('https://supermax.kr:3000/25susi')
+      .then(response => response.json())
+      .then(data => {
+        fullData = data;
+        createFilterOptions(data, '종류');
+        createFilterOptions(data, '형태');
+        createFilterOptions(data, '지역');
+        createFilterOptions(data, '교직');
+        displayTable(data);
+      })
+      .catch(error => console.error('데이터 가져오기 오류:', error));
   }
-
-  tableBody.innerHTML = '';
-  data.forEach(row => {
-    const tr = document.createElement('tr');
-    tr.onclick = () => showModal(row);
-    Object.keys(row).filter((key, index) => 
-      key !== 'id' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
-    ).forEach(key => { // 'id' 제외
-      const td = document.createElement('td');
-      td.textContent = row[key];
-      tr.appendChild(td);
+  
+  // 필터 옵션 박스 생성 함수
+  function createFilterOptions(data, category) {
+    const filterContainer = document.getElementById('filter-container');
+    const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
+  
+    const title = document.createElement('span');
+    title.textContent = category;
+    title.className = 'filter-title';
+    filterContainer.appendChild(title);
+  
+    uniqueValues.forEach(value => {
+      const filterBox = document.createElement('div');
+      filterBox.className = 'filter-box';
+      filterBox.textContent = value;
+      filterBox.dataset.category = category;
+      filterBox.dataset.value = value;
+      filterBox.onclick = () => filterBox.classList.toggle('selected');
+      filterContainer.appendChild(filterBox);
     });
-    tableBody.appendChild(tr);
-  });
-}
-
-// 모달 표시 함수
-function showModal(data) {
-  const modal = document.getElementById('myModal');
-  const modalBody = document.getElementById('modal-body');
-  modalBody.innerHTML = '';
-
-  const title = document.createElement('div');
-  title.className = 'modal-title';
-  title.textContent = `${data['대학명']} - ${data['학과명']}`;
-  modalBody.appendChild(title);
-
-  const table = document.createElement('table');
-  table.className = 'modal-table';
-
-  // 모달 테이블의 내용 구성
-  const rows = [
-    ['종류', '형태', '지역'],
-    ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
-    ['내신', '실기', '면접', '기타', '수능최저'],
-    ['내신반영'],
-    ['1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'],
-    ['과목반영'],
-    ['국', '수', '영', '사', '과', '기타_[1]'],
-    ['등급별점수'],
-    ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'],
-    ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'],
-    ['1단계발표', '실기날짜', '합격자발표'],
-    ['전년도'],
-    ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
-  ];
-
-  rows.forEach((row, rowIndex) => {
-    const trTitle = document.createElement('tr');
-    const trValue = document.createElement('tr');
-    if (rowIndex === 3 || rowIndex === 5 || rowIndex === 7 || rowIndex === 11) {
-      const thTitle = document.createElement('th');
-      thTitle.colSpan = row.length;
-      thTitle.textContent = row[0];
-      trTitle.appendChild(thTitle);
-    } else {
-      row.forEach(cell => {
+    filterContainer.appendChild(document.createElement('br'));
+  }
+  
+  // 필터 적용 함수
+  function applyFilter() {
+    const selectedFilters = {};
+    document.querySelectorAll('.filter-box.selected').forEach(box => {
+      const category = box.dataset.category;
+      const value = box.dataset.value;
+      if (!selectedFilters[category]) {
+        selectedFilters[category] = [];
+      }
+      selectedFilters[category].push(value);
+    });
+  
+    filteredData = fullData.filter(item => {
+      return Object.keys(selectedFilters).every(category => 
+        selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category])
+      );
+    });
+    displayTable(filteredData);
+  }
+  
+  // 선택 해제 함수
+  function clearFilters() {
+    document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
+    filteredData = fullData;
+    displayTable(filteredData);
+  }
+  
+  // 테이블 표시 함수
+  function displayTable(data) {
+    const tableHead = document.getElementById('table-head');
+    const tableBody = document.getElementById('table-body');
+  
+    tableHead.innerHTML = '';
+    if (data.length > 0) {
+      const headers = Object.keys(data[0]).filter(header => header !== 'id'); // 'id' 제외
+      const tr = document.createElement('tr');
+      headers.filter((header, index) => 
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
+      ).forEach((header, index) => {
         const th = document.createElement('th');
-        th.textContent = cell;
-        trTitle.appendChild(th);
-
-        const td = document.createElement('td');
-        td.textContent = data[cell] || '';
-        trValue.appendChild(td);
+        th.textContent = header;
+        if (index < 3) {
+          th.classList.add('col-1');
+        } else if (index < 5) {
+          th.classList.add('col-4');
+        } else if (index >= 43 && index <= 50) {
+          th.classList.add('col-6');
+        } else {
+          th.classList.add('col-10');
+        }
+        tr.appendChild(th);
       });
+      tableHead.appendChild(tr);
     }
-    table.appendChild(trTitle);
-    table.appendChild(trValue);
-  });
-
-  modalBody.appendChild(table);
-  modal.style.display = 'block';
-}
-
-// 모달 닫기 함수
-function closeModal() {
-  const modal = document.getElementById('myModal');
-  modal.style.display = 'none';
-}
-
-// 모달 닫기 버튼 이벤트 설정
-document.querySelector('.close').onclick = closeModal;
-window.onclick = function(event) {
-  const modal = document.getElementById('myModal');
-  if (event.target == modal) {
-    modal.style.display = 'none';
+  
+    tableBody.innerHTML = '';
+    data.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.onclick = () => showModal(row);
+      Object.keys(row).filter((key, index) => 
+        key !== 'id' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
+      ).forEach((key, index) => { // 'id' 제외
+        const td = document.createElement('td');
+        td.textContent = row[key];
+        if (index < 3) {
+          td.classList.add('col-1');
+        } else if (index < 5) {
+          td.classList.add('col-4');
+        } else if (index >= 43 && index <= 50) {
+          td.classList.add('col-6');
+        } else {
+          td.classList.add('col-10');
+        }
+        tr.appendChild(td);
+      });
+      tableBody.appendChild(tr);
+    });
   }
-}
-
-// 페이지 로드 시 데이터를 가져옵니다.
-document.addEventListener('DOMContentLoaded', fetchData);
-</script>
+  
+  // 모달 표시 함수
+  function showModal(data) {
+    const modal = document.getElementById('myModal');
+    const modalContent = document.querySelector('.modal-content');
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = '';
+  
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = `${data['대학명']} - ${data['학과명']}`;
+    modalBody.appendChild(title);
+  
+    // 이미지를 불러와 표시하는 부분 추가
+    if (data['image_data']) {
+      const img = document.createElement('img');
+      img.src = `data:image/png;base64,${data['image_data']}`;
+      img.alt = '이미지 불러오기 실패';
+      modalBody.appendChild(img);
+      modalContent.classList.add('image-modal');
+    } else {
+      const table = document.createElement('table');
+      table.className = 'modal-table';
+  
+      // 모달 테이블의 내용 구성
+      const rows = [
+        ['종류', '형태', '지역'],
+        ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
+        ['내신', '실기', '면접', '기타', '수능최저'],
+        ['내신반영'],
+        ['1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'],
+        ['과목반영'],
+        ['국', '수', '영', '사', '과', '기타_[1]'],
+        ['등급별점수'],
+        ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'],
+        ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'],
+        ['1단계발표', '실기날짜', '합격자발표'],
+        ['전년도'],
+        ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
+      ];
+  
+      rows.forEach((row, rowIndex) => {
+        const trTitle = document.createElement('tr');
+        const trValue = document.createElement('tr');
+        if (rowIndex === 3 || rowIndex === 5 || rowIndex === 7 || rowIndex === 11) {
+          const thTitle = document.createElement('th');
+          thTitle.colSpan = row.length;
+          thTitle.textContent = row[0];
+          trTitle.appendChild(thTitle);
+        } else {
+          row.forEach(cell => {
+            const th = document.createElement('th');
+            th.textContent = cell;
+            trTitle.appendChild(th);
+  
+            const td = document.createElement('td');
+            td.textContent = data[cell] || '';
+            trValue.appendChild(td);
+          });
+        }
+        table.appendChild(trTitle);
+        table.appendChild(trValue);
+      });
+  
+      modalBody.appendChild(table);
+      modalContent.classList.remove('image-modal');
+    }
+    modal.style.display = 'block';
+    document.body.classList.add('modal-open'); // 모달 열렸을 때 스크롤 막기
+  }
+  
+  // 모달 닫기 함수
+  function closeModal() {
+    const modal = document.getElementById('myModal');
+    modal.style.display = 'none';
+    document.body.classList.remove('modal-open'); // 모달 닫혔을 때 스크롤 해제
+  }
+  
+  // 모달 닫기 버튼 이벤트 설정
+  document.querySelector('.close').onclick = closeModal;
+  window.onclick = function(event) {
+    const modal = document.getElementById('myModal');
+    if (event.target == modal) {
+      modal.style.display = 'none';
+      document.body.classList.remove('modal-open'); // 모달 닫혔을 때 스크롤 해제
+    }
+  }
+  
+  // 페이지 로드 시 데이터를 가져옵니다.
+  document.addEventListener('DOMContentLoaded', fetchData);
+  </script>
 </body>
 <footer style="margin-top: 3rem; text-align: center;">
   <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
