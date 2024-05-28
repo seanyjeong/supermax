@@ -66,7 +66,11 @@ app.get('/25jeongsi', (req, res) => {
 
 // '25수시' 데이터를 가져오는 엔드포인트
 app.get('/25susi', (req, res) => {
-  const query = 'SELECT * FROM 25수시';
+  const query = `
+    SELECT s.*, i.image_data
+    FROM 25수시 s
+    LEFT JOIN images i ON s.id = i.id
+  `;
   connection.query(query, (err, rows) => {
     if (err) {
       res.status(500).json({ message: 'Database query failed', error: err });
@@ -77,7 +81,7 @@ app.get('/25susi', (req, res) => {
 });
 
 // 이미지 데이터를 가져오는 엔드포인트
-app.get('/images/:id', (req, res) => {
+app.get('/image/:id', (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
