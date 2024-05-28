@@ -80,7 +80,7 @@ app.get('/25susi', (req, res) => {
   });
 });
 
-// 이미지 데이터를 가져오는 엔드포인트
+// 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
 app.get('/image/:id', (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
@@ -91,9 +91,8 @@ app.get('/image/:id', (req, res) => {
       return;
     }
     if (rows.length > 0) {
-      const imageData = rows[0].image_data;
-      res.writeHead(200, { 'Content-Type': 'image/png' });
-      res.end(imageData);
+      const imageData = rows[0].image_data.toString('base64');
+      res.status(200).json({ image_data: imageData });
     } else {
       res.status(404).json({ message: 'Image not found' });
     }
