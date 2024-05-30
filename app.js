@@ -52,10 +52,16 @@ const server = https.createServer(sslOptions, app);
 // CORS 헤더를 설정합니다.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
   next();
 });
 
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 app.use(session({
   secret: 'secretKey',
   resave: false,
@@ -74,8 +80,8 @@ app.post('/login', (req, res) => {
   const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
   connection.query(query, [username, password], (err, results) => {
     if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
+      console.error('Database query failed:', err);
+      return res.status(500).json({ message: 'Database query failed', error: err });
     }
 
     if (results.length > 0) {
