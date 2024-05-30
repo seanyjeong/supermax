@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>로그인 - 맥스체대입시</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 2rem;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        input {
+            padding: 1rem;
+            width: 200px;
+            font-size: 1rem;
+        }
+        button {
+            padding: 1rem;
+            width: 100px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>로그인</h1>
+    <form action="/login" method="POST">
+        <input type="text" name="username" placeholder="ID" required>
+        <input type="password" name="password" placeholder="PW" required>
+        <button type="submit">로그인</button>
+    </form>
+</body>
+</html>
