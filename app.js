@@ -89,11 +89,21 @@ app.post('/login', (req, res) => {
 
     if (results.length > 0) {
       req.session.loggedIn = true;
+      req.session.username = username;  // 세션에 사용자 ID 저장
       res.status(200).send('Login successful');
     } else {
       res.status(401).send('Invalid username or password. Please try again.');
     }
   });
+});
+
+// 세션 정보 제공 엔드포인트
+app.get('/session', (req, res) => {
+  if (req.session.loggedIn) {
+    res.json({ loggedIn: true, username: req.session.username });
+  } else {
+    res.json({ loggedIn: false });
+  }
 });
 
 // 로그아웃 처리
