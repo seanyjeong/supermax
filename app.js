@@ -127,7 +127,7 @@ app.get('/25jeongsi', (req, res) => {
       res.status(200).json(rows);
     });
   } else {
-    res.redirect('/login');
+    res.status(401).json({ message: 'Unauthorized' });
   }
 });
 
@@ -153,7 +153,7 @@ app.get('/25susi', (req, res) => {
       res.status(200).json(rows);
     });
   } else {
-    res.redirect('/login');
+    res.status(401).json({ message: 'Unauthorized' });
   }
 });
 
@@ -176,7 +176,7 @@ app.get('/image/:id', (req, res) => {
       }
     });
   } else {
-    res.redirect('/login');
+    res.status(401).json({ message: 'Unauthorized' });
   }
 });
 
