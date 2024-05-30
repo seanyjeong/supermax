@@ -97,7 +97,7 @@ app.post('/login', (req, res) => {
   });
 });
 
-// 세션 정보 제공 엔드포인트
+// 세션 정보 제공 엔드포인트 추가
 app.get('/session', (req, res) => {
   if (req.session.loggedIn) {
     res.json({ loggedIn: true, username: req.session.username });
