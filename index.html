@@ -1,51 +1,58 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>University A 100m Record Input</title>
+    <title>맥스체대입시</title>
+    <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            color: black; /* 텍스트 색상을 검은색으로 설정 */
+        }
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 2rem;
+        }
+        img {
+            width: 50%;
+            height: auto;
+        }
+        .button-container {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        a {
+            padding: 1.5rem 0;
+            width: 200px; /* 버튼의 고정 너비 설정 */
+            background-color: #007bff;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        a:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
-    <h1>University A 100m Record Input</h1>
-    <form id="recordForm">
-        <label for="record">Enter Record (seconds):</label>
-        <input type="number" id="record" name="record" step="0.01" required>
-        <br>
-        <label for="gender">Select Gender:</label>
-        <select id="gender" name="gender" required>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-        </select>
-        <br>
-        <button type="submit">Submit</button>
-    </form>
-    <h2>Score: <span id="score"></span></h2>
-
-    <script>
-        document.getElementById('recordForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-
-            const record = document.getElementById('record').value;
-            const gender = document.getElementById('gender').value;
-
-            fetch('/get-score', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ record: record, gender: gender })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    document.getElementById('score').innerText = data.error;
-                } else {
-                    document.getElementById('score').innerText = data.score;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        });
-    </script>
+    <h1>맥스체대입시</h1>
+    <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
+    <div class="button-container">
+        <a href="/25susi">25수시요강 Demo</a>
+        <a href="/25jungsi">25정시요강</a>
+        <a href="/login">로그인</a> <!-- 로그인 버튼 추가 -->
+    </div>
 </body>
+<footer style="margin-top: 3rem; text-align: center;">
+    <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
+</footer>
 </html>
