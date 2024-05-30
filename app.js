@@ -2,6 +2,9 @@ const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
+const session = require('express-session');
+const bodyParser = require('body-parser');
+const path = require('path');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -52,57 +55,120 @@ app.use((req, res, next) => {
   next();
 });
 
-// '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', (req, res) => {
-  const query = 'SELECT * FROM 25정시';
-  connection.query(query, (err, rows) => {
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({
+  secret: 'secretKey',
+  resave: false,
+  saveUninitialized: true,
+}));
+
+// 로그인 페이지
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+// 로그인 처리
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+  connection.query(query, [username, password], (err, results) => {
     if (err) {
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
-    res.status(200).json(rows);
+
+    if (results.length > 0) {
+      req.session.loggedIn = true;
+      res.redirect('/');
+    } else {
+      res.send('로그인 실패. 다시 시도하세요.');
+    }
   });
+});
+
+// 로그아웃 처리
+app.get('/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ message: 'Failed to logout', error: err });
+    }
+    res.redirect('/login');
+  });
+});
+
+// 메인 페이지
+app.get('/', (req, res) => {
+  if (req.session.loggedIn) {
+    res.sendFile(path.join(__dirname, 'index.html'));
+  } else {
+    res.redirect('/login');
+  }
+});
+
+// '25정시' 데이터를 가져오는 엔드포인트
+app.get('/25jeongsi', (req, res) => {
+  if (req.session.loggedIn) {
+    const query = 'SELECT * FROM 25정시';
+    connection.query(query, (err, rows) => {
+      if (err) {
+        res.status(500).json({ message: 'Database query failed', error: err });
+        return;
+      }
+      res.status(200).json(rows);
+    });
+  } else {
+    res.redirect('/login');
+  }
 });
 
 // '25수시' 데이터를 가져오는 엔드포인트
 app.get('/25susi', (req, res) => {
-  const query = `
-    SELECT s.*, i.image_data
-    FROM 25수시 s
-    LEFT JOIN images i ON s.id = i.id
-  `;
-  connection.query(query, (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    // 각 행의 image_data를 Base64 인코딩 문자열로 변환
-    rows.forEach(row => {
-      if (row.image_data) {
-        row.image_data = row.image_data.toString('base64');
+  if (req.session.loggedIn) {
+    const query = `
+      SELECT s.*, i.image_data
+      FROM 25수시 s
+      LEFT JOIN images i ON s.id = i.id
+    `;
+    connection.query(query, (err, rows) => {
+      if (err) {
+        res.status(500).json({ message: 'Database query failed', error: err });
+        return;
       }
+      // 각 행의 image_data를 Base64 인코딩 문자열로 변환
+      rows.forEach(row => {
+        if (row.image_data) {
+          row.image_data = row.image_data.toString('base64');
+        }
+      });
+      res.status(200).json(rows);
     });
-    res.status(200).json(rows);
-  });
+  } else {
+    res.redirect('/login');
+  }
 });
 
 // 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
 app.get('/image/:id', (req, res) => {
-  const imageId = req.params.id;
-  const query = 'SELECT image_data FROM images WHERE id = ?';
+  if (req.session.loggedIn) {
+    const imageId = req.params.id;
+    const query = 'SELECT image_data FROM images WHERE id = ?';
 
-  connection.query(query, [imageId], (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    if (rows.length > 0) {
-      const imageData = rows[0].image_data.toString('base64');
-      res.status(200).json({ image_data: imageData });
-    } else {
-      res.status(404).json({ message: 'Image not found' });
-    }
-  });
+    connection.query(query, [imageId], (err, rows) => {
+      if (err) {
+        res.status(500).json({ message: 'Database query failed', error: err });
+        return;
+      }
+      if (rows.length > 0) {
+        const imageData = rows[0].image_data.toString('base64');
+        res.status(200).json({ image_data: imageData });
+      } else {
+        res.status(404).json({ message: 'Image not found' });
+      }
+    });
+  } else {
+    res.redirect('/login');
+  }
 });
 
 // 서버 시작
