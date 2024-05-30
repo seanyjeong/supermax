@@ -81,14 +81,14 @@ app.post('/login', (req, res) => {
   connection.query(query, [username, password], (err, results) => {
     if (err) {
       console.error('Database query failed:', err);
-      return res.status(500).json({ message: 'Database query failed', error: err });
+      return res.status(500).send('Database query failed. Please try again later.');
     }
 
     if (results.length > 0) {
       req.session.loggedIn = true;
       res.redirect('/');
     } else {
-      res.send('로그인 실패. 다시 시도하세요.');
+      res.status(401).send('Invalid username or password. Please try again.');
     }
   });
 });
