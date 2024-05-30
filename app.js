@@ -68,6 +68,9 @@ app.use(session({
   saveUninitialized: true,
 }));
 
+// 정적 파일을 서비스할 디렉토리 설정
+app.use(express.static(path.join(__dirname)));
+
 // 로그인 페이지
 app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'login.html'));
@@ -86,7 +89,7 @@ app.post('/login', (req, res) => {
 
     if (results.length > 0) {
       req.session.loggedIn = true;
-      res.redirect('/');
+      res.status(200).send('Login successful');
     } else {
       res.status(401).send('Invalid username or password. Please try again.');
     }
