@@ -70,7 +70,7 @@
             })
             .then(response => {
                 if (response.ok) {
-                    window.location.href = 'https://supermax.co.kr'; // 로그인 성공 시 리디렉션 URL
+                    window.location.href = '/'; // 로그인 성공 시 인덱스 페이지로 리디렉션
                 } else {
                     return response.text().then(text => { throw new Error(text) });
                 }
