@@ -41,38 +41,17 @@
         a:hover {
             background-color: #0056b3;
         }
-        .user-info {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 1rem;
-        }
     </style>
 </head>
 <body>
-    <div class="user-info" id="user-info"></div>
     <h1>맥스체대입시</h1>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
     <div class="button-container">
         <a href="/25susi">25수시요강 Demo</a>
         <a href="/25jungsi">25정시요강</a>
-        <a href="/login">로그인</a> <!-- 로그인 버튼 추가 -->
     </div>
-    <footer style="margin-top: 3rem; text-align: center;">
-        <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
-    </footer>
-    <script>
-        // 세션 정보를 가져와 로그인된 사용자의 ID를 표시합니다.
-        fetch('/session')
-            .then(response => response.json())
-            .then(data => {
-                if (data.loggedIn) {
-                    document.getElementById('user-info').textContent = `로그인 사용자: ${data.username}`;
-                } else {
-                    document.getElementById('user-info').textContent = '';
-                }
-            })
-            .catch(error => console.error('세션 정보 가져오기 오류:', error));
-    </script>
 </body>
+    <footer style="margin-top: 3rem; text-align: center;">
+  <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
+</footer>
 </html>
