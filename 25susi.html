@@ -3,27 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>25수시 (Demo)</title>
+<title>맥스 25수시 모집요강</title>
 <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
 <style>
   body.modal-open {
     overflow: hidden;
   }
+  body {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  .fixed-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    background-color: white;
+  }
+  .fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
+    margin: 0;
+    padding: 10px;
+    background-color: white;
+  }
+  .table-container {
+    padding: 0px;
+    overflow-x: auto;
+  }
   table {
     width: 100%;
-    margin: 0 auto;
+    margin: 0 ;
     border-collapse: collapse;
-    table-layout: fixed; /* 고정된 테이블 레이아웃 */
+    table-layout: fixed;
   }
-  table, th, td {
-    border: 1px solid black;
-  }
+
+  .buttons button {
+  width: 150px; /* 원하는 너비로 설정 */
+  height: 50px; /* 원하는 높이로 설정 */
+  font-size: 18px; /* 글씨 크기 설정 */
+  padding: 10px; /* 내부 여백 설정 */
+}
+
   th, td {
+    border: 1px solid black;
     padding: 8px;
     text-align: center;
-    white-space: nowrap; /* 줄바꿈 방지 */
-    overflow: hidden; /* 넘칠 경우 숨기기 */
-    text-overflow: ellipsis; /* 줄임표 표시 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   th {
     background-color: #f2f2f2;
@@ -31,27 +59,38 @@
   .filter-container {
     margin-bottom: 20px;
     text-align: left;
+    position: relative;
+    background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+    background-size: cover;
+    background-position: center;
+    padding: 20px;
+    border-radius: 10px;
   }
   .filter-title {
     font-weight: bold;
     margin-right: 10px;
+    position: relative;
+    z-index: 1;
   }
   .filter-box {
     display: inline-block;
-    padding: 10px;
+    padding: 8px;
     margin: 5px;
     border: 1px solid #ccc;
     cursor: pointer;
+    position: relative;
+    z-index: 1;
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
   }
   .filter-box.selected {
     background-color: #007bff;
     color: white;
   }
-  /* 모달 스타일 */
   .modal {
     display: none;
     position: fixed;
-    z-index: 1;
+    z-index: 2000;
     left: 0;
     top: 0;
     width: 100%;
@@ -95,7 +134,6 @@
   button {
     margin-bottom: 20px;
   }
-  /* 각 셀에 개별적인 스타일을 적용하여 셀 너비를 임의로 설정 */
   .col-1, .col-2, .col-3 {
     width: 2%;
   }
@@ -110,7 +148,7 @@
   }
   .image-modal {
     width: 800px;
-    max-width: 70%; /* 이미지가 너무 크지 않도록 조절 */
+    max-width: 70%;
   }
   .modal img {
     max-width: 100%;
@@ -119,22 +157,35 @@
 </style>
 </head>
 <body>
-<h1 style="text-align: center;">25수시 (Demo)</h1>
-<div class="filter-container" id="filter-container">
-  <!-- 필터링 옵션 -->
+<div class="fixed-header">
+  <h1 style="text-align: center;">맥스 25수시 모집요강</h1>
+  <div class="filter-container" id="filter-container">
+    <!-- 필터링 옵션 -->
+  </div>
+  <div class="buttons" style="text-align: center;">
+    <button onclick="clearFilters()">모두 해제</button>
+    <button onclick="applyFilter()">검색</button>
+  </div>
+  <table id="fixed-header-table">
+    <thead id="table-head">
+      <!-- 고정된 테이블 헤더 -->
+    </thead>
+  </table>
 </div>
-<div style="text-align: center;">
-  <button onclick="clearFilters()">모두 해제</button>
-  <button onclick="applyFilter()">검색</button>
+
+<div class="table-container" id="table-container">
+  <table id="data-table">
+    <thead>
+      <!-- 동일한 헤더로 간주 -->
+      <tr id="dummy-head" class="hidden">
+        <!-- 헤더 컬럼은 이곳에 추가됩니다 -->
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <!-- 테이블 바디 -->
+    </tbody>
+  </table>
 </div>
-<table id="data-table">
-  <thead id="table-head">
-    <!-- 테이블 헤더 -->
-  </thead>
-  <tbody id="table-body">
-    <!-- 테이블 바디가 -->
-  </tbody>
-</table>
 
 <!-- 모달 -->
 <div id="myModal" class="modal">
@@ -150,7 +201,6 @@
   let fullData = [];
   let filteredData = [];
   
-  // 데이터를 가져오고 테이블로 출력하는 함수
   function fetchData() {
     fetch('https://supermax.kr:3000/25susi')
       .then(response => response.json())
@@ -160,12 +210,13 @@
         createFilterOptions(data, '형태');
         createFilterOptions(data, '지역');
         createFilterOptions(data, '교직');
+        createPracticalFilterOptions(data);
         displayTable(data);
+        adjustTableContainerMargin();
       })
       .catch(error => console.error('데이터 가져오기 오류:', error));
   }
-  
-  // 필터 옵션 박스 생성 함수
+
   function createFilterOptions(data, category) {
     const filterContainer = document.getElementById('filter-container');
     const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
@@ -187,7 +238,45 @@
     filterContainer.appendChild(document.createElement('br'));
   }
   
-  // 필터 적용 함수
+  function createPracticalFilterOptions(data) {
+    const filterContainer = document.getElementById('filter-container');
+  
+    const title = document.createElement('span');
+    title.textContent = '실기';
+    title.className = 'filter-title';
+    filterContainer.appendChild(title);
+  
+    const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
+    const practicalValues = new Set();
+    
+    data.forEach(item => {
+      practicalFields.forEach(field => {
+        if (item[field]) {
+          practicalValues.add(item[field]);
+        }
+      });
+    });
+
+    practicalValues.forEach(value => {
+      const filterBox = document.createElement('div');
+      filterBox.className = 'filter-box';
+      filterBox.textContent = value;
+      filterBox.dataset.category = '실기';
+      filterBox.dataset.value = value;
+      filterBox.onclick = () => filterBox.classList.toggle('selected');
+      filterContainer.appendChild(filterBox);
+    });
+
+    const noneFilterBox = document.createElement('div');
+    noneFilterBox.className = 'filter-box';
+    noneFilterBox.textContent = '실기없음';
+    noneFilterBox.dataset.category = '실기';
+    noneFilterBox.dataset.value = '실기없음';
+    noneFilterBox.onclick = () => noneFilterBox.classList.toggle('selected');
+    filterContainer.appendChild(noneFilterBox);
+    filterContainer.appendChild(document.createElement('br'));
+  }
+  
   function applyFilter() {
     const selectedFilters = {};
     document.querySelectorAll('.filter-box.selected').forEach(box => {
@@ -198,30 +287,38 @@
       }
       selectedFilters[category].push(value);
     });
+
+    const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
   
     filteredData = fullData.filter(item => {
-      return Object.keys(selectedFilters).every(category => 
-        selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category])
-      );
+      return Object.keys(selectedFilters).every(category => {
+        if (category === '실기') {
+          if (selectedFilters[category].includes('실기없음')) {
+            return practicalFields.every(field => !item[field]);
+          }
+          return selectedFilters[category].every(value => 
+            practicalFields.every(field => item[field] !== value)
+          );
+        }
+        return selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category]);
+      });
     });
     displayTable(filteredData);
   }
   
-  // 선택 해제 함수
   function clearFilters() {
     document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
     filteredData = fullData;
     displayTable(filteredData);
   }
   
-  // 테이블 표시 함수
   function displayTable(data) {
     const tableHead = document.getElementById('table-head');
     const tableBody = document.getElementById('table-body');
   
     tableHead.innerHTML = '';
     if (data.length > 0) {
-      const headers = Object.keys(data[0]).filter(header => header !== 'id'); // 'id' 제외
+      const headers = Object.keys(data[0]).filter(header => header !== 'id');
       const tr = document.createElement('tr');
       headers.filter((header, index) => 
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
@@ -248,7 +345,7 @@
       tr.onclick = () => showModal(row);
       Object.keys(row).filter((key, index) => 
         key !== 'id' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
-      ).forEach((key, index) => { // 'id' 제외
+      ).forEach((key, index) => {
         const td = document.createElement('td');
         td.textContent = row[key];
         if (index < 3) {
@@ -266,7 +363,6 @@
     });
   }
   
-  // 모달 표시 함수
   function showModal(data) {
     const modal = document.getElementById('myModal');
     const modalContent = document.querySelector('.modal-content');
@@ -278,7 +374,6 @@
     title.textContent = `${data['대학명']} - ${data['학과명']}`;
     modalBody.appendChild(title);
   
-    // 이미지를 불러와 표시하는 부분 추가
     if (data['image_data']) {
       const img = document.createElement('img');
       img.src = `data:image/png;base64,${data['image_data']}`;
@@ -289,7 +384,6 @@
       const table = document.createElement('table');
       table.className = 'modal-table';
   
-      // 모달 테이블의 내용 구성
       const rows = [
         ['종류', '형태', '지역'],
         ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
@@ -333,29 +427,37 @@
       modalContent.classList.remove('image-modal');
     }
     modal.style.display = 'block';
-    document.body.classList.add('modal-open'); // 모달 열렸을 때 스크롤 막기
+    document.body.classList.add('modal-open');
   }
   
-  // 모달 닫기 함수
   function closeModal() {
     const modal = document.getElementById('myModal');
     modal.style.display = 'none';
-    document.body.classList.remove('modal-open'); // 모달 닫혔을 때 스크롤 해제
+    document.body.classList.remove('modal-open');
   }
   
-  // 모달 닫기 버튼 이벤트 설정
+  function adjustTableContainerMargin() {
+    const fixedHeader = document.querySelector('.fixed-header');
+    const tableContainer = document.getElementById('table-container');
+    const headerHeight = fixedHeader.offsetHeight;
+    tableContainer.style.marginTop = `${headerHeight}px`;
+  }
+
   document.querySelector('.close').onclick = closeModal;
   window.onclick = function(event) {
     const modal = document.getElementById('myModal');
     if (event.target == modal) {
       modal.style.display = 'none';
-      document.body.classList.remove('modal-open'); // 모달 닫혔을 때 스크롤 해제
+      document.body.classList.remove('modal-open');
     }
   }
-  
-  // 페이지 로드 시 데이터를 가져옵니다.
-  document.addEventListener('DOMContentLoaded', fetchData);
-  </script>
+
+  window.onresize = adjustTableContainerMargin;
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchData();
+    adjustTableContainerMargin();
+  });
+</script>
 </body>
 <footer style="margin-top: 3rem; text-align: center;">
   <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
