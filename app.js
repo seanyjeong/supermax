@@ -2,6 +2,8 @@ const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
+const session = require('express-session');
+const bodyParser = require('body-parser');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -43,8 +45,16 @@ function handleDisconnect() {
 
 handleDisconnect();
 
-// HTTPS 서버를 생성합니다.
-const server = https.createServer(sslOptions, app);
+// 미들웨어 설정
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+
+app.use(session({
+  secret: 'your-very-secure-secret-key',  // 여기에 그대로 사용
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: true }  // HTTPS를 사용하기 때문에 true로 설정
+}));
 
 // CORS 헤더를 설정합니다.
 app.use((req, res, next) => {
@@ -52,8 +62,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', (req, res) => {
+// 로그인 엔드포인트
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+
+  connection.query(query, [username, password], (err, rows) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+    if (rows.length > 0) {
+      req.session.user = rows[0];
+      res.status(200).json({ message: 'Login successful' });
+    } else {
+      res.status(401).json({ message: 'Invalid credentials' });
+    }
+  });
+});
+
+// 로그인 상태 확인 미들웨어
+function isAuthenticated(req, res, next) {
+  if (req.session.user) {
+    next();
+  } else {
+    res.status(401).json({ message: 'Unauthorized' });
+  }
+}
+
+// 페이지 접근 제어 엔드포인트
+app.get('/25jeongsi', isAuthenticated, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
@@ -64,8 +102,7 @@ app.get('/25jeongsi', (req, res) => {
   });
 });
 
-// '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', (req, res) => {
+app.get('/25susi', isAuthenticated, (req, res) => {
   const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
@@ -76,7 +113,6 @@ app.get('/25susi', (req, res) => {
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
-    // 각 행의 image_data를 Base64 인코딩 문자열로 변환
     rows.forEach(row => {
       if (row.image_data) {
         row.image_data = row.image_data.toString('base64');
@@ -106,6 +142,7 @@ app.get('/image/:id', (req, res) => {
 });
 
 // 서버 시작
+const server = https.createServer(sslOptions, app);
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at https://0.0.0.0:3000/');
 });
