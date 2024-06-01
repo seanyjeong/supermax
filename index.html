@@ -66,28 +66,37 @@
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
 
+            console.log('Attempting to log in with username:', username);
+
             fetch('https://supermax.kr/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ username, password }),
-                credentials: 'include'  // 추가
+                credentials: 'include'
             })
             .then(response => {
+                console.log('Received response:', response);
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }
                 return response.json();
             })
             .then(data => {
+                console.log('Received data:', data);
                 if (data.message === 'Login successful') {
+                    console.log('Login successful, redirecting to 25susi.html');
                     window.location.href = '25susi.html';
                 } else {
+                    console.log('Invalid credentials');
                     document.getElementById('message').innerText = 'Invalid credentials';
                 }
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => {
+                console.error('Error during login:', error);
+                document.getElementById('message').innerText = 'Error: ' + error.message;
+            });
         }
     </script>
 </body>
