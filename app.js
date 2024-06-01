@@ -74,17 +74,23 @@ app.use((req, res, next) => {
 
 // 로그인 API
 app.post('/login', (req, res) => {
+  console.log('Received POST /login request');
   const { username, password } = req.body;
+  console.log(`Username: ${username}, Password: ${password}`);
+
   const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
   connection.query(query, [username, password], (err, results) => {
     if (err) {
+      console.error('Database query error:', err);
       return res.status(500).json({ message: 'Database query failed', error: err });
     }
     if (results.length > 0) {
+      console.log('Login successful');
       req.session.loggedIn = true;
       req.session.username = username;
       return res.redirect('/index.html');
     } else {
+      console.log('Invalid username or password');
       return res.status(401).send('아이디 또는 비밀번호가 일치하지 않습니다');
     }
   });
@@ -116,6 +122,7 @@ app.get('/25jeongsi', authMiddleware, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
+      console.error('Database query error:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -132,6 +139,7 @@ app.get('/25susi', authMiddleware, (req, res) => {
   `;
   connection.query(query, (err, rows) => {
     if (err) {
+      console.error('Database query error:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -152,6 +160,7 @@ app.get('/image/:id', authMiddleware, (req, res) => {
 
   connection.query(query, [imageId], (err, rows) => {
     if (err) {
+      console.error('Database query error:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
