@@ -8,29 +8,32 @@
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
     
     <style>
+
+
       body {
-        background-color: black;
-        color: white;
+        background-color: white;
+        color: black;
         margin: 0;
         padding: 0;
       }
       .fixed-header {
         position: sticky;
         top: 0;
-        background-color: black;
+        background-color: white;
         z-index: 1000;
         padding: 0; /* 상단 고정 부분의 패딩 제거 */
       }
       .header-container {
-        background-color: black;
+        background-color: white;
         text-align: center;
         padding: 0; /* 패딩 제거 */
         margin: 0; /* 마진 제거 */
       }
       .header-container h1 {
-        font-family: 'Roboto', sans-serif;
-        font-size: larger;
-        margin: 0; /* 제목의 마진 제거 */
+   
+        font-size: 24px;
+        margin: 1; /* 제목의 마진 제거 */
+        color: black;
       }
       .filter-container {
         display: flex;
@@ -51,7 +54,7 @@
       .filter-legend {
         display: block;
         font-weight: bold;
-        color: white;
+        color: black;
         margin-bottom: 2px;
       }
       .filter-legend.red {
@@ -61,10 +64,10 @@
         display: inline-block;
         margin: 5px;
         padding: 5px;
-        border: 1px solid #ddd;
+        border: 1px solid #b4afaf;
         cursor: pointer;
-        background-color: black;
-        color: white;
+        background-color: rgba(255, 255, 255, 0.8); /* 배경에 투명도 추가 */
+        color: black;
         border-radius: 10px; /* 모서리를 둥글게 */
       }
       .filter-option.selected {
@@ -76,10 +79,10 @@
         table-layout: fixed;
         border-collapse: collapse;
         margin-top: 0; /* 테이블 상단 간격 제거 */
-        color: white;
+        color: black;
       }
       table, th, td {
-        border: 1px solid white;
+        border: 1px solid black;
       }
       th, td {
         padding: 8px;
@@ -89,7 +92,7 @@
         text-overflow: ellipsis;
       }
       th {
-        background-color: #333;
+        background-color: #f2f2f2;
       }
       .col-1 { width: 30px; }
       .col-2 { width: 40px; }
@@ -108,21 +111,28 @@
       .button-container button {
         padding: 10px 20px;
         margin: 0 10px; /* 버튼 사이의 간격 */
-        background-color: black;
-        color: white;
-        border: 1px solid white;
+        background-color: rgb(207, 206, 206);
+        color: black;
+        border: 1px solid black;
         cursor: pointer;
         border-radius: 10px;
         width: 150px; /* 버튼의 너비를 지정 */
         text-align: center; /* 텍스트를 중앙에 정렬 */
+        width: 120px; /* 원하는 너비로 설정 */
+    height: 40px; /* 원하는 높이로 설정 */
+    font-size: 13px; /* 글씨 크기 설정 */
+    padding: 5px; /* 내부 여백 설정 */
+    border-radius: 10px;
+    border: 2px solid #000000;
+        
       }
       .count-display {
         font-size: 16px;
         margin-left: 10px;
-        color: white;
+        color: black;
       }
       .highlighted-row {
-        background-color: #555;
+        background-color: #f2f2f2;
       }
       .full-text {
         overflow: visible;
@@ -176,13 +186,13 @@
         padding-top: 60px;
       }
       .modal-content {
-        background-color: black;
+        background-color: white;
         margin: 5% auto;
         padding: 20px;
-        border: 1px solid white;
+        border: 1px solid black;
         width: 90%;
         max-width: 600px;
-        color: white;
+        color: black;
         overflow-x: auto; /* 가로 스크롤 활성화 */
         position: relative; /* 닫기 버튼 위치를 위해 상대 위치 지정 */
       }
@@ -191,7 +201,7 @@
         border-collapse: collapse;
       }
       .modal-content th, .modal-content td {
-        border: 1px solid white;
+        border: 1px solid black;
         padding: 5px;
         text-align: left;
         white-space: nowrap; /* 텍스트 줄바꿈 방지 */
@@ -223,6 +233,10 @@
     <div class="header-container">
       <h1>맥스체대입시 25정시간단요강</h1>
       <div id="filters" class="filter-container"></div>
+      <div style="text-align: center; margin-bottom: 10px;">
+        <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 10px;"> <!-- 검색창 위치 변경 -->
+        <button onclick="searchByUniversity()">검색</button>
+      </div>
       <div class="button-container">
         <button onclick="clearFilters()">모두 해제</button>
         <button onclick="applyFilters()">검색</button>
@@ -258,12 +272,14 @@
   
   <script>
   
+  let originalData = [];
   let filteredData = [];
   
   function fetchData() {
     fetch('https://supermax.kr:3000/25jeongsi') // 엔드포인트를 '/25jeongsi'로 변경
       .then(response => response.json())
       .then(data => {
+        originalData = data; // 전체 데이터를 저장
         // '25정시' 테이블 데이터를 사용하여 필터 옵션 생성 및 기타 작업 수행
         createFilterOptions(data, '군');
         createFilterOptions(data, '형태');
@@ -387,56 +403,52 @@
   }
   
   function applyFilters() {
-    fetch('https://supermax.kr:3000/25jeongsi')
-      .then(response => response.json())
-      .then(data => {
-        const selectedFilters = {};
-        document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
-          const field = filterOption.parentNode.querySelector('span').textContent.replace(' 제외', '');
-          if (!selectedFilters[field]) {
-            selectedFilters[field] = [];
-          }
-          selectedFilters[field].push(filterOption.textContent);
-        });
+    const selectedFilters = {};
+    document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
+      const field = filterOption.parentNode.querySelector('span').textContent.replace(' 제외', '');
+      if (!selectedFilters[field]) {
+        selectedFilters[field] = [];
+      }
+      selectedFilters[field].push(filterOption.textContent);
+    });
   
-        filteredData = data.filter(item => {
-          return Object.keys(selectedFilters).every(field => {
-            if (field === '과목') {
-              return selectedFilters[field].every(subject => {
-                return (
-                  item[subject] === null || 
-                  item[subject] === '' || 
-                  /\(.*?\)/.test(item[subject])
-                );
-              });
-            } else if (field === '실기') {
-              const excludedSkills = selectedFilters[field];
-              return !excludedSkills.some(skill => {
-                for (let i = 1; i <= 6; i++) {
-                  if (item[`실기${i}`] === skill) {
-                    return true;
-                  }
-                }
-                return false;
-              });
-            } else if (field === '탐구반영갯수') {
-              const selectedNumbers = selectedFilters[field].map(Number);
-              return selectedNumbers.includes(item[field]);
-            }
-            return selectedFilters[field].includes(item[field]);
+    filteredData = originalData.filter(item => {
+      return Object.keys(selectedFilters).every(field => {
+        if (field === '과목') {
+          return selectedFilters[field].every(subject => {
+            return (
+              item[subject] === null || 
+              item[subject] === '' || 
+              /\(.*?\)/.test(item[subject])
+            );
           });
-        });
+        } else if (field === '실기') {
+          const excludedSkills = selectedFilters[field];
+          return !excludedSkills.some(skill => {
+            for (let i = 1; i <= 6; i++) {
+              if (item[`실기${i}`] === skill) {
+                return true;
+              }
+            }
+            return false;
+          });
+        } else if (field === '탐구반영갯수') {
+          const selectedNumbers = selectedFilters[field].map(Number);
+          return selectedNumbers.includes(item[field]);
+        }
+        return selectedFilters[field].includes(item[field]);
+      });
+    });
   
-        updateTable();
-        updateCountDisplay(); // 필터 적용 후 개수 업데이트
-      })
-      .catch(error => console.error('Error fetching data:', error));
+    updateTable();
+    updateCountDisplay(); // 필터 적용 후 개수 업데이트
   }
   
   function clearFilters() {
     document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
       filterOption.classList.remove('selected');
     });
+    document.getElementById('search-input').value = ''; // 검색창 초기화
     applyFilters();
   }
   
@@ -574,6 +586,23 @@
       link.click();
     });
   }
+  
+  function searchByUniversity() {
+    const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
+    if (searchInput) {
+      filteredData = originalData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
+    } else {
+      filteredData = [...originalData]; // 검색어가 없으면 전체 데이터로 초기화
+    }
+    updateTable();
+    updateCountDisplay();
+  }
+  
+  document.getElementById('search-input').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      searchByUniversity();
+    }
+  });
   
   window.onload = fetchData;
   </script>
