@@ -4,6 +4,7 @@ const mysql = require('mysql');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -48,17 +49,24 @@ handleDisconnect();
 // 미들웨어 설정
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(cors({
+  origin: 'https://supermax.co.kr', // 허용할 도메인
+  credentials: true // 쿠키를 허용
+}));
 
 app.use(session({
-  secret: 'your-very-secure-secret-key',  // 여기에 그대로 사용
+  secret: 'your-very-secure-secret-key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: true }  // HTTPS를 사용하기 때문에 true로 설정
+  cookie: { secure: true }
 }));
 
 // CORS 헤더를 설정합니다.
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', 'https://supermax.co.kr');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+  res.setHeader('Access-Control-Allow-Credentials', true);
   next();
 });
 
