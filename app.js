@@ -50,12 +50,14 @@ handleDisconnect();
 const server = https.createServer(sslOptions, app);
 
 // CORS 설정
-app.use(cors({
+const corsOptions = {
   origin: 'https://supermax.co.kr',
   methods: 'GET,POST',
   allowedHeaders: ['Content-Type'],
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -63,7 +65,7 @@ app.use(session({
   secret: 'your-secret-key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: true }
+  cookie: { secure: true, sameSite: 'none' }
 }));
 
 // 로그인 엔드포인트
