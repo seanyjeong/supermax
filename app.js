@@ -5,8 +5,23 @@ const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const morgan = require('morgan');
+const winston = require('winston');
 
 const app = express();
+
+// 로그 설정
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
 
 // SSL/TLS 설정을 불러옵니다.
 const sslOptions = {
@@ -30,13 +45,13 @@ function handleDisconnect() {
 
   connection.connect(function(err) {
     if (err) {
-      console.log('error when connecting to db:', err);
+      logger.error('error when connecting to db:', err);
       setTimeout(handleDisconnect, 2000);
     }
   });
 
   connection.on('error', function(err) {
-    console.log('db error', err);
+    logger.error('db error', err);
     if (err.code === 'PROTOCOL_CONNECTION_LOST') {
       handleDisconnect();
     } else {
@@ -68,6 +83,9 @@ app.use(cors({
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// HTTP 요청 로깅
+app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
+
 // 로그인 엔드포인트
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -75,14 +93,17 @@ app.post('/login', (req, res) => {
 
   connection.query(query, [username, password], (err, results) => {
     if (err) {
+      logger.error('Database query failed', { error: err });
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
 
     if (results.length > 0) {
       req.session.loggedIn = true;
+      logger.info('User logged in', { username });
       res.status(200).json({ message: 'Login successful' });
     } else {
+      logger.warn('Invalid credentials', { username });
       res.status(401).json({ message: 'Invalid credentials' });
     }
   });
@@ -93,6 +114,7 @@ function isAuthenticated(req, res, next) {
   if (req.session.loggedIn) {
     return next();
   } else {
+    logger.warn('Not authenticated');
     res.status(403).json({ message: 'Not authenticated' });
   }
 }
@@ -102,9 +124,11 @@ app.get('/25jeongsi', isAuthenticated, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
+      logger.error('Database query failed', { error: err });
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
+    logger.info('25정시 data retrieved', { rows: rows.length });
     res.status(200).json(rows);
   });
 });
@@ -118,15 +142,16 @@ app.get('/25susi', isAuthenticated, (req, res) => {
   `;
   connection.query(query, (err, rows) => {
     if (err) {
+      logger.error('Database query failed', { error: err });
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
-    // 각 행의 image_data를 Base64 인코딩 문자열로 변환
     rows.forEach(row => {
       if (row.image_data) {
         row.image_data = row.image_data.toString('base64');
       }
     });
+    logger.info('25수시 data retrieved', { rows: rows.length });
     res.status(200).json(rows);
   });
 });
@@ -138,13 +163,16 @@ app.get('/image/:id', isAuthenticated, (req, res) => {
 
   connection.query(query, [imageId], (err, rows) => {
     if (err) {
+      logger.error('Database query failed', { error: err });
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
     if (rows.length > 0) {
       const imageData = rows[0].image_data.toString('base64');
+      logger.info('Image data retrieved', { imageId });
       res.status(200).json({ image_data: imageData });
     } else {
+      logger.warn('Image not found', { imageId });
       res.status(404).json({ message: 'Image not found' });
     }
   });
@@ -152,5 +180,5 @@ app.get('/image/:id', isAuthenticated, (req, res) => {
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at https://0.0.0.0:3000/');
+  logger.info('Server running at https://0.0.0.0:3000/');
 });
