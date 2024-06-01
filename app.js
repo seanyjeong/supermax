@@ -4,7 +4,7 @@ const mysql = require('mysql');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
-const cors = require('cors');  // 추가
+const cors = require('cors');  // cors 패키지 추가
 
 const app = express();
 
@@ -60,9 +60,9 @@ app.use(session({
 
 // CORS 설정
 app.use(cors({
-  origin: 'https://supermax.co.kr',
-  methods: ['GET', 'POST'],
-  credentials: true
+  origin: 'https://supermax.co.kr', // CORS 허용 도메인
+  methods: ['GET', 'POST'], // 허용 메소드
+  credentials: true // 인증 정보 허용
 }));
 
 app.use(bodyParser.urlencoded({ extended: true }));
