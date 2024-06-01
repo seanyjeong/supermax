@@ -2,6 +2,8 @@ const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
+const session = require('express-session');
+const bodyParser = require('body-parser');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -46,14 +48,56 @@ handleDisconnect();
 // HTTPS 서버를 생성합니다.
 const server = https.createServer(sslOptions, app);
 
+// 세션 설정
+app.use(session({
+  secret: 'your_secret_key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: true }
+}));
+
 // CORS 헤더를 설정합니다.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   next();
 });
 
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
+// 로그인 엔드포인트
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+
+  connection.query(query, [username, password], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    if (results.length > 0) {
+      req.session.loggedIn = true;
+      res.status(200).json({ message: 'Login successful' });
+    } else {
+      res.status(401).json({ message: 'Invalid credentials' });
+    }
+  });
+});
+
+// 로그인 여부를 확인하는 미들웨어
+function isAuthenticated(req, res, next) {
+  if (req.session.loggedIn) {
+    return next();
+  } else {
+    res.status(403).json({ message: 'Not authenticated' });
+  }
+}
+
 // '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', (req, res) => {
+app.get('/25jeongsi', isAuthenticated, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
@@ -65,7 +109,7 @@ app.get('/25jeongsi', (req, res) => {
 });
 
 // '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', (req, res) => {
+app.get('/25susi', isAuthenticated, (req, res) => {
   const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
@@ -87,7 +131,7 @@ app.get('/25susi', (req, res) => {
 });
 
 // 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', (req, res) => {
+app.get('/image/:id', isAuthenticated, (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
