@@ -8,41 +8,49 @@
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
     
     <style>
-      body {
-        background-color: white;
-        color: black;
-        margin: 0;
-        padding: 0;
-      }
-      .fixed-header {
-        position: sticky;
-        top: 0;
-        background-color: white;
-        z-index: 1000;
-        padding: 0; /* 상단 고정 부분의 패딩 제거 */
-      }
-      .header-container {
-        background-color: white;
-        text-align: center;
-        padding: 0; /* 패딩 제거 */
-        margin: 0; /* 마진 제거 */
-      }
-      .header-container h1 {
-        font-size: 24px;
-        margin: 1; /* 제목의 마진 제거 */
-        color: black;
-      }
-      .filter-container {
-        display: flex;
-        flex-direction: column; /* 필터 그룹을 세로로 정렬 */
-        align-items: flex-start; /* 필터 그룹을 왼쪽 정렬 */
-        padding: 10px; /* 상하 간격 조정 */
-        background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
-        background-size: contain;
-        background-position: center;
-        background-repeat: no-repeat;
-        margin-top: 0; /* 간격 제거 */
-      }
+body {
+  background-color: white;
+  color: black;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+.fixed-header {
+  position: sticky;
+  top: 0;
+  background-color: white;
+  z-index: 1000;
+  padding: 0;
+}
+
+.header-container {
+  background-color: white;
+  text-align: center;
+  padding: 0;
+  margin: 0;
+}
+
+.header-container h1 {
+  font-size: 24px;
+  margin: 0;
+  padding: 10px 0; /* 수정된 부분 */
+  color: black;
+}
+
+.filter-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px;
+  background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  margin-top: 0;
+}
+
+
       .filter-group {
         display: flex;
         align-items: center; /* 필터 제목과 옵션을 같은 행에 배치 */
