@@ -4,6 +4,7 @@ const mysql = require('mysql');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
+const cors = require('cors'); // CORS 미들웨어 추가
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -60,17 +61,18 @@ app.use(session({
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// CORS 헤더를 설정합니다.
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+// CORS 설정
+const corsOptions = {
+  origin: '*', // 모든 도메인에서의 요청을 허용
+  methods: 'GET, POST, OPTIONS, PUT, PATCH, DELETE',
+  allowedHeaders: 'X-Requested-With,content-type',
+  credentials: true
+};
+
+app.use(cors(corsOptions)); // CORS 미들웨어 사용
+
+// OPTIONS 요청 처리
+app.options('*', cors(corsOptions));
 
 // 로그인 API
 app.post('/login', (req, res) => {
