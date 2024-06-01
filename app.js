@@ -84,6 +84,7 @@ app.use(cors({
 
 // 명시적으로 CORS 헤더 추가
 app.use((req, res, next) => {
+  logger.info('CORS check', { origin: req.headers.origin });
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS,POST,PUT');
