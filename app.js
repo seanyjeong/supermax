@@ -4,7 +4,7 @@ const mysql = require('mysql');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
-const cors = require('cors');  // cors 패키지 추가
+const cors = require('cors');
 
 const app = express();
 
