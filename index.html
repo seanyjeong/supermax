@@ -71,7 +71,8 @@
             fetch('https://supermax.kr/login', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token // 필요한 경우 추가
                 },
                 body: JSON.stringify({ username, password }),
                 credentials: 'include'
