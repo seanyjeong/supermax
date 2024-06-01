@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const morgan = require('morgan');
 const winston = require('winston');
+const jwt = require('jsonwebtoken'); // 추가
 
 const app = express();
 
@@ -93,6 +94,9 @@ app.use(cors({
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// JWT 비밀키 설정
+const jwtSecret = 'your_jwt_secret';
+
 // HTTP 요청 로깅
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
@@ -110,9 +114,9 @@ app.post('/login', (req, res) => {
     }
 
     if (results.length > 0) {
-      req.session.loggedIn = true;
+      const token = jwt.sign({ username }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
       logger.info('User logged in', { username });
-      res.status(200).json({ message: 'Login successful' });
+      res.status(200).json({ message: 'Login successful', token }); // 토큰 반환
     } else {
       logger.warn('Invalid credentials', { username });
       res.status(401).json({ message: 'Invalid credentials' });
@@ -120,18 +124,22 @@ app.post('/login', (req, res) => {
   });
 });
 
-// 로그인 여부를 확인하는 미들웨어
-function isAuthenticated(req, res, next) {
-  if (req.session.loggedIn) {
-    return next();
-  } else {
-    logger.warn('Not authenticated');
-    res.status(403).json({ message: 'Not authenticated' });
-  }
+// JWT 인증 미들웨어
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.status(401).json({ message: 'No token provided' });
+
+  jwt.verify(token, jwtSecret, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+    req.user = user;
+    next();
+  });
 }
 
 // '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', isAuthenticated, (req, res) => {
+app.get('/25jeongsi', authenticateToken, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
@@ -145,7 +153,7 @@ app.get('/25jeongsi', isAuthenticated, (req, res) => {
 });
 
 // '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', isAuthenticated, (req, res) => {
+app.get('/25susi', authenticateToken, (req, res) => {
   const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
@@ -168,7 +176,7 @@ app.get('/25susi', isAuthenticated, (req, res) => {
 });
 
 // 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', isAuthenticated, (req, res) => {
+app.get('/image/:id', authenticateToken, (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
