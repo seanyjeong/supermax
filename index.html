@@ -13,7 +13,7 @@
             margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             text-align: center;
-            color: black; /* 텍스트 색상을 검은색으로 설정 */
+            color: black;
         }
         h1 {
             font-size: 3rem;
@@ -23,22 +23,28 @@
             width: 50%;
             height: auto;
         }
-        .button-container {
+        .form-container {
             display: flex;
+            flex-direction: column;
             gap: 1rem;
             margin-top: 2rem;
         }
-        a {
-            padding: 1.5rem 0;
-            width: 200px; /* 버튼의 고정 너비 설정 */
+        input {
+            padding: 0.5rem;
+            font-size: 1rem;
+            width: 200px;
+        }
+        button {
+            padding: 0.5rem;
+            width: 100px;
             background-color: #007bff;
             color: #fff;
-            text-decoration: none;
+            border: none;
             border-radius: 5px;
-            font-size: 1.5rem;
-            text-align: center;
+            font-size: 1rem;
+            cursor: pointer;
         }
-        a:hover {
+        button:hover {
             background-color: #0056b3;
         }
     </style>
@@ -46,12 +52,37 @@
 <body>
     <h1>맥스체대입시</h1>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
-    <div class="button-container">
-        <a href="/25susi">25수시요강 Demo</a>
-        <a href="/25jungsi">25정시요강</a>
+    <div class="form-container">
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
     </div>
-</body>
+    <div id="message"></div>
     <footer style="margin-top: 3rem; text-align: center;">
-  <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
-</footer>
+      <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
+    </footer>
+    <script>
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            fetch('https://supermax.kr/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === 'Login successful') {
+                    window.location.href = '25susi.html';
+                } else {
+                    document.getElementById('message').innerText = 'Invalid credentials';
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    </script>
+</body>
 </html>
