@@ -2,9 +2,6 @@ const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
-const session = require('express-session');
-const bodyParser = require('body-parser');
-const cors = require('cors');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -49,82 +46,17 @@ handleDisconnect();
 // HTTPS 서버를 생성합니다.
 const server = https.createServer(sslOptions, app);
 
-// 세션 설정
-app.use(session({
-  secret: 'your-secret-key', // secret key를 적절히 변경하세요
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false } // HTTPS를 사용하는 경우 secure: true로 설정
-}));
-
-// Body parser 설정
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
-// CORS 설정
-const corsOptions = {
-  origin: 'https://supermax.co.kr', // 프론트엔드 도메인
-  methods: 'GET, POST, OPTIONS, PUT, PATCH, DELETE',
-  allowedHeaders: 'X-Requested-With,content-type',
-  credentials: true
-};
-
-app.use(cors(corsOptions));
-
-// OPTIONS 요청 처리
-app.options('*', cors(corsOptions));
-
-// 로그인 API
-app.post('/login', (req, res) => {
-  console.log('Received POST /login request');
-  const { username, password } = req.body;
-  console.log(`Username: ${username}, Password: ${password}`);
-
-  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
-  connection.query(query, [username, password], (err, results) => {
-    if (err) {
-      console.error('Database query error:', err);
-      return res.status(500).json({ message: 'Database query failed', error: err });
-    }
-    if (results.length > 0) {
-      console.log('Login successful');
-      req.session.loggedIn = true;
-      req.session.username = username;
-      return res.redirect('/index.html');
-    } else {
-      console.log('Invalid username or password');
-      return res.status(401).send('아이디 또는 비밀번호가 일치하지 않습니다');
-    }
-  });
-});
-
-// 인증 미들웨어
-function authMiddleware(req, res, next) {
-  if (req.session.loggedIn) {
-    next();
-  } else {
-    res.redirect('/login.html');
-  }
-}
-
-// 정적 파일 제공 (로그인 페이지와 리소스들)
-app.use(express.static('public'));
-
-// 보호된 라우트 설정
-app.get('/25susi.html', authMiddleware, (req, res) => {
-  res.sendFile(__dirname + '/public/25susi.html');
-});
-
-app.get('/25jungsi.html', authMiddleware, (req, res) => {
-  res.sendFile(__dirname + '/public/25jungsi.html');
+// CORS 헤더를 설정합니다.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
 });
 
 // '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', authMiddleware, (req, res) => {
+app.get('/25jeongsi', (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
-      console.error('Database query error:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -133,7 +65,7 @@ app.get('/25jeongsi', authMiddleware, (req, res) => {
 });
 
 // '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', authMiddleware, (req, res) => {
+app.get('/25susi', (req, res) => {
   const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
@@ -141,7 +73,6 @@ app.get('/25susi', authMiddleware, (req, res) => {
   `;
   connection.query(query, (err, rows) => {
     if (err) {
-      console.error('Database query error:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -156,13 +87,12 @@ app.get('/25susi', authMiddleware, (req, res) => {
 });
 
 // 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', authMiddleware, (req, res) => {
+app.get('/image/:id', (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
   connection.query(query, [imageId], (err, rows) => {
     if (err) {
-      console.error('Database query error:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
