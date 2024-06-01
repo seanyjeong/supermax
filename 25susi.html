@@ -285,16 +285,8 @@
     title.className = 'filter-title filter-title-practical'; /* 필터 제목에 클래스 추가 */
     filterContainer.appendChild(title);
 
+    const practicalValues = ['제멀', '메던', '배근력', '좌전굴', '체전굴', '20m'];
     const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
-    const practicalValues = new Set();
-    
-    data.forEach(item => {
-      practicalFields.forEach(field => {
-        if (item[field]) {
-          practicalValues.add(item[field]);
-        }
-      });
-    });
 
     practicalValues.forEach(value => {
       const filterBox = document.createElement('div');
@@ -323,15 +315,17 @@
     const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
 
     filteredData = fullData.filter(item => {
-      return Object.keys(selectedFilters).every(category => {
+      const passesFilter = Object.keys(selectedFilters).every(category => {
         if (category === '실기') {
-          return selectedFilters[category].some(value => 
+          return !selectedFilters[category].some(value => 
             practicalFields.some(field => item[field] === value)
           );
         }
         return selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category]);
       });
+      return passesFilter;
     });
+
     displayTable(filteredData);
   }
 
