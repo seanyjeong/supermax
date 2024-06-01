@@ -4,7 +4,7 @@ const mysql = require('mysql');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
-const cors = require('cors'); // CORS 미들웨어 추가
+const cors = require('cors');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -63,13 +63,13 @@ app.use(bodyParser.json());
 
 // CORS 설정
 const corsOptions = {
-  origin: '*', // 모든 도메인에서의 요청을 허용
+  origin: 'https://supermax.co.kr', // 프론트엔드 도메인
   methods: 'GET, POST, OPTIONS, PUT, PATCH, DELETE',
   allowedHeaders: 'X-Requested-With,content-type',
   credentials: true
 };
 
-app.use(cors(corsOptions)); // CORS 미들웨어 사용
+app.use(cors(corsOptions));
 
 // OPTIONS 요청 처리
 app.options('*', cors(corsOptions));
