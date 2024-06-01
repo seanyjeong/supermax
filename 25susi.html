@@ -27,6 +27,11 @@
     padding: 10px;
     background-color: white;
   }
+  .fixed-header h1 {
+    text-align: center;
+    font-size: 24px; /* 원하는 폰트 사이즈로 변경 */
+  }
+
   .table-container {
     padding: 0px;
     overflow-x: auto;
@@ -39,12 +44,12 @@
   }
 
   .buttons button {
-  width: 120px; /* 원하는 너비로 설정 */
-  height: 40px; /* 원하는 높이로 설정 */
-  font-size: 13px; /* 글씨 크기 설정 */
-  padding: 5px; /* 내부 여백 설정 */
-  border-radius: 10px;
-}
+    width: 120px; /* 원하는 너비로 설정 */
+    height: 40px; /* 원하는 높이로 설정 */
+    font-size: 13px; /* 글씨 크기 설정 */
+    padding: 5px; /* 내부 여백 설정 */
+    border-radius: 10px;
+  }
 
   th, td {
     border: 1px solid black;
@@ -75,14 +80,13 @@
   }
   .filter-box {
     display: inline-block;
-    padding: 5px;
     margin: 5px;
-    border: 1px solid #ccc;
+    padding: 5px;
+    border: 1px solid #b4afaf;
     cursor: pointer;
-    position: relative;
-    z-index: 1;
-    background-color: rgba(255, 255, 255, 0.8);
-    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.8); /* 배경에 투명도 추가 */
+    color: black;
+    border-radius: 10px; /* 모서리를 둥글게 */
   }
   .filter-box.selected {
     background-color: #007bff;
@@ -133,7 +137,7 @@
     display: none;
   }
   button {
-    margin-bottom: 20px;
+    margin-bottom: 10px;
   }
   .col-1, .col-2, .col-3 {
     width: 2%;
@@ -155,6 +159,36 @@
     max-width: 100%;
     height: auto;
   }
+
+  /* 색상 클래스 추가 */
+  .bg-category1 {
+    background-color: #ff9999; /* 종류, 형태, 지역 */
+  }
+
+  .bg-category2 {
+    background-color: #99ccff; /* 대학명, 학과명 */
+  }
+
+  .bg-category3 {
+    background-color: #99ff99; /* 전형명, 모집인원, 교직 */
+  }
+
+  .bg-category4 {
+    background-color: #ffcc99; /* 1단계배수, 내신, 실기, 면접, 기타, 수능최저 */
+  }
+
+  .bg-category5 {
+    background-color: #cc99ff; /* 실기1~실기8 */
+  }
+
+  .search-container {
+    text-align: center;
+    margin: 10px 0;
+  }
+
+  .filter-title-practical {
+    color: red; /* 빨간색으로 표시 */
+  }
 </style>
 </head>
 <body>
@@ -162,14 +196,14 @@
   <h1 style="text-align: center;">맥스 25수시 모집요강</h1>
   <div class="filter-container" id="filter-container">
     <!-- 필터링 옵션 -->
-    <div style="text-align: center; margin-bottom: 10px;">
-      <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px;">
-      <button onclick="searchByUniversity()">검색</button>
-    </div>
   </div>
   <div class="buttons" style="text-align: center;">
     <button onclick="clearFilters()">필터초기화</button>
     <button onclick="applyFilter()">검색</button>
+  </div>
+  <div class="search-container">
+    <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px;">
+    <button onclick="searchByUniversity()">검색</button>
   </div>
   <table id="fixed-header-table">
     <thead id="table-head">
@@ -247,8 +281,8 @@
     const filterContainer = document.getElementById('filter-container');
 
     const title = document.createElement('span');
-    title.textContent = '실기';
-    title.className = 'filter-title';
+    title.textContent = '실기제외';
+    title.className = 'filter-title filter-title-practical'; /* 필터 제목에 클래스 추가 */
     filterContainer.appendChild(title);
 
     const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
@@ -272,13 +306,6 @@
       filterContainer.appendChild(filterBox);
     });
 
-    const noneFilterBox = document.createElement('div');
-    noneFilterBox.className = 'filter-box';
-    noneFilterBox.textContent = '실기없음';
-    noneFilterBox.dataset.category = '실기';
-    noneFilterBox.dataset.value = '실기없음';
-    noneFilterBox.onclick = () => noneFilterBox.classList.toggle('selected');
-    filterContainer.appendChild(noneFilterBox);
     filterContainer.appendChild(document.createElement('br'));
   }
 
@@ -298,11 +325,8 @@
     filteredData = fullData.filter(item => {
       return Object.keys(selectedFilters).every(category => {
         if (category === '실기') {
-          if (selectedFilters[category].includes('실기없음')) {
-            return practicalFields.every(field => !item[field]);
-          }
-          return selectedFilters[category].every(value => 
-            practicalFields.every(field => item[field] !== value)
+          return selectedFilters[category].some(value => 
+            practicalFields.some(field => item[field] === value)
           );
         }
         return selectedFilters[category].length === 0 || selectedFilters[category].includes(item[category]);
@@ -321,28 +345,60 @@
   function displayTable(data) {
     const tableHead = document.getElementById('table-head');
     const tableBody = document.getElementById('table-body');
+    const dummyHead = document.getElementById('dummy-head');
 
     tableHead.innerHTML = '';
+    dummyHead.innerHTML = '';
+
     if (data.length > 0) {
       const headers = Object.keys(data[0]).filter(header => header !== 'id');
-      const tr = document.createElement('tr');
+      const trHead = document.createElement('tr');
+      const trDummy = document.createElement('tr');
+
       headers.filter((header, index) => 
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
       ).forEach((header, index) => {
         const th = document.createElement('th');
+        const thDummy = document.createElement('th');
         th.textContent = header;
+        thDummy.textContent = header;
+
+        if (['종류', '형태', '지역'].includes(header)) {
+          th.classList.add('bg-category1');
+          thDummy.classList.add('bg-category1');
+        } else if (['대학명', '학과명'].includes(header)) {
+          th.classList.add('bg-category2');
+          thDummy.classList.add('bg-category2');
+        } else if (['전형명', '모집정원', '교직'].includes(header)) {
+          th.classList.add('bg-category3');
+          thDummy.classList.add('bg-category3');
+        } else if (['1단계배수', '내신', '실기', '면접', '기타', '수능최저'].includes(header)) {
+          th.classList.add('bg-category4');
+          thDummy.classList.add('bg-category4');
+        } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'].includes(header)) {
+          th.classList.add('bg-category5');
+          thDummy.classList.add('bg-category5');
+        }
+
         if (index < 3) {
           th.classList.add('col-1');
+          thDummy.classList.add('col-1');
         } else if (index < 5) {
           th.classList.add('col-4');
+          thDummy.classList.add('col-4');
         } else if (index >= 43 && index <= 50) {
           th.classList.add('col-6');
+          thDummy.classList.add('col-6');
         } else {
           th.classList.add('col-10');
+          thDummy.classList.add('col-10');
         }
-        tr.appendChild(th);
+        trHead.appendChild(th);
+        trDummy.appendChild(thDummy);
       });
-      tableHead.appendChild(tr);
+
+      tableHead.appendChild(trHead);
+      dummyHead.appendChild(trDummy);
     }
 
     tableBody.innerHTML = '';
