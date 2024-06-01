@@ -88,6 +88,7 @@ app.use(morgan('combined', { stream: { write: message => logger.info(message.tri
 
 // 로그인 엔드포인트
 app.post('/login', (req, res) => {
+  logger.info('Login attempt', { body: req.body });
   const { username, password } = req.body;
   const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
 
