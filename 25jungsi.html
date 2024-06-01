@@ -62,7 +62,7 @@
       }
       .filter-option {
         display: inline-block;
-        margin: 5px;
+        margin: 2px;
         padding: 5px;
         border: 1px solid #b4afaf;
         cursor: pointer;
@@ -78,7 +78,7 @@
         width: 100%;
         table-layout: fixed;
         border-collapse: collapse;
-        margin-top: 0; /* 테이블 상단 간격 제거 */
+        margin-top: 0; /* 테이블 상단 간격 설정 */
         color: black;
       }
       table, th, td {
@@ -233,14 +233,14 @@
     <div class="header-container">
       <h1>맥스체대입시 25정시간단요강</h1>
       <div id="filters" class="filter-container"></div>
-      <div style="text-align: center; margin-bottom: 10px;">
-        <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 10px;"> <!-- 검색창 위치 변경 -->
-        <button onclick="searchByUniversity()">검색</button>
-      </div>
       <div class="button-container">
-        <button onclick="clearFilters()">모두 해제</button>
+        <button onclick="clearFilters()">필터 초기화</button>
         <button onclick="applyFilters()">검색</button>
         <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
+      </div>
+      <div style="text-align: center; margin-bottom: 10px;">
+        <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 5px;"> <!-- 검색창 위치 변경 -->
+        <button onclick="searchByUniversity()">검색</button>
       </div>
       <table>
         <thead>
