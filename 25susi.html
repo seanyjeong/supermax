@@ -43,6 +43,7 @@
   height: 40px; /* 원하는 높이로 설정 */
   font-size: 13px; /* 글씨 크기 설정 */
   padding: 5px; /* 내부 여백 설정 */
+  border-radius: 10px;
 }
 
   th, td {
@@ -161,9 +162,13 @@
   <h1 style="text-align: center;">맥스 25수시 모집요강</h1>
   <div class="filter-container" id="filter-container">
     <!-- 필터링 옵션 -->
+    <div style="text-align: center; margin-bottom: 10px;">
+      <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px;">
+      <button onclick="searchByUniversity()">검색</button>
+    </div>
   </div>
   <div class="buttons" style="text-align: center;">
-    <button onclick="clearFilters()">모두 해제</button>
+    <button onclick="clearFilters()">필터초기화</button>
     <button onclick="applyFilter()">검색</button>
   </div>
   <table id="fixed-header-table">
@@ -200,7 +205,7 @@
 <script>
   let fullData = [];
   let filteredData = [];
-  
+
   function fetchData() {
     fetch('https://supermax.kr:3000/25susi')
       .then(response => response.json())
@@ -220,12 +225,12 @@
   function createFilterOptions(data, category) {
     const filterContainer = document.getElementById('filter-container');
     const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
-  
+
     const title = document.createElement('span');
     title.textContent = category;
     title.className = 'filter-title';
     filterContainer.appendChild(title);
-  
+
     uniqueValues.forEach(value => {
       const filterBox = document.createElement('div');
       filterBox.className = 'filter-box';
@@ -237,15 +242,15 @@
     });
     filterContainer.appendChild(document.createElement('br'));
   }
-  
+
   function createPracticalFilterOptions(data) {
     const filterContainer = document.getElementById('filter-container');
-  
+
     const title = document.createElement('span');
     title.textContent = '실기';
     title.className = 'filter-title';
     filterContainer.appendChild(title);
-  
+
     const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
     const practicalValues = new Set();
     
@@ -276,7 +281,7 @@
     filterContainer.appendChild(noneFilterBox);
     filterContainer.appendChild(document.createElement('br'));
   }
-  
+
   function applyFilter() {
     const selectedFilters = {};
     document.querySelectorAll('.filter-box.selected').forEach(box => {
@@ -289,7 +294,7 @@
     });
 
     const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
-  
+
     filteredData = fullData.filter(item => {
       return Object.keys(selectedFilters).every(category => {
         if (category === '실기') {
@@ -305,17 +310,18 @@
     });
     displayTable(filteredData);
   }
-  
+
   function clearFilters() {
     document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
+    document.getElementById('search-input').value = ''; // 검색창 초기화
     filteredData = fullData;
     displayTable(filteredData);
   }
-  
+
   function displayTable(data) {
     const tableHead = document.getElementById('table-head');
     const tableBody = document.getElementById('table-body');
-  
+
     tableHead.innerHTML = '';
     if (data.length > 0) {
       const headers = Object.keys(data[0]).filter(header => header !== 'id');
@@ -338,7 +344,7 @@
       });
       tableHead.appendChild(tr);
     }
-  
+
     tableBody.innerHTML = '';
     data.forEach(row => {
       const tr = document.createElement('tr');
@@ -362,18 +368,18 @@
       tableBody.appendChild(tr);
     });
   }
-  
+
   function showModal(data) {
     const modal = document.getElementById('myModal');
     const modalContent = document.querySelector('.modal-content');
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = '';
-  
+
     const title = document.createElement('div');
     title.className = 'modal-title';
     title.textContent = `${data['대학명']} - ${data['학과명']}`;
     modalBody.appendChild(title);
-  
+
     if (data['image_data']) {
       const img = document.createElement('img');
       img.src = `data:image/png;base64,${data['image_data']}`;
@@ -383,7 +389,7 @@
     } else {
       const table = document.createElement('table');
       table.className = 'modal-table';
-  
+
       const rows = [
         ['종류', '형태', '지역'],
         ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
@@ -399,7 +405,7 @@
         ['전년도'],
         ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
       ];
-  
+
       rows.forEach((row, rowIndex) => {
         const trTitle = document.createElement('tr');
         const trValue = document.createElement('tr');
@@ -413,7 +419,7 @@
             const th = document.createElement('th');
             th.textContent = cell;
             trTitle.appendChild(th);
-  
+
             const td = document.createElement('td');
             td.textContent = data[cell] || '';
             trValue.appendChild(td);
@@ -422,26 +428,42 @@
         table.appendChild(trTitle);
         table.appendChild(trValue);
       });
-  
+
       modalBody.appendChild(table);
       modalContent.classList.remove('image-modal');
     }
     modal.style.display = 'block';
     document.body.classList.add('modal-open');
   }
-  
+
   function closeModal() {
     const modal = document.getElementById('myModal');
     modal.style.display = 'none';
     document.body.classList.remove('modal-open');
   }
-  
+
   function adjustTableContainerMargin() {
     const fixedHeader = document.querySelector('.fixed-header');
     const tableContainer = document.getElementById('table-container');
     const headerHeight = fixedHeader.offsetHeight;
     tableContainer.style.marginTop = `${headerHeight}px`;
   }
+
+  function searchByUniversity() {
+    const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
+    if (searchInput) {
+      filteredData = fullData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
+    } else {
+      filteredData = fullData;
+    }
+    displayTable(filteredData);
+  }
+
+  document.getElementById('search-input').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      searchByUniversity();
+    }
+  });
 
   document.querySelector('.close').onclick = closeModal;
   window.onclick = function(event) {
