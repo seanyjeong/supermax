@@ -71,8 +71,7 @@
             fetch('https://supermax.kr/login', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token // 필요한 경우 추가
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ username, password }),
                 credentials: 'include'
@@ -87,7 +86,8 @@
             .then(data => {
                 console.log('Received data:', data);
                 if (data.message === 'Login successful') {
-                    console.log('Login successful, redirecting to 25susi.html');
+                    console.log('Login successful, storing token and redirecting to 25susi.html');
+                    localStorage.setItem('token', data.token);
                     window.location.href = '25susi.html';
                 } else {
                     console.log('Invalid credentials');
@@ -97,6 +97,30 @@
             .catch(error => {
                 console.error('Error during login:', error);
                 document.getElementById('message').innerText = 'Error: ' + error.message;
+            });
+        }
+
+        function fetchProtectedData(url) {
+            const token = localStorage.getItem('token');
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                },
+                credentials: 'include'
+            })
+            .then(response => {
+                console.log('Received response:', response);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Received data:', data);
+            })
+            .catch(error => {
+                console.error('Error fetching protected data:', error);
             });
         }
     </script>
