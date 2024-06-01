@@ -82,7 +82,7 @@ app.use((req, res, next) => {
 
 // CORS 설정
 app.use(cors({
-  origin: 'https://supermax.co.kr', // 특정 도메인만 허용
+  origin: true, // 모든 도메인 허용
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -90,7 +90,7 @@ app.use(cors({
 
 // 명시적으로 CORS 헤더 추가
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://supermax.co.kr');
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS,POST,PUT');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
