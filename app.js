@@ -78,8 +78,6 @@ const allowedOrigins = ['https://supermax.co.kr'];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // allow requests with no origin
-    // (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified origin.';
@@ -88,6 +86,7 @@ app.use(cors({
     return callback(null, true);
   },
   methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
