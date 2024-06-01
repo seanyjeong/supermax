@@ -73,11 +73,12 @@ app.use(session({
   cookie: { secure: true }
 }));
 
-// CORS 설정
+// 모든 도메인에서의 CORS 허용
 app.use(cors({
-  origin: 'https://supermax.co.kr', // CORS 허용 도메인
-  methods: ['GET', 'POST'], // 허용 메소드
-  credentials: true // 인증 정보 허용
+  origin: '*', // 모든 도메인 허용
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
 }));
 
 app.use(bodyParser.urlencoded({ extended: true }));
