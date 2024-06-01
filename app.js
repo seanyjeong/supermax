@@ -4,6 +4,8 @@ const mysql = require('mysql');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
+const cors = require('cors');  // 추가
+
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -56,13 +58,12 @@ app.use(session({
   cookie: { secure: true }
 }));
 
-// CORS 헤더를 설정합니다.
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
+// CORS 설정
+app.use(cors({
+  origin: 'https://supermax.co.kr',
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
