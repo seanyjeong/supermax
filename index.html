@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>맥스체대입시</title>
     <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
     <style>
@@ -13,7 +15,7 @@
             margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             text-align: center;
-            color: black; /* 텍스트 색상을 검은색으로 설정 */
+            color: black;
         }
         h1 {
             font-size: 3rem;
@@ -28,30 +30,56 @@
             gap: 1rem;
             margin-top: 2rem;
         }
-        a {
+        a, button {
             padding: 1.5rem 0;
-            width: 200px; /* 버튼의 고정 너비 설정 */
+            width: 200px;
             background-color: #007bff;
             color: #fff;
             text-decoration: none;
+            border: none;
             border-radius: 5px;
             font-size: 1.5rem;
             text-align: center;
+            cursor: pointer;
         }
-        a:hover {
+        a:hover, button:hover {
             background-color: #0056b3;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 2rem;
+        }
+        label {
+            margin-bottom: 0.5rem;
+        }
+        input {
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            width: 200px;
         }
     </style>
 </head>
 <body>
     <h1>맥스체대입시</h1>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
+    
+    <!-- 로그인 폼 추가 -->
+    <form action="https://supermax.co.kr/login" method="POST">
+        <label for="username">아이디:</label>
+        <input type="text" id="username" name="username" required>
+        <label for="password">비밀번호:</label>
+        <input type="password" id="password" name="password" required>
+        <button type="submit">로그인</button>
+    </form>
+
     <div class="button-container">
-        <a href="/25susi">25수시요강 Demo</a>
-        <a href="/25jungsi">25정시요강</a>
+        <a href="/25susi.html">25수시요강 Demo</a>
+        <a href="/25jungsi.html">25정시요강</a>
     </div>
 </body>
-    <footer style="margin-top: 3rem; text-align: center;">
+<footer style="margin-top: 3rem; text-align: center;">
   <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
 </footer>
 </html>
