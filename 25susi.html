@@ -200,6 +200,7 @@
   <div class="buttons" style="text-align: center;">
     <button onclick="clearFilters()">필터초기화</button>
     <button onclick="applyFilter()">검색</button>
+    <span id="filtered-count">선택된 학교 : 0개</span> <!-- 필터링된 행의 갯수를 표시할 요소 -->
   </div>
   <div class="search-container">
     <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px;">
@@ -250,8 +251,10 @@
         createFilterOptions(data, '지역');
         createFilterOptions(data, '교직');
         createPracticalFilterOptions(data);
+        filteredData = fullData; // 초기 데이터 설정
         displayTable(data);
         adjustTableContainerMargin();
+        updateFilteredCount(); // 필터링된 행의 갯수를 업데이트
       })
       .catch(error => console.error('데이터 가져오기 오류:', error));
   }
@@ -327,6 +330,7 @@
     });
 
     displayTable(filteredData);
+    updateFilteredCount(); // 필터링된 행의 갯수를 업데이트
   }
 
   function clearFilters() {
@@ -334,6 +338,7 @@
     document.getElementById('search-input').value = ''; // 검색창 초기화
     filteredData = fullData;
     displayTable(filteredData);
+    updateFilteredCount(); // 필터 초기화 후 갯수 업데이트
   }
 
   function displayTable(data) {
@@ -507,6 +512,13 @@
       filteredData = fullData;
     }
     displayTable(filteredData);
+    updateFilteredCount(); // 필터링된 행의 갯수를 업데이트
+  }
+
+  function updateFilteredCount() {
+    const filteredCount = filteredData.length;
+    const filteredCountElement = document.getElementById('filtered-count');
+    filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
   }
 
   document.getElementById('search-input').addEventListener('keypress', function (e) {
