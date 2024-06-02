@@ -582,8 +582,22 @@ body {
   
       tableBody.appendChild(rowElement);
     });
+
+    adjustHeaderFontSize(); // 테이블 갱신 후 글씨 크기 조정
   }
-  
+
+  function adjustHeaderFontSize() {
+    const headers = document.querySelectorAll('#headers th');
+    headers.forEach(header => {
+      let fontSize = 16; // 기본 글씨 크기
+      header.style.fontSize = fontSize + 'px';
+      while (header.scrollWidth > header.clientWidth && fontSize > 10) { // 줄어드는 글씨 크기 제한 설정
+        fontSize -= 1;
+        header.style.fontSize = fontSize + 'px';
+      }
+    });
+  }
+
   function updateCountDisplay() {
     const countDisplay = document.querySelector('.count-display');
     countDisplay.textContent = `선택된 학교 : ${filteredData.length} 개`;
