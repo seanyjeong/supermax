@@ -53,7 +53,7 @@ const server = https.createServer(sslOptions, app);
 const corsOptions = {
   origin: 'https://supermax.co.kr',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 };
 
