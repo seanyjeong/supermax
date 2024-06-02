@@ -2,6 +2,9 @@ const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
+const session = require('express-session');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -46,14 +49,56 @@ handleDisconnect();
 // HTTPS 서버를 생성합니다.
 const server = https.createServer(sslOptions, app);
 
-// CORS 헤더를 설정합니다.
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  next();
+// CORS 설정
+const corsOptions = {
+  origin: 'https://supermax.co.kr',
+  methods: 'GET,POST,OPTIONS',
+  allowedHeaders: ['Content-Type'],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Preflight 요청에 대한 응답을 추가합니다.
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({
+  secret: 'your-secret-key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: true, sameSite: 'none' }
+}));
+
+// 로그인 엔드포인트
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+  
+  connection.query(query, [username, password], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+    if (results.length > 0) {
+      req.session.user = results[0];
+      res.status(200).json({ message: 'Login successful' });
+    } else {
+      res.status(401).json({ message: 'Invalid credentials' });
+    }
+  });
 });
 
+// 인증 미들웨어
+function isAuthenticated(req, res, next) {
+  if (req.session.user) {
+    next();
+  } else {
+    res.status(401).json({ message: 'Unauthorized' });
+  }
+}
+
 // '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', (req, res) => {
+app.get('/25jeongsi', isAuthenticated, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
@@ -65,7 +110,7 @@ app.get('/25jeongsi', (req, res) => {
 });
 
 // '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', (req, res) => {
+app.get('/25susi', isAuthenticated, (req, res) => {
   const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
@@ -76,7 +121,6 @@ app.get('/25susi', (req, res) => {
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
-    // 각 행의 image_data를 Base64 인코딩 문자열로 변환
     rows.forEach(row => {
       if (row.image_data) {
         row.image_data = row.image_data.toString('base64');
@@ -87,7 +131,7 @@ app.get('/25susi', (req, res) => {
 });
 
 // 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', (req, res) => {
+app.get('/image/:id', isAuthenticated, (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
