@@ -69,8 +69,8 @@ app.use(session({
   cookie: { secure: true, sameSite: 'none' }
 }));
 
-// 로그인 엔드포인트
-app.post('/login', (req, res) => {
+// 로그인 엔드포인트에 CORS 설정을 명시적으로 추가합니다.
+app.post('/login', cors(corsOptions), (req, res) => {
   const { username, password } = req.body;
   const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
   
