@@ -60,15 +60,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Preflight 요청에 대한 응답을 추가합니다.
 
-// 모든 요청에 대해 CORS 헤더를 설정합니다.
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://supermax.co.kr');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  next();
-});
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
