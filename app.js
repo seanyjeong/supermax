@@ -46,9 +46,6 @@ function handleDisconnect() {
 
 handleDisconnect();
 
-// HTTPS 서버를 생성합니다.
-const server = https.createServer(sslOptions, app);
-
 // CORS 설정
 const corsOptions = {
   origin: 'https://supermax.co.kr',
@@ -68,6 +65,9 @@ app.use(session({
   saveUninitialized: true,
   cookie: { secure: true, sameSite: 'none' }
 }));
+
+// HTTPS 서버를 생성합니다.
+const server = https.createServer(sslOptions, app);
 
 // 로그인 엔드포인트
 app.post('/login', (req, res) => {
