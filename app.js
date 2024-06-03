@@ -1,4 +1,3 @@
-app.js
 const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
