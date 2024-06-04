@@ -77,15 +77,14 @@ app.post('/login', (req, res) => {
     }
 
     if (results.length > 0) {
-      const token = jwt.sign({ username }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
-      res.status(200).json({ message: 'Login successful', token }); // 토큰 반환
+      const user = results[0];
+      const token = jwt.sign({ username: user.username, legion: user.legion }, jwtSecret, { expiresIn: '1h' });
+      res.status(200).json({ message: 'Login successful', token, username: user.username, legion: user.legion });
     } else {
       res.status(401).json({ message: 'Invalid credentials' });
     }
   });
 });
- 
-
 
 // JWT 인증 미들웨어
 function authenticateToken(req, res, next) {
