@@ -67,22 +67,6 @@ app.use(session({
   cookie: { secure: true, sameSite: 'none' }
 }));
 
-// 프록시 설정
-app.use('/api', createProxyMiddleware({
-  target: 'https://supermax.kr',
-  changeOrigin: true,
-  pathRewrite: {
-    '^/api': '', // URL 경로에서 /api를 제거
-  },
-  secure: false,
-  onProxyReq: (proxyReq, req, res) => {
-    proxyReq.setHeader('origin', 'https://supermax.co.kr'); // 클라이언트의 origin을 프록시 요청에 추가
-  }
-}));
-
-// HTTPS 서버를 생성합니다.
-const server = https.createServer(sslOptions, app);
-
 // 로그인 엔드포인트
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
@@ -162,6 +146,19 @@ app.get('/image/:id', isAuthenticated, (req, res) => {
     }
   });
 });
+
+// 프록시 설정
+app.use('/api', createProxyMiddleware({
+  target: 'https://supermax.kr',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api': '', // URL 경로에서 /api를 제거
+  },
+  secure: false,
+  onProxyReq: (proxyReq, req, res) => {
+    proxyReq.setHeader('origin', 'https://supermax.co.kr'); // 클라이언트의 origin을 프록시 요청에 추가
+  }
+}));
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
