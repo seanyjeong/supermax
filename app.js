@@ -1,14 +1,8 @@
-const https = require('https');
+const http = require('http');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
 const app = express();
-
-// SSL/TLS 설정을 불러옵니다.
-const sslOptions = {
-  key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
-  cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
-};
 
 // 데이터베이스 연결을 설정합니다.
 const db_config = {
@@ -43,8 +37,8 @@ function handleDisconnect() {
 
 handleDisconnect();
 
-// HTTPS 서버를 생성합니다.
-const server = https.createServer(sslOptions, app);
+// HTTP 서버를 생성합니다.
+const server = http.createServer(app);
 
 // CORS 헤더를 설정합니다.
 app.use((req, res, next) => {
@@ -76,7 +70,6 @@ app.get('/25susi', (req, res) => {
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
-    // 각 행의 image_data를 Base64 인코딩 문자열로 변환
     rows.forEach(row => {
       if (row.image_data) {
         row.image_data = row.image_data.toString('base64');
@@ -107,5 +100,5 @@ app.get('/image/:id', (req, res) => {
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at https://0.0.0.0:3000/');
+  console.log('Server running at http://0.0.0.0:3000/');
 });
