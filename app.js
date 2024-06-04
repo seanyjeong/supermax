@@ -65,10 +65,24 @@ app.use(bodyParser.json());
 // HTTP 서버를 생성합니다.
 const server = http.createServer(app);
 
+// JWT 인증 미들웨어
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.status(401).json({ message: 'No token provided' });
+
+  jwt.verify(token, jwtSecret, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+}
+
 // 로그인 엔드포인트
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+  const query = 'SELECT username, legion FROM users WHERE username = ? AND password = ?';
 
   connection.query(query, [username, password], (err, results) => {
     if (err) {
@@ -77,8 +91,9 @@ app.post('/login', (req, res) => {
     }
 
     if (results.length > 0) {
-      const token = jwt.sign({ username }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
-      res.status(200).json({ message: 'Login successful', token }); // 토큰 반환
+      const user = results[0];
+      const token = jwt.sign({ username: user.username, legion: user.legion }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
+      res.status(200).json({ message: 'Login successful', token, user }); // 토큰과 사용자 정보 반환
     } else {
       res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -100,21 +115,6 @@ app.get('/userinfo', authenticateToken, (req, res) => {
     }
   });
 });
-
-
-// JWT 인증 미들웨어
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token == null) return res.status(401).json({ message: 'No token provided' });
-
-  jwt.verify(token, jwtSecret, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
-    req.user = user;
-    next();
-  });
-}
 
 // '25정시' 데이터를 가져오는 엔드포인트
 app.get('/25jeongsi', authenticateToken, (req, res) => {
