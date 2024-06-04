@@ -64,21 +64,64 @@
         button:hover {
             background-color: #0056b3;
         }
+        .user-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background-color: #007bff;
+            color: #fff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.5rem;
+        }
+        .user-menu {
+            display: none;
+            position: absolute;
+            top: 70px;
+            left: 10px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .user-menu a {
+            display: block;
+            padding: 10px;
+            text-decoration: none;
+            color: black;
+        }
+        .user-menu a:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
+    <div class="user-info" id="user-info">?</div>
+    <div class="user-menu" id="user-menu">
+        <div id="username"></div>
+        <div id="legion"></div>
+        <a href="#" onclick="resetPassword()">비밀번호 재설정</a>
+        <a href="#" onclick="logout()">로그아웃</a>
+    </div>
+    
     <h1>맥스체대입시</h1>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
     
     <div class="login-form">
-        <input type="text" id="username" placeholder="Username">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="login()">Login</button>
+        <input type="text" id="username" placeholder="지점아이디">
+        <input type="password" id="password" placeholder="비밀번호">
+        <button onclick="login()">로그인</button>
     </div>
     
     <div class="button-container" style="display:none;" id="buttons">
-        <a href="/25susi">25수시요강 Demo</a>
-        <a href="/25jungsi">25정시요강</a>
+        <a href="/25susi">25수시요강(계획안)</a>
+        <a href="/25jungsi">25정시요강(계획안)</a>
     </div>
 
     <footer style="margin-top: 3rem; text-align: center;">
@@ -104,10 +147,52 @@
                 localStorage.setItem('token', data.token); // 토큰을 로컬 스토리지에 저장
                 document.querySelector('.login-form').style.display = 'none';
                 document.getElementById('buttons').style.display = 'flex';
+                fetchUserInfo(); // 로그인 후 사용자 정보 가져오기
             } else {
                 alert('Login failed. Please check your username and password.');
             }
         }
+
+        function resetPassword() {
+            alert('비밀번호 재설정 기능은 아직 구현되지 않았습니다.');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('user-info').addEventListener('click', function() {
+            var menu = document.getElementById('user-menu');
+            menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+        });
+
+        function fetchUserInfo() {
+            const token = localStorage.getItem('token');
+            fetch('https://supermax.kr/userinfo', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('user-info').textContent = data.username.charAt(0).toUpperCase();
+                document.getElementById('username').textContent = `ID: ${data.username}`;
+                document.getElementById('legion').textContent = `지점: ${data.legion}`;
+            })
+            .catch(error => {
+                console.error('Error fetching user info:', error);
+                alert('로그인 정보 가져오기 실패. 다시 로그인 해주세요.');
+                logout();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('token')) {
+                fetchUserInfo();
+            }
+        });
     </script>
 </body>
 </html>
