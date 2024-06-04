@@ -16,7 +16,7 @@
             color: black; /* 텍스트 색상을 검은색으로 설정 */
         }
         h1 {
-            font-size: 3rem;
+            font-size: 2.5rem; /* 타이틀 크기 조정 */
             margin-bottom: 2rem;
         }
         img {
@@ -86,7 +86,7 @@
             font-weight: bold;
         }
         .user-menu {
-            display: none;
+            display: block; /* 항상 보이도록 설정 */
             position: absolute;
             top: 50px;
             left: 10px;
@@ -125,12 +125,12 @@
         <a href="/25jungsi">25정시요강(계획안)</a>
     </div>
 
-    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
+    <div class="user-info" id="user-info" style="display:none;">
         <div class="user-info-circle" id="user-initial"></div>
         <span id="user-name"></span>
     </div>
 
-    <div class="user-menu" id="user-menu">
+    <div class="user-menu" id="user-menu" style="display:none;">
         <a href="#" id="user-username"></a>
         <a href="#" id="user-legion"></a>
         <a href="#" onclick="resetPassword()">비밀번호 재설정</a>
@@ -161,18 +161,14 @@
                 document.querySelector('.login-form').style.display = 'none';
                 document.getElementById('buttons').style.display = 'flex';
                 document.getElementById('user-info').style.display = 'flex';
-                document.getElementById('user-initial').textContent = data.username.charAt(0).toUpperCase();
+                document.getElementById('user-initial').textContent = data.legion.charAt(0).toUpperCase();
                 document.getElementById('user-name').textContent = data.username;
                 document.getElementById('user-username').textContent = `ID: ${data.username}`;
                 document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
+                document.getElementById('user-menu').style.display = 'block';
             } else {
                 alert('Login failed. Please check your username and password.');
             }
-        }
-
-        function toggleMenu() {
-            const userMenu = document.getElementById('user-menu');
-            userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
         }
 
         function resetPassword() {
