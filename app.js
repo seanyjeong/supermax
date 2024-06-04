@@ -61,7 +61,7 @@ app.use(session({
   secret: 'your_secret_key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false } // secure를 false로 설정하여 http에서도 쿠키를 사용할 수 있도록 합니다.
+  cookie: { secure: false, sameSite: 'None' } // secure를 false로 설정하여 http에서도 쿠키를 사용할 수 있도록 합니다.
 }));
 
 // 모든 요청을 로그로 남기기
@@ -77,6 +77,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// 명시적으로 CORS 헤더 추가
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://supermax.co.kr');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS,POST,PUT');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
