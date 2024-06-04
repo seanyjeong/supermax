@@ -238,25 +238,44 @@
 </div>
 
 <script>
+  function checkAuth() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert('You are not logged in.');
+        window.location.href = 'index.html';
+    }
+  }
+
   let fullData = [];
   let filteredData = [];
 
   function fetchData() {
-    fetch('https://supermax.kr/25susi')
-      .then(response => response.json())
-      .then(data => {
-        fullData = data;
-        createFilterOptions(data, '종류');
-        createFilterOptions(data, '형태');
-        createFilterOptions(data, '지역');
-        createFilterOptions(data, '교직');
-        createPracticalFilterOptions(data);
-        filteredData = fullData; // 초기 데이터 설정
-        displayTable(data);
-        adjustTableContainerMargin();
-        updateFilteredCount(); // 필터링된 행의 갯수를 업데이트
-      })
-      .catch(error => console.error('데이터 가져오기 오류:', error));
+    const token = localStorage.getItem('token');
+    fetch('https://supermax.kr/25susi', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok ' + response.statusText);
+      }
+      return response.json();
+    })
+    .then(data => {
+      fullData = data;
+      createFilterOptions(data, '종류');
+      createFilterOptions(data, '형태');
+      createFilterOptions(data, '지역');
+      createFilterOptions(data, '교직');
+      createPracticalFilterOptions(data);
+      filteredData = fullData; // 초기 데이터 설정
+      displayTable(data);
+      adjustTableContainerMargin();
+      updateFilteredCount(); // 필터링된 행의 갯수를 업데이트
+    })
+    .catch(error => console.error('데이터 가져오기 오류:', error));
   }
 
   function createFilterOptions(data, category) {
@@ -552,6 +571,7 @@
 
   window.onresize = adjustTableContainerMargin;
   document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
     fetchData();
     adjustTableContainerMargin();
   });
