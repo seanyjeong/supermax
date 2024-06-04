@@ -13,10 +13,11 @@
             margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             text-align: center;
-            color: black; /* 텍스트 색상을 검은색으로 설정 */
+            color: black;
         }
         h1 {
-            font-size: 2.5rem; /* 타이틀 크기 조정 */
+            font-size: 2.5rem;
+            margin-top: 2rem;
             margin-bottom: 2rem;
         }
         img {
@@ -30,7 +31,7 @@
         }
         a {
             padding: 1.5rem 0;
-            width: 200px; /* 버튼의 고정 너비 설정 */
+            width: 200px;
             background-color: #007bff;
             color: #fff;
             text-decoration: none;
@@ -86,7 +87,7 @@
             font-weight: bold;
         }
         .user-menu {
-            display: block; /* 항상 보이도록 설정 */
+            display: none;
             position: absolute;
             top: 50px;
             left: 10px;
@@ -96,14 +97,14 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
             padding: 10px;
             z-index: 1000;
-            width: 150px; /* 메뉴 너비 조정 */
+            width: 150px;
         }
         .user-menu a {
             display: block;
             padding: 10px;
             color: #007bff;
             text-decoration: none;
-            font-size: 0.9rem; /* 메뉴 텍스트 크기 조정 */
+            font-size: 0.9rem;
         }
         .user-menu a:hover {
             background-color: #f0f0f0;
@@ -111,10 +112,10 @@
     </style>
 </head>
 <body>
-    <h1>맥스체대입시</h1>
+    <h1 id="title">맥스체대입시</h1>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
     
-    <div class="login-form">
+    <div class="login-form" id="login-form">
         <input type="text" id="username" placeholder="지점아이디">
         <input type="password" id="password" placeholder="비밀번호">
         <button onclick="login()">로그인</button>
@@ -125,12 +126,12 @@
         <a href="/25jungsi">25정시요강(계획안)</a>
     </div>
 
-    <div class="user-info" id="user-info" style="display:none;">
+    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
         <div class="user-info-circle" id="user-initial"></div>
         <span id="user-name"></span>
     </div>
 
-    <div class="user-menu" id="user-menu" style="display:none;">
+    <div class="user-menu" id="user-menu">
         <a href="#" id="user-username"></a>
         <a href="#" id="user-legion"></a>
         <a href="#" onclick="resetPassword()">비밀번호 재설정</a>
@@ -142,6 +143,14 @@
     </footer>
 
     <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const token = localStorage.getItem('token');
+            if (token) {
+                const userInfo = parseJwt(token);
+                showUserInfo(userInfo);
+            }
+        });
+
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -152,33 +161,50 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ username, password }),
-                credentials: 'include' // Ensure this is included
+                credentials: 'include'
             });
 
             if (response.ok) {
                 const data = await response.json();
-                localStorage.setItem('token', data.token); // 토큰을 로컬 스토리지에 저장
-                document.querySelector('.login-form').style.display = 'none';
-                document.getElementById('buttons').style.display = 'flex';
-                document.getElementById('user-info').style.display = 'flex';
-                document.getElementById('user-initial').textContent = data.legion.charAt(0).toUpperCase();
-                document.getElementById('user-name').textContent = data.username;
-                document.getElementById('user-username').textContent = `ID: ${data.username}`;
-                document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
-                document.getElementById('user-menu').style.display = 'block';
+                localStorage.setItem('token', data.token);
+                showUserInfo(data);
             } else {
                 alert('Login failed. Please check your username and password.');
             }
         }
 
+        function showUserInfo(data) {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('buttons').style.display = 'flex';
+            document.getElementById('user-info').style.display = 'flex';
+            document.getElementById('user-initial').textContent = data.legion.charAt(0).toUpperCase();
+            document.getElementById('user-name').textContent = data.username;
+            document.getElementById('user-username').textContent = `ID: ${data.username}`;
+            document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
+        }
+
+        function toggleMenu() {
+            const userMenu = document.getElementById('user-menu');
+            userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+        }
+
         function resetPassword() {
-            // 비밀번호 재설정 기능 구현
             alert('비밀번호 재설정 기능은 아직 구현되지 않았습니다.');
         }
 
         function logout() {
             localStorage.removeItem('token');
             location.reload();
+        }
+
+        function parseJwt(token) {
+            var base64Url = token.split('.')[1];
+            var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            var jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+
+            return JSON.parse(jsonPayload);
         }
     </script>
 </body>
