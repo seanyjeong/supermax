@@ -85,6 +85,23 @@ app.post('/login', (req, res) => {
   });
 });
 
+// 사용자 정보 엔드포인트
+app.get('/userinfo', authenticateToken, (req, res) => {
+  const query = 'SELECT username, legion FROM users WHERE username = ?';
+  connection.query(query, [req.user.username], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+    if (results.length > 0) {
+      res.status(200).json(results[0]);
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  });
+});
+
+
 // JWT 인증 미들웨어
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
