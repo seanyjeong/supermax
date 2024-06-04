@@ -42,7 +42,7 @@ const server = http.createServer(app);
 
 // CORS 헤더를 설정합니다.
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', 'https://supermax.co.kr');
   next();
 });
 
