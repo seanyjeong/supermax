@@ -155,8 +155,12 @@ app.use('/api', createProxyMiddleware({
     '^/api': '', // URL 경로에서 /api를 제거
   },
   secure: false,
+  logLevel: 'debug', // 디버그 로그 레벨 설정
   onProxyReq: (proxyReq, req, res) => {
     proxyReq.setHeader('origin', 'https://supermax.co.kr'); // 클라이언트의 origin을 프록시 요청에 추가
+  },
+  onError: (err, req, res) => {
+    console.error('Proxy error:', err);
   }
 }));
 
@@ -167,4 +171,3 @@ const server = https.createServer(sslOptions, app);
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at https://0.0.0.0:3000/');
 });
-
