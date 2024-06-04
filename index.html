@@ -64,6 +64,48 @@
         button:hover {
             background-color: #0056b3;
         }
+        .user-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+        .user-info-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #007bff;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .user-menu {
+            display: none;
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            padding: 10px;
+            z-index: 1000;
+        }
+        .user-menu a {
+            display: block;
+            padding: 10px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .user-menu a:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -79,6 +121,18 @@
     <div class="button-container" style="display:none;" id="buttons">
         <a href="/25susi">25수시요강(계획안)</a>
         <a href="/25jungsi">25정시요강(계획안)</a>
+    </div>
+
+    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
+        <div class="user-info-circle" id="user-initial"></div>
+        <span id="user-name"></span>
+    </div>
+
+    <div class="user-menu" id="user-menu">
+        <a href="#" id="user-username"></a>
+        <a href="#" id="user-legion"></a>
+        <a href="#" onclick="resetPassword()">비밀번호 재설정</a>
+        <a href="#" onclick="logout()">로그아웃</a>
     </div>
 
     <footer style="margin-top: 3rem; text-align: center;">
@@ -104,9 +158,29 @@
                 localStorage.setItem('token', data.token); // 토큰을 로컬 스토리지에 저장
                 document.querySelector('.login-form').style.display = 'none';
                 document.getElementById('buttons').style.display = 'flex';
+                document.getElementById('user-info').style.display = 'flex';
+                document.getElementById('user-initial').textContent = data.username.charAt(0).toUpperCase();
+                document.getElementById('user-name').textContent = data.username;
+                document.getElementById('user-username').textContent = `ID: ${data.username}`;
+                document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
             } else {
                 alert('Login failed. Please check your username and password.');
             }
+        }
+
+        function toggleMenu() {
+            const userMenu = document.getElementById('user-menu');
+            userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function resetPassword() {
+            // 비밀번호 재설정 기능 구현
+            alert('비밀번호 재설정 기능은 아직 구현되지 않았습니다.');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            location.reload();
         }
     </script>
 </body>
