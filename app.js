@@ -65,6 +65,28 @@ app.use(bodyParser.json());
 // HTTP 서버를 생성합니다.
 const server = http.createServer(app);
 
+// 로그인 엔드포인트
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+
+  connection.query(query, [username, password], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    if (results.length > 0) {
+      const token = jwt.sign({ username }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
+      res.status(200).json({ message: 'Login successful', token }); // 토큰 반환
+    } else {
+      res.status(401).json({ message: 'Invalid credentials' });
+    }
+  });
+});
+ 
+
+
 // JWT 인증 미들웨어
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -78,43 +100,6 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
-
-// 로그인 엔드포인트
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  const query = 'SELECT username, legion FROM users WHERE username = ? AND password = ?';
-
-  connection.query(query, [username, password], (err, results) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-
-    if (results.length > 0) {
-      const user = results[0];
-      const token = jwt.sign({ username: user.username, legion: user.legion }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
-      res.status(200).json({ message: 'Login successful', token, user }); // 토큰과 사용자 정보 반환
-    } else {
-      res.status(401).json({ message: 'Invalid credentials' });
-    }
-  });
-});
-
-// 사용자 정보 엔드포인트
-app.get('/userinfo', authenticateToken, (req, res) => {
-  const query = 'SELECT username, legion FROM users WHERE username = ?';
-  connection.query(query, [req.user.username], (err, results) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    if (results.length > 0) {
-      res.status(200).json(results[0]);
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
-  });
-});
 
 // '25정시' 데이터를 가져오는 엔드포인트
 app.get('/25jeongsi', authenticateToken, (req, res) => {
