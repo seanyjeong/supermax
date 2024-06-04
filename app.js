@@ -5,6 +5,7 @@ const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const app = express();
 
 // SSL/TLS 설정을 불러옵니다.
@@ -64,6 +65,19 @@ app.use(session({
   resave: false,
   saveUninitialized: true,
   cookie: { secure: true, sameSite: 'none' }
+}));
+
+// 프록시 설정
+app.use('/api', createProxyMiddleware({
+  target: 'https://supermax.kr',
+  changeOrigin: true,
+  pathRewrite: {
+    '^/api': '', // URL 경로에서 /api를 제거
+  },
+  secure: false,
+  onProxyReq: (proxyReq, req, res) => {
+    proxyReq.setHeader('origin', 'https://supermax.co.kr'); // 클라이언트의 origin을 프록시 요청에 추가
+  }
 }));
 
 // HTTPS 서버를 생성합니다.
