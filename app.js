@@ -2,7 +2,13 @@ const http = require('http');
 const fs = require('fs');
 const mysql = require('mysql');
 const express = require('express');
+const bodyParser = require('body-parser');
+const session = require('express-session');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+
 const app = express();
+const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
 
 // 데이터베이스 연결을 설정합니다.
 const db_config = {
@@ -18,14 +24,14 @@ let connection;
 function handleDisconnect() {
   connection = mysql.createConnection(db_config);
 
-  connection.connect(function(err) {
+  connection.connect(function (err) {
     if (err) {
       console.log('error when connecting to db:', err);
       setTimeout(handleDisconnect, 2000);
     }
   });
 
-  connection.on('error', function(err) {
+  connection.on('error', function (err) {
     console.log('db error', err);
     if (err.code === 'PROTOCOL_CONNECTION_LOST') {
       handleDisconnect();
@@ -37,17 +43,64 @@ function handleDisconnect() {
 
 handleDisconnect();
 
+// 세션 설정
+app.use(session({
+  secret: 'your_secret_key',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false, sameSite: 'None' } // 쿠키 설정 조정
+}));
+
+// CORS 설정
+app.use(cors({
+  origin: 'https://supermax.co.kr',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+
 // HTTP 서버를 생성합니다.
 const server = http.createServer(app);
 
-// CORS 헤더를 설정합니다.
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'https://supermax.co.kr');
-  next();
+// 로그인 엔드포인트
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+
+  connection.query(query, [username, password], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    if (results.length > 0) {
+      const token = jwt.sign({ username }, jwtSecret, { expiresIn: '1h' }); // JWT 토큰 발급
+      res.status(200).json({ message: 'Login successful', token }); // 토큰 반환
+    } else {
+      res.status(401).json({ message: 'Invalid credentials' });
+    }
+  });
 });
 
+// JWT 인증 미들웨어
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.status(401).json({ message: 'No token provided' });
+
+  jwt.verify(token, jwtSecret, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+}
+
 // '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', (req, res) => {
+app.get('/25jeongsi', authenticateToken, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
@@ -59,7 +112,7 @@ app.get('/25jeongsi', (req, res) => {
 });
 
 // '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', (req, res) => {
+app.get('/25susi', authenticateToken, (req, res) => {
   const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
@@ -80,7 +133,7 @@ app.get('/25susi', (req, res) => {
 });
 
 // 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', (req, res) => {
+app.get('/image/:id', authenticateToken, (req, res) => {
   const imageId = req.params.id;
   const query = 'SELECT image_data FROM images WHERE id = ?';
 
