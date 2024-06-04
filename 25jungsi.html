@@ -6,233 +6,261 @@
     <title>맥스체대입시 25정시간단요강</title>
     <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
-    
     <style>
-body {
-  background-color: white;
-  color: black;
-  margin: 0;
-  padding: 0;
-  font-family: Arial, sans-serif;
-}
+        body {
+            background-color: white;
+            color: black;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
 
-.fixed-header {
-  position: sticky;
-  top: 0;
-  background-color: white;
-  z-index: 1000;
-  padding: 0;
-}
-
-.header-container {
-  background-color: white;
-  text-align: center;
-  padding: 0;
-  margin: 0;
-}
-
-.header-container h1 {
-  font-size: 24px;
-  margin: 0;
-  padding: 10px 0; /* 수정된 부분 */
-  color: black;
-}
-
-.filter-container {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 10px;
-  background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-  margin-top: 0;
-}
-
-
-      .filter-group {
-        display: flex;
-        align-items: center; /* 필터 제목과 옵션을 같은 행에 배치 */
-        margin-bottom: 5px; /* 필터 그룹 간격 좁게 */
-      }
-      .filter-legend {
-        font-weight: bold;
-        color: black;
-        margin-right: 10px; /* 필터 제목과 옵션 사이 간격 */
-      }
-      .filter-legend.red {
-        color: red;
-      }
-      .filter-options-container {
-        display: flex;
-        flex-wrap: wrap; /* 필터 옵션을 줄 바꿈 가능하게 설정 */
-      }
-      .filter-option {
-        display: inline-block;
-        margin: 2px;
-        padding: 5px;
-        border: 1px solid #b4afaf;
-        cursor: pointer;
-        background-color: rgba(255, 255, 255, 0.8); /* 배경에 투명도 추가 */
-        color: black;
-        border-radius: 10px; /* 모서리를 둥글게 */
-      }
-      .filter-option.selected {
-        background-color: #007bff;
-        color: white;
-      }
-      table {
-        width: 100%;
-        table-layout: fixed;
-        border-collapse: collapse;
-        margin-top: 0; /* 테이블 상단 간격 설정 */
-        color: black;
-      }
-      table, th, td {
-        border: 1px solid black;
-      }
-      th, td {
-        padding: 8px;
-        text-align: center;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-      }
-      th {
-        background-color: #f2f2f2;
-      }
-      .col-1 { width: 30px; }
-      .col-2 { width: 40px; }
-      .col-3 { width: 40px; }
-      .col-4 { width: 40px; }
-      .col-5 { width: 120px; }
-      .col-6 { width: 135px; }
-      .col-7 { width: auto; }
-      .button-container {
-        display: flex;
-        justify-content: center;
-        align-items: center; /* 세로 가운데 정렬 */
-        padding: 10px;
-        margin: 0; /* 마진 제거 */
-      }
-      .button-container button {
-        padding: 10px 20px;
-        margin: 0 10px; /* 버튼 사이의 간격 */
-        background-color: rgb(207, 206, 206);
-        color: black;
-        border: 1px solid black;
-        cursor: pointer;
-        border-radius: 10px;
-        width: 150px; /* 버튼의 너비를 지정 */
-        text-align: center; /* 텍스트를 중앙에 정렬 */
-        width: 120px; /* 원하는 너비로 설정 */
-        height: 40px; /* 원하는 높이로 설정 */
-        font-size: 13px; /* 글씨 크기 설정 */
-        padding: 5px; /* 내부 여백 설정 */
-        border-radius: 10px;
-        border: 2px solid #000000;
-      }
-      .count-display {
-        font-size: 16px;
-        margin-left: 10px;
-        color: black;
-      }
-      .highlighted-row {
-        background-color: #f2f2f2;
-      }
-      .full-text {
-        overflow: visible;
-        white-space: normal;
-      }
-      .header-group-1 {
-        background-color: #ffcccb; /* Light red */
-        color: black;
-      }
-      .header-group-2 {
-        background-color: #add8e6; /* Light blue */
-        color: black;
-      }
-      .header-group-3 {
-        background-color: #90ee90; /* Light green */
-        color: black;
-      }
-      .header-group-4 {
-        background-color: #dda0dd; /* Light purple */
-        color: black;
-      }
-      .header-group-5 {
-        background-color: #ffcc99; /* Light orange */
-        color: black;
-      }
-      .header-group-6 {
-        background-color: #ffb6c1; /* Light pink */
-        color: black;
-      }
-      .header-group-7 {
-        background-color: #e1f76a; /* 라임 */
-        color: black;
-      }
-      .screenshot-button {
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-      }
-      .modal {
-        display: none; /* 모달 기본적으로 숨기기 */
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        overflow: auto;
-        background-color: rgb(0,0,0);
-        background-color: rgba(0,0,0,0.4);
-        padding-top: 60px;
-      }
-      .modal-content {
-        background-color: white;
-        margin: 5% auto;
-        padding: 20px;
-        border: 1px solid black;
-        width: 90%;
-        max-width: 600px;
-        color: black;
-        overflow-x: auto; /* 가로 스크롤 활성화 */
-        position: relative; /* 닫기 버튼 위치를 위해 상대 위치 지정 */
-      }
-      .modal-content table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      .modal-content th, .modal-content td {
-        border: 1px solid black;
-        padding: 5px;
-        text-align: left;
-        white-space: nowrap; /* 텍스트 줄바꿈 방지 */
-      }
-      .close-button {
-        display: block;
-        margin: 0 auto 20px; /* 중앙에 배치 */
-        padding: 10px 20px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        cursor: pointer;
-        border-radius: 10px;
-        text-align: center;
-        font-size: 18px; /* 버튼 폰트 크기 증가 */
-      }
-      @media (max-width: 768px) {
         .fixed-header {
-          position: relative;
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 1000;
+            padding: 0;
         }
+
         .header-container {
-          position: relative;
+            background-color: white;
+            text-align: center;
+            padding: 0;
+            margin: 0;
         }
-      }
+
+        .header-container h1 {
+            font-size: 24px;
+            margin: 0;
+            padding: 10px 0;
+            color: black;
+        }
+
+        .filter-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 10px;
+            background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            margin-top: 0;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .filter-legend {
+            font-weight: bold;
+            color: black;
+            margin-right: 10px;
+        }
+
+        .filter-legend.red {
+            color: red;
+        }
+
+        .filter-options-container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .filter-option {
+            display: inline-block;
+            margin: 2px;
+            padding: 5px;
+            border: 1px solid #b4afaf;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: black;
+            border-radius: 10px;
+        }
+
+        .filter-option.selected {
+            background-color: #007bff;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin-top: 0;
+            color: black;
+        }
+
+        table, th, td {
+            border: 1px solid black;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: center;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .col-1 { width: 30px; }
+        .col-2 { width: 40px; }
+        .col-3 { width: 40px; }
+        .col-4 { width: 40px; }
+        .col-5 { width: 120px; }
+        .col-6 { width: 135px; }
+        .col-7 { width: auto; }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            margin: 0;
+        }
+
+        .button-container button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: rgb(207, 206, 206);
+            color: black;
+            border: 1px solid black;
+            cursor: pointer;
+            border-radius: 10px;
+            width: 150px;
+            text-align: center;
+            width: 120px;
+            height: 40px;
+            font-size: 13px;
+            padding: 5px;
+            border-radius: 10px;
+            border: 2px solid #000000;
+        }
+
+        .count-display {
+            font-size: 16px;
+            margin-left: 10px;
+            color: black;
+        }
+
+        .highlighted-row {
+            background-color: #f2f2f2;
+        }
+
+        .full-text {
+            overflow: visible;
+            white-space: normal;
+        }
+
+        .header-group-1 {
+            background-color: #ffcccb;
+            color: black;
+        }
+
+        .header-group-2 {
+            background-color: #add8e6;
+            color: black;
+        }
+
+        .header-group-3 {
+            background-color: #90ee90;
+            color: black;
+        }
+
+        .header-group-4 {
+            background-color: #dda0dd;
+            color: black;
+        }
+
+        .header-group-5 {
+            background-color: #ffcc99;
+            color: black;
+        }
+
+        .header-group-6 {
+            background-color: #ffb6c1;
+            color: black;
+        }
+
+        .header-group-7 {
+            background-color: #e1f76a;
+            color: black;
+        }
+
+        .screenshot-button {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid black;
+            width: 90%;
+            max-width: 600px;
+            color: black;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .modal-content table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .modal-content th, .modal-content td {
+            border: 1px solid black;
+            padding: 5px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .close-button {
+            display: block;
+            margin: 0 auto 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .fixed-header {
+                position: relative;
+            }
+
+            .header-container {
+                position: relative;
+            }
+        }
     </style>
 </head>
 <body>
@@ -283,23 +311,35 @@ body {
   let filteredData = [];
   
   function fetchData() {
-    fetch('https://supermax.kr/25jeongsi') // 엔드포인트를 '/25jeongsi'로 변경
-      .then(response => response.json())
-      .then(data => {
-        originalData = data; // 전체 데이터를 저장
-        // '25정시' 테이블 데이터를 사용하여 필터 옵션 생성 및 기타 작업 수행
-        createFilterOptions(data, '군');
-        createFilterOptions(data, '형태');
-        createFilterOptions(data, '지역');
-        createFilterOptions(data, '교직');
-        createSubjectExclusionFilter(data, ['국어', '수학', '영어', '탐구']);
-        createFilterOptionsFromData(data, '탐구반영갯수');
-        createSkillExclusionFilter();
-        filteredData = data;
-        updateTable();
-        updateCountDisplay(); // 데이터 로드 후 개수 업데이트
-      })
-      .catch(error => console.error('Error fetching data:', error));
+    const token = localStorage.getItem('token');
+    
+    fetch('https://supermax.kr/25jeongsi', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok ' + response.statusText);
+      }
+      return response.json();
+    })
+    .then(data => {
+      originalData = data; // 전체 데이터를 저장
+      // '25정시' 테이블 데이터를 사용하여 필터 옵션 생성 및 기타 작업 수행
+      createFilterOptions(data, '군');
+      createFilterOptions(data, '형태');
+      createFilterOptions(data, '지역');
+      createFilterOptions(data, '교직');
+      createSubjectExclusionFilter(data, ['국어', '수학', '영어', '탐구']);
+      createFilterOptionsFromData(data, '탐구반영갯수');
+      createSkillExclusionFilter();
+      filteredData = data;
+      updateTable();
+      updateCountDisplay(); // 데이터 로드 후 개수 업데이트
+    })
+    .catch(error => console.error('Error fetching data:', error));
   }
   
   function createFilterOptionsFromData(data, field) {
