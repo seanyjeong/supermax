@@ -4,7 +4,11 @@ const mysql = require('mysql');
 const express = require('express');
 const app = express();
 
-
+// SSL/TLS 설정을 불러옵니다.
+const sslOptions = {
+  key: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/privkey.pem'),
+  cert: fs.readFileSync('/etc/letsencrypt/live/supermax.kr/fullchain.pem')
+};
 
 // 데이터베이스 연결을 설정합니다.
 const db_config = {
