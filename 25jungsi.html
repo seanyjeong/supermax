@@ -21,6 +21,10 @@
             background-color: white;
             z-index: 1000;
             padding: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
         }
 
         .header-container {
@@ -28,6 +32,7 @@
             text-align: center;
             padding: 0;
             margin: 0;
+            flex-grow: 1;
         }
 
         .header-container h1 {
@@ -264,9 +269,6 @@
 
         /* 사용자 정보 스타일 */
         .user-info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -313,10 +315,15 @@
     </style>
 </head>
 <body>
-  <!-- 사용자 정보 (유저 이름, 지점, 메뉴) -->
-  <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
-    <div class="user-info-circle" id="user-initial"></div>
-    <span id="user-name"></span>
+  <div class="fixed-header">
+    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
+      <div class="user-info-circle" id="user-initial"></div>
+      <span id="user-name"></span>
+    </div>
+
+    <div class="header-container">
+      <h1>맥스체대입시 25정시간단요강</h1>
+    </div>
   </div>
 
   <!-- 사용자 메뉴 (아이디, 지점, 비밀번호 재설정, 로그아웃) -->
@@ -327,26 +334,21 @@
     <a href="#" onclick="logout()">로그아웃</a>
   </div>
 
-  <div class="fixed-header">
-    <div class="header-container">
-      <h1>맥스체대입시 25정시간단요강</h1>
-      <div id="filters" class="filter-container"></div>
-      <div class="button-container">
-        <button onclick="clearFilters()">필터 초기화</button>
-        <button onclick="applyFilters()">검색</button>
-        <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
-      </div>
-      <div style="text-align: center; margin-bottom: 10px;">
-        <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 5px;"> <!-- 검색창 위치 변경 -->
-        <button onclick="searchByUniversity()">검색</button>
-      </div>
-      <table>
-        <thead>
-          <tr id="headers"></tr>
-        </thead>
-      </table>
-    </div>
+  <div id="filters" class="filter-container"></div>
+  <div class="button-container">
+    <button onclick="clearFilters()">필터 초기화</button>
+    <button onclick="applyFilters()">검색</button>
+    <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
   </div>
+  <div style="text-align: center; margin-bottom: 10px;">
+    <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 5px;"> <!-- 검색창 위치 변경 -->
+    <button onclick="searchByUniversity()">검색</button>
+  </div>
+  <table>
+    <thead>
+      <tr id="headers"></tr>
+    </thead>
+  </table>
   
   <button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
   
@@ -730,7 +732,7 @@
       headerElement.classList.add(`col-${index + 1}`);
       headerElementPlaceholder.classList.add(`col-${index + 1}`);
       tableHead.appendChild(headerElement);
-      tableHeadPlaceholder.appendChild(headerElementPlaceholder);
+      tableHeadPlaceholder.append.appendChild(headerElementPlaceholder);
     });
   
     filteredData.forEach(row => {
