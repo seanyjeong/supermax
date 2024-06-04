@@ -160,7 +160,11 @@ app.use('/api', createProxyMiddleware({
   }
 }));
 
+// HTTPS 서버를 생성합니다.
+const server = https.createServer(sslOptions, app);
+
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at https://0.0.0.0:3000/');
 });
+
