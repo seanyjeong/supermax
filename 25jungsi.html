@@ -22,7 +22,7 @@
             z-index: 1000;
             padding: 0;
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
             width: 100%;
         }
@@ -269,13 +269,14 @@
 
         /* 사용자 정보 스타일 */
         .user-info {
-            position: absolute;
+            position: fixed;
             top: 10px;
             left: 10px;
             display: flex;
             align-items: center;
             gap: 10px;
             cursor: pointer;
+            z-index: 1001;
         }
 
         /* 사용자 정보 원 모양 */
@@ -302,7 +303,7 @@
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
             padding: 10px;
-            z-index: 1000;
+            z-index: 1001;
             width: 130px;
         }
 
