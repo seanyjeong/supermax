@@ -32,12 +32,15 @@
         a {
             padding: 1.5rem 0;
             width: 200px;
-            color: #007bff;
+            background-color: #007bff;
+            color: #fff;
             text-decoration: none;
             border-radius: 5px;
             font-size: 1.5rem;
             text-align: center;
-            border: 1px solid #007bff; /* 추가된 부분: 경계선 추가 */
+        }
+        a:hover {
+            background-color: #0056b3;
         }
         .login-form {
             display: flex;
@@ -58,6 +61,9 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
         }
         .user-info {
             position: absolute;
@@ -99,6 +105,9 @@
             color: black; /* 링크 색상 검정으로 설정 */
             text-decoration: none;
             font-size: 0.9rem;
+        }
+        .user-menu a:hover {
+            background-color: transparent; /* 배경색 제거 */
         }
     </style>
 </head>
