@@ -13,55 +13,6 @@
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
-            transition: margin-left 0.3s; /* 사이드바 애니메이션 효과 */
-        }
-
-        .sidebar {
-            height: 100%;
-            width: 250px;
-            position: fixed;
-            top: 0;
-            left: -250px;
-            background-color: #111;
-            overflow-x: hidden;
-            transition: 0.3s;
-            padding-top: 60px;
-            z-index: 1002; /* 사이드바 z-index 조정 */
-        }
-
-        .sidebar a {
-            padding: 10px 15px;
-            text-decoration: none;
-            font-size: 18px;
-            color: white;
-            display: block;
-            transition: 0.3s;
-        }
-
-        .sidebar a:hover {
-            background-color: #575757;
-        }
-
-        .open-btn {
-            font-size: 20px;
-            cursor: pointer;
-            background-color: #111;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 1003; /* 버튼 z-index 조정 */
-        }
-
-        .close-btn {
-            position: absolute;
-            top: 0;
-            right: 25px;
-            font-size: 36px;
-            margin-left: 50px;
-            color: white;
         }
 
         .fixed-header {
@@ -311,48 +262,118 @@
             }
         }
 
-        /* 사용자 정보 스타일 */
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        /* 사이드바 스타일 */
+        .sidebar {
+            height: 100%;
+            width: 0;
+            position: fixed;
+            z-index: 2000;
+            top: 0;
+            left: 0;
+            background-color: #111;
+            overflow-x: hidden;
+            transition: 0.5s;
+            padding-top: 60px;
+        }
+
+        .sidebar a {
+            padding: 8px 8px 8px 32px;
+            text-decoration: none;
+            font-size: 25px;
+            color: #818181;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .sidebar a:hover {
+            color: #f1f1f1;
+        }
+
+        .sidebar .closebtn {
+            position: absolute;
+            top: 0;
+            right: 25px;
+            font-size: 36px;
+            margin-left: 50px;
+        }
+
+        /* 사용자의 정보 스타일 */
+        .sidebar .user-info {
+            color: white;
+            font-size: 18px;
+            margin: 10px 32px;
+        }
+
+        .sidebar .user-info span {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .openbtn {
+            font-size: 20px;
             cursor: pointer;
+            background-color: #111;
+            color: white;
+            padding: 10px 15px;
+            border: none;
         }
 
-        /* 사용자 정보 원 모양 */
-        .user-info-circle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: #ff0000;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            font-weight: bold;
+        .openbtn:hover {
+            background-color: #444;
         }
 
+        /* 메인 콘텐츠 스타일 */
+        #main {
+            transition: margin-left .5s;
+            padding: 16px;
+        }
     </style>
 </head>
 <body>
-    <!-- 사이드바 -->
     <div id="mySidebar" class="sidebar">
-        <a href="javascript:void(0)" class="close-btn" onclick="closeNav()">&times;</a>
-        <div class="user-info" id="user-info" style="display:none;">
-            <div class="user-info-circle" id="user-initial"></div>
-            <span id="user-name"></span>
+        <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+        <div class="user-info">
+            <span id="user-username"></span>
+            <span id="user-legion"></span>
         </div>
-        <a href="#" id="user-username"></a>
-        <a href="#" id="user-legion"></a>
+        <a href="/25susi">25수시요강</a>
+        <a href="/25jeongsi">25정시요강</a>
         <a href="#" onclick="openPasswordModal()">비밀번호 재설정</a>
         <a href="#" onclick="logout()">로그아웃</a>
-        <a href="25susi.html">25수시요강</a>
-        <a href="25jungsi.html">25정시요강</a>
     </div>
 
-    <!-- 사이드바 오픈 버튼 -->
-    <button class="open-btn" onclick="openNav()">☰ Menu</button>
+    <div id="main" onclick="closeNavOnClick(event)">
+        <button class="openbtn" onclick="openNav()">☰ 메뉴</button>
+        <div class="fixed-header">
+            <div class="header-container">
+                <h1>맥스체대입시 25정시간단요강</h1>
+                <div id="filters" class="filter-container"></div>
+                <div class="button-container">
+                    <button onclick="clearFilters()">필터 초기화</button>
+                    <button onclick="applyFilters()">검색</button>
+                    <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
+                </div>
+                <div style="text-align: center; margin-bottom: 10px;">
+                    <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 5px;"> <!-- 검색창 위치 변경 -->
+                    <button onclick="searchByUniversity()">검색</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr id="headers"></tr>
+                    </thead>
+                </table>
+            </div>
+        </div>
+        
+        <button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
+        
+        <table id="data-table">
+            <thead style="visibility: collapse;">
+                <tr id="headers-placeholder"></tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
 
     <!-- 비밀번호 변경 팝업 -->
     <div id="passwordModal" class="modal">
@@ -365,36 +386,6 @@
             <button onclick="changePassword()">변경</button>
         </div>
     </div>
-
-    <div class="fixed-header">
-        <div class="header-container">
-            <h1>맥스체대입시 25정시간단요강</h1>
-            <div id="filters" class="filter-container"></div>
-            <div class="button-container">
-                <button onclick="clearFilters()">필터 초기화</button>
-                <button onclick="applyFilters()">검색</button>
-                <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
-            </div>
-            <div style="text-align: center; margin-bottom: 10px;">
-                <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 5px;"> <!-- 검색창 위치 변경 -->
-                <button onclick="searchByUniversity()">검색</button>
-            </div>
-            <table>
-                <thead>
-                    <tr id="headers"></tr>
-                </thead>
-            </table>
-        </div>
-    </div>
-    
-    <button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
-    
-    <table id="data-table">
-        <thead style="visibility: collapse;">
-            <tr id="headers-placeholder"></tr>
-        </thead>
-        <tbody id="table-body"></tbody>
-    </table>
     
     <!-- 모달 창 -->
     <div id="myModal" class="modal">
@@ -419,17 +410,7 @@
             window.location.href = 'index.html';
         }
     }
-
-    function openNav() {
-        document.getElementById("mySidebar").style.left = "0";
-        document.body.style.marginLeft = "250px";
-    }
-
-    function closeNav() {
-        document.getElementById("mySidebar").style.left = "-250px";
-        document.body.style.marginLeft= "0";
-    }
-
+    
     function fetchData() {
         const token = localStorage.getItem('token');
         
@@ -789,6 +770,16 @@
         }
     });
 
+    function showUserInfo(data) {
+        document.getElementById('user-username').textContent = `ID: ${data.username}`;
+        document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
+    }
+
+    function toggleMenu() {
+        const userMenu = document.getElementById('user-menu');
+        userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+    }
+
     function openPasswordModal() {
         document.getElementById('passwordModal').style.display = 'block';
     }
@@ -839,6 +830,22 @@
         }).join(''));
 
         return JSON.parse(jsonPayload);
+    }
+
+    function openNav() {
+        document.getElementById("mySidebar").style.width = "250px";
+        document.getElementById("main").style.marginLeft = "250px";
+    }
+
+    function closeNav() {
+        document.getElementById("mySidebar").style.width = "0";
+        document.getElementById("main").style.marginLeft = "0";
+    }
+
+    function closeNavOnClick(event) {
+        if (document.getElementById("mySidebar").style.width === "250px" && !event.target.closest('.sidebar') && !event.target.closest('.openbtn')) {
+            closeNav();
+        }
     }
 
     document.addEventListener("DOMContentLoaded", function() {
