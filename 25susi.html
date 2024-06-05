@@ -23,7 +23,6 @@
             width: 100%;
             z-index: 1000;
             background-color: white;
-            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
         }
         .fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
             margin: 0;
@@ -37,7 +36,6 @@
         .table-container {
             padding: 0px;
             overflow-x: auto;
-            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
         }
         table {
             width: 100%;
@@ -711,14 +709,10 @@
         function openNav() {
             document.getElementById("mySidebar").style.width = "250px";
             document.body.style.marginLeft = "250px";
-            document.getElementById("fixed-header").style.marginLeft = "250px";
-            document.getElementById("table-container").style.marginLeft = "250px";
         }
         function closeNav() {
             document.getElementById("mySidebar").style.width = "0";
             document.body.style.marginLeft = "0";
-            document.getElementById("fixed-header").style.marginLeft = "0";
-            document.getElementById("table-container").style.marginLeft = "0";
         }
         function navigateTo(url) {
             window.location.href = url;
