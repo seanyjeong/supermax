@@ -14,6 +14,7 @@
             padding: 0;
             box-sizing: border-box;
             font-family: Arial, sans-serif;
+            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
         }
         .fixed-header {
             position: fixed;
@@ -22,6 +23,7 @@
             width: 100%;
             z-index: 1000;
             background-color: white;
+            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
         }
         .fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
             margin: 0;
@@ -35,6 +37,7 @@
         .table-container {
             padding: 0px;
             overflow-x: auto;
+            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
         }
         table {
             width: 100%;
@@ -193,7 +196,7 @@
             left: 0;
             background-color: #111;
             overflow-x: hidden;
-            transition: width 0s; /* 애니메이션 없이 바로 열리도록 설정 */
+            transition: width 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
             padding-top: 60px;
         }
         .sidebar a {
@@ -283,7 +286,7 @@
         <a href="#" onclick="logout()">로그아웃</a>
     </div>
     <button class="openbtn" onclick="openNav()">&#9776;</button>
-    <div class="fixed-header">
+    <div class="fixed-header" id="fixed-header">
         <h1 style="text-align: center;">맥스 25수시 모집요강</h1>
         <div class="filter-container" id="filter-container"></div>
         <div class="buttons" style="text-align: center;">
@@ -708,10 +711,14 @@
         function openNav() {
             document.getElementById("mySidebar").style.width = "250px";
             document.body.style.marginLeft = "250px";
+            document.getElementById("fixed-header").style.marginLeft = "250px";
+            document.getElementById("table-container").style.marginLeft = "250px";
         }
         function closeNav() {
             document.getElementById("mySidebar").style.width = "0";
             document.body.style.marginLeft = "0";
+            document.getElementById("fixed-header").style.marginLeft = "0";
+            document.getElementById("table-container").style.marginLeft = "0";
         }
         function navigateTo(url) {
             window.location.href = url;
