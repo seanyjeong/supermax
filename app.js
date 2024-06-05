@@ -152,6 +152,34 @@ app.get('/image/:id', authenticateToken, (req, res) => {
   });
 });
 
+// 비밀번호 변경 엔드포인트
+app.post('/change-password', authenticateToken, (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const username = req.user.username;
+
+  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
+
+  connection.query(query, [username, currentPassword], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    if (results.length > 0) {
+      const updateQuery = 'UPDATE users SET password = ? WHERE username = ?';
+      connection.query(updateQuery, [newPassword, username], (err, results) => {
+        if (err) {
+          res.status(500).json({ message: 'Database query failed', error: err });
+          return;
+        }
+        res.status(200).json({ message: 'Password has been changed' });
+      });
+    } else {
+      res.status(401).json({ message: 'Current password is incorrect' });
+    }
+  });
+});
+
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at http://0.0.0.0:3000/');
