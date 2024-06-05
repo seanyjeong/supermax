@@ -13,6 +13,7 @@
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
+            transition: margin-left 0.5s;
         }
 
         .fixed-header {
@@ -262,28 +263,12 @@
             }
         }
 
-        .openbtn {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background-color: #007bff;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-            z-index: 1001;
-        }
-
-        .openbtn:hover {
-            background-color: #0056b3;
-        }
-
+        /* 사이드바 스타일 */
         .sidebar {
             height: 100%;
             width: 0;
             position: fixed;
-            z-index: 1000;
+            z-index: 1001;
             top: 0;
             left: 0;
             background-color: #111;
@@ -307,20 +292,32 @@
 
         .sidebar .closebtn {
             position: absolute;
-            top: 10px;
+            top: 0;
             right: 25px;
             font-size: 36px;
             margin-left: 50px;
         }
 
-        .sidebar-header {
-            padding: 10px 15px;
-            text-align: center;
-            background-color: #007bff;
+        .openbtn {
+            font-size: 20px;
+            cursor: pointer;
+            background-color: #111;
+            color: white;
+            border: none;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1002;
         }
 
-        .sidebar-header h2 {
-            margin: 0;
+        .openbtn:hover {
+            background-color: #444;
+        }
+
+        /* 사용자 정보 스타일 */
+        .user-info {
+            padding: 10px 15px;
+            font-size: 18px;
             color: white;
         }
 
@@ -328,20 +325,31 @@
 </head>
 <body>
     <div id="mySidebar" class="sidebar">
-        <div class="sidebar-header">
-            <h2>Menu</h2>
-            <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+        <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+        <div class="user-info" id="user-info">
+            <div id="user-username"></div>
+            <div id="user-legion"></div>
         </div>
-        <a href="#" id="user-username"></a>
-        <a href="#" id="user-legion"></a>
-        <a href="#">25수시요강</a>
-        <a href="#">25정시요강</a>
+        <a href="#" onclick="navigateTo('/25susi')">25수시요강</a>
+        <a href="#" onclick="navigateTo('/25jeongsi')">25정시요강</a>
         <a href="#" onclick="openPasswordModal()">비밀번호 재설정</a>
         <a href="#" onclick="logout()">로그아웃</a>
     </div>
-    
-    <button class="openbtn" onclick="openNav()">&#9776; Menu</button>
-    
+
+    <button class="openbtn" onclick="openNav()">&#9776;</button>
+
+    <!-- 비밀번호 변경 팝업 -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closePasswordModal()">&times;</span>
+            <h2>비밀번호 변경</h2>
+            <input type="password" id="currentPassword" placeholder="현재 비밀번호">
+            <input type="password" id="newPassword" placeholder="새 비밀번호">
+            <input type="password" id="confirmPassword" placeholder="새 비밀번호 확인">
+            <button onclick="changePassword()">변경</button>
+        </div>
+    </div>
+
     <div class="fixed-header">
         <div class="header-container">
             <h1>맥스체대입시 25정시간단요강</h1>
@@ -377,18 +385,6 @@
         <div class="modal-content">
             <button class="close-button" onclick="closeModal()">닫기</button> <!-- 닫기 버튼 추가 -->
             <div id="modal-content-container"></div>
-        </div>
-    </div>
-    
-    <!-- 비밀번호 변경 팝업 -->
-    <div id="passwordModal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" onclick="closePasswordModal()">&times;</span>
-            <h2>비밀번호 변경</h2>
-            <input type="password" id="currentPassword" placeholder="현재 비밀번호">
-            <input type="password" id="newPassword" placeholder="새 비밀번호">
-            <input type="password" id="confirmPassword" placeholder="새 비밀번호 확인">
-            <button onclick="changePassword()">변경</button>
         </div>
     </div>
     
@@ -768,13 +764,17 @@
     });
 
     function openNav() {
-        document.getElementById('mySidebar').style.width = '250px';
-        document.body.classList.add('sidebar-open');
+        document.getElementById("mySidebar").style.width = "250px";
+        document.body.style.marginLeft = "250px";
     }
 
     function closeNav() {
-        document.getElementById('mySidebar').style.width = '0';
-        document.body.classList.remove('sidebar-open');
+        document.getElementById("mySidebar").style.width = "0";
+        document.body.style.marginLeft = "0";
+    }
+
+    function navigateTo(url) {
+        window.location.href = url;
     }
 
     function openPasswordModal() {
@@ -833,16 +833,9 @@
         const token = localStorage.getItem('token');
         if (token) {
             const userInfo = parseJwt(token);
-            document.getElementById('user-username').textContent = `로그인한 ID: ${userInfo.username}`;
+            document.getElementById('user-info').style.display = 'block';
+            document.getElementById('user-username').textContent = `ID: ${userInfo.username}`;
             document.getElementById('user-legion').textContent = `지점: ${userInfo.legion}`;
-        }
-    });
-
-    document.addEventListener("click", function(event) {
-        const sidebar = document.getElementById('mySidebar');
-        const openButton = document.querySelector('.openbtn');
-        if (!sidebar.contains(event.target) && !openButton.contains(event.target)) {
-            closeNav();
         }
     });
 
