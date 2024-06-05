@@ -1,186 +1,839 @@
-const http = require('http');
-const fs = require('fs');
-const mysql = require('mysql');
-const express = require('express');
-const bodyParser = require('body-parser');
-const session = require('express-session');
-const jwt = require('jsonwebtoken');
-const cors = require('cors');
-
-const app = express();
-const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
-
-// 데이터베이스 연결을 설정합니다.
-const db_config = {
-  host: '211.37.174.218',
-  user: 'maxilsan',
-  password: 'q141171616!',
-  database: 'supermax',
-  charset: 'utf8mb4'
-};
-
-let connection;
-
-function handleDisconnect() {
-  connection = mysql.createConnection(db_config);
-
-  connection.connect(function (err) {
-    if (err) {
-      console.log('error when connecting to db:', err);
-      setTimeout(handleDisconnect, 2000);
-    }
-  });
-
-  connection.on('error', function (err) {
-    console.log('db error', err);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-      handleDisconnect();
-    } else {
-      throw err;
-    }
-  });
-}
-
-handleDisconnect();
-
-// 세션 설정
-app.use(session({
-  secret: 'your_secret_key',
-  resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false, sameSite: 'None' } // 쿠키 설정 조정
-}));
-
-// CORS 설정
-app.use(cors({
-  origin: 'https://supermax.co.kr',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
-
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
-// HTTP 서버를 생성합니다.
-const server = http.createServer(app);
-
-// 로그인 엔드포인트
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
-
-  connection.query(query, [username, password], (err, results) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-
-    if (results.length > 0) {
-      const user = results[0];
-      const token = jwt.sign({ username: user.username, legion: user.legion }, jwtSecret, { expiresIn: '1h' });
-      res.status(200).json({ message: 'Login successful', token, username: user.username, legion: user.legion });
-    } else {
-      res.status(401).json({ message: 'Invalid credentials' });
-    }
-  });
-});
-
-// JWT 인증 미들웨어
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token == null) return res.status(401).json({ message: 'No token provided' });
-
-  jwt.verify(token, jwtSecret, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
-    req.user = user;
-    next();
-  });
-}
-
-// '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', authenticateToken, (req, res) => {
-  const query = 'SELECT * FROM 25정시';
-  connection.query(query, (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    res.status(200).json(rows);
-  });
-});
-
-// '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', authenticateToken, (req, res) => {
-  const query = `
-    SELECT s.*, i.image_data
-    FROM 25수시 s
-    LEFT JOIN images i ON s.id = i.id
-  `;
-  connection.query(query, (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    rows.forEach(row => {
-      if (row.image_data) {
-        row.image_data = row.image_data.toString('base64');
-      }
-    });
-    res.status(200).json(rows);
-  });
-});
-
-// 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', authenticateToken, (req, res) => {
-  const imageId = req.params.id;
-  const query = 'SELECT image_data FROM images WHERE id = ?';
-
-  connection.query(query, [imageId], (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    if (rows.length > 0) {
-      const imageData = rows[0].image_data.toString('base64');
-      res.status(200).json({ image_data: imageData });
-    } else {
-      res.status(404).json({ message: 'Image not found' });
-    }
-  });
-});
-
-// 비밀번호 변경 엔드포인트
-app.post('/change-password', authenticateToken, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  const username = req.user.username;
-
-  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
-  connection.query(query, [username, currentPassword], (err, results) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-
-    if (results.length > 0) {
-      const updateQuery = 'UPDATE users SET password = ? WHERE username = ?';
-      connection.query(updateQuery, [newPassword, username], (err, updateResults) => {
-        if (err) {
-          res.status(500).json({ message: 'Database update failed', error: err });
-          return;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>맥스체대입시 25정시간단요강</title>
+    <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: white;
+            color: black;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
         }
 
-        res.status(200).json({ message: 'Password changed successfully' });
-      });
-    } else {
-      res.status(401).json({ message: 'Current password is incorrect' });
-    }
-  });
-});
+        .fixed-header {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 1000;
+            padding: 0;
+        }
 
-// 서버 시작
-server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at http://0.0.0.0:3000/');
-});
+        .header-container {
+            background-color: white;
+            text-align: center;
+            padding: 0;
+            margin: 0;
+        }
+
+        .header-container h1 {
+            font-size: 24px;
+            margin: 0;
+            padding: 10px 0;
+            color: black;
+        }
+
+        .filter-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 10px;
+            background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            margin-top: 0;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .filter-legend {
+            font-weight: bold;
+            color: black;
+            margin-right: 10px;
+        }
+
+        .filter-legend.red {
+            color: red;
+        }
+
+        .filter-options-container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .filter-option {
+            display: inline-block;
+            margin: 2px;
+            padding: 5px;
+            border: 1px solid #b4afaf;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: black;
+            border-radius: 10px;
+        }
+
+        .filter-option.selected {
+            background-color: #007bff;
+            color: white;
+        }
+
+        table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            margin-top: 0;
+            color: black;
+        }
+
+        table, th, td {
+            border: 1px solid black;
+        }
+
+        th, td {
+            padding: 8px;
+            text-align: center;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .col-1 { width: 30px; }
+        .col-2 { width: 40px; }
+        .col-3 { width: 40px; }
+        .col-4 { width: 40px; }
+        .col-5 { width: 120px; }
+        .col-6 { width: 135px; }
+        .col-7 { width: auto; }
+
+        .button-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            margin: 0;
+        }
+
+        .button-container button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: rgb(207, 206, 206);
+            color: black;
+            border: 1px solid black;
+            cursor: pointer;
+            border-radius: 10px;
+            width: 150px;
+            text-align: center;
+            width: 120px;
+            height: 40px;
+            font-size: 13px;
+            padding: 5px;
+            border-radius: 10px;
+            border: 2px solid #000000;
+        }
+
+        .count-display {
+            font-size: 16px;
+            margin-left: 10px;
+            color: black;
+        }
+
+        .highlighted-row {
+            background-color: #f2f2f2;
+        }
+
+        .full-text {
+            overflow: visible;
+            white-space: normal;
+        }
+
+        .header-group-1 {
+            background-color: #ffcccb;
+            color: black;
+        }
+
+        .header-group-2 {
+            background-color: #add8e6;
+            color: black;
+        }
+
+        .header-group-3 {
+            background-color: #90ee90;
+            color: black;
+        }
+
+        .header-group-4 {
+            background-color: #dda0dd;
+            color: black;
+        }
+
+        .header-group-5 {
+            background-color: #ffcc99;
+            color: black;
+        }
+
+        .header-group-6 {
+            background-color: #ffb6c1;
+            color: black;
+        }
+
+        .header-group-7 {
+            background-color: #e1f76a;
+            color: black;
+        }
+
+        .screenshot-button {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid black;
+            width: 90%;
+            max-width: 600px;
+            color: black;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .modal-content table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .modal-content th, .modal-content td {
+            border: 1px solid black;
+            padding: 5px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .close-button {
+            display: block;
+            margin: 0 auto 20px;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        @media (max-width: 768px) {
+            .fixed-header {
+                position: relative;
+            }
+
+            .header-container {
+                position: relative;
+            }
+        }
+
+        /* 사용자 정보 스타일 */
+        .user-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            z-index: 1001;
+        }
+
+        /* 사용자 정보 원 모양 */
+        .user-info-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* 사용자 메뉴 스타일 */
+        .user-menu {
+            display: none;
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            padding: 10px;
+            z-index: 1001;
+            width: 130px;
+        }
+
+        /* 사용자 메뉴 링크 스타일 */
+        .user-menu a {
+            display: block;
+            padding: 10px;
+            color: black;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+    </style>
+</head>
+<body>
+    <!-- 사용자 정보 (유저 이름, 지점, 메뉴) -->
+    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
+        <div class="user-info-circle" id="user-initial"></div>
+        <span id="user-name"></span>
+    </div>
+
+    <!-- 사용자 메뉴 (아이디, 지점, 비밀번호 재설정, 로그아웃) -->
+    <div class="user-menu" id="user-menu">
+        <a href="#" id="user-username"></a>
+        <a href="#" id="user-legion"></a>
+        <a href="#" onclick="openPasswordModal()">비밀번호 재설정</a>
+        <a href="#" onclick="logout()">로그아웃</a>
+    </div>
+
+    <!-- 비밀번호 변경 팝업 -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closePasswordModal()">&times;</span>
+            <h2>비밀번호 변경</h2>
+            <input type="password" id="currentPassword" placeholder="현재 비밀번호">
+            <input type="password" id="newPassword" placeholder="새 비밀번호">
+            <input type="password" id="confirmPassword" placeholder="새 비밀번호 확인">
+            <button onclick="changePassword()">변경</button>
+        </div>
+    </div>
+
+    <div class="fixed-header">
+        <div class="header-container">
+            <h1>맥스체대입시 25정시간단요강</h1>
+            <div id="filters" class="filter-container"></div>
+            <div class="button-container">
+                <button onclick="clearFilters()">필터 초기화</button>
+                <button onclick="applyFilters()">검색</button>
+                <span class="count-display">선택된 학교 : 0 개</span> <!-- 선택된 결과값 개수 표시 -->
+            </div>
+            <div style="text-align: center; margin-bottom: 10px;">
+                <input type="text" id="search-input" placeholder="대학명을 입력하세요" style="width: 200px; padding: 5px; margin-bottom: 5px;"> <!-- 검색창 위치 변경 -->
+                <button onclick="searchByUniversity()">검색</button>
+            </div>
+            <table>
+                <thead>
+                    <tr id="headers"></tr>
+                </thead>
+            </table>
+        </div>
+    </div>
+    
+    <button class="screenshot-button" onclick="captureScreenshot()">스크린샷</button> <!-- 스크린샷 버튼 추가 -->
+    
+    <table id="data-table">
+        <thead style="visibility: collapse;">
+            <tr id="headers-placeholder"></tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+    </table>
+    
+    <!-- 모달 창 -->
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <button class="close-button" onclick="closeModal()">닫기</button> <!-- 닫기 버튼 추가 -->
+            <div id="modal-content-container"></div>
+        </div>
+    </div>
+    
+    <!-- 최신 버전의 html2canvas 라이브러리 CDN 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script>
+    
+    let originalData = [];
+    let filteredData = [];
+
+    function checkAuth() {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('You are not logged in.');
+            window.location.href = 'index.html';
+        }
+    }
+    
+    function fetchData() {
+        const token = localStorage.getItem('token');
+        
+        fetch('https://supermax.kr/25jeongsi', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok ' + response.statusText);
+            }
+            return response.json();
+        })
+        .then(data => {
+            originalData = data; // 전체 데이터를 저장
+            // '25정시' 테이블 데이터를 사용하여 필터 옵션 생성 및 기타 작업 수행
+            createFilterOptions(data, '군');
+            createFilterOptions(data, '형태');
+            createFilterOptions(data, '지역');
+            createFilterOptions(data, '교직');
+            createSubjectExclusionFilter(data, ['국어', '수학', '영어', '탐구']);
+            createFilterOptionsFromData(data, '탐구반영갯수');
+            createSkillExclusionFilter();
+            filteredData = data;
+            updateTable();
+            updateCountDisplay(); // 데이터 로드 후 개수 업데이트
+        })
+        .catch(error => console.error('Error fetching data:', error));
+    }
+    
+    function createFilterOptionsFromData(data, field) {
+        const uniqueValues = Array.from(new Set(data.map(item => item[field])))
+            .filter(value => value !== 0 && value !== null)
+            .sort((a, b) => a - b);
+        const filterContainer = document.getElementById('filters');
+        const fieldSet = document.createElement('div');
+        fieldSet.classList.add('filter-group');
+        const legend = document.createElement('span');
+        legend.classList.add('filter-legend');
+        legend.textContent = field;
+        fieldSet.appendChild(legend);
+    
+        const optionsContainer = document.createElement('div');
+        optionsContainer.classList.add('filter-options-container');
+    
+        uniqueValues.forEach(value => {
+            const filterOption = document.createElement('div');
+            filterOption.classList.add('filter-option');
+            filterOption.textContent = value;
+            filterOption.onclick = function() {
+                this.classList.toggle('selected');
+            };
+            optionsContainer.appendChild(filterOption);
+        });
+    
+        fieldSet.appendChild(optionsContainer);
+        filterContainer.appendChild(fieldSet);
+    }
+    
+    function createFilterOptions(data, field) {
+        const uniqueValues = Array.from(new Set(data.map(item => item[field])))
+            .filter(value => value !== 0 && value !== null)
+            .sort();
+        const filterContainer = document.getElementById('filters');
+        const fieldSet = document.createElement('div');
+        fieldSet.classList.add('filter-group');
+        const legend = document.createElement('span');
+        legend.classList.add('filter-legend');
+        legend.textContent = field;
+        fieldSet.appendChild(legend);
+    
+        const optionsContainer = document.createElement('div');
+        optionsContainer.classList.add('filter-options-container');
+    
+        uniqueValues.forEach(value => {
+            const filterOption = document.createElement('div');
+            filterOption.classList.add('filter-option');
+            filterOption.textContent = value;
+            filterOption.onclick = function() {
+                this.classList.toggle('selected');
+            };
+            optionsContainer.appendChild(filterOption);
+        });
+    
+        fieldSet.appendChild(optionsContainer);
+        filterContainer.appendChild(fieldSet);
+    }
+    
+    function createSubjectExclusionFilter(data, fields) {
+        const filterContainer = document.getElementById('filters');
+        const fieldSet = document.createElement('div');
+        fieldSet.classList.add('filter-group');
+        const legend = document.createElement('span');
+        legend.classList.add('filter-legend', 'red');
+        legend.textContent = '과목 제외';
+        fieldSet.appendChild(legend);
+    
+        const optionsContainer = document.createElement('div');
+        optionsContainer.classList.add('filter-options-container');
+    
+        fields.forEach(field => {
+            const filterOption = document.createElement('div');
+            filterOption.classList.add('filter-option');
+            filterOption.textContent = field;
+            filterOption.onclick = function() {
+                this.classList.toggle('selected');
+            };
+            optionsContainer.appendChild(filterOption);
+        });
+    
+        fieldSet.appendChild(optionsContainer);
+        filterContainer.appendChild(fieldSet);
+    }
+    
+    function createSkillExclusionFilter() {
+        const skills = ['제멀', '메던', '배근력', '좌전굴', '체전굴', '20m', '싯업'];
+        const filterContainer = document.getElementById('filters');
+        const fieldSet = document.createElement('div');
+        fieldSet.classList.add('filter-group');
+        const legend = document.createElement('span');
+        legend.classList.add('filter-legend', 'red');
+        legend.textContent = '실기 제외';
+        fieldSet.appendChild(legend);
+    
+        const optionsContainer = document.createElement('div');
+        optionsContainer.classList.add('filter-options-container');
+    
+        skills.forEach(skill => {
+            const filterOption = document.createElement('div');
+            filterOption.classList.add('filter-option');
+            filterOption.textContent = skill;
+            filterOption.onclick = function() {
+                this.classList.toggle('selected');
+            };
+            optionsContainer.appendChild(filterOption);
+        });
+    
+        fieldSet.appendChild(optionsContainer);
+        filterContainer.appendChild(fieldSet);
+    }
+    
+    function applyFilters() {
+        const selectedFilters = {};
+        document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
+            const field = filterOption.parentNode.parentNode.querySelector('span').textContent.replace(' 제외', '');
+            if (!selectedFilters[field]) {
+                selectedFilters[field] = [];
+            }
+            selectedFilters[field].push(filterOption.textContent);
+        });
+    
+        filteredData = originalData.filter(item => {
+            return Object.keys(selectedFilters).every(field => {
+                if (field === '과목') {
+                    return selectedFilters[field].every(subject => {
+                        return (
+                            item[subject] === null || 
+                            item[subject] === '' || 
+                            /\(.*?\)/.test(item[subject])
+                        );
+                    });
+                } else if (field === '실기') {
+                    const excludedSkills = selectedFilters[field];
+                    return !excludedSkills.some(skill => {
+                        for (let i = 1; i <= 6; i++) {
+                            if (item[`실기${i}`] === skill) {
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                } else if (field === '탐구반영갯수') {
+                    const selectedNumbers = selectedFilters[field].map(Number);
+                    return selectedNumbers.includes(item[field]);
+                }
+                return selectedFilters[field].includes(item[field]);
+            });
+        });
+    
+        updateTable();
+        updateCountDisplay(); // 필터 적용 후 개수 업데이트
+    }
+    
+    function clearFilters() {
+        document.querySelectorAll('.filter-option.selected').forEach(filterOption => {
+            filterOption.classList.remove('selected');
+        });
+        document.getElementById('search-input').value = ''; // 검색창 초기화
+        applyFilters();
+    }
+    
+    function handleRowClick(event) {
+        const isMobile = window.innerWidth <= 768; // 모바일 화면 너비 기준 설정
+    
+        if (isMobile) {
+            // 모바일에서는 모달 창으로 표시
+            const rowContent = Array.from(event.currentTarget.cells).map(cell => cell.textContent);
+            const headers = Array.from(document.getElementById('headers').children).map(header => header.textContent);
+            
+            const modalContentContainer = document.getElementById('modal-content-container');
+            modalContentContainer.innerHTML = '';
+    
+            const fieldGroups = [
+                ['군', '형태', '지역', '교직'],
+                ['대학명', '학과명'],
+                ['전형명', '모집인원', '반영방법'],
+                ['수능', '내신', '실기', '기타'],
+                ['국어', '수학', '영어', '탐구', '탐구반영갯수', '한국사'],
+                ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6']
+            ];
+    
+            const table = document.createElement('table');
+    
+            fieldGroups.forEach(group => {
+                group.forEach(field => {
+                    const index = headers.indexOf(field);
+                    if (index !== -1) {
+                        const tr = document.createElement('tr');
+                        const th = document.createElement('th');
+                        const td = document.createElement('td');
+                        th.textContent = field;
+                        td.textContent = rowContent[index];
+                        tr.appendChild(th);
+                        tr.appendChild(td);
+                        table.appendChild(tr);
+                    }
+                });
+            });
+    
+            modalContentContainer.appendChild(table);
+            document.getElementById('myModal').style.display = 'block';
+            document.body.style.overflow = 'hidden'; // 모달이 열릴 때 배경 스크롤 비활성화
+        } else {
+            // PC에서는 행 강조 및 전체 텍스트 표시
+            const allRows = document.querySelectorAll('tr');
+            allRows.forEach(row => {
+                row.classList.remove('highlighted-row');
+                row.querySelectorAll('td').forEach(cell => {
+                    cell.classList.remove('full-text');
+                });
+            });
+            event.currentTarget.classList.add('highlighted-row');
+            event.currentTarget.querySelectorAll('td').forEach(cell => {
+                cell.classList.add('full-text');
+            });
+        }
+    }
+    
+    function closeModal() {
+        document.getElementById('myModal').style.display = 'none';
+        document.body.style.overflow = 'auto'; // 모달이 닫힐 때 배경 스크롤 활성화
+    }
+    
+    function updateTable() {
+        const headers = Object.keys(filteredData[0] || {}).filter(header => header !== 'ID');
+        const tableHead = document.getElementById('headers');
+        const tableHeadPlaceholder = document.getElementById('headers-placeholder');
+        const tableBody = document.getElementById('table-body');
+    
+        tableHead.innerHTML = '';
+        tableHeadPlaceholder.innerHTML = '';
+        tableBody.innerHTML = '';
+    
+        headers.forEach((header, index) => {
+            const headerElement = document.createElement('th');
+            const headerElementPlaceholder = document.createElement('th');
+            headerElement.textContent = header;
+            headerElementPlaceholder.textContent = header;
+    
+            if (['군', '형태', '지역', '교직'].includes(header)) {
+                headerElement.classList.add('header-group-1');
+                headerElementPlaceholder.classList.add('header-group-1');
+            } else if (['대학명', '학과명'].includes(header)) {
+                headerElement.classList.add('header-group-2');
+                headerElementPlaceholder.classList.add('header-group-2');
+            } else if (['전형명', '모집인원', '반영방법'].includes(header)) {
+                headerElement.classList.add('header-group-3');
+                headerElementPlaceholder.classList.add('header-group-3');
+            } else if (['수능', '내신', '실기', '기타'].includes(header)) {
+                headerElement.classList.add('header-group-4');
+                headerElementPlaceholder.classList.add('header-group-4');
+            } else if (['국어', '수학', '영어', '탐구', '탐구반영갯수', '한국사'].includes(header)) {
+                headerElement.classList.add('header-group-5');
+                headerElementPlaceholder.classList.add('header-group-5');
+            } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6'].includes(header)) {
+                headerElement.classList.add('header-group-6');
+                headerElementPlaceholder.classList.add('header-group-6');
+            }else if (['백분위'].includes(header)) {
+                headerElement.classList.add('header-group-7');
+                headerElementPlaceholder.classList.add('header-group-7');
+            }
+            headerElement.classList.add(`col-${index + 1}`);
+            headerElementPlaceholder.classList.add(`col-${index + 1}`);
+            tableHead.appendChild(headerElement);
+            tableHeadPlaceholder.appendChild(headerElementPlaceholder);
+        });
+    
+        filteredData.forEach(row => {
+            const rowElement = document.createElement('tr');
+            headers.forEach((header, index) => {
+                const cell = document.createElement('td');
+                cell.textContent = row[header];
+                cell.classList.add(`col-${index + 1}`);
+                rowElement.appendChild(cell);
+            });
+    
+            rowElement.addEventListener('click', handleRowClick); // 클릭 이벤트 리스너 설정
+    
+            tableBody.appendChild(rowElement);
+        });
+
+        adjustHeaderFontSize(); // 테이블 갱신 후 글씨 크기 조정
+    }
+
+    function adjustHeaderFontSize() {
+        const headers = document.querySelectorAll('#headers th');
+        headers.forEach(header => {
+            let fontSize = 16; // 기본 글씨 크기
+            header.style.fontSize = fontSize + 'px';
+            while (header.scrollWidth > header.clientWidth && fontSize > 10) { // 줄어드는 글씨 크기 제한 설정
+                fontSize -= 1;
+                header.style.fontSize = fontSize + 'px';
+            }
+        });
+    }
+
+    function updateCountDisplay() {
+        const countDisplay = document.querySelector('.count-display');
+        countDisplay.textContent = `선택된 학교 : ${filteredData.length} 개`;
+    }
+    
+    function captureScreenshot() {
+        html2canvas(document.body).then(canvas => {
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = 'screenshot.png';
+            link.click();
+        });
+    }
+    
+    function searchByUniversity() {
+        const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
+        if (searchInput) {
+            filteredData = originalData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
+        } else {
+            filteredData = [...originalData]; // 검색어가 없으면 전체 데이터로 초기화
+        }
+        updateTable();
+        updateCountDisplay();
+    }
+    
+    document.getElementById('search-input').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            searchByUniversity();
+        }
+    });
+
+    function showUserInfo(data) {
+        document.getElementById('user-info').style.display = 'flex';
+        document.getElementById('user-initial').textContent = data.legion.charAt(0).toUpperCase();
+        document.getElementById('user-name').textContent = data.username;
+        document.getElementById('user-username').textContent = `ID: ${data.username}`;
+        document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
+    }
+
+    function toggleMenu() {
+        const userMenu = document.getElementById('user-menu');
+        userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function openPasswordModal() {
+        document.getElementById('passwordModal').style.display = 'block';
+    }
+
+    function closePasswordModal() {
+        document.getElementById('passwordModal').style.display = 'none';
+    }
+
+    async function changePassword() {
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+
+        if (newPassword !== confirmPassword) {
+            alert('새 비밀번호가 일치하지 않습니다.');
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        const response = await fetch('https://supermax.kr/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+
+        if (response.ok) {
+            alert('비밀번호가 성공적으로 변경되었습니다.');
+            closePasswordModal();
+        } else {
+            const data = await response.json();
+            alert(`비밀번호 변경 실패: ${data.message}`);
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        location.reload();
+    }
+
+    function parseJwt(token) {
+        var base64Url = token.split('.')[1];
+        var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        var jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+
+        return JSON.parse(jsonPayload);
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const userInfo = parseJwt(token);
+            showUserInfo(userInfo);
+        }
+    });
+
+    window.onload = function() {
+        checkAuth();
+        fetchData();
+    }
+    </script>
+    
+</body>
+<footer style="margin-top: 3rem; text-align: center;">
+    <p>© 2024 맥스체대입시 일산교육원.  All rights reserved.</p>
+</footer>
+</html>
