@@ -13,6 +13,55 @@
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
+            transition: margin-left 0.3s; /* 사이드바 애니메이션 효과 */
+        }
+
+        .sidebar {
+            height: 100%;
+            width: 250px;
+            position: fixed;
+            top: 0;
+            left: -250px;
+            background-color: #111;
+            overflow-x: hidden;
+            transition: 0.3s;
+            padding-top: 60px;
+            z-index: 1002; /* 사이드바 z-index 조정 */
+        }
+
+        .sidebar a {
+            padding: 10px 15px;
+            text-decoration: none;
+            font-size: 18px;
+            color: white;
+            display: block;
+            transition: 0.3s;
+        }
+
+        .sidebar a:hover {
+            background-color: #575757;
+        }
+
+        .open-btn {
+            font-size: 20px;
+            cursor: pointer;
+            background-color: #111;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1003; /* 버튼 z-index 조정 */
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 0;
+            right: 25px;
+            font-size: 36px;
+            margin-left: 50px;
+            color: white;
         }
 
         .fixed-header {
@@ -264,14 +313,10 @@
 
         /* 사용자 정보 스타일 */
         .user-info {
-            position: fixed;
-            top: 10px;
-            left: 10px;
             display: flex;
             align-items: center;
             gap: 10px;
             cursor: pointer;
-            z-index: 1001;
         }
 
         /* 사용자 정보 원 모양 */
@@ -288,45 +333,26 @@
             font-weight: bold;
         }
 
-        /* 사용자 메뉴 스타일 */
-        .user-menu {
-            display: none;
-            position: absolute;
-            top: 50px;
-            left: 10px;
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-            padding: 10px;
-            z-index: 1001;
-            width: 130px;
-        }
-
-        /* 사용자 메뉴 링크 스타일 */
-        .user-menu a {
-            display: block;
-            padding: 10px;
-            color: black;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-
     </style>
 </head>
 <body>
-    <!-- 사용자 정보 (유저 이름, 지점, 메뉴) -->
-    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
-        <div class="user-info-circle" id="user-initial"></div>
-        <span id="user-name"></span>
-    </div>
-
-    <!-- 사용자 메뉴 (아이디, 지점, 비밀번호 재설정, 로그아웃) -->
-    <div class="user-menu" id="user-menu">
+    <!-- 사이드바 -->
+    <div id="mySidebar" class="sidebar">
+        <a href="javascript:void(0)" class="close-btn" onclick="closeNav()">&times;</a>
+        <div class="user-info" id="user-info" style="display:none;">
+            <div class="user-info-circle" id="user-initial"></div>
+            <span id="user-name"></span>
+        </div>
         <a href="#" id="user-username"></a>
         <a href="#" id="user-legion"></a>
         <a href="#" onclick="openPasswordModal()">비밀번호 재설정</a>
         <a href="#" onclick="logout()">로그아웃</a>
+        <a href="25susi.html">25수시요강</a>
+        <a href="25jungsi.html">25정시요강</a>
     </div>
+
+    <!-- 사이드바 오픈 버튼 -->
+    <button class="open-btn" onclick="openNav()">☰ Menu</button>
 
     <!-- 비밀번호 변경 팝업 -->
     <div id="passwordModal" class="modal">
@@ -393,7 +419,17 @@
             window.location.href = 'index.html';
         }
     }
-    
+
+    function openNav() {
+        document.getElementById("mySidebar").style.left = "0";
+        document.body.style.marginLeft = "250px";
+    }
+
+    function closeNav() {
+        document.getElementById("mySidebar").style.left = "-250px";
+        document.body.style.marginLeft= "0";
+    }
+
     function fetchData() {
         const token = localStorage.getItem('token');
         
@@ -752,19 +788,6 @@
             searchByUniversity();
         }
     });
-
-    function showUserInfo(data) {
-        document.getElementById('user-info').style.display = 'flex';
-        document.getElementById('user-initial').textContent = data.legion.charAt(0).toUpperCase();
-        document.getElementById('user-name').textContent = data.username;
-        document.getElementById('user-username').textContent = `ID: ${data.username}`;
-        document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
-    }
-
-    function toggleMenu() {
-        const userMenu = document.getElementById('user-menu');
-        userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
-    }
 
     function openPasswordModal() {
         document.getElementById('passwordModal').style.display = 'block';
