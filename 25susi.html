@@ -13,6 +13,7 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: Arial, sans-serif;
         }
         .fixed-header {
             position: fixed;
@@ -360,7 +361,7 @@
             }
         }
         function showUserInfo(data) {
-            document.getElementById('user-info').style.display = 'flex';
+            document.getElementById('user-info').style.display = 'block';
             document.getElementById('user-username').textContent = `ID: ${data.username}`;
             document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
         }
@@ -704,6 +705,17 @@
             fetchData();
             adjustTableContainerMargin();
         });
+        function openNav() {
+            document.getElementById("mySidebar").style.width = "250px";
+            document.body.style.marginLeft = "250px";
+        }
+        function closeNav() {
+            document.getElementById("mySidebar").style.width = "0";
+            document.body.style.marginLeft = "0";
+        }
+        function navigateTo(url) {
+            window.location.href = url;
+        }
     </script>
 </body>
 <footer style="margin-top: 3rem; text-align: center;">
