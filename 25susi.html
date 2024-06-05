@@ -13,6 +13,7 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    transition: margin-left 0.5s;
   }
   .fixed-header {
     position: fixed;
@@ -192,14 +193,10 @@
 
   /* 사용자 정보 스타일 */
   .user-info {
-      position: fixed;
-      top: 10px;
-      left: 10px;
       display: flex;
       align-items: center;
       gap: 10px;
       cursor: pointer;
-      z-index: 1001;
   }
 
   /* 사용자 정보 원 모양 */
@@ -216,90 +213,74 @@
       font-weight: bold;
   }
 
-  /* 사용자 메뉴 스타일 */
-  .user-menu {
-      display: none;
-      position: absolute;
-      top: 50px;
-      left: 10px;
-      background-color: #fff;
-      border-radius: 5px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-      padding: 10px;
-      z-index: 1001;
-      width: 130px;
-  }
-
-  /* 사용자 메뉴 링크 스타일 */
-  .user-menu a {
-      display: block;
-      padding: 10px;
-      color: black;
-      text-decoration: none;
-      font-size: 0.9rem;
-  }
-
-  /* 비밀번호 재설정 팝업 스타일 */
-  .reset-password-modal {
-      display: none;
+  /* 사이드바 스타일 */
+  .sidebar {
+      height: 100%;
+      width: 0;
       position: fixed;
-      z-index: 3000;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      background-color: white;
-      padding: 20px;
-      border: 1px solid #888;
-      border-radius: 10px;
-      width: 300px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      z-index: 1001;
+      top: 0;
+      left: 0;
+      background-color: #111;
+      overflow-x: hidden;
+      transition: 0.5s;
+      padding-top: 60px;
   }
 
-  .reset-password-modal input {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-  }
-
-  .reset-password-modal button {
-      width: 100%;
-      padding: 10px;
-      background-color: #007bff;
+  .sidebar a {
+      padding: 10px 15px;
+      text-decoration: none;
+      font-size: 18px;
       color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
+      display: block;
+      transition: 0.3s;
   }
 
-  .reset-password-modal button:hover {
-      background-color: #0056b3;
+  .sidebar a:hover {
+      background-color: #575757;
   }
 
-  .reset-password-modal .close {
+  .sidebar .closebtn {
       position: absolute;
-      top: 10px;
-      right: 10px;
+      top: 0;
+      right: 25px;
+      font-size: 36px;
+      margin-left: 50px;
+  }
+
+  .openbtn {
       font-size: 20px;
       cursor: pointer;
+      background-color: #111;
+      color: white;
+      border: none;
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1002;
   }
+
+  .openbtn:hover {
+      background-color: #444;
+  }
+
 </style>
 </head>
 <body>
-<!-- 사용자 정보 (유저 이름, 지점, 메뉴) -->
-<div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
-  <div class="user-info-circle" id="user-initial"></div>
-  <span id="user-name"></span>
-</div>
-
-<!-- 사용자 메뉴 (아이디, 지점, 비밀번호 재설정, 로그아웃) -->
-<div class="user-menu" id="user-menu">
+<!-- 사이드바 -->
+<div id="mySidebar" class="sidebar">
+  <a href="javascript:void(0)" class="closebtn" onclick="closeNav()">&times;</a>
+  <div class="user-info">
+    <div class="user-info-circle" id="user-initial"></div>
+    <span id="user-name"></span>
+  </div>
   <a href="#" id="user-username"></a>
   <a href="#" id="user-legion"></a>
   <a href="#" onclick="openResetPasswordModal()">비밀번호 재설정</a>
   <a href="#" onclick="logout()">로그아웃</a>
 </div>
+
+<button class="openbtn" onclick="openNav()">&#9776; 메뉴</button>
 
 <!-- 비밀번호 재설정 팝업 -->
 <div class="reset-password-modal" id="reset-password-modal">
@@ -406,9 +387,14 @@
       document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
   }
 
-  function toggleMenu() {
-      const userMenu = document.getElementById('user-menu');
-      userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+  function openNav() {
+      document.getElementById("mySidebar").style.width = "250px";
+      document.body.style.marginLeft = "250px";
+  }
+
+  function closeNav() {
+      document.getElementById("mySidebar").style.width = "0";
+      document.body.style.marginLeft = "0";
   }
 
   function openResetPasswordModal() {
