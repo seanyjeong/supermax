@@ -15,19 +15,9 @@
             box-sizing: border-box;
             font-family: Arial, sans-serif;
         }
-        @keyframes slide {
-    from {
-        transform: translateX(0);
-    }
-    to {
-        transform: translateX(100px); /* 필요에 따라 값을 조정 */
-    }
-}
-
-.fixed-header, .table-container, .openbtn {
-    animation: slide 0.5s ease-in-out;
-}
-
+        .fixed-header, .table-container, .openbtn {
+            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
+        }
         .fixed-header {
             position: fixed;
             top: 0;
@@ -74,14 +64,15 @@
             background-color: #f2f2f2;
         }
         .filter-container {
-            margin-bottom: 20px;
-            text-align: left;
-            position: relative;
-            background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
-            background-size: cover;
-            background-position: center;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
             padding: 10px;
-            border-radius: 10px;
+            background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            margin-top: 0;
         }
         .filter-title {
             font-weight: bold;
