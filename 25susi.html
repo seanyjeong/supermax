@@ -15,9 +15,19 @@
             box-sizing: border-box;
             font-family: Arial, sans-serif;
         }
-        .fixed-header, .table-container, .openbtn {
-            transition: margin-left 0.5s; /* 부드러운 애니메이션을 위한 트랜지션 추가 */
-        }
+        @keyframes slide {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(100px); /* 필요에 따라 값을 조정 */
+    }
+}
+
+.fixed-header, .table-container, .openbtn {
+    animation: slide 0.5s ease-in-out;
+}
+
         .fixed-header {
             position: fixed;
             top: 0;
