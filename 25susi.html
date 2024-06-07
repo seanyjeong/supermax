@@ -38,10 +38,11 @@
         .table-container {
             padding: 0px;
             overflow-x: auto;
+            margin-top: 70px; /* Add this to ensure there is enough space for the fixed header */
         }
         table {
             width: 100%;
-            margin: 0 ;
+            margin: 0;
             border-collapse: collapse;
             table-layout: fixed;
         }
@@ -284,6 +285,7 @@
             .table-container {
                 overflow-x: auto;
                 padding: 0 5px;
+                margin-top: 0; /* Reset margin for mobile */
             }
             th:not(.mobile-visible), td:not(.mobile-visible) {
                 display: none;
