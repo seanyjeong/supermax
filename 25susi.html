@@ -163,6 +163,7 @@
         .bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
             background-color: #f0c6c5;
         }
+       
         .search-container {
             text-align: center;
             margin: 5px 0;
@@ -510,56 +511,70 @@
             const dummyHead = document.getElementById('dummy-head');
             tableHead.innerHTML = '';
             dummyHead.innerHTML = '';
-            const isMobile = window.innerWidth <= 768;
-            const headers = isMobile ? ['지역', '대학명', '학과명'] : Object.keys(data[0]).filter(header => header !== 'id');
-            const trHead = document.createElement('tr');
-            const trDummy = document.createElement('tr');
-            headers.forEach((header, index) => {
-                const th = document.createElement('th');
-                const thDummy = document.createElement('th');
-                th.textContent = header;
-                thDummy.textContent = header;
-                if (['종류', '형태', '지역'].includes(header)) {
-                    th.classList.add('bg-category1');
-                    thDummy.classList.add('bg-category1');
-                } else if (['대학명', '학과명'].includes(header)) {
-                    th.classList.add('bg-category2');
-                    thDummy.classList.add('bg-category2');
-                } else if (['전형명', '모집정원', '교직'].includes(header)) {
-                    th.classList.add('bg-category3');
-                    thDummy.classList.add('bg-category3');
-                } else if (['1단계배수', '내신', '실기', '면접', '기타', '수능최저'].includes(header)) {
-                    th.classList.add('bg-category4');
-                    thDummy.classList.add('bg-category4');
-                } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'].includes(header)) {
-                    th.classList.add('bg-category5');
-                    thDummy.classList.add('bg-category5');
-                }
-                if (index < 3) {
-                    th.classList.add('col-1');
-                    thDummy.classList.add('col-1');
-                } else if (index < 5) {
-                    th.classList.add('col-4');
-                    thDummy.classList.add('col-4');
-                } else if (index >= 43 && index <= 50) {
-                    th.classList.add('col-6');
-                    thDummy.classList.add('col-6');
-                } else {
-                    th.classList.add('col-10');
-                    thDummy.classList.add('col-10');
-                }
-                trHead.appendChild(th);
-                trDummy.appendChild(thDummy);
-            });
-            tableHead.appendChild(trHead);
-            dummyHead.appendChild(trDummy);
+            if (data.length > 0) {
+                const headers = Object.keys(data[0]).filter(header => header !== 'id');
+                const trHead = document.createElement('tr');
+                const trDummy = document.createElement('tr');
+                headers.filter((header, index) => 
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
+                ).forEach((header, index) => {
+                    const th = document.createElement('th');
+                    const thDummy = document.createElement('th');
+                    th.textContent = header;
+                    thDummy.textContent = header;
+                    if (['종류', '형태', '지역'].includes(header)) {
+                        th.classList.add('bg-category1');
+                        thDummy.classList.add('bg-category1');
+                    } else if (['대학명', '학과명'].includes(header)) {
+                        th.classList.add('bg-category2');
+                        thDummy.classList.add('bg-category2');
+                    } else if (['전형명', '모집정원', '교직'].includes(header)) {
+                        th.classList.add('bg-category3');
+                        thDummy.classList.add('bg-category3');
+                    } else if (['1단계배수', '내신', '실기', '면접', '기타', '수능최저'].includes(header)) {
+                        th.classList.add('bg-category4');
+                        thDummy.classList.add('bg-category4');
+                    } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'].includes(header)) {
+                        th.classList.add('bg-category5');
+                        thDummy.classList.add('bg-category5');
+                    }
+                    if (index < 3) {
+                        th.classList.add('col-1');
+                        thDummy.classList.add('col-1');
+                    } else if (index < 5) {
+                        th.classList.add('col-4');
+                        thDummy.classList.add('col-4');
+                    } else if (index >= 43 && index <= 50) {
+                        th.classList.add('col-6');
+                        thDummy.classList.add('col-6');
+                    } else {
+                        th.classList.add('col-10');
+                        thDummy.classList.add('col-10');
+                    }
+                    trHead.appendChild(th);
+                    trDummy.appendChild(thDummy);
+                });
+                tableHead.appendChild(trHead);
+                dummyHead.appendChild(trDummy);
+            }
             tableBody.innerHTML = '';
             data.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.onclick = () => showModal(row);
-                headers.forEach(key => {
+                Object.keys(row).filter((key, index) => 
+                    key !== 'id' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
+                ).forEach((key, index) => {
                     const td = document.createElement('td');
                     td.textContent = row[key];
+                    if (index < 3) {
+                        td.classList.add('col-1');
+                    } else if (index < 5) {
+                        td.classList.add('col-4');
+                    } else if (index >= 43 && index <= 50) {
+                        td.classList.add('col-6');
+                    } else {
+                        td.classList.add('col-10');
+                    }
                     tr.appendChild(td);
                 });
                 tableBody.appendChild(tr);
