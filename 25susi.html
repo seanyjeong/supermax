@@ -163,7 +163,6 @@
         .bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
             background-color: #f0c6c5;
         }
-       
         .search-container {
             text-align: center;
             margin: 5px 0;
@@ -259,6 +258,45 @@
             right: 10px;
             font-size: 20px;
             cursor: pointer;
+        }
+        @media screen and (max-width: 768px) {
+            .fixed-header, .table-container {
+                position: relative;
+                margin-left: 0;
+            }
+            .fixed-header {
+                position: relative;
+                top: auto;
+                left: auto;
+                width: 100%;
+                z-index: 1000;
+                background-color: white;
+            }
+            .fixed-header h1 {
+                font-size: 20px;
+            }
+            table {
+                table-layout: auto;
+            }
+            th, td {
+                font-size: 12px;
+            }
+            .table-container {
+                overflow-x: auto;
+                padding: 0 5px;
+            }
+            th:not(.mobile-visible), td:not(.mobile-visible) {
+                display: none;
+            }
+            th.mobile-visible, td.mobile-visible {
+                display: table-cell;
+            }
+            .openbtn {
+                position: fixed;
+                top: 5px;
+                left: 5px;
+                font-size: 16px;
+            }
         }
     </style>
 </head>
@@ -551,6 +589,10 @@
                         th.classList.add('col-10');
                         thDummy.classList.add('col-10');
                     }
+                    if (['지역', '대학명', '학과명'].includes(header)) {
+                        th.classList.add('mobile-visible');
+                        thDummy.classList.add('mobile-visible');
+                    }
                     trHead.appendChild(th);
                     trDummy.appendChild(thDummy);
                 });
@@ -574,6 +616,9 @@
                         td.classList.add('col-6');
                     } else {
                         td.classList.add('col-10');
+                    }
+                    if (['지역', '대학명', '학과명'].includes(key)) {
+                        td.classList.add('mobile-visible');
                     }
                     tr.appendChild(td);
                 });
