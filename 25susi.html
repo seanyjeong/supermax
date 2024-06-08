@@ -21,7 +21,7 @@
     </div>
     <button class="openbtn" onclick="openNav()">&#9776;</button>
     <div class="fixed-header" id="fixed-header">
-        <h1 style="text-align: center;">맥스 25수시 모집요강</h1>
+        <h1>맥스 25수시 모집요강</h1>
         <div class="filter-container" id="filter-container"></div>
         <div class="buttons" style="text-align: center;">
             <button onclick="clearFilters()">필터초기화</button>
@@ -40,16 +40,14 @@
     <div class="table-container" id="table-container">
         <table id="data-table">
             <thead>
-                <tr id="dummy-head" class="hidden">
-                </tr>
+                <tr id="dummy-head" class="hidden"></tr>
             </thead>
-            <tbody id="table-body">
-            </tbody>
+            <tbody id="table-body"></tbody>
         </table>
     </div>
     <div id="myModal" class="modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
+            <span class="close" onclick="closeModal()">&times;</span>
             <div id="modal-body"></div>
         </div>
     </div>
@@ -69,8 +67,10 @@
                 window.location.href = 'index.html';
             }
         }
+
         let fullData = [];
         let filteredData = [];
+
         document.addEventListener("DOMContentLoaded", function() {
             const token = localStorage.getItem('token');
             if (token) {
@@ -78,6 +78,7 @@
                 showUserInfo(userInfo);
             }
         });
+
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -97,25 +98,25 @@
                 alert('Login failed. Please check your username and password.');
             }
         }
+
         function showUserInfo(data) {
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('user-username').textContent = `ID: ${data.username}`;
             document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
         }
-        function toggleMenu() {
-            const userMenu = document.getElementById('user-menu');
-            userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
-        }
+
         function openResetPasswordModal() {
             const modal = document.getElementById('reset-password-modal');
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
+
         function closeResetPasswordModal() {
             const modal = document.getElementById('reset-password-modal');
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
+
         async function resetPassword() {
             const currentPassword = document.getElementById('current-password').value;
             const newPassword = document.getElementById('new-password').value;
@@ -141,10 +142,12 @@
                 alert(`비밀번호 변경 실패: ${error.message}`);
             }
         }
+
         function logout() {
             localStorage.removeItem('token');
             location.reload();
         }
+
         function parseJwt(token) {
             var base64Url = token.split('.')[1];
             var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -153,6 +156,7 @@
             }).join(''));
             return JSON.parse(jsonPayload);
         }
+
         function fetchData() {
             const token = localStorage.getItem('token');
             fetch('https://supermax.kr/25susi', {
@@ -176,11 +180,11 @@
                 createPracticalFilterOptions(data);
                 filteredData = fullData;
                 displayTable(data);
-                adjustTableContainerMargin();
                 updateFilteredCount();
             })
             .catch(error => console.error('데이터 가져오기 오류:', error));
         }
+
         function createFilterOptions(data, category) {
             const filterContainer = document.getElementById('filter-container');
             const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
@@ -199,6 +203,7 @@
             });
             filterContainer.appendChild(document.createElement('br'));
         }
+
         function createPracticalFilterOptions(data) {
             const filterContainer = document.getElementById('filter-container');
             const title = document.createElement('span');
@@ -206,7 +211,6 @@
             title.className = 'filter-title filter-title-practical';
             filterContainer.appendChild(title);
             const practicalValues = ['제멀', '메던', '배근력', '좌전굴', '체전굴', '20m', '싯업'];
-            const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
             practicalValues.forEach(value => {
                 const filterBox = document.createElement('div');
                 filterBox.className = 'filter-box';
@@ -218,6 +222,7 @@
             });
             filterContainer.appendChild(document.createElement('br'));
         }
+
         function applyFilter() {
             const selectedFilters = {};
             document.querySelectorAll('.filter-box.selected').forEach(box => {
@@ -243,6 +248,7 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
+
         function clearFilters() {
             document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
             document.getElementById('search-input').value = '';
@@ -250,6 +256,7 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
+
         function displayTable(data) {
             const tableHead = document.getElementById('table-head');
             const tableBody = document.getElementById('table-body');
@@ -260,9 +267,7 @@
                 const headers = Object.keys(data[0]).filter(header => header !== 'id');
                 const trHead = document.createElement('tr');
                 const trDummy = document.createElement('tr');
-                headers.filter((header, index) => 
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
-                ).forEach((header, index) => {
+                headers.forEach((header, index) => {
                     const th = document.createElement('th');
                     const thDummy = document.createElement('th');
                     th.textContent = header;
@@ -333,6 +338,7 @@
             });
             adjustHeaderFontSize();
         }
+
         function showModal(data) {
             const modal = document.getElementById('myModal');
             const modalContent = document.querySelector('.modal-content');
@@ -393,32 +399,13 @@
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
+
         function closeModal() {
             const modal = document.getElementById('myModal');
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
-        function adjustTableContainerMargin() {
-            const fixedHeader = document.querySelector('.fixed-header');
-            const tableContainer = document.getElementById('table-container');
-            const headerHeight = fixedHeader.offsetHeight;
-            tableContainer.style.marginTop = `${headerHeight}px`;
-        }
-        function searchByUniversity() {
-            const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
-            if (searchInput) {
-                filteredData = fullData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
-            } else {
-                filteredData = fullData;
-            }
-            displayTable(filteredData);
-            updateFilteredCount();
-        }
-        function updateFilteredCount() {
-            const filteredCount = filteredData.length;
-            const filteredCountElement = document.getElementById('filtered-count');
-            filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
-        }
+
         function adjustHeaderFontSize() {
             const headers = document.querySelectorAll('#table-head th');
             headers.forEach(header => {
@@ -430,37 +417,54 @@
                 }
             });
         }
+
+        function searchByUniversity() {
+            const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
+            if (searchInput) {
+                filteredData = fullData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
+            } else {
+                filteredData = fullData;
+            }
+            displayTable(filteredData);
+            updateFilteredCount();
+        }
+
+        function updateFilteredCount() {
+            const filteredCount = filteredData.length;
+            const filteredCountElement = document.getElementById('filtered-count');
+            filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
+        }
+
         document.getElementById('search-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchByUniversity();
             }
         });
-        document.querySelector('.close').onclick = closeModal;
+
         window.onclick = function(event) {
             const modal = document.getElementById('myModal');
             if (event.target == modal) {
                 modal.style.display = 'none';
                 document.body.classList.remove('modal-open');
             }
-        }
-        window.onresize = adjustTableContainerMargin;
+        };
+
+        window.onresize = adjustHeaderFontSize;
+
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             fetchData();
-            adjustTableContainerMargin();
+            adjustHeaderFontSize();
         });
+
         function openNav() {
             document.getElementById("mySidebar").style.width = "250px";
-            document.getElementById("fixed-header").style.marginLeft = "250px";
-            document.getElementById("table-container").style.marginLeft = "250px";
-            document.querySelector(".openbtn").style.marginLeft = "250px";
         }
+
         function closeNav() {
             document.getElementById("mySidebar").style.width = "0";
-            document.getElementById("fixed-header").style.marginLeft = "0";
-            document.getElementById("table-container").style.marginLeft = "0";
-            document.querySelector(".openbtn").style.marginLeft = "0";
         }
+
         function navigateTo(url) {
             window.location.href = url;
         }
