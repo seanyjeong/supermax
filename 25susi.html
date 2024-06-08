@@ -5,248 +5,305 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>맥스 25수시 모집요강</title>
     <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
-    <style>
-        body.modal-open {
-            overflow: hidden;
-        }
-        body {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: Arial, sans-serif;
-        }
-        .fixed-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            z-index: 1000;
-            background-color: white;
-        }
-        .fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
-            margin: 0;
-            padding: 10px;
-            background-color: white;
-        }
-        .fixed-header h1 {
-            text-align: center;
-            font-size: 24px;
-        }
-        .table-container {
-            padding: 0;
-            overflow-x: auto;
-            margin-top: 150px; /* Adjusted margin to ensure header and filters are visible */
-        }
-        table {
-            width: 100%;
-            margin: 0;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }
-        th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: center;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        .filter-container {
-            margin-bottom: 20px;
-            text-align: left;
-            background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
-            background-size: cover;
-            background-position: center;
-            padding: 10px;
-            border-radius: 10px;
-        }
-        .filter-title {
-            font-weight: bold;
-            margin-right: 10px;
-        }
-        .filter-box {
-            display: inline-block;
-            margin: 2px;
-            padding: 5px;
-            border: 1px solid #b4afaf;
-            cursor: pointer;
-            background-color: rgba(255, 255, 255, 0.8);
-            color: black;
-            border-radius: 10px;
-        }
-        .filter-box.selected {
-            background-color: #007bff;
-            color: white;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 2000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.4);
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 5% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 1200px;
-        }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .modal-title {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .modal-table th {
-            background-color: #5b6164;
-            color: white;
-        }
-        .hidden {
-            display: none;
-        }
-        .sidebar {
-            height: 100%;
-            width: 0;
-            position: fixed;
-            z-index: 1001;
-            top: 0;
-            left: 0;
-            background-color: #111;
-            overflow-x: hidden;
-            transition: width 0.3s;
-            padding-top: 60px;
-        }
-        .sidebar a {
-            padding: 10px 15px;
-            text-decoration: none;
-            font-size: 18px;
-            color: white;
-            display: block;
-            transition: 0.3s;
-        }
-        .sidebar a:hover {
-            background-color: #575757;
-        }
-        .sidebar .closebtn {
-            position: absolute;
-            top: 0;
-            right: 25px;
-            font-size: 36px;
-            margin-left: 50px;
-        }
-        .openbtn {
-            font-size: 20px;
-            cursor: pointer;
-            background-color: #111;
-            color: white;
-            border: none;
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 1002;
-        }
-        .openbtn:hover {
-            background-color: #444;
-        }
-        .reset-password-modal {
-            display: none;
-            position: fixed;
-            z-index: 3000;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 20px;
-            border: 1px solid #888;
-            border-radius: 10px;
-            width: 300px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-        }
-        .reset-password-modal input {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .reset-password-modal button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .reset-password-modal button:hover {
-            background-color: #0056b3;
-        }
-        .reset-password-modal .close {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 20px;
-            cursor: pointer;
-        }
-        @media screen and (max-width: 768px) {
-            .fixed-header, .table-container {
-                position: relative;
-                margin-left: 0;
-            }
-            .fixed-header {
-                position: relative;
-                top: auto;
-                left: auto;
-                width: 100%;
-                z-index: 1000;
-                background-color: white;
-            }
-            .fixed-header h1 {
-                font-size: 20px;
-            }
-            table {
-                table-layout: auto;
-            }
-            th, td {
-                font-size: 12px;
-            }
-            .table-container {
-                overflow-x: auto;
-                padding: 0 5px;
-            }
-            th:not(.mobile-visible), td:not(.mobile-visible) {
-                display: none;
-            }
-            th.mobile-visible, td.mobile-visible {
-                display: table-cell;
-            }
-            .openbtn {
-                top: 5px;
-                left: 5px;
-                font-size: 16px;
-            }
-        }
-    </style>
+<style>
+  body.modal-open {
+    overflow: hidden;
+}
+body {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+.fixed-header, .table-container, .openbtn {
+    transition: margin-left 0.3s;
+}
+.fixed-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    background-color: white;
+}
+.fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
+    margin: 0;
+    padding: 10px;
+    background-color: white;
+}
+.fixed-header h1 {
+    text-align: center;
+    font-size: 24px;
+}
+.table-container {
+    padding: 0;
+    overflow-x: auto;
+    margin-top: 0; /* Adjusted for mobile view */
+}
+table {
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+.buttons button {
+    width: 120px;
+    height: 40px;
+    font-size: 13px;
+    padding: 5px;
+    border-radius: 10px;
+}
+th, td {
+    border: 1px solid black;
+    padding: 8px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+th {
+    background-color: #f2f2f2;
+}
+.filter-container {
+    margin-bottom: 20px;
+    text-align: left;
+    position: relative;
+    background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+    background-size: cover;
+    background-position: center;
+    padding: 10px;
+    border-radius: 10px;
+}
+.filter-title {
+    font-weight: bold;
+    margin-right: 10px;
+    position: relative;
+    z-index: 1;
+}
+.filter-box {
+    display: inline-block;
+    margin: 2px;
+    padding: 5px;
+    border: 1px solid #b4afaf;
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.8);
+    color: black;
+    border-radius: 10px;
+}
+.filter-box.selected {
+    background-color: #007bff;
+    color: white;
+}
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgb(0,0,0);
+    background-color: rgba(0,0,0,0.4);
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 1200px;
+}
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+.modal-title {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+.modal-table th {
+    background-color: #5b6164;
+    color: white;
+}
+.hidden {
+    display: none;
+}
+button {
+    margin-bottom: 10px;
+}
+.col-1, .col-2, .col-3 {
+    width: 2%;
+}
+.col-4, .col-5 {
+    width: 10%;
+}
+.col-6, .col-7, .col-8, .col-9 {
+    width: 5%;
+}
+.col-10, .col-11 {
+    width: auto;
+}
+.image-modal {
+    width: 800px;
+    max-width: 70%;
+}
+.modal img {
+    max-width: 100%;
+    height: auto;
+}
+.bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
+    background-color: #f0c6c5;
+}
+.search-container {
+    text-align: center;
+    margin: 5px 0;
+}
+.filter-title-practical {
+    color: red;
+}
+.user-info {
+    padding: 10px 15px;
+    font-size: 18px;
+    color: white;
+}
+.sidebar {
+    height: 100%;
+    width: 0;
+    position: fixed;
+    z-index: 1001;
+    top: 0;
+    left: 0;
+    background-color: #111;
+    overflow-x: hidden;
+    transition: width 0.5s;
+    padding-top: 60px;
+}
+.sidebar a {
+    padding: 10px 15px;
+    text-decoration: none;
+    font-size: 18px;
+    color: white;
+    display: block;
+    transition: 0.3s;
+}
+.sidebar a:hover {
+    background-color: #575757;
+}
+.sidebar .closebtn {
+    position: absolute;
+    top: 0;
+    right: 25px;
+    font-size: 36px;
+    margin-left: 50px;
+}
+.openbtn {
+    font-size: 20px;
+    cursor: pointer;
+    background-color: #111;
+    color: white;
+    border: none;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1002;
+}
+.openbtn:hover {
+    background-color: #444;
+}
+.reset-password-modal {
+    display: none;
+    position: fixed;
+    z-index: 3000;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background-color: white;
+    padding: 20px;
+    border: 1px solid #888;
+    border-radius: 10px;
+    width: 300px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+.reset-password-modal input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.reset-password-modal button {
+    width: 100%;
+    padding: 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+.reset-password-modal button:hover {
+    background-color: #0056b3;
+}
+.reset-password-modal .close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 20px;
+    cursor: pointer;
+}
+@media screen and (max-width: 768px) {
+    .fixed-header, .table-container {
+        position: relative;
+        margin-left: 0;
+    }
+    .fixed-header {
+        position: relative;
+        top: auto;
+        left: auto;
+        width: 100%;
+        z-index: 1000;
+        background-color: white;
+        margin-bottom: 0; /* Remove margin below header */
+    }
+    .fixed-header h1 {
+        font-size: 20px;
+        margin-bottom: 0; /* Remove margin below header text */
+    }
+    table {
+        table-layout: auto;
+    }
+    th, td {
+        font-size: 12px;
+    }
+    .table-container {
+        overflow-x: auto;
+        padding: 0 5px;
+        margin-top: 0; /* Ensure table touches header */
+    }
+    th:not(.mobile-visible), td:not(.mobile-visible) {
+        display: none;
+    }
+    th.mobile-visible, td.mobile-visible {
+        display: table-cell;
+    }
+    .openbtn {
+        position: fixed;
+        top: 5px;
+        left: 5px;
+        font-size: 16px;
+    }
+}
+
+</style>  
 </head>
 <body>
     <div id="mySidebar" class="sidebar">
@@ -262,7 +319,7 @@
     </div>
     <button class="openbtn" onclick="openNav()">&#9776;</button>
     <div class="fixed-header" id="fixed-header">
-        <h1>맥스 25수시 모집요강</h1>
+        <h1 style="text-align: center;">맥스 25수시 모집요강</h1>
         <div class="filter-container" id="filter-container"></div>
         <div class="buttons" style="text-align: center;">
             <button onclick="clearFilters()">필터초기화</button>
@@ -281,14 +338,16 @@
     <div class="table-container" id="table-container">
         <table id="data-table">
             <thead>
-                <tr id="dummy-head" class="hidden"></tr>
+                <tr id="dummy-head" class="hidden">
+                </tr>
             </thead>
-            <tbody id="table-body"></tbody>
+            <tbody id="table-body">
+            </tbody>
         </table>
     </div>
     <div id="myModal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <span class="close">&times;</span>
             <div id="modal-body"></div>
         </div>
     </div>
@@ -308,10 +367,8 @@
                 window.location.href = 'index.html';
             }
         }
-
         let fullData = [];
         let filteredData = [];
-
         document.addEventListener("DOMContentLoaded", function() {
             const token = localStorage.getItem('token');
             if (token) {
@@ -319,7 +376,6 @@
                 showUserInfo(userInfo);
             }
         });
-
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -339,25 +395,25 @@
                 alert('Login failed. Please check your username and password.');
             }
         }
-
         function showUserInfo(data) {
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('user-username').textContent = `ID: ${data.username}`;
             document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
         }
-
+        function toggleMenu() {
+            const userMenu = document.getElementById('user-menu');
+            userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+        }
         function openResetPasswordModal() {
             const modal = document.getElementById('reset-password-modal');
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
-
         function closeResetPasswordModal() {
             const modal = document.getElementById('reset-password-modal');
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
-
         async function resetPassword() {
             const currentPassword = document.getElementById('current-password').value;
             const newPassword = document.getElementById('new-password').value;
@@ -383,12 +439,10 @@
                 alert(`비밀번호 변경 실패: ${error.message}`);
             }
         }
-
         function logout() {
             localStorage.removeItem('token');
             location.reload();
         }
-
         function parseJwt(token) {
             var base64Url = token.split('.')[1];
             var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -397,7 +451,6 @@
             }).join(''));
             return JSON.parse(jsonPayload);
         }
-
         function fetchData() {
             const token = localStorage.getItem('token');
             fetch('https://supermax.kr/25susi', {
@@ -421,11 +474,11 @@
                 createPracticalFilterOptions(data);
                 filteredData = fullData;
                 displayTable(data);
+                adjustTableContainerMargin();
                 updateFilteredCount();
             })
             .catch(error => console.error('데이터 가져오기 오류:', error));
         }
-
         function createFilterOptions(data, category) {
             const filterContainer = document.getElementById('filter-container');
             const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
@@ -444,7 +497,6 @@
             });
             filterContainer.appendChild(document.createElement('br'));
         }
-
         function createPracticalFilterOptions(data) {
             const filterContainer = document.getElementById('filter-container');
             const title = document.createElement('span');
@@ -452,6 +504,7 @@
             title.className = 'filter-title filter-title-practical';
             filterContainer.appendChild(title);
             const practicalValues = ['제멀', '메던', '배근력', '좌전굴', '체전굴', '20m', '싯업'];
+            const practicalFields = ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'];
             practicalValues.forEach(value => {
                 const filterBox = document.createElement('div');
                 filterBox.className = 'filter-box';
@@ -463,7 +516,6 @@
             });
             filterContainer.appendChild(document.createElement('br'));
         }
-
         function applyFilter() {
             const selectedFilters = {};
             document.querySelectorAll('.filter-box.selected').forEach(box => {
@@ -489,7 +541,6 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
-
         function clearFilters() {
             document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
             document.getElementById('search-input').value = '';
@@ -497,7 +548,6 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
-
         function displayTable(data) {
             const tableHead = document.getElementById('table-head');
             const tableBody = document.getElementById('table-body');
@@ -509,7 +559,7 @@
                 const trHead = document.createElement('tr');
                 const trDummy = document.createElement('tr');
                 headers.filter((header, index) => 
-                    ['지역', '대학명', '학과명', '전형명', '모집정원', '교직'].includes(header) // 필요 없는 헤더 제외
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
                 ).forEach((header, index) => {
                     const th = document.createElement('th');
                     const thDummy = document.createElement('th');
@@ -524,6 +574,29 @@
                     } else if (['전형명', '모집정원', '교직'].includes(header)) {
                         th.classList.add('bg-category3');
                         thDummy.classList.add('bg-category3');
+                    } else if (['1단계배수', '내신', '실기', '면접', '기타', '수능최저'].includes(header)) {
+                        th.classList.add('bg-category4');
+                        thDummy.classList.add('bg-category4');
+                    } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'].includes(header)) {
+                        th.classList.add('bg-category5');
+                        thDummy.classList.add('bg-category5');
+                    }
+                    if (index < 3) {
+                        th.classList.add('col-1');
+                        thDummy.classList.add('col-1');
+                    } else if (index < 5) {
+                        th.classList.add('col-4');
+                        thDummy.classList.add('col-4');
+                    } else if (index >= 43 && index <= 50) {
+                        th.classList.add('col-6');
+                        thDummy.classList.add('col-6');
+                    } else {
+                        th.classList.add('col-10');
+                        thDummy.classList.add('col-10');
+                    }
+                    if (['지역', '대학명', '학과명'].includes(header)) {
+                        th.classList.add('mobile-visible');
+                        thDummy.classList.add('mobile-visible');
                     }
                     trHead.appendChild(th);
                     trDummy.appendChild(thDummy);
@@ -535,18 +608,29 @@
             data.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.onclick = () => showModal(row);
-                Object.keys(row).filter(key => 
-                    ['지역', '대학명', '학과명', '전형명', '모집정원', '교직'].includes(key) // 필요 없는 헤더 제외
+                Object.keys(row).filter((key, index) => 
+                    key !== 'id' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 43, 44, 45, 46, 47, 48, 49, 50].includes(index)
                 ).forEach((key, index) => {
                     const td = document.createElement('td');
                     td.textContent = row[key];
+                    if (index < 3) {
+                        td.classList.add('col-1');
+                    } else if (index < 5) {
+                        td.classList.add('col-4');
+                    } else if (index >= 43 && index <= 50) {
+                        td.classList.add('col-6');
+                    } else {
+                        td.classList.add('col-10');
+                    }
+                    if (['지역', '대학명', '학과명'].includes(key)) {
+                        td.classList.add('mobile-visible');
+                    }
                     tr.appendChild(td);
                 });
                 tableBody.appendChild(tr);
             });
             adjustHeaderFontSize();
         }
-
         function showModal(data) {
             const modal = document.getElementById('myModal');
             const modalContent = document.querySelector('.modal-content');
@@ -607,13 +691,32 @@
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
-
         function closeModal() {
             const modal = document.getElementById('myModal');
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
-
+        function adjustTableContainerMargin() {
+            const fixedHeader = document.querySelector('.fixed-header');
+            const tableContainer = document.getElementById('table-container');
+            const headerHeight = fixedHeader.offsetHeight;
+            tableContainer.style.marginTop = `${headerHeight}px`;
+        }
+        function searchByUniversity() {
+            const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
+            if (searchInput) {
+                filteredData = fullData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
+            } else {
+                filteredData = fullData;
+            }
+            displayTable(filteredData);
+            updateFilteredCount();
+        }
+        function updateFilteredCount() {
+            const filteredCount = filteredData.length;
+            const filteredCountElement = document.getElementById('filtered-count');
+            filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
+        }
         function adjustHeaderFontSize() {
             const headers = document.querySelectorAll('#table-head th');
             headers.forEach(header => {
@@ -625,54 +728,37 @@
                 }
             });
         }
-
-        function searchByUniversity() {
-            const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
-            if (searchInput) {
-                filteredData = fullData.filter(item => item['대학명'].toLowerCase().includes(searchInput));
-            } else {
-                filteredData = fullData;
-            }
-            displayTable(filteredData);
-            updateFilteredCount();
-        }
-
-        function updateFilteredCount() {
-            const filteredCount = filteredData.length;
-            const filteredCountElement = document.getElementById('filtered-count');
-            filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
-        }
-
         document.getElementById('search-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchByUniversity();
             }
         });
-
+        document.querySelector('.close').onclick = closeModal;
         window.onclick = function(event) {
             const modal = document.getElementById('myModal');
             if (event.target == modal) {
                 modal.style.display = 'none';
                 document.body.classList.remove('modal-open');
             }
-        };
-
-        window.onresize = adjustHeaderFontSize;
-
+        }
+        window.onresize = adjustTableContainerMargin;
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             fetchData();
-            adjustHeaderFontSize();
+            adjustTableContainerMargin();
         });
-
         function openNav() {
             document.getElementById("mySidebar").style.width = "250px";
+            document.getElementById("fixed-header").style.marginLeft = "250px";
+            document.getElementById("table-container").style.marginLeft = "250px";
+            document.querySelector(".openbtn").style.marginLeft = "250px";
         }
-
         function closeNav() {
             document.getElementById("mySidebar").style.width = "0";
+            document.getElementById("fixed-header").style.marginLeft = "0";
+            document.getElementById("table-container").style.marginLeft = "0";
+            document.querySelector(".openbtn").style.marginLeft = "0";
         }
-
         function navigateTo(url) {
             window.location.href = url;
         }
@@ -682,3 +768,6 @@
     <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
 </footer>
 </html>
+
+1번과 2번이 내용은 조금 틀린데, 표시되는 형식이며, 나타내고자 하는건 똑같거든.
+그런데 코드를 만든 형식이 많이 틀리지? 무엇이 더 효율적으로 쓰였어??
