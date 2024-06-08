@@ -79,6 +79,7 @@
                 const userInfo = parseJwt(token);
                 showUserInfo(userInfo);
             }
+            fetchData();
         });
 
         async function login() {
