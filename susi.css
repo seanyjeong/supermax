@@ -252,8 +252,6 @@ button {
     font-size: 20px;
     cursor: pointer;
 }
-
-/* Mobile view adjustments */
 @media screen and (max-width: 768px) {
     .fixed-header, .table-container {
         position: relative;
@@ -266,9 +264,11 @@ button {
         width: 100%;
         z-index: 1000;
         background-color: white;
+        margin-bottom: 0; /* Remove margin below header */
     }
     .fixed-header h1 {
         font-size: 20px;
+        margin-bottom: 0; /* Remove margin below header text */
     }
     table {
         table-layout: auto;
@@ -279,7 +279,7 @@ button {
     .table-container {
         overflow-x: auto;
         padding: 0 5px;
-        margin-top: 0; /* Reset margin for mobile */
+        margin-top: 0; /* Ensure table touches header */
     }
     th:not(.mobile-visible), td:not(.mobile-visible) {
         display: none;
@@ -293,14 +293,5 @@ button {
         left: 5px;
         font-size: 16px;
     }
-    /* Add these lines to ensure the header and table are touching */
-    .fixed-header {
-        margin-bottom: 0; /* Remove margin below header */
-    }
-    .table-container {
-        margin-top: 0; /* Ensure table touches header */
-    }
-    .fixed-header h1 {
-        margin-bottom: 0; /* Remove margin below header text */
-    }
 }
+
