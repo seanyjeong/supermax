@@ -137,7 +137,6 @@
             border-radius: 10px;
             width: 150px;
             text-align: center;
-            width: 120px;
             height: 40px;
             font-size: 13px;
             padding: 5px;
@@ -387,15 +386,9 @@
     let originalData = [];
     let filteredData = [];
     const desiredHeaders = [
-        '종류', '형태', '지역', '교직',
-        '대학명', '학과명', '전형명', '모집정원',
-        '1단계배수', '내신', '실기', '면접', '기타', '수능최저',
-        '내신반영', '1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로',
-        '과목반영', '국', '수', '영', '사', '과', '기타_[1]',
-        '등급별점수', '1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급',
-        '실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8',
-        '1단계발표', '실기날짜', '합격자발표',
-        '전년도', '정원', '지원자', '추가합격', '입시결과', '경쟁률'
+        '종류', '형태', '지역', '교직', '대학명', '학과명', '전형명', '모집정원', '1단계배수', 
+        '내신', '실기', '면접', '기타', '수능최저', '실기1', '실기2', '실기3', '실기4', 
+        '실기5', '실기6', '실기7', '실기8'
     ];
 
     function checkAuth() {
@@ -546,16 +539,7 @@
                 ['대학명', '학과명'],
                 ['전형명', '모집정원', '교직'],
                 ['1단계배수', '내신', '실기', '면접', '기타', '수능최저'],
-                ['내신반영'],
-                ['1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'],
-                ['과목반영'],
-                ['국', '수', '영', '사', '과', '기타_[1]'],
-                ['등급별점수'],
-                ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'],
-                ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'],
-                ['1단계발표', '실기날짜', '합격자발표'],
-                ['전년도'],
-                ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
+                ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8']
             ];
     
             const table = document.createElement('table');
@@ -630,9 +614,6 @@
             } else if (['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'].includes(header)) {
                 headerElement.classList.add('header-group-5');
                 headerElementPlaceholder.classList.add('header-group-5');
-            } else if (['백분위'].includes(header)) {
-                headerElement.classList.add('header-group-7');
-                headerElementPlaceholder.classList.add('header-group-7');
             }
             headerElement.classList.add(`col-${index + 1}`);
             headerElementPlaceholder.classList.add(`col-${index + 1}`);
@@ -640,6 +621,7 @@
             tableHeadPlaceholder.appendChild(headerElementPlaceholder);
         });
     
+        const fragment = document.createDocumentFragment();
         filteredData.forEach(row => {
             const rowElement = document.createElement('tr');
             desiredHeaders.forEach((header, index) => {
@@ -651,8 +633,9 @@
     
             rowElement.addEventListener('click', handleRowClick); // 클릭 이벤트 리스너 설정
     
-            tableBody.appendChild(rowElement);
+            fragment.appendChild(rowElement);
         });
+        tableBody.appendChild(fragment);
 
         adjustHeaderFontSize(); // 테이블 갱신 후 글씨 크기 조정
     }
