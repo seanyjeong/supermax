@@ -69,10 +69,10 @@
                 window.location.href = 'index.html';
             }
         }
-        
+
         let fullData = [];
         let filteredData = [];
-        
+
         document.addEventListener("DOMContentLoaded", function() {
             const token = localStorage.getItem('token');
             if (token) {
@@ -470,7 +470,7 @@
         };
 
         window.onresize = debounce(adjustTableContainerMargin, 100);
-        
+
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             fetchData();
