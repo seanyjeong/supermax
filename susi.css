@@ -1,15 +1,25 @@
-body.modal-open {
-    overflow: hidden;
-}
+/* 공통 스타일 */
 body {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
     font-family: Arial, sans-serif;
 }
+
+button {
+    margin-bottom: 10px;
+}
+
+/* 모달 열림 시 스크롤 방지 */
+body.modal-open {
+    overflow: hidden;
+}
+
+/* 고정 헤더 및 테이블 컨테이너 */
 .fixed-header, .table-container, .openbtn {
     transition: margin-left 0.3s ease-in-out;
 }
+
 .fixed-header {
     position: fixed;
     top: 0;
@@ -17,34 +27,29 @@ body {
     width: 100%;
     z-index: 1000;
     background-color: white;
-}
-.fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
-    margin: 0;
-    padding: 10px;
-    background-color: white;
-}
-.fixed-header h1 {
     text-align: center;
+    padding: 10px;
+}
+
+.fixed-header h1 {
+    margin: 0;
     font-size: 24px;
 }
+
 .table-container {
     padding: 0;
     overflow-x: auto;
-    margin-top: 120px; /* Adjusted for mobile view */
+    margin-top: 120px; /* 모바일 뷰에 맞게 조정 */
 }
+
+/* 테이블 스타일 */
 table {
     width: 100%;
     margin: 0;
     border-collapse: collapse;
     table-layout: fixed;
 }
-.buttons button {
-    width: 120px;
-    height: 40px;
-    font-size: 13px;
-    padding: 5px;
-    border-radius: 10px;
-}
+
 th, td {
     border: 1px solid black;
     padding: 8px;
@@ -53,9 +58,21 @@ th, td {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 th {
     background-color: #f2f2f2;
 }
+
+/* 버튼 스타일 */
+.buttons button {
+    width: 120px;
+    height: 40px;
+    font-size: 13px;
+    padding: 5px;
+    border-radius: 10px;
+}
+
+/* 필터 컨테이너 */
 .filter-container {
     margin-bottom: 20px;
     text-align: left;
@@ -66,12 +83,15 @@ th {
     padding: 10px;
     border-radius: 10px;
 }
+
+/* 필터 스타일 */
 .filter-title {
     font-weight: bold;
     margin-right: 10px;
     position: relative;
     z-index: 1;
 }
+
 .filter-box {
     display: inline-block;
     margin: 2px;
@@ -82,10 +102,13 @@ th {
     color: black;
     border-radius: 10px;
 }
+
 .filter-box.selected {
     background-color: #007bff;
     color: white;
 }
+
+/* 모달 스타일 */
 .modal {
     display: none;
     position: fixed;
@@ -95,9 +118,9 @@ th {
     width: 100%;
     height: 100%;
     overflow: auto;
-    background-color: rgb(0,0,0);
-    background-color: rgba(0,0,0,0.4);
+    background-color: rgba(0, 0, 0, 0.4);
 }
+
 .modal-content {
     background-color: #fefefe;
     margin: 5% auto;
@@ -106,68 +129,65 @@ th {
     width: 80%;
     max-width: 1200px;
 }
+
 .close {
     color: #aaa;
     float: right;
     font-size: 28px;
     font-weight: bold;
+    cursor: pointer;
 }
+
 .close:hover,
 .close:focus {
     color: black;
     text-decoration: none;
-    cursor: pointer;
 }
-.modal-title {
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 20px;
+
+/* 모바일 뷰 스타일 */
+@media screen and (max-width: 768px) {
+    .fixed-header {
+        position: relative;
+        margin-bottom: 0;
+    }
+
+    .fixed-header h1 {
+        font-size: 20px;
+    }
+
+    .table-container {
+        margin-top: 0 !important;
+        padding: 0 5px;
+    }
+
+    th:not(.mobile-visible), td:not(.mobile-visible) {
+        display: none;
+    }
+
+    th.mobile-visible, td.mobile-visible {
+        display: table-cell;
+    }
+
+    .openbtn {
+        position: fixed;
+        top: 5px;
+        left: 5px;
+        font-size: 16px;
+    }
 }
-.modal-table th {
-    background-color: #5b6164;
-    color: white;
-}
-.hidden {
-    display: none;
-}
-button {
-    margin-bottom: 10px;
-}
-.col-1, .col-2, .col-3 {
-    width: 2%;
-}
-.col-4, .col-5 {
-    width: 10%;
-}
-.col-6, .col-7, .col-8, .col-9 {
-    width: 5%;
-}
-.col-10, .col-11 {
-    width: auto;
-}
-.image-modal {
-    width: 800px;
-    max-width: 70%;
-}
-.modal img {
-    max-width: 100%;
-    height: auto;
-}
-.bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
-    background-color: #f0c6c5;
-}
+
+/* 추가 스타일링 */
 .search-container {
     text-align: center;
     margin: 5px 0;
 }
-.filter-title-practical {
-    color: red;
-}
+
 .user-info {
     padding: 10px 15px;
     font-size: 18px;
     color: white;
 }
+
 .sidebar {
     height: 100%;
     width: 0;
@@ -180,6 +200,7 @@ button {
     transition: width 0.5s ease-in-out;
     padding-top: 60px;
 }
+
 .sidebar a {
     padding: 10px 15px;
     text-decoration: none;
@@ -188,9 +209,11 @@ button {
     display: block;
     transition: 0.3s;
 }
+
 .sidebar a:hover {
     background-color: #575757;
 }
+
 .sidebar .closebtn {
     position: absolute;
     top: 0;
@@ -198,6 +221,7 @@ button {
     font-size: 36px;
     margin-left: 50px;
 }
+
 .openbtn {
     font-size: 20px;
     cursor: pointer;
@@ -209,9 +233,12 @@ button {
     left: 10px;
     z-index: 1002;
 }
+
 .openbtn:hover {
     background-color: #444;
 }
+
+/* 비밀번호 재설정 모달 스타일 */
 .reset-password-modal {
     display: none;
     position: fixed;
@@ -226,6 +253,7 @@ button {
     width: 300px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
+
 .reset-password-modal input {
     width: 100%;
     padding: 10px;
@@ -233,6 +261,7 @@ button {
     border: 1px solid #ddd;
     border-radius: 5px;
 }
+
 .reset-password-modal button {
     width: 100%;
     padding: 10px;
@@ -242,9 +271,11 @@ button {
     border-radius: 5px;
     cursor: pointer;
 }
+
 .reset-password-modal button:hover {
     background-color: #0056b3;
 }
+
 .reset-password-modal .close {
     position: absolute;
     top: 10px;
@@ -252,45 +283,29 @@ button {
     font-size: 20px;
     cursor: pointer;
 }
-@media screen and (max-width: 768px) {
-    .fixed-header, .table-container {
-        position: relative;
-        margin-left: 0;
-    }
-    .fixed-header {
-        position: relative;
-        top: auto;
-        left: auto;
-        width: 100%;
-        z-index: 1000;
-        background-color: white;
-        margin-bottom: 0; /* Remove margin below header */
-    }
-    .fixed-header h1 {
-        font-size: 20px;
-        margin-bottom: 0; /* Remove margin below header text */
-    }
-    table {
-        table-layout: auto;
-    }
-    th, td {
-        font-size: 12px;
-    }
-    .table-container {
-        overflow-x: auto;
-        padding: 0 5px;
-        margin-top: 0 !important; /* Ensure table touches header */
-    }
-    th:not(.mobile-visible), td:not(.mobile-visible) {
-        display: none;
-    }
-    th.mobile-visible, td.mobile-visible {
-        display: table-cell;
-    }
-    .openbtn {
-        position: fixed;
-        top: 5px;
-        left: 5px;
-        font-size: 16px;
-    }
+
+/* 컬럼 너비 클래스 */
+.col-1, .col-2, .col-3 {
+    width: 2%;
+}
+
+.col-4, .col-5 {
+    width: 10%;
+}
+
+.col-6, .col-7, .col-8, .col-9 {
+    width: 5%;
+}
+
+.col-10, .col-11 {
+    width: auto;
+}
+
+/* 배경 카테고리 스타일 */
+.bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
+    background-color: #f0c6c5;
+}
+
+.filter-title-practical {
+    color: red;
 }
