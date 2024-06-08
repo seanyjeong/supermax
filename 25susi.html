@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>맥스 25수시 모집요강</title>
     <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/gh/seanyjeong/supermax@main/susi.css">
+    <link rel="stylesheet" type="text/css" href="susi.css">
 </head>
 <body>
     <div id="mySidebar" class="sidebar">
@@ -69,19 +69,15 @@
                 window.location.href = 'index.html';
             }
         }
-        
         let fullData = [];
         let filteredData = [];
-        
         document.addEventListener("DOMContentLoaded", function() {
             const token = localStorage.getItem('token');
             if (token) {
                 const userInfo = parseJwt(token);
                 showUserInfo(userInfo);
             }
-            fetchData();
         });
-
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -101,30 +97,25 @@
                 alert('Login failed. Please check your username and password.');
             }
         }
-
         function showUserInfo(data) {
             document.getElementById('user-info').style.display = 'block';
             document.getElementById('user-username').textContent = `ID: ${data.username}`;
             document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
         }
-
         function toggleMenu() {
             const userMenu = document.getElementById('user-menu');
             userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
         }
-
         function openResetPasswordModal() {
             const modal = document.getElementById('reset-password-modal');
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
-
         function closeResetPasswordModal() {
             const modal = document.getElementById('reset-password-modal');
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
-
         async function resetPassword() {
             const currentPassword = document.getElementById('current-password').value;
             const newPassword = document.getElementById('new-password').value;
@@ -150,12 +141,10 @@
                 alert(`비밀번호 변경 실패: ${error.message}`);
             }
         }
-
         function logout() {
             localStorage.removeItem('token');
             location.reload();
         }
-
         function parseJwt(token) {
             var base64Url = token.split('.')[1];
             var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -164,7 +153,6 @@
             }).join(''));
             return JSON.parse(jsonPayload);
         }
-
         function fetchData() {
             const token = localStorage.getItem('token');
             fetch('https://supermax.kr/25susi', {
@@ -193,7 +181,6 @@
             })
             .catch(error => console.error('데이터 가져오기 오류:', error));
         }
-
         function createFilterOptions(data, category) {
             const filterContainer = document.getElementById('filter-container');
             const uniqueValues = new Set(data.map(item => item[category]).filter(value => value));
@@ -212,7 +199,6 @@
             });
             filterContainer.appendChild(document.createElement('br'));
         }
-
         function createPracticalFilterOptions(data) {
             const filterContainer = document.getElementById('filter-container');
             const title = document.createElement('span');
@@ -232,7 +218,6 @@
             });
             filterContainer.appendChild(document.createElement('br'));
         }
-
         function applyFilter() {
             const selectedFilters = {};
             document.querySelectorAll('.filter-box.selected').forEach(box => {
@@ -258,7 +243,6 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
-
         function clearFilters() {
             document.querySelectorAll('.filter-box.selected').forEach(box => box.classList.remove('selected'));
             document.getElementById('search-input').value = '';
@@ -266,7 +250,6 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
-
         function displayTable(data) {
             const tableHead = document.getElementById('table-head');
             const tableBody = document.getElementById('table-body');
@@ -350,7 +333,6 @@
             });
             adjustHeaderFontSize();
         }
-
         function showModal(data) {
             const modal = document.getElementById('myModal');
             const modalContent = document.querySelector('.modal-content');
@@ -411,20 +393,17 @@
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
-
         function closeModal() {
             const modal = document.getElementById('myModal');
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
-
         function adjustTableContainerMargin() {
             const fixedHeader = document.querySelector('.fixed-header');
             const tableContainer = document.getElementById('table-container');
             const headerHeight = fixedHeader.offsetHeight;
             tableContainer.style.marginTop = `${headerHeight}px`;
         }
-
         function searchByUniversity() {
             const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
             if (searchInput) {
@@ -435,13 +414,11 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
-
         function updateFilteredCount() {
             const filteredCount = filteredData.length;
             const filteredCountElement = document.getElementById('filtered-count');
             filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
         }
-
         function adjustHeaderFontSize() {
             const headers = document.querySelectorAll('#table-head th');
             headers.forEach(header => {
@@ -453,13 +430,11 @@
                 }
             });
         }
-
         document.getElementById('search-input').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchByUniversity();
             }
         });
-
         document.querySelector('.close').onclick = closeModal;
         window.onclick = function(event) {
             const modal = document.getElementById('myModal');
@@ -467,44 +442,27 @@
                 modal.style.display = 'none';
                 document.body.classList.remove('modal-open');
             }
-        };
-
-        window.onresize = debounce(adjustTableContainerMargin, 100);
-        
+        }
+        window.onresize = adjustTableContainerMargin;
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             fetchData();
             adjustTableContainerMargin();
         });
-
         function openNav() {
             document.getElementById("mySidebar").style.width = "250px";
             document.getElementById("fixed-header").style.marginLeft = "250px";
             document.getElementById("table-container").style.marginLeft = "250px";
             document.querySelector(".openbtn").style.marginLeft = "250px";
         }
-
         function closeNav() {
             document.getElementById("mySidebar").style.width = "0";
             document.getElementById("fixed-header").style.marginLeft = "0";
             document.getElementById("table-container").style.marginLeft = "0";
             document.querySelector(".openbtn").style.marginLeft = "0";
         }
-
         function navigateTo(url) {
             window.location.href = url;
-        }
-
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
         }
     </script>
 </body>
