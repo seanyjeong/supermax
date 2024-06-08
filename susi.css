@@ -30,7 +30,7 @@ body {
 .table-container {
     padding: 0;
     overflow-x: auto;
-    margin-top: 120px; /* Adjusted for mobile view */
+    margin-top: 0; /* Adjusted for mobile view */
 }
 table {
     width: 100%;
