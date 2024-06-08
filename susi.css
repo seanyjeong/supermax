@@ -252,6 +252,8 @@ button {
     font-size: 20px;
     cursor: pointer;
 }
+
+/* Mobile view adjustments */
 @media screen and (max-width: 768px) {
     .fixed-header, .table-container {
         position: relative;
@@ -291,13 +293,14 @@ button {
         left: 5px;
         font-size: 16px;
     }
-    .fixed-header, .table-container {
-        margin-top: 0; /* 모바일에서 헤더와 테이블이 붙어 있도록 설정 */
-    }
+    /* Add these lines to ensure the header and table are touching */
     .fixed-header {
-        margin-bottom: 0; /* 테이블과 헤더 사이 간격 제거 */
+        margin-bottom: 0; /* Remove margin below header */
     }
     .table-container {
-        margin-top: 0px; /* 모바일에서 헤더와 테이블이 붙도록 설정 */
+        margin-top: 0; /* Ensure table touches header */
+    }
+    .fixed-header h1 {
+        margin-bottom: 0; /* Remove margin below header text */
     }
 }
