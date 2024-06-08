@@ -292,6 +292,12 @@ button {
         font-size: 16px;
     }
     .fixed-header, .table-container {
-        margin-top: 0; /* 추가된 부분: 모바일에서 헤더와 테이블이 붙어 있도록 설정 */
+        margin-top: 0; /* 모바일에서 헤더와 테이블이 붙어 있도록 설정 */
+    }
+    .fixed-header {
+        margin-bottom: 0; /* 테이블과 헤더 사이 간격 제거 */
+    }
+    .table-container {
+        margin-top: 120px; /* 모바일에서 헤더와 테이블이 붙도록 설정 */
     }
 }
