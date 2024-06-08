@@ -30,7 +30,7 @@ body {
 .table-container {
     padding: 0;
     overflow-x: auto;
-    margin-top: 0; /* Adjusted for mobile view */
+    margin-top: 120px; /* Adjusted for mobile view */
 }
 table {
     width: 100%;
@@ -279,7 +279,7 @@ button {
     .table-container {
         overflow-x: auto;
         padding: 0 5px;
-        margin-top: 0; /* Ensure table touches header */
+        margin-top: 0 !important; /* Ensure table touches header */
     }
     th:not(.mobile-visible), td:not(.mobile-visible) {
         display: none;
@@ -294,4 +294,3 @@ button {
         font-size: 16px;
     }
 }
-
