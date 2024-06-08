@@ -298,6 +298,6 @@ button {
         margin-bottom: 0; /* 테이블과 헤더 사이 간격 제거 */
     }
     .table-container {
-        margin-top: 120px; /* 모바일에서 헤더와 테이블이 붙도록 설정 */
+        margin-top: 0px; /* 모바일에서 헤더와 테이블이 붙도록 설정 */
     }
 }
