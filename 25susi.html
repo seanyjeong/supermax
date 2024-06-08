@@ -386,6 +386,17 @@
     
     let originalData = [];
     let filteredData = [];
+    const desiredHeaders = [
+        '종류', '형태', '지역', '교직',
+        '대학명', '학과명', '전형명', '모집정원',
+        '1단계배수', '내신', '실기', '면접', '기타', '수능최저',
+        '내신반영', '1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로',
+        '과목반영', '국', '수', '영', '사', '과', '기타_[1]',
+        '등급별점수', '1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급',
+        '실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8',
+        '1단계발표', '실기날짜', '합격자발표',
+        '전년도', '정원', '지원자', '추가합격', '입시결과', '경쟁률'
+    ];
 
     function checkAuth() {
         const token = localStorage.getItem('token');
@@ -590,7 +601,6 @@
     }
     
     function updateTable() {
-        const headers = Object.keys(filteredData[0] || {}).filter(header => header !== 'id');
         const tableHead = document.getElementById('headers');
         const tableHeadPlaceholder = document.getElementById('headers-placeholder');
         const tableBody = document.getElementById('table-body');
@@ -599,7 +609,7 @@
         tableHeadPlaceholder.innerHTML = '';
         tableBody.innerHTML = '';
     
-        headers.forEach((header, index) => {
+        desiredHeaders.forEach((header, index) => {
             const headerElement = document.createElement('th');
             const headerElementPlaceholder = document.createElement('th');
             headerElement.textContent = header;
@@ -632,7 +642,7 @@
     
         filteredData.forEach(row => {
             const rowElement = document.createElement('tr');
-            headers.forEach((header, index) => {
+            desiredHeaders.forEach((header, index) => {
                 const cell = document.createElement('td');
                 cell.textContent = row[header];
                 cell.classList.add(`col-${index + 1}`);
