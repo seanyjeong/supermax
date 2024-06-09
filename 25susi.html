@@ -5,305 +5,312 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>맥스 25수시 모집요강</title>
     <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
-<style>
-  body.modal-open {
-    overflow: hidden;
-}
-body {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: Arial, sans-serif;
-}
-.fixed-header, .table-container, .openbtn {
-    transition: margin-left 0.3s;
-}
-.fixed-header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
-    background-color: white;
-}
-.fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
-    margin: 0;
-    padding: 10px;
-    background-color: white;
-}
-.fixed-header h1 {
-    text-align: center;
-    font-size: 24px;
-}
-.table-container {
-    padding: 0;
-    overflow-x: auto;
-    margin-top: 0; /* Adjusted for mobile view */
-}
-table {
-    width: 100%;
-    margin: 0;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
-.buttons button {
-    width: 120px;
-    height: 40px;
-    font-size: 13px;
-    padding: 5px;
-    border-radius: 10px;
-}
-th, td {
-    border: 1px solid black;
-    padding: 8px;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-th {
-    background-color: #f2f2f2;
-}
-.filter-container {
-    margin-bottom: 20px;
-    text-align: left;
-    position: relative;
-    background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
-    background-size: cover;
-    background-position: center;
-    padding: 10px;
-    border-radius: 10px;
-}
-.filter-title {
-    font-weight: bold;
-    margin-right: 10px;
-    position: relative;
-    z-index: 1;
-}
-.filter-box {
-    display: inline-block;
-    margin: 2px;
-    padding: 5px;
-    border: 1px solid #b4afaf;
-    cursor: pointer;
-    background-color: rgba(255, 255, 255, 0.8);
-    color: black;
-    border-radius: 10px;
-}
-.filter-box.selected {
-    background-color: #007bff;
-    color: white;
-}
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgb(0,0,0);
-    background-color: rgba(0,0,0,0.4);
-}
-.modal-content {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 20px;
-    border: 1px solid #888;
-    width: 80%;
-    max-width: 1200px;
-}
-.close {
-    color: #aaa;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-}
-.close:hover,
-.close:focus {
-    color: black;
-    text-decoration: none;
-    cursor: pointer;
-}
-.modal-title {
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 20px;
-}
-.modal-table th {
-    background-color: #5b6164;
-    color: white;
-}
-.hidden {
-    display: none;
-}
-button {
-    margin-bottom: 10px;
-}
-.col-1, .col-2, .col-3 {
-    width: 2%;
-}
-.col-4, .col-5 {
-    width: 10%;
-}
-.col-6, .col-7, .col-8, .col-9 {
-    width: 5%;
-}
-.col-10, .col-11 {
-    width: auto;
-}
-.image-modal {
-    width: 800px;
-    max-width: 70%;
-}
-.modal img {
-    max-width: 100%;
-    height: auto;
-}
-.bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
-    background-color: #f0c6c5;
-}
-.search-container {
-    text-align: center;
-    margin: 5px 0;
-}
-.filter-title-practical {
-    color: red;
-}
-.user-info {
-    padding: 10px 15px;
-    font-size: 18px;
-    color: white;
-}
-.sidebar {
-    height: 100%;
-    width: 0;
-    position: fixed;
-    z-index: 1001;
-    top: 0;
-    left: 0;
-    background-color: #111;
-    overflow-x: hidden;
-    transition: width 0.5s;
-    padding-top: 60px;
-}
-.sidebar a {
-    padding: 10px 15px;
-    text-decoration: none;
-    font-size: 18px;
-    color: white;
-    display: block;
-    transition: 0.3s;
-}
-.sidebar a:hover {
-    background-color: #575757;
-}
-.sidebar .closebtn {
-    position: absolute;
-    top: 0;
-    right: 25px;
-    font-size: 36px;
-    margin-left: 50px;
-}
-.openbtn {
-    font-size: 20px;
-    cursor: pointer;
-    background-color: #111;
-    color: white;
-    border: none;
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    z-index: 1002;
-}
-.openbtn:hover {
-    background-color: #444;
-}
-.reset-password-modal {
-    display: none;
-    position: fixed;
-    z-index: 3000;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    background-color: white;
-    padding: 20px;
-    border: 1px solid #888;
-    border-radius: 10px;
-    width: 300px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-}
-.reset-password-modal input {
-    width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-}
-.reset-password-modal button {
-    width: 100%;
-    padding: 10px;
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-}
-.reset-password-modal button:hover {
-    background-color: #0056b3;
-}
-.reset-password-modal .close {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    font-size: 20px;
-    cursor: pointer;
-}
-@media screen and (max-width: 768px) {
-    .fixed-header, .table-container {
-        position: relative;
-        margin-left: 0;
-    }
-    .fixed-header {
-        position: relative;
-        top: auto;
-        left: auto;
-        width: 100%;
-        z-index: 1000;
-        background-color: white;
-        margin-bottom: 0; /* Remove margin below header */
-    }
-    .fixed-header h1 {
-        font-size: 20px;
-        margin-bottom: 0; /* Remove margin below header text */
-    }
-    table {
-        table-layout: auto;
-    }
-    th, td {
-        font-size: 12px;
-    }
-    .table-container {
-        overflow-x: auto;
-        padding: 0 5px;
-        margin-top: 0; /* Ensure table touches header */
-    }
-    th:not(.mobile-visible), td:not(.mobile-visible) {
-        display: none;
-    }
-    th.mobile-visible, td.mobile-visible {
-        display: table-cell;
-    }
-    .openbtn {
-        position: fixed;
-        top: 5px;
-        left: 5px;
-        font-size: 16px;
-    }
-}
-
-</style>  
+    <style>
+        /* 기본 스타일 */
+        body.modal-open {
+            overflow: hidden;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        /* 사이드바, 고정 헤더, 테이블 컨테이너, 버튼에 트랜지션 추가 */
+        .fixed-header, .table-container, .openbtn, #mySidebar {
+            transition: transform 0.3s;
+        }
+        .fixed-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1000;
+            background-color: white;
+        }
+        .fixed-header h1, .fixed-header .filter-container, .fixed-header .buttons {
+            margin: 0;
+            padding: 10px;
+            background-color: white;
+        }
+        .fixed-header h1 {
+            text-align: center;
+            font-size: 24px;
+        }
+        .table-container {
+            padding: 0;
+            overflow-x: auto;
+            margin-top: 0;
+        }
+        table {
+            width: 100%;
+            margin: 0;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        .buttons button {
+            width: 120px;
+            height: 40px;
+            font-size: 13px;
+            padding: 5px;
+            border-radius: 10px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .filter-container {
+            margin-bottom: 20px;
+            text-align: left;
+            position: relative;
+            background-image: url('https://github.com/seanyjeong/supermax/blob/main/maxlogo%20(2).png?raw=true');
+            background-size: cover;
+            background-position: center;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .filter-title {
+            font-weight: bold;
+            margin-right: 10px;
+            position: relative;
+            z-index: 1;
+        }
+        .filter-box {
+            display: inline-block;
+            margin: 2px;
+            padding: 5px;
+            border: 1px solid #b4afaf;
+            cursor: pointer;
+            background-color: rgba(255, 255, 255, 0.8);
+            color: black;
+            border-radius: 10px;
+        }
+        .filter-box.selected {
+            background-color: #007bff;
+            color: white;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0,0,0);
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 1200px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .modal-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .modal-table th {
+            background-color: #5b6164;
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
+        button {
+            margin-bottom: 10px;
+        }
+        .col-1, .col-2, .col-3 {
+            width: 2%;
+        }
+        .col-4, .col-5 {
+            width: 10%;
+        }
+        .col-6, .col-7, .col-8, .col-9 {
+            width: 5%;
+        }
+        .col-10, .col-11 {
+            width: auto;
+        }
+        .image-modal {
+            width: 800px;
+            max-width: 70%;
+        }
+        .modal img {
+            max-width: 100%;
+            height: auto;
+        }
+        .bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
+            background-color: #f0c6c5;
+        }
+        .search-container {
+            text-align: center;
+            margin: 5px 0;
+        }
+        .filter-title-practical {
+            color: red;
+        }
+        .user-info {
+            padding: 10px 15px;
+            font-size: 18px;
+            color: white;
+        }
+        /* 사이드바 스타일 */
+        .sidebar {
+            height: 100%;
+            width: 250px; /* 사이드바 넓이를 고정 */
+            transform: translateX(-250px); /* 사이드바를 처음에 숨김 */
+            position: fixed;
+            z-index: 1001;
+            top: 0;
+            left: 0;
+            background-color: #111;
+            overflow-x: hidden;
+            transition: transform 0.3s;
+            padding-top: 60px;
+        }
+        .sidebar.open {
+            transform: translateX(0); /* 사이드바를 열기 */
+        }
+        .sidebar a {
+            padding: 10px 15px;
+            text-decoration: none;
+            font-size: 18px;
+            color: white;
+            display: block;
+            transition: 0.3s;
+        }
+        .sidebar a:hover {
+            background-color: #575757;
+        }
+        .sidebar .closebtn {
+            position: absolute;
+            top: 0;
+            right: 25px;
+            font-size: 36px;
+            margin-left: 50px;
+        }
+        .openbtn {
+            font-size: 20px;
+            cursor: pointer;
+            background-color: #111;
+            color: white;
+            border: none;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1002;
+        }
+        .openbtn:hover {
+            background-color: #444;
+        }
+        .reset-password-modal {
+            display: none;
+            position: fixed;
+            z-index: 3000;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 10px;
+            width: 300px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .reset-password-modal input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .reset-password-modal button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .reset-password-modal button:hover {
+            background-color: #0056b3;
+        }
+        .reset-password-modal .close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        /* 반응형 스타일 */
+        @media screen and (max-width: 768px) {
+            .fixed-header, .table-container {
+                position: relative;
+                margin-left: 0;
+            }
+            .fixed-header {
+                position: relative;
+                top: auto;
+                left: auto;
+                width: 100%;
+                z-index: 1000;
+                background-color: white;
+                margin-bottom: 0;
+            }
+            .fixed-header h1 {
+                font-size: 20px;
+                margin-bottom: 0;
+            }
+            table {
+                table-layout: auto;
+            }
+            th, td {
+                font-size: 12px;
+            }
+            .table-container {
+                overflow-x: auto;
+                padding: 0 5px;
+                margin-top: 0;
+            }
+            th:not(.mobile-visible), td:not(.mobile-visible) {
+                display: none;
+            }
+            th.mobile-visible, td.mobile-visible {
+                display: table-cell;
+            }
+            .openbtn {
+                position: fixed;
+                top: 5px;
+                left: 5px;
+                font-size: 16px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div id="mySidebar" class="sidebar">
@@ -360,6 +367,7 @@ button {
         <button onclick="resetPassword()">변경</button>
     </div>
     <script>
+        // 사용자 인증 확인
         function checkAuth() {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -696,12 +704,14 @@ button {
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
+        // 테이블 컨테이너의 마진 조정
         function adjustTableContainerMargin() {
             const fixedHeader = document.querySelector('.fixed-header');
             const tableContainer = document.getElementById('table-container');
             const headerHeight = fixedHeader.offsetHeight;
             tableContainer.style.marginTop = `${headerHeight}px`;
         }
+        // 대학명으로 검색 기능
         function searchByUniversity() {
             const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
             if (searchInput) {
@@ -712,11 +722,13 @@ button {
             displayTable(filteredData);
             updateFilteredCount();
         }
+        // 필터링된 학교 개수 업데이트
         function updateFilteredCount() {
             const filteredCount = filteredData.length;
             const filteredCountElement = document.getElementById('filtered-count');
             filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
         }
+        // 헤더 폰트 크기 조정
         function adjustHeaderFontSize() {
             const headers = document.querySelectorAll('#table-head th');
             headers.forEach(header => {
@@ -741,26 +753,38 @@ button {
                 document.body.classList.remove('modal-open');
             }
         }
-        window.onresize = adjustTableContainerMargin;
+        // 윈도우 리사이즈 시 테이블 컨테이너 마진 조정을 지연하여 수행
+        window.onresize = debounce(adjustTableContainerMargin, 200);
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             fetchData();
             adjustTableContainerMargin();
         });
+        // 사이드바 열기
         function openNav() {
-            document.getElementById("mySidebar").style.width = "250px";
-            document.getElementById("fixed-header").style.marginLeft = "250px";
-            document.getElementById("table-container").style.marginLeft = "250px";
-            document.querySelector(".openbtn").style.marginLeft = "250px";
+            document.getElementById("mySidebar").classList.add("open");
+            document.getElementById("fixed-header").classList.add("open");
+            document.getElementById("table-container").classList.add("open");
+            document.querySelector(".openbtn").classList.add("open");
         }
+        // 사이드바 닫기
         function closeNav() {
-            document.getElementById("mySidebar").style.width = "0";
-            document.getElementById("fixed-header").style.marginLeft = "0";
-            document.getElementById("table-container").style.marginLeft = "0";
-            document.querySelector(".openbtn").style.marginLeft = "0";
+            document.getElementById("mySidebar").classList.remove("open");
+            document.getElementById("fixed-header").classList.remove("open");
+            document.getElementById("table-container").classList.remove("open");
+            document.querySelector(".openbtn").classList.remove("open");
         }
+        // 페이지 네비게이션
         function navigateTo(url) {
             window.location.href = url;
+        }
+        // 디바운스 함수: 특정 시간 내에 호출된 함수들을 하나로 묶어 마지막에 한 번만 실행
+        function debounce(func, wait) {
+            let timeout;
+            return function (...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
         }
     </script>
 </body>
