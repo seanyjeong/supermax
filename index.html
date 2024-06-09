@@ -209,9 +209,11 @@
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const token = localStorage.getItem('token');
-            if (token) {
+            if (token && !isTokenExpired(token)) {
                 const userInfo = parseJwt(token);
                 showUserInfo(userInfo);
+            } else {
+                logout();
             }
         });
 
@@ -302,6 +304,12 @@
             }).join(''));
 
             return JSON.parse(jsonPayload);
+        }
+
+        function isTokenExpired(token) {
+            const payload = parseJwt(token);
+            const currentTime = Math.floor(Date.now() / 1000);
+            return payload.exp < currentTime;
         }
     </script>
 </body>
