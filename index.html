@@ -293,7 +293,9 @@
 
         function logout() {
             localStorage.removeItem('token');
-            location.reload();
+            document.getElementById('login-form').style.display = 'flex';
+            document.getElementById('buttons').style.display = 'none';
+            document.getElementById('user-info').style.display = 'none';
         }
 
         function parseJwt(token) {
