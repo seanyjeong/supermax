@@ -371,7 +371,7 @@
         function checkAuth() {
             const token = localStorage.getItem('token');
             if (!token) {
-                alert('You are not logged in.');
+                alert('로그인이 만료되었습니다.');
                 window.location.href = 'index.html';
             }
         }
@@ -759,6 +759,7 @@
             checkAuth();
             fetchData();
             adjustTableContainerMargin();
+            resetTokenCheckTimer();
         });
         // 사이드바 열기
         function openNav() {
@@ -786,6 +787,33 @@
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
         }
+
+        function checkTokenExpiration() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                logout();
+                return;
+            }
+            const { exp } = parseJwt(token);
+            const now = Math.floor(Date.now() / 1000);
+            if (exp < now) {
+                alert('로그인이 만료되었습니다.');
+                logout();
+            }
+        }
+
+        function resetTokenCheckTimer() {
+            clearTimeout(tokenCheckTimer);
+            tokenCheckTimer = setTimeout(() => {
+                checkTokenExpiration();
+            }, 5 * 60 * 1000); // 5분마다 체크
+        }
+
+        let tokenCheckTimer;
+
+        document.body.addEventListener('mousemove', resetTokenCheckTimer);
+        document.body.addEventListener('keydown', resetTokenCheckTimer);
+        document.body.addEventListener('click', resetTokenCheckTimer);
     </script>
 </body>
 <footer style="margin-top: 3rem; text-align: center;">
