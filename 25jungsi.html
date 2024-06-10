@@ -400,7 +400,7 @@
     function checkAuth() {
         const token = localStorage.getItem('token');
         if (!token) {
-            alert('You are not logged in.');
+            alert('로그인이 만료되었습니다.');
             window.location.href = 'index.html';
         }
     }
