@@ -263,63 +263,64 @@
             }
         }
 
-        /* 사이드바 스타일 */
-        .sidebar {
-            height: 100%;
-            width: 0;
-            position: fixed;
-            z-index: 1001;
-            top: 0;
-            left: 0;
-            background-color: #111;
-            overflow-x: hidden;
-            transition: 0.5s;
-            padding-top: 60px;
-        }
+/* 사이드바 스타일 */
+.sidebar {
+    height: 100%;
+    width: 250px; /* 사이드바의 기본 너비 */
+    position: fixed;
+    z-index: 1001;
+    top: 0;
+    left: -250px; /* 시작 시 사이드바를 숨김 */
+    background-color: #111;
+    overflow-x: hidden;
+    transition: left 0.5s; /* 부드러운 열림 효과를 위한 전환 효과 */
+    padding-top: 60px;
+}
 
-        .sidebar a {
-            padding: 10px 15px;
-            text-decoration: none;
-            font-size: 18px;
-            color: white;
-            display: block;
-            transition: 0.3s;
-        }
+.sidebar a {
+    padding: 10px 15px;
+    text-decoration: none;
+    font-size: 18px;
+    color: white;
+    display: block;
+    transition: 0.3s;
+}
 
-        .sidebar a:hover {
-            background-color: #575757;
-        }
+.sidebar a:hover {
+    background-color: #575757;
+}
 
-        .sidebar .closebtn {
-            position: absolute;
-            top: 0;
-            right: 25px;
-            font-size: 36px;
-            margin-left: 50px;
-        }
+.sidebar .closebtn {
+    position: absolute;
+    top: 0;
+    right: 25px;
+    font-size: 36px;
+    margin-left: 50px;
+}
 
-        .openbtn {
-            font-size: 20px;
-            cursor: pointer;
-            background-color: #111;
-            color: white;
-            border: none;
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 1002;
-        }
+.openbtn {
+    font-size: 20px;
+    cursor: pointer;
+    background-color: #111;
+    color: white;
+    border: none;
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1002;
+}
 
-        .openbtn:hover {
-            background-color: #444;
-        }
+.openbtn:hover {
+    background-color: #444;
+}
 
-        /* 사용자 정보 스타일 */
-        .user-info {
-            padding: 10px 15px;
-            font-size: 18px;
-            color: white;
-        }
+/* 사용자 정보 스타일 */
+.user-info {
+    padding: 10px 15px;
+    font-size: 18px;
+    color: white;
+}
+
 
     </style>
 </head>
@@ -764,14 +765,13 @@
     });
 
     function openNav() {
-        document.getElementById("mySidebar").style.width = "250px";
-        document.body.style.marginLeft = "250px";
-    }
+    document.getElementById("mySidebar").style.left = "0"; // 사이드바를 화면에 보이게 설정
+}
 
-    function closeNav() {
-        document.getElementById("mySidebar").style.width = "0";
-        document.body.style.marginLeft = "0";
-    }
+function closeNav() {
+    document.getElementById("mySidebar").style.left = "-250px"; // 사이드바를 화면에서 숨김
+}
+
 
     function navigateTo(url) {
         window.location.href = url;
