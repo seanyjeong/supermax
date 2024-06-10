@@ -296,6 +296,10 @@
             document.getElementById('login-form').style.display = 'flex';
             document.getElementById('buttons').style.display = 'none';
             document.getElementById('user-info').style.display = 'none';
+            document.getElementById('user-initial').textContent = '';
+            document.getElementById('user-name').textContent = '';
+            document.getElementById('user-username').textContent = '';
+            document.getElementById('user-legion').textContent = '';
         }
 
         function parseJwt(token) {
