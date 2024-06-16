@@ -7,6 +7,7 @@ const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const os = require('os');
+const path = require('path');
 
 const app = express();
 const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
@@ -54,7 +55,7 @@ app.use(session({
 
 // CORS 설정
 app.use(cors({
-  origin: 'https://supermax.co.kr',
+  origin: 'https://<your-github-username>.github.io',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -63,8 +64,8 @@ app.use(cors({
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// HTTP 서버를 생성합니다.
-const server = http.createServer(app);
+// 정적 파일 제공 설정
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 로그인 엔드포인트
 app.post('/login', (req, res) => {
@@ -182,7 +183,7 @@ app.post('/change-password', authenticateToken, (req, res) => {
 });
 
 // 지점 목록과 트래픽 용량을 가져오는 엔드포인트
-app.get('/branch-list', authenticateToken, (req, res) => {
+app.get('/branch-list-data', authenticateToken, (req, res) => {
   const query = 'SELECT * FROM branches'; // 지점 목록을 가져오는 쿼리
   connection.query(query, (err, branches) => {
     if (err) {
