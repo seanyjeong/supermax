@@ -15,6 +15,7 @@
             padding: 0;
             box-sizing: border-box;
             font-family: Arial, sans-serif;
+            font-size: 14px; /* 글씨 크기 2포인트 줄이기 */
         }
         /* 사이드바, 고정 헤더, 테이블 컨테이너, 버튼에 트랜지션 추가 */
         .fixed-header, .table-container, .openbtn, #mySidebar {
@@ -150,9 +151,15 @@
             cursor: pointer;
         }
         .modal-title {
-            font-size: 24px;
+            font-size: 22px; /* 글씨 크기 2포인트 줄이기 */
             font-weight: bold;
             margin-bottom: 20px;
+            text-align: center; /* 가운데 정렬 */
+        }
+        .section-title {
+            font-size: 18px; /* 글씨 크기 2포인트 줄이기 */
+            font-weight: bold;
+            margin: 20px 0 10px; /* 여백 조정 */
         }
         .hidden {
             display: none;
@@ -685,11 +692,7 @@
                 modalBody.appendChild(img);
                 modalContent.classList.add('image-modal');
             } else {
-                const table = document.createElement('table');
-                table.className = 'modal-table';
-                
-                // 테이블의 행과 열을 정의합니다.
-                const rows = [
+                const sections = [
                     { title: '기본 정보', cells: ['종류', '형태', '지역'] },
                     { title: '전형 정보', cells: ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'] },
                     { title: '평가 항목', cells: ['내신', '실기', '면접', '기타', '수능최저'] },
@@ -697,16 +700,21 @@
                     { title: '과목 반영', cells: ['국', '수', '영', '사', '과', '기타_[1]']},
                     { title: '등급별점수', cells: ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급']},
                     { title: '실기 종목', cells: ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'] },
-                    { title: '일    정', cells: ['1단계발표', '실기날짜', '합격자발표'] },
+                    { title: '일정', cells: ['1단계발표', '실기날짜', '합격자발표'] },
                     { title: '전년도결과', cells: ['정원', '지원자', '추가합격', '입시결과', '경쟁률'] },
-
-                    // 필요한 경우 추가 행을 여기에 추가합니다.
                 ];
 
-                // 각 행의 타이틀과 값을 가로로 표시
-                rows.forEach(row => {
+                sections.forEach(section => {
+                    const sectionTitle = document.createElement('div');
+                    sectionTitle.className = 'section-title';
+                    sectionTitle.textContent = section.title;
+                    modalBody.appendChild(sectionTitle);
+
+                    const table = document.createElement('table');
+                    table.className = 'modal-table';
+
                     const trTitle = document.createElement('tr');
-                    row.cells.forEach(cell => {
+                    section.cells.forEach(cell => {
                         const th = document.createElement('th');
                         th.textContent = cell;
                         trTitle.appendChild(th);
@@ -714,15 +722,16 @@
                     table.appendChild(trTitle);
 
                     const trValues = document.createElement('tr');
-                    row.cells.forEach(cell => {
+                    section.cells.forEach(cell => {
                         const td = document.createElement('td');
                         td.textContent = data[cell] || '';
                         trValues.appendChild(td);
                     });
                     table.appendChild(trValues);
+
+                    modalBody.appendChild(table);
                 });
 
-                modalBody.appendChild(table);
                 modalContent.classList.remove('image-modal');
             }
             modal.style.display = 'block';
@@ -761,7 +770,7 @@
         function adjustHeaderFontSize() {
             const headers = document.querySelectorAll('#table-head th');
             headers.forEach(header => {
-                let fontSize = 16;
+                let fontSize = 14; /* 글씨 크기 2포인트 줄이기 */
                 header.style.fontSize = fontSize + 'px';
                 while (header.scrollWidth > header.clientWidth && fontSize > 10) {
                     fontSize -= 1;
