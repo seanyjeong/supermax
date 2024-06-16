@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const os = require('os');
 
 const app = express();
 const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
@@ -177,6 +178,27 @@ app.post('/change-password', authenticateToken, (req, res) => {
     } else {
       res.status(401).json({ message: 'Current password is incorrect' });
     }
+  });
+});
+
+// 지점 목록과 트래픽 용량을 가져오는 엔드포인트
+app.get('/branch-list', authenticateToken, (req, res) => {
+  const query = 'SELECT * FROM branches'; // 지점 목록을 가져오는 쿼리
+  connection.query(query, (err, branches) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+    const networkInterfaces = os.networkInterfaces();
+    const trafficData = Object.keys(networkInterfaces).map(ifname => ({
+      interface: ifname,
+      addresses: networkInterfaces[ifname].map(addr => ({
+        address: addr.address,
+        family: addr.family,
+        internal: addr.internal
+      }))
+    }));
+    res.status(200).json({ branches, trafficData });
   });
 });
 
