@@ -172,6 +172,7 @@
     <div class="button-container" id="buttons" style="display:none;">
         <a href="/25susi" class="button">25수시요강(계획안)</a>
         <a href="/25jungsi" class="button">25정시요강(계획안)</a>
+        <a href="branch-list.html" id="admin-button" class="button" style="display:none;">지점 목록 및 트래픽</a>
     </div>
 
     <!-- 사용자 정보 (유저 이름, 지점, 메뉴) -->
@@ -247,6 +248,10 @@
             document.getElementById('user-name').textContent = data.username;
             document.getElementById('user-username').textContent = `ID: ${data.username}`;
             document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
+            
+            if (data.username === 'sean8320') {
+                document.getElementById('admin-button').style.display = 'block';
+            }
         }
 
         function toggleMenu() {
