@@ -703,24 +703,23 @@
                     // 필요한 경우 추가 행을 여기에 추가합니다.
                 ];
 
+                // 각 행의 타이틀과 값을 가로로 표시
                 rows.forEach(row => {
                     const trTitle = document.createElement('tr');
-                    const thTitle = document.createElement('th');
-                    thTitle.colSpan = 2;
-                    thTitle.textContent = row.title;
-                    trTitle.appendChild(thTitle);
-                    table.appendChild(trTitle);
-
                     row.cells.forEach(cell => {
-                        const tr = document.createElement('tr');
                         const th = document.createElement('th');
                         th.textContent = cell;
-                        tr.appendChild(th);
+                        trTitle.appendChild(th);
+                    });
+                    table.appendChild(trTitle);
+
+                    const trValues = document.createElement('tr');
+                    row.cells.forEach(cell => {
                         const td = document.createElement('td');
                         td.textContent = data[cell] || '';
-                        tr.appendChild(td);
-                        table.appendChild(tr);
+                        trValues.appendChild(td);
                     });
+                    table.appendChild(trValues);
                 });
 
                 modalBody.appendChild(table);
