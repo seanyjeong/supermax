@@ -16,6 +16,7 @@
             box-sizing: border-box;
             font-family: Arial, sans-serif;
         }
+        /* 사이드바, 고정 헤더, 테이블 컨테이너, 버튼에 트랜지션 추가 */
         .fixed-header, .table-container, .openbtn, #mySidebar {
             transition: transform 0.3s;
         }
@@ -115,29 +116,45 @@
             border: 1px solid #888;
             width: 80%;
             max-width: 1200px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            overflow-y: auto;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
         }
         .modal-title {
             font-size: 24px;
             font-weight: bold;
             margin-bottom: 20px;
-            text-align: center;
-        }
-        .modal-table th, .modal-table td {
-            border: 1px solid #ddd;
-            padding: 10px;
-            text-align: left;
         }
         .modal-table th {
-            background-color: #f2f2f2;
-            font-weight: bold;
+            background-color: #5b6164;
+            color: white;
         }
-        .modal-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+        .hidden {
+            display: none;
+        }
+        button {
+            margin-bottom: 10px;
+        }
+        .col-1, .col-2, .col-3 {
+            width: 2%;
+        }
+        .col-4, .col-5 {
+            width: 10%;
+        }
+        .col-6, .col-7, .col-8, .col-9 {
+            width: 5%;
+        }
+        .col-10, .col-11 {
+            width: auto;
         }
         .image-modal {
             width: 800px;
@@ -147,21 +164,38 @@
             max-width: 100%;
             height: auto;
         }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
+        .bg-category1, .bg-category2, .bg-category3, .bg-category4, .bg-category5 {
+            background-color: #f0c6c5;
         }
-        .close:hover, .close:focus {
-            color: black;
-            text-decoration: none;
+        .bg-category2 {
+            background-color: #add8e6;
         }
+        .bg-category3 {
+            background-color: #90ee90;
+        }
+        .bg-category4 {
+            background-color: #dda0dd;
+        }
+        .bg-category5 {
+            background-color: #ffb6c1;
+        }
+        .search-container {
+            text-align: center;
+            margin: 5px 0;
+        }
+        .filter-title-practical {
+            color: red;
+        }
+        .user-info {
+            padding: 10px 15px;
+            font-size: 18px;
+            color: white;
+        }
+        /* 사이드바 스타일 */
         .sidebar {
             height: 100%;
-            width: 250px;
-            transform: translateX(-250px);
+            width: 250px; /* 사이드바 넓이를 고정 */
+            transform: translateX(-250px); /* 사이드바를 처음에 숨김 */
             position: fixed;
             z-index: 1001;
             top: 0;
@@ -172,7 +206,7 @@
             padding-top: 60px;
         }
         .sidebar.open {
-            transform: translateX(0);
+            transform: translateX(0); /* 사이드바를 열기 */
         }
         .sidebar a {
             padding: 10px 15px;
@@ -246,6 +280,7 @@
             font-size: 20px;
             cursor: pointer;
         }
+        /* 반응형 스타일 */
         @media screen and (max-width: 768px) {
             .fixed-header, .table-container {
                 position: relative;
@@ -332,7 +367,7 @@
     </div>
     <div id="myModal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <span class="close">&times;</span>
             <div id="modal-body"></div>
         </div>
     </div>
@@ -622,51 +657,10 @@
             const modalContent = document.querySelector('.modal-content');
             const modalBody = document.getElementById('modal-body');
             modalBody.innerHTML = '';
-
             const title = document.createElement('div');
             title.className = 'modal-title';
             title.textContent = `${data['대학명']} - ${data['학과명']}`;
             modalBody.appendChild(title);
-
-            const sections = [
-                { title: '기본 정보', rows: ['종류', '형태', '지역'] },
-                { title: '전형 정보', rows: ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'] },
-                { title: '평가 기준', rows: ['내신', '실기', '면접', '기타', '수능최저'] },
-                { title: '내신 반영', rows: ['내신반영', '1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'] },
-                { title: '과목 반영', rows: ['과목반영', '국', '수', '영', '사', '과', '기타_[1]'] },
-                { title: '등급별 점수', rows: ['등급별점수', '1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'] },
-                { title: '실기 종목', rows: ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'] },
-                { title: '일정 정보', rows: ['1단계발표', '실기날짜', '합격자발표'] },
-                { title: '전년도 정보', rows: ['전년도', '정원', '지원자', '추가합격', '입시결과', '경쟁률'] }
-            ];
-
-            sections.forEach(section => {
-                const sectionTitle = document.createElement('div');
-                sectionTitle.className = 'modal-title';
-                sectionTitle.textContent = section.title;
-                modalBody.appendChild(sectionTitle);
-
-                const table = document.createElement('table');
-                table.className = 'modal-table';
-
-                const trTitle = document.createElement('tr');
-                const trValue = document.createElement('tr');
-
-                section.rows.forEach(cell => {
-                    const th = document.createElement('th');
-                    th.textContent = cell;
-                    trTitle.appendChild(th);
-
-                    const td = document.createElement('td');
-                    td.textContent = data[cell] || '';
-                    trValue.appendChild(td);
-                });
-
-                table.appendChild(trTitle);
-                table.appendChild(trValue);
-                modalBody.appendChild(table);
-            });
-
             if (data['image_data']) {
                 const img = document.createElement('img');
                 img.src = `data:image/png;base64,${data['image_data']}`;
@@ -674,9 +668,47 @@
                 modalBody.appendChild(img);
                 modalContent.classList.add('image-modal');
             } else {
+                const table = document.createElement('table');
+                table.className = 'modal-table';
+                const rows = [
+                    ['종류', '형태', '지역'],
+                    ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
+                    ['내신', '실기', '면접', '기타', '수능최저'],
+                    ['내신반영'],
+                    ['1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'],
+                    ['과목반영'],
+                    ['국', '수', '영', '사', '과', '기타_[1]'],
+                    ['등급별점수'],
+                    ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'],
+                    ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'],
+                    ['1단계발표', '실기날짜', '합격자발표'],
+                    ['전년도'],
+                    ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
+                ];
+                rows.forEach((row, rowIndex) => {
+                    const trTitle = document.createElement('tr');
+                    const trValue = document.createElement('tr');
+                    if (rowIndex === 3 || rowIndex === 5 || rowIndex === 7 || rowIndex === 11) {
+                        const thTitle = document.createElement('th');
+                        thTitle.colSpan = row.length;
+                        thTitle.textContent = row[0];
+                        trTitle.appendChild(thTitle);
+                    } else {
+                        row.forEach(cell => {
+                            const th = document.createElement('th');
+                            th.textContent = cell;
+                            trTitle.appendChild(th);
+                            const td = document.createElement('td');
+                            td.textContent = data[cell] || '';
+                            trValue.appendChild(td);
+                        });
+                    }
+                    table.appendChild(trTitle);
+                    table.appendChild(trValue);
+                });
+                modalBody.appendChild(table);
                 modalContent.classList.remove('image-modal');
             }
-
             modal.style.display = 'block';
             document.body.classList.add('modal-open');
         }
@@ -685,12 +717,14 @@
             modal.style.display = 'none';
             document.body.classList.remove('modal-open');
         }
+        // 테이블 컨테이너의 마진 조정
         function adjustTableContainerMargin() {
             const fixedHeader = document.querySelector('.fixed-header');
             const tableContainer = document.getElementById('table-container');
             const headerHeight = fixedHeader.offsetHeight;
             tableContainer.style.marginTop = `${headerHeight}px`;
         }
+        // 대학명으로 검색 기능
         function searchByUniversity() {
             const searchInput = document.getElementById('search-input').value.trim().toLowerCase();
             if (searchInput) {
@@ -701,11 +735,13 @@
             displayTable(filteredData);
             updateFilteredCount();
         }
+        // 필터링된 학교 개수 업데이트
         function updateFilteredCount() {
             const filteredCount = filteredData.length;
             const filteredCountElement = document.getElementById('filtered-count');
             filteredCountElement.textContent = `선택된 학교 : ${filteredCount}개`;
         }
+        // 헤더 폰트 크기 조정
         function adjustHeaderFontSize() {
             const headers = document.querySelectorAll('#table-head th');
             headers.forEach(header => {
@@ -730,6 +766,7 @@
                 document.body.classList.remove('modal-open');
             }
         }
+        // 윈도우 리사이즈 시 테이블 컨테이너 마진 조정을 지연하여 수행
         window.onresize = debounce(adjustTableContainerMargin, 200);
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
@@ -737,21 +774,25 @@
             adjustTableContainerMargin();
             resetTokenCheckTimer();
         });
+        // 사이드바 열기
         function openNav() {
             document.getElementById("mySidebar").classList.add("open");
             document.getElementById("fixed-header").classList.add("open");
             document.getElementById("table-container").classList.add("open");
             document.querySelector(".openbtn").classList.add("open");
         }
+        // 사이드바 닫기
         function closeNav() {
             document.getElementById("mySidebar").classList.remove("open");
             document.getElementById("fixed-header").classList.remove("open");
             document.getElementById("table-container").classList.remove("open");
             document.querySelector(".openbtn").classList.remove("open");
         }
+        // 페이지 네비게이션
         function navigateTo(url) {
             window.location.href = url;
         }
+        // 디바운스 함수: 특정 시간 내에 호출된 함수들을 하나로 묶어 마지막에 한 번만 실행
         function debounce(func, wait) {
             let timeout;
             return function (...args) {
@@ -759,6 +800,7 @@
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
         }
+
         function checkTokenExpiration() {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -772,13 +814,16 @@
                 logout();
             }
         }
+
         function resetTokenCheckTimer() {
             clearTimeout(tokenCheckTimer);
             tokenCheckTimer = setTimeout(() => {
                 checkTokenExpiration();
-            }, 5 * 60 * 1000);
+            }, 5 * 60 * 1000); // 5분마다 체크
         }
+
         let tokenCheckTimer;
+
         document.body.addEventListener('mousemove', resetTokenCheckTimer);
         document.body.addEventListener('keydown', resetTokenCheckTimer);
         document.body.addEventListener('click', resetTokenCheckTimer);
