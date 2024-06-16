@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>지점 목록 및 트래픽</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+        }
+        .branch-list, .traffic-info {
+            width: 45%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+    <h1>지점 목록 및 트래픽 정보</h1>
+    <div class="container">
+        <div class="branch-list">
+            <h2>지점 목록</h2>
+            <table id="branches-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>지점 이름</th>
+                        <th>위치</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Branch data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+        <div class="traffic-info">
+            <h2>트래픽 정보</h2>
+            <table id="traffic-table">
+                <thead>
+                    <tr>
+                        <th>인터페이스</th>
+                        <th>주소</th>
+                        <th>유형</th>
+                        <th>내부</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Traffic data will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = '/';
+                return;
+            }
+
+            fetch('https://supermax.kr/branch-list-data', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const branchesTable = document.getElementById('branches-table').getElementsByTagName('tbody')[0];
+                data.branches.forEach(branch => {
+                    const row = branchesTable.insertRow();
+                    row.insertCell(0).innerText = branch.id;
+                    row.insertCell(1).innerText = branch.name;
+                    row.insertCell(2).innerText = branch.location;
+                });
+
+                const trafficTable = document.getElementById('traffic-table').getElementsByTagName('tbody')[0];
+                data.trafficData.forEach(interface => {
+                    interface.addresses.forEach(address => {
+                        const row = trafficTable.insertRow();
+                        row.insertCell(0).innerText = interface.interface;
+                        row.insertCell(1).innerText = address.address;
+                        row.insertCell(2).innerText = address.family;
+                        row.insertCell(3).innerText = address.internal ? 'Yes' : 'No';
+                    });
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching branch list and traffic data:', error);
+                alert('데이터를 가져오는데 오류가 발생했습니다.');
+            });
+        });
+    </script>
+</body>
+</html>
