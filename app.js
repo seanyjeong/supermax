@@ -55,7 +55,7 @@ app.use(session({
 
 // CORS 설정
 app.use(cors({
-  origin: 'https://<your-github-username>.github.io',
+  origin: 'https://supermax.co.kr',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
