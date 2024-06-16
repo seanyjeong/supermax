@@ -114,28 +114,8 @@
             margin: 5% auto;
             padding: 20px;
             border: 1px solid #888;
-            width: 60%; /* 조정된 크기 */
-            max-width: 800px; /* 조정된 크기 */
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* 선택사항: 더 나은 시각적 효과를 위해 그림자 추가 */
-        }
-        /* Modal Table Styling */
-        .modal-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        .modal-table th,
-        .modal-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-        }
-        .modal-table th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
-        .modal-table tr:nth-child(even) {
-            background-color: #f9f9f9;
+            width: 80%;
+            max-width: 1200px;
         }
         .close {
             color: #aaa;
@@ -153,6 +133,10 @@
             font-size: 24px;
             font-weight: bold;
             margin-bottom: 20px;
+        }
+        .modal-table th {
+            background-color: #5b6164;
+            color: white;
         }
         .hidden {
             display: none;
@@ -383,7 +367,7 @@
     </div>
     <div id="myModal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <span class="close">&times;</span>
             <div id="modal-body"></div>
         </div>
     </div>
@@ -677,7 +661,6 @@
             title.className = 'modal-title';
             title.textContent = `${data['대학명']} - ${data['학과명']}`;
             modalBody.appendChild(title);
-
             if (data['image_data']) {
                 const img = document.createElement('img');
                 img.src = `data:image/png;base64,${data['image_data']}`;
@@ -687,37 +670,42 @@
             } else {
                 const table = document.createElement('table');
                 table.className = 'modal-table';
-                
-                // 테이블의 행과 열을 정의합니다.
                 const rows = [
-                    { title: '기본 정보', cells: ['종류', '형태', '지역'] },
-                    { title: '전형 정보', cells: ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'] },
-                    { title: '평가 항목', cells: ['내신', '실기', '면접', '기타', '수능최저'] },
-                    { title: '내신 반영 비율', cells: ['내신반영'] },
-                    { title: '실기종목', cells: ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'] }
-                    // 필요한 경우 추가 행을 여기에 추가합니다.
+                    ['종류', '형태', '지역'],
+                    ['전형명', '모집정원', '교직', '1단계배수', '1단계학생부', '1단계기타'],
+                    ['내신', '실기', '면접', '기타', '수능최저'],
+                    ['내신반영'],
+                    ['1학년', '2학년', '3학년', 'n반영', '교과', '출결', '기타', '교과_일반', '교과진로'],
+                    ['과목반영'],
+                    ['국', '수', '영', '사', '과', '기타_[1]'],
+                    ['등급별점수'],
+                    ['1등급', '2등급', '3등급', '4등급', '5등급', '6등급', '7등급', '8등급', '9등급'],
+                    ['실기1', '실기2', '실기3', '실기4', '실기5', '실기6', '실기7', '실기8'],
+                    ['1단계발표', '실기날짜', '합격자발표'],
+                    ['전년도'],
+                    ['정원', '지원자', '추가합격', '입시결과', '경쟁률']
                 ];
-
-                rows.forEach(row => {
+                rows.forEach((row, rowIndex) => {
                     const trTitle = document.createElement('tr');
-                    const thTitle = document.createElement('th');
-                    thTitle.colSpan = row.cells.length;
-                    thTitle.textContent = row.title;
-                    trTitle.appendChild(thTitle);
+                    const trValue = document.createElement('tr');
+                    if (rowIndex === 3 || rowIndex === 5 || rowIndex === 7 || rowIndex === 11) {
+                        const thTitle = document.createElement('th');
+                        thTitle.colSpan = row.length;
+                        thTitle.textContent = row[0];
+                        trTitle.appendChild(thTitle);
+                    } else {
+                        row.forEach(cell => {
+                            const th = document.createElement('th');
+                            th.textContent = cell;
+                            trTitle.appendChild(th);
+                            const td = document.createElement('td');
+                            td.textContent = data[cell] || '';
+                            trValue.appendChild(td);
+                        });
+                    }
                     table.appendChild(trTitle);
-
-                    const tr = document.createElement('tr');
-                    row.cells.forEach(cell => {
-                        const th = document.createElement('th');
-                        th.textContent = cell;
-                        tr.appendChild(th);
-                        const td = document.createElement('td');
-                        td.textContent = data[cell] || '';
-                        tr.appendChild(td);
-                    });
-                    table.appendChild(tr);
+                    table.appendChild(trValue);
                 });
-
                 modalBody.appendChild(table);
                 modalContent.classList.remove('image-modal');
             }
