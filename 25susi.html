@@ -706,21 +706,21 @@
                 rows.forEach(row => {
                     const trTitle = document.createElement('tr');
                     const thTitle = document.createElement('th');
-                    thTitle.colSpan = row.cells.length;
+                    thTitle.colSpan = 2;
                     thTitle.textContent = row.title;
                     trTitle.appendChild(thTitle);
                     table.appendChild(trTitle);
 
-                    const tr = document.createElement('tr');
                     row.cells.forEach(cell => {
+                        const tr = document.createElement('tr');
                         const th = document.createElement('th');
                         th.textContent = cell;
                         tr.appendChild(th);
                         const td = document.createElement('td');
                         td.textContent = data[cell] || '';
                         tr.appendChild(td);
+                        table.appendChild(tr);
                     });
-                    table.appendChild(tr);
                 });
 
                 modalBody.appendChild(table);
