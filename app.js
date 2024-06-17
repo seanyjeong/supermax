@@ -180,6 +180,28 @@ app.post('/change-password', authenticateToken, (req, res) => {
   });
 });
 
+// 지점 목록과 트래픽 데이터를 가져오는 엔드포인트
+app.get('/branch-list-data', authenticateToken, (req, res) => {
+  const branchesQuery = 'SELECT * FROM branches';
+  const trafficQuery = 'SELECT * FROM traffic';
+
+  connection.query(branchesQuery, (err, branches) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    connection.query(trafficQuery, (err, trafficData) => {
+      if (err) {
+        res.status(500).json({ message: 'Database query failed', error: err });
+        return;
+      }
+
+      res.status(200).json({ branches, trafficData });
+    });
+  });
+});
+
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at http://0.0.0.0:3000/');
