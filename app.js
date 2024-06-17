@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
@@ -63,7 +64,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
 // 정적 파일 제공 설정
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // HTTP 서버를 생성합니다.
 const server = http.createServer(app);
@@ -215,7 +216,7 @@ app.get('/admin', authenticateToken, (req, res) => {
     return res.status(403).json({ message: 'Access denied' });
   }
 
-  res.status(200).sendFile(__dirname + '/admin.html');
+  res.redirect('https://supermax.co.kr/admin.html');
 });
 
 // 서버 시작
