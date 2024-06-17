@@ -62,6 +62,9 @@ app.use(cors({
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+// 정적 파일 제공 설정
+app.use(express.static('public'));
+
 // HTTP 서버를 생성합니다.
 const server = http.createServer(app);
 
