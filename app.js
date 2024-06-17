@@ -180,6 +180,41 @@ app.post('/change-password', authenticateToken, (req, res) => {
   });
 });
 
+// 로그인한 사용자 정보를 반환하는 엔드포인트
+app.get('/user-info', authenticateToken, (req, res) => {
+  const username = req.user.username;
+  const query = 'SELECT * FROM users WHERE username = ?';
+
+  connection.query(query, [username], (err, results) => {
+    if (err) {
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    if (results.length > 0) {
+      const user = results[0];
+      const userInfo = {
+        username: user.username,
+        legion: user.legion,
+        ip: req.ip,
+        region: req.headers['x-forwarded-for'] || req.connection.remoteAddress // 간단한 지역 정보 추출
+      };
+      res.status(200).json(userInfo);
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  });
+});
+
+// 관리자 페이지 엔드포인트
+app.get('/admin', authenticateToken, (req, res) => {
+  if (req.user.username !== 'sean8320') {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+
+  res.status(200).sendFile(__dirname + '/admin.html');
+});
+
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at http://0.0.0.0:3000/');
