@@ -197,10 +197,11 @@ app.get('/branch-list-data', authenticateToken, (req, res) => {
         return;
       }
 
-      res.status(200).json({ branches, trafficData });
+      res.status(200).json({ branches: branches, trafficData: trafficData });
     });
   });
 });
+
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
