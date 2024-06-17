@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>관리자 페이지</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            color: black;
+        }
+        table {
+            width: 80%;
+            border-collapse: collapse;
+            margin-top: 2rem;
+        }
+        th, td {
+            padding: 1rem;
+            border: 1px solid black;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>관리자 페이지</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>지점</th>
+                <th>IP 주소</th>
+                <th>로그인 지역</th>
+            </tr>
+        </thead>
+        <tbody id="admin-table-body">
+            <!-- 동적으로 데이터를 추가할 부분 -->
+        </tbody>
+    </table>
+    <script>
+        document.addEventListener("DOMContentLoaded", async function() {
+            const token = localStorage.getItem('token');
+            const response = await fetch('/user-info', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const userInfo = await response.json();
+                const tableBody = document.getElementById('admin-table-body');
+                const row = document.createElement('tr');
+
+                row.innerHTML = `
+                    <td>${userInfo.legion}</td>
+                    <td>${userInfo.ip}</td>
+                    <td>${userInfo.region}</td>
+                `;
+                tableBody.appendChild(row);
+            } else {
+                alert('Failed to load user information');
+            }
+        });
+    </script>
+</body>
+</html>
