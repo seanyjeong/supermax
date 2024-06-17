@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const os = require('os');
 
 const app = express();
 const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
@@ -100,108 +101,59 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// '25정시' 데이터를 가져오는 엔드포인트
-app.get('/25jeongsi', authenticateToken, (req, res) => {
-  const query = 'SELECT * FROM 25정시';
-  connection.query(query, (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    res.status(200).json(rows);
-  });
-});
+// 네트워크 트래픽 정보를 가져오는 함수
+function getNetworkTraffic() {
+  const interfaces = os.networkInterfaces();
+  const trafficData = [];
 
-// '25수시' 데이터를 가져오는 엔드포인트
-app.get('/25susi', authenticateToken, (req, res) => {
-  const query = `
-    SELECT s.*, i.image_data
-    FROM 25수시 s
-    LEFT JOIN images i ON s.id = i.id
-  `;
-  connection.query(query, (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-    rows.forEach(row => {
-      if (row.image_data) {
-        row.image_data = row.image_data.toString('base64');
+  for (const iface in interfaces) {
+    for (const address of interfaces[iface]) {
+      if (address.family === 'IPv4' || address.family === 'IPv6') {
+        trafficData.push({
+          interface: iface,
+          address: address.address,
+          family: address.family,
+          internal: address.internal
+        });
       }
-    });
-    res.status(200).json(rows);
-  });
-});
-
-// 이미지 데이터를 Base64로 인코딩하여 클라이언트에 제공
-app.get('/image/:id', authenticateToken, (req, res) => {
-  const imageId = req.params.id;
-  const query = 'SELECT image_data FROM images WHERE id = ?';
-
-  connection.query(query, [imageId], (err, rows) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
     }
-    if (rows.length > 0) {
-      const imageData = rows[0].image_data.toString('base64');
-      res.status(200).json({ image_data: imageData });
-    } else {
-      res.status(404).json({ message: 'Image not found' });
-    }
-  });
-});
+  }
 
-// 비밀번호 변경 엔드포인트
-app.post('/change-password', authenticateToken, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
+  return trafficData;
+}
+
+// 지점 목록과 트래픽 데이터를 가져오는 엔드포인트
+app.get('/branch-list-data', authenticateToken, (req, res) => {
   const username = req.user.username;
+  const userQuery = 'SELECT legion FROM users WHERE username = ?';
 
-  const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
-
-  connection.query(query, [username, currentPassword], (err, results) => {
+  connection.query(userQuery, [username], (err, results) => {
     if (err) {
+      console.error('Error fetching user legion:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
 
     if (results.length > 0) {
-      const updateQuery = 'UPDATE users SET password = ? WHERE username = ?';
-      connection.query(updateQuery, [newPassword, username], (err, results) => {
+      const userLegion = results[0].legion;
+      const branchesQuery = 'SELECT * FROM users WHERE legion = ?';
+
+      connection.query(branchesQuery, [userLegion], (err, branches) => {
         if (err) {
+          console.error('Error fetching branches:', err);
           res.status(500).json({ message: 'Database query failed', error: err });
           return;
         }
-        res.status(200).json({ message: 'Password has been changed' });
+
+        const trafficData = getNetworkTraffic();
+
+        res.status(200).json({ branches, trafficData });
       });
     } else {
-      res.status(401).json({ message: 'Current password is incorrect' });
+      res.status(404).json({ message: 'User not found' });
     }
   });
 });
-
-// 지점 목록과 트래픽 데이터를 가져오는 엔드포인트
-app.get('/branch-list-data', authenticateToken, (req, res) => {
-  const branchesQuery = 'SELECT * FROM branches';
-  const trafficQuery = 'SELECT * FROM traffic';
-
-  connection.query(branchesQuery, (err, branches) => {
-    if (err) {
-      res.status(500).json({ message: 'Database query failed', error: err });
-      return;
-    }
-
-    connection.query(trafficQuery, (err, trafficData) => {
-      if (err) {
-        res.status(500).json({ message: 'Database query failed', error: err });
-        return;
-      }
-
-      res.status(200).json({ branches: branches, trafficData: trafficData });
-    });
-  });
-});
-
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
