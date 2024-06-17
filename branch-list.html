@@ -39,8 +39,8 @@
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>지점 이름</th>
-                        <th>위치</th>
+                        <th>사용자 이름</th>
+                        <th>지점</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -82,26 +82,25 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log('Received data:', data); // 데이터를 확인하기 위한 로그
                 if (data.branches) {
                     const branchesTable = document.getElementById('branches-table').getElementsByTagName('tbody')[0];
                     data.branches.forEach(branch => {
                         const row = branchesTable.insertRow();
                         row.insertCell(0).innerText = branch.id;
-                        row.insertCell(1).innerText = branch.name;
-                        row.insertCell(2).innerText = branch.location;
+                        row.insertCell(1).innerText = branch.username;
+                        row.insertCell(2).innerText = branch.legion;
                     });
                 }
 
                 if (data.trafficData) {
                     const trafficTable = document.getElementById('traffic-table').getElementsByTagName('tbody')[0];
                     data.trafficData.forEach(interface => {
-                        interface.addresses.forEach(address => {
-                            const row = trafficTable.insertRow();
-                            row.insertCell(0).innerText = interface.interface;
-                            row.insertCell(1).innerText = address.address;
-                            row.insertCell(2).innerText = address.family;
-                            row.insertCell(3).innerText = address.internal ? 'Yes' : 'No';
-                        });
+                        const row = trafficTable.insertRow();
+                        row.insertCell(0).innerText = interface.interface;
+                        row.insertCell(1).innerText = interface.address;
+                        row.insertCell(2).innerText = interface.family;
+                        row.insertCell(3).innerText = interface.internal ? 'Yes' : 'No';
                     });
                 }
             })
