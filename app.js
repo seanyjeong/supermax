@@ -6,7 +6,7 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const axios = require('axios');
+const os = require('os');
 
 const app = express();
 const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
@@ -101,45 +101,58 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// 지점 목록과 IP 주소 기반 지역 정보를 가져오는 엔드포인트
-app.post('/branch-list-data', authenticateToken, async (req, res) => {
-  const username = req.user.username;
-  const userIp = req.body.ip;
+// 네트워크 트래픽 정보를 가져오는 함수
+function getNetworkTraffic() {
+  const interfaces = os.networkInterfaces();
+  const trafficData = [];
 
-  // IP 주소로 지역 정보를 가져오기 위해 ipinfo.io API 사용
-  const ipInfoUrl = `https://ipinfo.io/${userIp}/json?token=YOUR_IPINFO_TOKEN`;
-
-  try {
-    const ipInfoResponse = await axios.get(ipInfoUrl);
-    const location = ipInfoResponse.data.city ? `${ipInfoResponse.data.city}, ${ipInfoResponse.data.region}, ${ipInfoResponse.data.country}` : 'Unknown';
-
-    const userQuery = 'SELECT * FROM users WHERE username = ?';
-    connection.query(userQuery, [username], (err, results) => {
-      if (err) {
-        console.error('Error fetching user:', err);
-        res.status(500).json({ message: 'Database query failed', error: err });
-        return;
-      }
-
-      if (results.length > 0) {
-        const user = results[0];
-        res.status(200).json({
-          branches: [{
-            id: user.id,
-            username: user.username,
-            legion: user.legion,
-            ip: userIp,
-            location: location
-          }]
+  for (const iface in interfaces) {
+    for (const address of interfaces[iface]) {
+      if (address.family === 'IPv4' || address.family === 'IPv6') {
+        trafficData.push({
+          interface: iface,
+          address: address.address,
+          family: address.family,
+          internal: address.internal
         });
-      } else {
-        res.status(404).json({ message: 'User not found' });
       }
-    });
-  } catch (error) {
-    console.error('Error fetching IP info:', error);
-    res.status(500).json({ message: 'Failed to fetch IP info', error: error });
+    }
   }
+
+  return trafficData;
+}
+
+// 지점 목록과 트래픽 데이터를 가져오는 엔드포인트
+app.get('/branch-list-data', authenticateToken, (req, res) => {
+  const username = req.user.username;
+  const userQuery = 'SELECT legion FROM users WHERE username = ?';
+
+  connection.query(userQuery, [username], (err, results) => {
+    if (err) {
+      console.error('Error fetching user legion:', err);
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+
+    if (results.length > 0) {
+      const userLegion = results[0].legion;
+      const branchesQuery = 'SELECT * FROM users WHERE legion = ?';
+
+      connection.query(branchesQuery, [userLegion], (err, branches) => {
+        if (err) {
+          console.error('Error fetching branches:', err);
+          res.status(500).json({ message: 'Database query failed', error: err });
+          return;
+        }
+
+        const trafficData = getNetworkTraffic();
+
+        res.status(200).json({ branches, trafficData });
+      });
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  });
 });
 
 // 서버 시작
