@@ -29,11 +29,15 @@
             width: 300px;
             margin-top: 1rem;
         }
+
+        .user-info {
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
     <h1>관리자 페이지</h1>
-    <div class="info-box" id="admin-info">
+    <div id="admin-info">
         <p>Loading...</p>
     </div>
 
@@ -55,11 +59,21 @@
 
             if (response.ok) {
                 const data = await response.json();
-                document.getElementById('admin-info').innerHTML = `
-                    <p><strong>IP 주소:</strong> ${data.ip}</p>
-                    <p><strong>사용자 이름:</strong> ${data.username}</p>
-                    <p><strong>지점:</strong> ${data.legion}</p>
-                `;
+                const adminInfoContainer = document.getElementById('admin-info');
+                adminInfoContainer.innerHTML = '';
+
+                data.forEach(user => {
+                    const userInfoDiv = document.createElement('div');
+                    userInfoDiv.classList.add('user-info');
+                    userInfoDiv.innerHTML = `
+                        <p><strong>IP 주소:</strong> ${user.ip}</p>
+                        <p><strong>사용자 이름:</strong> ${user.username}</p>
+                        <p><strong>지점:</strong> ${user.legion}</p>
+                        <p><strong>위치:</strong> ${user.location}</p>
+                        <p><strong>로그인 시간:</strong> ${user.login_time}</p>
+                    `;
+                    adminInfoContainer.appendChild(userInfoDiv);
+                });
             } else {
                 alert('권한이 없습니다.');
                 window.location.href = '/';
