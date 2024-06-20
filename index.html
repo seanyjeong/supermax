@@ -290,19 +290,34 @@
             }
         }
 
-        function logout() {
-            localStorage.removeItem('token');
-            document.getElementById('login-form').style.display = 'flex';
-            document.getElementById('buttons').style.display = 'none';
-            document.getElementById('user-info').style.display = 'none';
-            document.getElementById('user-menu').style.display = 'none';
-            document.getElementById('user-initial').textContent = '';
-            document.getElementById('user-name').textContent = '';
-            document.getElementById('user-username').textContent = '';
-            document.getElementById('user-legion').textContent = '';
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
+async function logout() {
+    const token = localStorage.getItem('token');
+    const response = await fetch('https://supermax.kr/logout', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
         }
+    });
+
+    if (response.ok) {
+        localStorage.removeItem('token');
+        alert('로그아웃 되었습니다.');
+        document.getElementById('login-form').style.display = 'flex';
+        document.getElementById('buttons').style.display = 'none';
+        document.getElementById('user-info').style.display = 'none';
+        document.getElementById('user-menu').style.display = 'none';
+        document.getElementById('user-initial').textContent = '';
+        document.getElementById('user-name').textContent = '';
+        document.getElementById('user-username').textContent = '';
+        document.getElementById('user-legion').textContent = '';
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        window.location.href = '/';
+    } else {
+        alert('로그아웃 실패');
+    }
+}
+
 
         function parseJwt(token) {
             var base64Url = token.split('.')[1];
