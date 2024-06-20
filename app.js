@@ -11,6 +11,7 @@ const axios = require('axios');
 
 const app = express();
 const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
+const SESSION_TIMEOUT = 3600; // 세션 타임아웃을 1시간(3600초)으로 설정
 
 // 데이터베이스 연결을 설정합니다.
 const db_config = {
@@ -50,7 +51,7 @@ app.use(session({
   secret: 'your_secret_key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false, sameSite: 'None' } // 쿠키 설정 조정
+  cookie: { secure: false, sameSite: 'None', maxAge: SESSION_TIMEOUT * 1000 } // 쿠키 설정 조정
 }));
 
 // CORS 설정
@@ -75,6 +76,7 @@ app.post('/login', async (req, res) => {
 
   connection.query(query, [username, password], async (err, results) => {
     if (err) {
+      console.error('Database query failed:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -100,6 +102,18 @@ app.post('/login', async (req, res) => {
       req.session.username = user.username;
       req.session.legion = user.legion;
 
+      // 세션 정보를 데이터베이스에 저장
+      const insertSessionQuery = `
+        INSERT INTO user_sessions (username, legion, ip, location)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE login_time = CURRENT_TIMESTAMP
+      `;
+      connection.query(insertSessionQuery, [user.username, user.legion, ip, location], (err, results) => {
+        if (err) {
+          console.error('Failed to insert session data:', err);
+        }
+      });
+
       res.status(200).json({ message: 'Login successful', token, username: user.username, legion: user.legion });
     } else {
       res.status(401).json({ message: 'Invalid credentials' });
@@ -121,11 +135,34 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// 현재 로그인한 사용자 정보를 가져오는 엔드포인트
+app.get('/admin', authenticateToken, (req, res) => {
+  const username = req.user.username;
+  if (username === 'sean8320') {
+    const query = `
+      SELECT username, legion, ip, location, login_time
+      FROM user_sessions
+      WHERE login_time > DATE_SUB(NOW(), INTERVAL ${SESSION_TIMEOUT} SECOND)
+    `;
+    connection.query(query, (err, results) => {
+      if (err) {
+        console.error('Failed to retrieve session data:', err);
+        res.status(500).json({ message: 'Failed to retrieve session data', error: err });
+        return;
+      }
+      res.status(200).json(results);
+    });
+  } else {
+    res.status(403).json({ message: 'Access denied' });
+  }
+});
+
 // '25정시' 데이터를 가져오는 엔드포인트
 app.get('/25jeongsi', authenticateToken, (req, res) => {
   const query = 'SELECT * FROM 25정시';
   connection.query(query, (err, rows) => {
     if (err) {
+      console.error('Database query failed:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -142,6 +179,7 @@ app.get('/25susi', authenticateToken, (req, res) => {
   `;
   connection.query(query, (err, rows) => {
     if (err) {
+      console.error('Database query failed:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -161,6 +199,7 @@ app.get('/image/:id', authenticateToken, (req, res) => {
 
   connection.query(query, [imageId], (err, rows) => {
     if (err) {
+      console.error('Database query failed:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -182,6 +221,7 @@ app.post('/change-password', authenticateToken, (req, res) => {
 
   connection.query(query, [username, currentPassword], (err, results) => {
     if (err) {
+      console.error('Database query failed:', err);
       res.status(500).json({ message: 'Database query failed', error: err });
       return;
     }
@@ -190,6 +230,7 @@ app.post('/change-password', authenticateToken, (req, res) => {
       const updateQuery = 'UPDATE users SET password = ? WHERE username = ?';
       connection.query(updateQuery, [newPassword, username], (err, results) => {
         if (err) {
+          console.error('Database query failed:', err);
           res.status(500).json({ message: 'Database query failed', error: err });
           return;
         }
@@ -199,20 +240,6 @@ app.post('/change-password', authenticateToken, (req, res) => {
       res.status(401).json({ message: 'Current password is incorrect' });
     }
   });
-});
-
-// 관리자 페이지 엔드포인트
-app.get('/admin', authenticateToken, (req, res) => {
-  if (req.user.username === 'sean8320') {
-    res.status(200).json({
-      ip: req.session.ip,
-      location: req.session.location,
-      username: req.session.username,
-      legion: req.session.legion
-    });
-  } else {
-    res.status(403).json({ message: 'Access denied' });
-  }
 });
 
 // 서버 시작
