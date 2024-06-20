@@ -157,6 +157,20 @@ app.get('/admin', authenticateToken, (req, res) => {
   }
 });
 
+// 로그아웃 엔드포인트
+app.post('/logout', authenticateToken, (req, res) => {
+  const username = req.user.username;
+  const query = 'DELETE FROM user_sessions WHERE username = ?';
+  connection.query(query, [username], (err, results) => {
+    if (err) {
+      console.error('Failed to delete session data:', err);
+      res.status(500).json({ message: 'Failed to delete session data', error: err });
+      return;
+    }
+    res.status(200).json({ message: 'Logout successful' });
+  });
+});
+
 // '25정시' 데이터를 가져오는 엔드포인트
 app.get('/25jeongsi', authenticateToken, (req, res) => {
   const query = 'SELECT * FROM 25정시';
