@@ -4,6 +4,7 @@
     <title>맥스체대입시</title>
     <link rel="icon" type="image/gif" href="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true">
     <style>
+        /* 전체 페이지 스타일 */
         body {
             display: flex;
             flex-direction: column;
@@ -15,77 +16,201 @@
             text-align: center;
             color: black;
         }
+
+        /* 제목 스타일 */
         h1 {
-            font-size: 3rem;
+            font-size: 2.5rem;
+            margin-top: 2rem;
             margin-bottom: 2rem;
         }
+
+        /* 이미지 스타일 */
         img {
-            width: 50%;
+            width: 40%;
             height: auto;
         }
+
+        /* 버튼 컨테이너 스타일 */
         .button-container {
             display: flex;
             gap: 1rem;
             margin-top: 2rem;
         }
-        a {
-            padding: 1.5rem 0;
-            width: 200px;
-            background-color: #007bff;
-            color: #fff;
-            text-decoration: none;
-            border-radius: 5px;
-            font-size: 1.5rem;
-            text-align: center;
-        }
-        a:hover {
-            background-color: #0056b3;
-        }
+
+        /* 로그인 폼 스타일 */
         .login-form {
             display: flex;
             flex-direction: column;
             gap: 1rem;
             margin-top: 2rem;
         }
+
+        /* 입력 필드 스타일 */
         input {
             padding: 1rem;
             font-size: 1rem;
             width: 200px;
         }
-        button {
+
+        /* 버튼 스타일 */
+        button, .button {
             padding: 1rem;
             font-size: 1rem;
-            background-color: #007bff;
+            background-color: #ff0040;
             color: #fff;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            text-decoration: none;
+            text-align: center;
         }
-        button:hover {
-            background-color: #0056b3;
+
+        /* 사용자 정보 스타일 */
+        .user-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        /* 사용자 정보 원 모양 */
+        .user-info-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* 사용자 메뉴 스타일 */
+        .user-menu {
+            display: none;
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            padding: 10px;
+            z-index: 1000;
+            width: 130px;
+        }
+
+        /* 사용자 메뉴 링크 스타일 */
+        .user-menu a {
+            display: block;
+            padding: 10px;
+            color: black;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        /* 비밀번호 변경 팝업 스타일 */
+        .password-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+            padding-top: 60px;
+        }
+        .password-modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid black;
+            width: 90%;
+            max-width: 400px;
+            color: black;
+            position: relative;
+        }
+        .password-modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <h1>맥스체대입시</h1>
+    <!-- 헤더와 로고 이미지 -->
+    <h1 id="title">25학년 맥스체대입시 모집요강</h1>
     <img src="https://github.com/seanyjeong/max24liveM/blob/main/max.gif?raw=true" alt="Image">
-    
-    <div class="login-form">
-        <input type="text" id="username" placeholder="Username">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="login()">Login</button>
+    <!-- 로그인 폼 -->
+    <div class="login-form" id="login-form">
+        <input type="text" id="username" placeholder="지점아이디">
+        <input type="password" id="password" placeholder="비밀번호">
+        <button onclick="login()">로그인</button>
     </div>
-    
-    <div class="button-container" style="display:none;" id="buttons">
-        <a href="/25susi">25수시요강 Demo</a>
-        <a href="/25jungsi">25정시요강</a>
+    <!-- 버튼 컨테이너 (수시, 정시 요강 버튼) -->
+    <div class="button-container" id="buttons" style="display:none;">
+        <a href="/25susi" class="button">25수시요강(계획안)</a>
+        <a href="/25jungsi" class="button">25정시요강(계획안)</a>
+        <a href="/admin" class="button" id="admin-button" style="display:none;">관리자</a>
     </div>
-
+    <!-- 사용자 정보 (유저 이름, 지점, 메뉴) -->
+    <div class="user-info" id="user-info" style="display:none;" onclick="toggleMenu()">
+        <div class="user-info-circle" id="user-initial"></div>
+        <span id="user-name"></span>
+    </div>
+    <!-- 사용자 메뉴 (아이디, 지점, 비밀번호 재설정, 로그아웃) -->
+    <div class="user-menu" id="user-menu">
+        <a href="#" id="user-username"></a>
+        <a href="#" id="user-legion"></a>
+        <a href="#" onclick="openPasswordModal()">비밀번호 재설정</a>
+        <a href="#" onclick="logout()">로그아웃</a>
+    </div>
+    <!-- 비밀번호 변경 팝업 -->
+    <div id="passwordModal" class="password-modal">
+        <div class="password-modal-content">
+            <span class="close-button" onclick="closePasswordModal()">&times;</span>
+            <h2>비밀번호 변경</h2>
+            <input type="password" id="currentPassword" placeholder="현재 비밀번호">
+            <input type="password" id="newPassword" placeholder="새 비밀번호">
+            <input type="password" id="confirmPassword" placeholder="새 비밀번호 확인">
+            <button onclick="changePassword()">변경</button>
+        </div>
+    </div>
+    <!-- 푸터 -->
     <footer style="margin-top: 3rem; text-align: center;">
       <p>© 2024 맥스체대입시 일산교육원. All rights reserved.</p>
     </footer>
-
+    <!-- 자바스크립트 -->
     <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const token = localStorage.getItem('token');
+            if (token && !isTokenExpired(token)) {
+                const userInfo = parseJwt(token);
+                showUserInfo(userInfo);
+            } else {
+                logout();
+            }
+        });
+
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -93,19 +218,106 @@
             const response = await fetch('https://supermax.kr/login', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': 'https://supermax.co.kr', // 추가 설정
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ username, password }),
                 credentials: 'include'
             });
 
             if (response.ok) {
-                document.querySelector('.login-form').style.display = 'none';
-                document.getElementById('buttons').style.display = 'flex';
+                const data = await response.json();
+                localStorage.setItem('token', data.token);
+                showUserInfo(data);
             } else {
                 alert('Login failed. Please check your username and password.');
             }
+        }
+
+        function showUserInfo(data) {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('buttons').style.display = 'flex';
+            document.getElementById('user-info').style.display = 'flex';
+            document.getElementById('user-initial').textContent = data.legion.charAt(0).toUpperCase();
+            document.getElementById('user-name').textContent = data.username;
+            document.getElementById('user-username').textContent = `ID: ${data.username}`;
+            document.getElementById('user-legion').textContent = `지점: ${data.legion}`;
+
+            // 관리자 버튼 표시
+            if (data.username === 'sean8320') {
+                document.getElementById('admin-button').style.display = 'inline-block';
+            }
+        }
+
+        function toggleMenu() {
+            const userMenu = document.getElementById('user-menu');
+            userMenu.style.display = userMenu.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function openPasswordModal() {
+            document.getElementById('passwordModal').style.display = 'block';
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModal').style.display = 'none';
+        }
+
+        async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            if (newPassword !== confirmPassword) {
+                alert('새 비밀번호가 일치하지 않습니다.');
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+            const response = await fetch('https://supermax.kr/change-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ currentPassword, newPassword })
+            });
+
+            if (response.ok) {
+                alert('비밀번호가 성공적으로 변경되었습니다.');
+                closePasswordModal();
+            } else {
+                const data = await response.json();
+                alert(`비밀번호 변경 실패: ${data.message}`);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            document.getElementById('login-form').style.display = 'flex';
+            document.getElementById('buttons').style.display = 'none';
+            document.getElementById('user-info').style.display = 'none';
+            document.getElementById('user-menu').style.display = 'none';
+            document.getElementById('user-initial').textContent = '';
+            document.getElementById('user-name').textContent = '';
+            document.getElementById('user-username').textContent = '';
+            document.getElementById('user-legion').textContent = '';
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+        }
+
+        function parseJwt(token) {
+            var base64Url = token.split('.')[1];
+            var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            var jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+
+            return JSON.parse(jsonPayload);
+        }
+
+        function isTokenExpired(token) {
+            const payload = parseJwt(token);
+            const currentTime = Math.floor(Date.now() / 1000);
+            return payload.exp < currentTime;
         }
     </script>
 </body>
