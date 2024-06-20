@@ -21,25 +21,58 @@
             margin-bottom: 1rem;
         }
 
-        .info-box {
-            border: 1px solid black;
-            padding: 1rem;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-            width: 300px;
+        .info-table {
+            border-collapse: collapse;
+            width: 80%;
             margin-top: 1rem;
         }
 
-        .user-info {
-            margin-bottom: 1rem;
+        .info-table th, .info-table td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .info-table th {
+            background-color: #f2f2f2;
+        }
+
+        .home-button {
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            background-color: #ff0040;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            text-decoration: none;
+        }
+
+        .home-button:hover {
+            background-color: #e60036;
         }
     </style>
 </head>
 <body>
     <h1>관리자 페이지</h1>
-    <div id="admin-info">
-        <p>Loading...</p>
-    </div>
+    <table class="info-table" id="admin-info">
+        <thead>
+            <tr>
+                <th>IP 주소</th>
+                <th>사용자 이름</th>
+                <th>지점</th>
+                <th>위치</th>
+                <th>로그인 시간</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td colspan="5">Loading...</td>
+            </tr>
+        </tbody>
+    </table>
+    <a href="https://supermax.co.kr" class="home-button">홈으로</a>
 
     <script>
         document.addEventListener("DOMContentLoaded", async function() {
@@ -59,20 +92,16 @@
 
             if (response.ok) {
                 const data = await response.json();
-                const adminInfoContainer = document.getElementById('admin-info');
-                adminInfoContainer.innerHTML = '';
+                const adminInfoTable = document.getElementById('admin-info').getElementsByTagName('tbody')[0];
+                adminInfoTable.innerHTML = '';
 
                 data.forEach(user => {
-                    const userInfoDiv = document.createElement('div');
-                    userInfoDiv.classList.add('user-info');
-                    userInfoDiv.innerHTML = `
-                        <p><strong>IP 주소:</strong> ${user.ip}</p>
-                        <p><strong>사용자 이름:</strong> ${user.username}</p>
-                        <p><strong>지점:</strong> ${user.legion}</p>
-                        <p><strong>위치:</strong> ${user.location}</p>
-                        <p><strong>로그인 시간:</strong> ${user.login_time}</p>
-                    `;
-                    adminInfoContainer.appendChild(userInfoDiv);
+                    const row = adminInfoTable.insertRow();
+                    row.insertCell(0).textContent = user.ip;
+                    row.insertCell(1).textContent = user.username;
+                    row.insertCell(2).textContent = user.legion;
+                    row.insertCell(3).textContent = user.location;
+                    row.insertCell(4).textContent = user.login_time;
                 });
             } else {
                 alert('권한이 없습니다.');
