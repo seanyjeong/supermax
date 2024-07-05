@@ -266,13 +266,18 @@ app.post('/save-data', (req, res) => {
     skill4_name, skill4_record, skill4_score, skill5_name, skill5_record, skill5_score, skill6_name, skill6_record, skill6_score) 
     VALUES ?
   `;
-  let values = [
-    [legion, name, school, gender, grade, 
-     collegeData[0][0], collegeData[0][1], collegeData[0][2], collegeData[0][3], collegeData[0][4], 
-     skillData[0][0], skillData[0][1], skillData[0][2], skillData[0][3], skillData[0][4], skillData[0][5], 
-     skillData[0][6], skillData[0][7], skillData[0][8], skillData[0][9], skillData[0][10], skillData[0][11],
-     skillData[0][12], skillData[0][13], skillData[0][14], skillData[0][15], skillData[0][16], skillData[0][17]]
-  ];
+
+  let values = [];
+
+  for (let i = 0; i < collegeData.length; i++) {
+    values.push([
+      legion, name, school, gender, grade,
+      collegeData[i][0], collegeData[i][1], collegeData[i][2], collegeData[i][3], collegeData[i][4],
+      skillData[i][0], skillData[i][1], skillData[i][2], skillData[i][3], skillData[i][4], skillData[i][5],
+      skillData[i][6], skillData[i][7], skillData[i][8], skillData[i][9], skillData[i][10], skillData[i][11],
+      skillData[i][12], skillData[i][13], skillData[i][14], skillData[i][15], skillData[i][16], skillData[i][17]
+    ]);
+  }
 
   connection.query(query, [values], (error, results) => {
     if (error) {
@@ -304,6 +309,10 @@ app.post('/update-data', (req, res) => {
   });
 });
 
+// 서버 시작
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}/`);
+});
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
