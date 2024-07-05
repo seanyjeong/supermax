@@ -270,22 +270,28 @@ app.post('/save-data', (req, res) => {
   let values = [];
 
   for (let i = 0; i < collegeData.length; i++) {
-    values.push([
-      legion, name, school, gender, grade,
-      collegeData[i][0], collegeData[i][1], collegeData[i][2], collegeData[i][3], collegeData[i][4],
-      skillData[i][0], skillData[i][1], skillData[i][2], skillData[i][3], skillData[i][4], skillData[i][5],
-      skillData[i][6], skillData[i][7], skillData[i][8], skillData[i][9], skillData[i][10], skillData[i][11],
-      skillData[i][12], skillData[i][13], skillData[i][14], skillData[i][15], skillData[i][16], skillData[i][17]
-    ]);
+    if (collegeData[i][0] !== "") { // collegeData의 첫 번째 컬럼이 빈 값이 아닌 경우에만 추가
+      values.push([
+        legion, name, school, gender, grade,
+        collegeData[i][0], collegeData[i][1], collegeData[i][2], collegeData[i][3], collegeData[i][4],
+        skillData[i][0], skillData[i][1], skillData[i][2], skillData[i][3], skillData[i][4], skillData[i][5],
+        skillData[i][6], skillData[i][7], skillData[i][8], skillData[i][9], skillData[i][10], skillData[i][11],
+        skillData[i][12], skillData[i][13], skillData[i][14], skillData[i][15], skillData[i][16], skillData[i][17]
+      ]);
+    }
   }
 
-  connection.query(query, [values], (error, results) => {
-    if (error) {
-      res.status(500).send(error);
-    } else {
-      res.status(200).send('Data inserted successfully');
-    }
-  });
+  if (values.length > 0) {
+    connection.query(query, [values], (error, results) => {
+      if (error) {
+        res.status(500).send(error);
+      } else {
+        res.status(200).send('Data inserted successfully');
+      }
+    });
+  } else {
+    res.status(400).send('No valid data to insert');
+  }
 });
 
 // 데이터 업데이트 엔드포인트
@@ -308,7 +314,6 @@ app.post('/update-data', (req, res) => {
     }
   });
 });
-
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
