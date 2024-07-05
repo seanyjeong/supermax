@@ -309,10 +309,6 @@ app.post('/update-data', (req, res) => {
   });
 });
 
-// 서버 시작
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}/`);
-});
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
