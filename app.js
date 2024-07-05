@@ -255,6 +255,25 @@ app.post('/change-password', authenticateToken, (req, res) => {
     }
   });
 });
+app.post('/save-data', (req, res) => {
+  const { legion, name, school, gender, grade, collegeData, skillData } = req.body;
+
+  let query = 'INSERT INTO your_table_name (legion, name, school, gender, grade, collegeData, skillData) VALUES ?';
+  let values = [];
+
+  for (let i = 0; i < collegeData.length; i++) {
+    values.push([legion, name, school, gender, grade, JSON.stringify(collegeData[i]), JSON.stringify(skillData[i])]);
+  }
+
+  connection.query(query, [values], (error, results) => {
+    if (error) {
+      res.status(500).send(error);
+    } else {
+      res.status(200).send('Data inserted successfully');
+    }
+  });
+});
+
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
