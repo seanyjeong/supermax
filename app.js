@@ -255,21 +255,51 @@ app.post('/change-password', authenticateToken, (req, res) => {
     }
   });
 });
+// 데이터 저장 엔드포인트
 app.post('/save-data', (req, res) => {
   const { legion, name, school, gender, grade, collegeData, skillData } = req.body;
 
-  let query = 'INSERT INTO your_table_name (legion, name, school, gender, grade, collegeData, skillData) VALUES ?';
-  let values = [];
-
-  for (let i = 0; i < collegeData.length; i++) {
-    values.push([legion, name, school, gender, grade, JSON.stringify(collegeData[i]), JSON.stringify(skillData[i])]);
-  }
+  let query = `
+    INSERT INTO \`25수시수합\` 
+    (legion, name, school, gender, grade, college_name, college_department, college_admission_type, college_gpa, college_grade, 
+    skill1_name, skill1_record, skill1_score, skill2_name, skill2_record, skill2_score, skill3_name, skill3_record, skill3_score, 
+    skill4_name, skill4_record, skill4_score, skill5_name, skill5_record, skill5_score, skill6_name, skill6_record, skill6_score) 
+    VALUES ?
+  `;
+  let values = [
+    [legion, name, school, gender, grade, 
+     collegeData[0][0], collegeData[0][1], collegeData[0][2], collegeData[0][3], collegeData[0][4], 
+     skillData[0][0], skillData[0][1], skillData[0][2], skillData[0][3], skillData[0][4], skillData[0][5], 
+     skillData[0][6], skillData[0][7], skillData[0][8], skillData[0][9], skillData[0][10], skillData[0][11],
+     skillData[0][12], skillData[0][13], skillData[0][14], skillData[0][15], skillData[0][16], skillData[0][17]]
+  ];
 
   connection.query(query, [values], (error, results) => {
     if (error) {
       res.status(500).send(error);
     } else {
       res.status(200).send('Data inserted successfully');
+    }
+  });
+});
+
+// 데이터 업데이트 엔드포인트
+app.post('/update-data', (req, res) => {
+  const { legion, name, school, gender, skill1_record, skill1_score, skill2_record, skill2_score, skill3_record, skill3_score, skill4_record, skill4_score, skill5_record, skill5_score, skill6_record, skill6_score } = req.body;
+
+  let query = `
+    UPDATE \`25수시수합\` 
+    SET skill1_record = ?, skill1_score = ?, skill2_record = ?, skill2_score = ?, skill3_record = ?, skill3_score = ?, skill4_record = ?, skill4_score = ?, skill5_record = ?, skill5_score = ?, skill6_record = ?, skill6_score = ?
+    WHERE legion = ? AND name = ? AND school = ? AND gender = ?
+  `;
+
+  let values = [skill1_record, skill1_score, skill2_record, skill2_score, skill3_record, skill3_score, skill4_record, skill4_score, skill5_record, skill5_score, skill6_record, skill6_score, legion, name, school, gender];
+
+  connection.query(query, values, (error, results) => {
+    if (error) {
+      res.status(500).send(error);
+    } else {
+      res.status(200).send('Data updated successfully');
     }
   });
 });
