@@ -260,6 +260,9 @@ app.post('/change-password', authenticateToken, (req, res) => {
 app.post('/save-scores', (req, res) => {
   const { name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore } = req.body;
 
+  // 로그 추가
+  console.log('Received data:', req.body);
+
   const query = `
     INSERT INTO scores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -269,12 +272,13 @@ app.post('/save-scores', (req, res) => {
   connection.query(query, values, (error, results) => {
     if (error) {
       console.error('Error saving scores to MySQL:', error);
-      res.status(500).json({ success: false, message: 'Error saving scores to MySQL' });
+      res.status(500).json({ success: false, message: 'Error saving scores to MySQL', error: error.message });
     } else {
       res.status(200).json({ success: true, message: 'Scores saved successfully' });
     }
   });
 });
+
 
 // 데이터 저장 엔드포인트
 app.post('/save-data', (req, res) => {
