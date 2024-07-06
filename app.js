@@ -56,7 +56,7 @@ app.use(session({
 
 // CORS 설정
 app.use(cors({
-  origin: ['https://supermax.co.kr','https://seanyjeong.github.io/duniv/'],
+  origin: ['https://supermax.co.kr','https://seanyjeong.github.io'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
