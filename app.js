@@ -271,13 +271,15 @@ app.post('/save-scores', (req, res) => {
 
   connection.query(query, values, (error, results) => {
     if (error) {
-      console.error('Error saving scores to MySQL:', error);
+      console.error('Error saving scores to MySQL:', error); // 이 부분을 통해 구체적인 에러 메시지를 확인하세요.
       res.status(500).json({ success: false, message: 'Error saving scores to MySQL', error: error.message });
     } else {
+      console.log('Scores saved successfully:', results);
       res.status(200).json({ success: true, message: 'Scores saved successfully' });
     }
   });
 });
+
 
 
 // 데이터 저장 엔드포인트
