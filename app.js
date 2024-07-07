@@ -256,66 +256,28 @@ app.post('/change-password', authenticateToken, (req, res) => {
   });
 });
 
+// 새로운 엔드포인트 추가: 점수 저장
+app.post('/save-duniv', (req, res) => {
+  const {
+    name, academy, formType, gender,
+    standingJump, weightedRun, backStrength, sitAndReach,
+    academicScore, totalScore
+  } = req.body;
 
-
-
-// 데이터 저장 엔드포인트
-app.post('/save-data', (req, res) => {
-  const { legion, name, school, gender, grade, collegeData, skillData } = req.body;
-
-  let query = `
-    INSERT INTO \`25수시수합\` 
-    (legion, name, school, gender, grade, college_name, college_department, college_admission_type, college_gpa, college_grade, 
-    skill1_name, skill1_record, skill1_score, skill2_name, skill2_record, skill2_score, skill3_name, skill3_record, skill3_score, 
-    skill4_name, skill4_record, skill4_score, skill5_name, skill5_record, skill5_score, skill6_name, skill6_record, skill6_score) 
-    VALUES ?
+  const query = `
+    INSERT INTO dscores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  let values = [];
+  const values = [name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore];
 
-  for (let i = 0; i < collegeData.length; i++) {
-    if (collegeData[i][0] !== "") { // collegeData의 첫 번째 컬럼이 빈 값이 아닌 경우에만 추가
-      values.push([
-        legion, name, school, gender, grade,
-        collegeData[i][0], collegeData[i][1], collegeData[i][2], collegeData[i][3], collegeData[i][4],
-        skillData[i][0], skillData[i][1], skillData[i][2], skillData[i][3], skillData[i][4], skillData[i][5],
-        skillData[i][6], skillData[i][7], skillData[i][8], skillData[i][9], skillData[i][10], skillData[i][11],
-        skillData[i][12], skillData[i][13], skillData[i][14], skillData[i][15], skillData[i][16], skillData[i][17]
-      ]);
+  connection.query(query, values, (err, results) => {
+    if (err) {
+      console.error('Failed to insert data:', err);
+      res.status(500).json({ message: 'Failed to insert data', error: err });
+      return;
     }
-  }
-
-  if (values.length > 0) {
-    connection.query(query, [values], (error, results) => {
-      if (error) {
-        res.status(500).send(error);
-      } else {
-        res.status(200).send('Data inserted successfully');
-      }
-    });
-  } else {
-    res.status(400).send('No valid data to insert');
-  }
-});
-
-// 데이터 업데이트 엔드포인트
-app.post('/update-data', (req, res) => {
-  const { legion, name, school, gender, skill1_record, skill1_score, skill2_record, skill2_score, skill3_record, skill3_score, skill4_record, skill4_score, skill5_record, skill5_score, skill6_record, skill6_score } = req.body;
-
-  let query = `
-    UPDATE \`25수시수합\` 
-    SET skill1_record = ?, skill1_score = ?, skill2_record = ?, skill2_score = ?, skill3_record = ?, skill3_score = ?, skill4_record = ?, skill4_score = ?, skill5_record = ?, skill5_score = ?, skill6_record = ?, skill6_score = ?
-    WHERE legion = ? AND name = ? AND school = ? AND gender = ?
-  `;
-
-  let values = [skill1_record, skill1_score, skill2_record, skill2_score, skill3_record, skill3_score, skill4_record, skill4_score, skill5_record, skill5_score, skill6_record, skill6_score, legion, name, school, gender];
-
-  connection.query(query, values, (error, results) => {
-    if (error) {
-      res.status(500).send(error);
-    } else {
-      res.status(200).send('Data updated successfully');
-    }
+    res.status(200).json({ message: 'Data inserted successfully' });
   });
 });
 
