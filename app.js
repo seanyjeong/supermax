@@ -258,26 +258,26 @@ app.post('/change-password', authenticateToken, (req, res) => {
 
 // 데이터 저장 엔드포인트 추가
 app.post('/save-scores', (req, res) => {
-  const { name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore } = req.body;
+    const { name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore } = req.body;
 
-  // 로그 추가
-  console.log('Received data:', req.body);
+    // 데이터 수신 로그
+    console.log('Received data:', req.body);
 
-  const query = `
-    INSERT INTO scores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  const values = [name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore];
+    const query = `
+        INSERT INTO scores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+    const values = [name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore];
 
-  connection.query(query, values, (error, results) => {
-    if (error) {
-      console.error('Error saving scores to MySQL:', error); // 이 부분을 통해 구체적인 에러 메시지를 확인하세요.
-      res.status(500).json({ success: false, message: 'Error saving scores to MySQL', error: error.message });
-    } else {
-      console.log('Scores saved successfully:', results);
-      res.status(200).json({ success: true, message: 'Scores saved successfully' });
-    }
-  });
+    // 데이터베이스 쿼리 실행
+    connection.query(query, values, (error, results) => {
+        if (error) {
+            console.error('Error saving scores to MySQL:', error);
+            res.status(500).json({ success: false, message: 'Error saving scores to MySQL', error: error.message });
+        } else {
+            res.status(200).json({ success: true, message: 'Scores saved successfully' });
+        }
+    });
 });
 
 
