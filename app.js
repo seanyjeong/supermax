@@ -280,8 +280,18 @@ app.post('/save-duniv', (req, res) => {
     res.status(200).json({ message: 'Data inserted successfully' });
   });
 });
-app.get('/get-all-data', (req, res) => {
-    const query = 'SELECT * FROM dscores';
+// 수시 데이터 가져오기 엔드포인트
+app.get('/get-susi-data', (req, res) => {
+    const query = "SELECT * FROM dscores WHERE formType='susi' ORDER BY totalScore DESC";
+    connection.query(query, (err, results) => {
+        if (err) throw err;
+        res.json(results);
+    });
+});
+
+// 정시 데이터 가져오기 엔드포인트
+app.get('/get-jeongsi-data', (req, res) => {
+    const query = "SELECT * FROM dscores WHERE formType='jeongsi' ORDER BY totalScore DESC";
     connection.query(query, (err, results) => {
         if (err) throw err;
         res.json(results);
