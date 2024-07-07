@@ -90,9 +90,9 @@ app.post('/login', async (req, res) => {
       let location = 'Unknown';
 
       try {
-        const response = await axios.get(http://ip-api.com/json/${ip});
+        const response = await axios.get(`http://ip-api.com/json/${ip}`);
         const data = response.data;
-        location = ${data.city}, ${data.regionName}, ${data.country};
+        location = `${data.city}, ${data.regionName}, ${data.country}`;
       } catch (error) {
         console.error('Error fetching IP location:', error);
       }
@@ -103,11 +103,11 @@ app.post('/login', async (req, res) => {
       req.session.legion = user.legion;
 
       // 세션 정보를 데이터베이스에 저장
-      const insertSessionQuery = 
+      const insertSessionQuery = `
         INSERT INTO user_sessions (username, legion, ip, location)
         VALUES (?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE login_time = CURRENT_TIMESTAMP
-      ;
+      `;
       connection.query(insertSessionQuery, [user.username, user.legion, ip, location], (err, results) => {
         if (err) {
           console.error('Failed to insert session data:', err);
@@ -139,11 +139,11 @@ function authenticateToken(req, res, next) {
 app.get('/admin', authenticateToken, (req, res) => {
   const username = req.user.username;
   if (username === 'sean8320') {
-    const query = 
+    const query = `
       SELECT username, legion, ip, location, login_time
       FROM user_sessions
       WHERE login_time > DATE_SUB(NOW(), INTERVAL ${SESSION_TIMEOUT} SECOND)
-    ;
+    `;
     connection.query(query, (err, results) => {
       if (err) {
         console.error('Failed to retrieve session data:', err);
@@ -186,11 +186,11 @@ app.get('/25jeongsi', authenticateToken, (req, res) => {
 
 // '25수시' 데이터를 가져오는 엔드포인트
 app.get('/25susi', authenticateToken, (req, res) => {
-  const query = 
+  const query = `
     SELECT s.*, i.image_data
     FROM 25수시 s
     LEFT JOIN images i ON s.id = i.id
-  ;
+  `;
   connection.query(query, (err, rows) => {
     if (err) {
       console.error('Database query failed:', err);
@@ -263,13 +263,13 @@ app.post('/change-password', authenticateToken, (req, res) => {
 app.post('/save-data', (req, res) => {
   const { legion, name, school, gender, grade, collegeData, skillData } = req.body;
 
-  let query = 
-    INSERT INTO \25수시수합\ 
+  let query = `
+    INSERT INTO \`25수시수합\` 
     (legion, name, school, gender, grade, college_name, college_department, college_admission_type, college_gpa, college_grade, 
     skill1_name, skill1_record, skill1_score, skill2_name, skill2_record, skill2_score, skill3_name, skill3_record, skill3_score, 
     skill4_name, skill4_record, skill4_score, skill5_name, skill5_record, skill5_score, skill6_name, skill6_record, skill6_score) 
     VALUES ?
-  ;
+  `;
 
   let values = [];
 
@@ -302,11 +302,11 @@ app.post('/save-data', (req, res) => {
 app.post('/update-data', (req, res) => {
   const { legion, name, school, gender, skill1_record, skill1_score, skill2_record, skill2_score, skill3_record, skill3_score, skill4_record, skill4_score, skill5_record, skill5_score, skill6_record, skill6_score } = req.body;
 
-  let query = 
-    UPDATE \25수시수합\ 
+  let query = `
+    UPDATE \`25수시수합\` 
     SET skill1_record = ?, skill1_score = ?, skill2_record = ?, skill2_score = ?, skill3_record = ?, skill3_score = ?, skill4_record = ?, skill4_score = ?, skill5_record = ?, skill5_score = ?, skill6_record = ?, skill6_score = ?
     WHERE legion = ? AND name = ? AND school = ? AND gender = ?
-  ;
+  `;
 
   let values = [skill1_record, skill1_score, skill2_record, skill2_score, skill3_record, skill3_score, skill4_record, skill4_score, skill5_record, skill5_score, skill6_record, skill6_score, legion, name, school, gender];
 
