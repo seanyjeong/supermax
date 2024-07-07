@@ -318,6 +318,39 @@ app.post('/update-data', (req, res) => {
     }
   });
 });
+app.post('/save-scores', (req, res) => {
+  const {
+    name,
+    academy,
+    formType,
+    gender,
+    standingJump,
+    standingJumpScore,
+    weightedRun,
+    weightedRunScore,
+    backStrength,
+    backStrengthScore,
+    sitAndReach,
+    sitAndReachScore,
+    academicScore,
+    totalScore,
+    practicalTotal
+  } = req.body;
+
+  const query = `
+    INSERT INTO scores (name, academy, formType, gender, standingJump, standingJumpScore, weightedRun, weightedRunScore, backStrength, backStrengthScore, sitAndReach, sitAndReachScore, academicScore, totalScore, practicalTotal)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  connection.query(query, [name, academy, formType, gender, standingJump, standingJumpScore, weightedRun, weightedRunScore, backStrength, backStrengthScore, sitAndReach, sitAndReachScore, academicScore, totalScore, practicalTotal], (err, results) => {
+    if (err) {
+      console.error('Database query failed:', err);
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+    res.status(200).json({ message: 'Data inserted successfully' });
+  });
+});
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
