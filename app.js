@@ -280,6 +280,13 @@ app.post('/save-duniv', (req, res) => {
     res.status(200).json({ message: 'Data inserted successfully' });
   });
 });
+app.get('/get-all-data', (req, res) => {
+    const query = 'SELECT * FROM dscores';
+    connection.query(query, (err, results) => {
+        if (err) throw err;
+        res.json(results);
+    });
+});
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
