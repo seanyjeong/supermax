@@ -261,15 +261,15 @@ app.post('/save-duniv', (req, res) => {
   const {
     name, academy, formType, gender,
     standingJump, weightedRun, backStrength, sitAndReach,
-    academicScore, totalScore
+    academicScore, practicalTotal, totalScore // 실기총점 추가
   } = req.body;
 
   const query = `
-    INSERT INTO dscores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO dscores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, practicalTotal, totalScore)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  const values = [name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, totalScore];
+  const values = [name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, practicalTotal, totalScore];
 
   connection.query(query, values, (err, results) => {
     if (err) {
@@ -280,6 +280,7 @@ app.post('/save-duniv', (req, res) => {
     res.status(200).json({ message: 'Data inserted successfully' });
   });
 });
+
 // 수시 데이터 가져오기 엔드포인트
 app.get('/get-susi-data', (req, res) => {
     const query = "SELECT * FROM dscores WHERE formType='susi' ORDER BY totalScore DESC";
