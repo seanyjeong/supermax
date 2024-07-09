@@ -345,6 +345,21 @@ app.post('/save-ERICA-jeongsi', (req, res) => {
     });
 });
 
+//가천대 데이터 저장 엔드포잉트
+app.post('/ga-save', (req, res) => {
+    const { name, academy, formType, gender, schoolScore, strength, medicineBall, standingJump, tenMeterRun, practicalScore, totalScore } = req.body;
+
+    const query = 'INSERT INTO gachon_scores (name, academy, formType, gender, schoolScore, strength, medicineBall, standingJump, tenMeterRun, practicalScore, totalScore) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+
+    db.query(query, [name, academy, formType, gender, schoolScore, strength, medicineBall, standingJump, tenMeterRun, practicalScore, totalScore], (err, result) => {
+        if (err) {
+            console.error('Error saving data:', err);
+            return res.status(500).json({ success: false, message: 'Database error' });
+        }
+        res.status(200).json({ success: true, message: 'Data saved successfully' });
+    });
+});
+
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
