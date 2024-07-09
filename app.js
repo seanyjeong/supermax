@@ -299,6 +299,7 @@ app.get('/get-jeongsi-data', (req, res) => {
     });
 });
 
+// 수시 데이터 저장 엔드포인트에리카
 app.post('/save-ERICA-susi', (req, res) => {
     const {
         name, academy, formType, gender,
@@ -311,7 +312,7 @@ app.post('/save-ERICA-susi', (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    db.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore], (error, results) => {
+    connection.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore], (error, results) => {
         if (error) {
             console.error('Error saving data:', error);
             res.status(500).send('Internal Server Error');
@@ -321,6 +322,7 @@ app.post('/save-ERICA-susi', (req, res) => {
     });
 });
 
+// 정시 데이터 저장 엔드포인트
 app.post('/save-ERICA-jeongsi', (req, res) => {
     const {
         name, academy, formType, gender,
@@ -333,7 +335,7 @@ app.post('/save-ERICA-jeongsi', (req, res) => {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    db.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore], (error, results) => {
+    connection.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore], (error, results) => {
         if (error) {
             console.error('Error saving data:', error);
             res.status(500).send('Internal Server Error');
@@ -342,6 +344,7 @@ app.post('/save-ERICA-jeongsi', (req, res) => {
         }
     });
 });
+
 
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
