@@ -281,7 +281,7 @@ app.post('/save-duniv', (req, res) => {
   });
 });
 
-// 수시 데이터 가져오기 엔드포인트
+// 수시 데이터 가져오기 엔드포인트에리
 app.get('/get-susi-data', (req, res) => {
     const query = "SELECT * FROM dscores WHERE formType='susi' ORDER BY totalScore DESC";
     connection.query(query, (err, results) => {
@@ -299,7 +299,7 @@ app.get('/get-jeongsi-data', (req, res) => {
     });
 });
 
-// 수시 데이터 저장 엔드포인트에리카
+// 수시 데이터 저장 엔드포인트
 app.post('/save-ERICA-susi', (req, res) => {
     const {
         name, academy, formType, gender,
@@ -315,9 +315,9 @@ app.post('/save-ERICA-susi', (req, res) => {
     connection.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore], (error, results) => {
         if (error) {
             console.error('Error saving data:', error);
-            res.status(500).send('Internal Server Error');
+            res.status(500).json({ message: 'Internal Server Error' });
         } else {
-            res.status(200).send('Data saved successfully');
+            res.status(200).json({ message: 'Data saved successfully' });
         }
     });
 });
@@ -338,9 +338,9 @@ app.post('/save-ERICA-jeongsi', (req, res) => {
     connection.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore], (error, results) => {
         if (error) {
             console.error('Error saving data:', error);
-            res.status(500).send('Internal Server Error');
+            res.status(500).json({ message: 'Internal Server Error' });
         } else {
-            res.status(200).send('Data saved successfully');
+            res.status(200).json({ message: 'Data saved successfully' });
         }
     });
 });
