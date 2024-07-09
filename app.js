@@ -299,6 +299,50 @@ app.get('/get-jeongsi-data', (req, res) => {
     });
 });
 
+app.post('/save-ERICA-susi', (req, res) => {
+    const {
+        name, academy, formType, gender,
+        standingJump, medicineBall, tenMeterRun,
+        twentyFiveMeterRun, practicalScore, totalScore
+    } = req.body;
+
+    const query = `
+        INSERT INTO huniv (name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore], (error, results) => {
+        if (error) {
+            console.error('Error saving data:', error);
+            res.status(500).send('Internal Server Error');
+        } else {
+            res.status(200).send('Data saved successfully');
+        }
+    });
+});
+
+app.post('/save-ERICA-jeongsi', (req, res) => {
+    const {
+        name, academy, formType, gender,
+        standingJump, medicineBall, tenMeterRun,
+        twentyFiveMeterRun, practicalScore, totalScore, suengScore
+    } = req.body;
+
+    const query = `
+        INSERT INTO huniv (name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore], (error, results) => {
+        if (error) {
+            console.error('Error saving data:', error);
+            res.status(500).send('Internal Server Error');
+        } else {
+            res.status(200).send('Data saved successfully');
+        }
+    });
+});
+
 // 서버 시작
 server.listen(3000, '0.0.0.0', () => {
   console.log('Server running at http://0.0.0.0:3000/');
