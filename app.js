@@ -359,6 +359,38 @@ app.post('/ga-save', (req, res) => {
     res.status(200).json({ success: true, message: 'Data saved successfully' });
   });
 });
+// 데이터베이스의 각 테이블의 행 개수를 가져오는 엔드포인트
+app.get('/get-row-counts', (req, res) => {
+  const queries = [
+    'SELECT COUNT(*) AS count FROM dscores',
+    'SELECT COUNT(*) AS count FROM gachon_scores',
+    'SELECT COUNT(*) AS count FROM huniv'
+  ];
+
+  Promise.all(queries.map(query => {
+    return new Promise((resolve, reject) => {
+      connection.query(query, (err, results) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(results[0].count);
+        }
+      });
+    });
+  }))
+  .then(counts => {
+    res.status(200).json({
+      dscores_count: counts[0],
+      gachon_scores_count: counts[1],
+      huniv_count: counts[2]
+    });
+  })
+  .catch(err => {
+    console.error('Failed to retrieve row counts:', err);
+    res.status(500).json({ message: 'Failed to retrieve row counts', error: err });
+  });
+});
+
 
 
 // 서버 시작
