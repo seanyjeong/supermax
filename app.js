@@ -55,7 +55,7 @@ app.use(session({
 
 // CORS 설정
 app.use(cors({
-  origin: ['https://supermax.co.kr','https://seanyjeong.github.io','https://chejump.com'],
+  origin: ['https://supermax.co.kr','https://seanyjeong.github.io','https://chejump.com','https://score.ilsanmax.com'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
