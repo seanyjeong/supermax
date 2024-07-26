@@ -344,28 +344,7 @@ app.get('/get-row-counts', (req, res) => {
   });
 });
 
-// 구글 스프레드시트 API 설정
-const SPREADSHEET_ID = '15VB99hsmTGzZMCWulwdPZeQFCq58xm9xg-Lgmx2Rpm4';
-const RANGE = 'jj!A4:N74';
-const auth = new google.auth.GoogleAuth({
-  keyFile: './supermax/summer-marker-406313-b6a094674f0e.json', // JSON 키 파일 경로
-  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-});
 
-app.get('/data', async (req, res) => {
-  try {
-    const client = await auth.getClient();
-    const sheets = google.sheets({ version: 'v4', auth: client });
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: RANGE,
-    });
-
-    res.json(response.data.values); // JSON 데이터 반환
-  } catch (error) {
-    res.status(500).send('Error retrieving data');
-  }
-});
 
 
 
