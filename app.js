@@ -1,10 +1,11 @@
-const express = require('express');
-const { google } = require('googleapis'); // 추가된 부분
-const cors = require('cors');
+const http = require('http');
+const fs = require('fs');
 const mysql = require('mysql');
+const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
 const requestIp = require('request-ip');
 const axios = require('axios');
 
@@ -65,6 +66,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(requestIp.mw({ attributeName: 'clientIp' }));
 
+// HTTP 서버를 생성합니다.
+const server = http.createServer(app);
+
 // 구글 스프레드시트 API 설정
 const SPREADSHEET_ID = '15VB99hsmTGzZMCWulwdPZeQFCq58xm9xg-Lgmx2Rpm4';
 const RANGE = 'jj!A4:N74';
@@ -88,7 +92,6 @@ app.get('/data', async (req, res) => {
   }
 });
 
-
 // 로그인 엔드포인트
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -110,9 +113,9 @@ app.post('/login', async (req, res) => {
       let location = 'Unknown';
 
       try {
-        const response = await axios.get(`http://ip-api.com/json/${ip}`);
+        const response = await axios.get(http://ip-api.com/json/${ip});
         const data = response.data;
-        location = `${data.city}, ${data.regionName}, ${data.country}`;
+        location = ${data.city}, ${data.regionName}, ${data.country};
       } catch (error) {
         console.error('Error fetching IP location:', error);
       }
@@ -123,11 +126,11 @@ app.post('/login', async (req, res) => {
       req.session.legion = user.legion;
 
       // 세션 정보를 데이터베이스에 저장
-      const insertSessionQuery = `
+      const insertSessionQuery = 
         INSERT INTO user_sessions (username, legion, ip, location)
         VALUES (?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE login_time = CURRENT_TIMESTAMP
-      `;
+      ;
       connection.query(insertSessionQuery, [user.username, user.legion, ip, location], (err, results) => {
         if (err) {
           console.error('Failed to insert session data:', err);
@@ -159,11 +162,11 @@ function authenticateToken(req, res, next) {
 app.get('/admin', authenticateToken, (req, res) => {
   const username = req.user.username;
   if (username === 'sean8320') {
-    const query = `
+    const query = 
       SELECT username, legion, ip, location, login_time
       FROM user_sessions
       WHERE login_time > DATE_SUB(NOW(), INTERVAL ${SESSION_TIMEOUT} SECOND)
-    `;
+    ;
     connection.query(query, (err, results) => {
       if (err) {
         console.error('Failed to retrieve session data:', err);
@@ -206,11 +209,11 @@ app.get('/25jeongsi', authenticateToken, (req, res) => {
 
 // '25수시' 데이터를 가져오는 엔드포인트
 app.get('/25susi', authenticateToken, (req, res) => {
-  const query = `
+  const query = 
     SELECT s.*, i.image_data
     FROM 25수시 s
     LEFT JOIN images i ON s.id = i.id
-  `;
+  ;
   connection.query(query, (err, rows) => {
     if (err) {
       console.error('Database query failed:', err);
@@ -284,10 +287,10 @@ app.post('/save-duniv', (req, res) => {
     academicScore, practicalTotal, totalScore // 실기총점 추가
   } = req.body;
 
-  const query = `
+  const query = 
     INSERT INTO dscores (name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, practicalTotal, totalScore)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
+  ;
 
   const values = [name, academy, formType, gender, standingJump, weightedRun, backStrength, sitAndReach, academicScore, practicalTotal, totalScore];
 
@@ -327,10 +330,10 @@ app.post('/save-ERICA-susi', (req, res) => {
         twentyFiveMeterRun, practicalScore, totalScore
     } = req.body;
 
-    const query = `
+    const query = 
         INSERT INTO huniv (name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    ;
 
     connection.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore], (error, results) => {
         if (error) {
@@ -350,10 +353,10 @@ app.post('/save-ERICA-jeongsi', (req, res) => {
         twentyFiveMeterRun, practicalScore, totalScore, suengScore
     } = req.body;
 
-    const query = `
+    const query = 
         INSERT INTO huniv (name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+    ;
 
     connection.query(query, [name, academy, formType, gender, standingJump, medicineBall, tenMeterRun, twentyFiveMeterRun, practicalScore, totalScore, suengScore], (error, results) => {
         if (error) {
