@@ -1,5 +1,5 @@
 const express = require('express');
-const { google } = require('googleapis');
+const { google } = require('googleapis'); // 추가된 부분
 const cors = require('cors');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
@@ -9,10 +9,10 @@ const requestIp = require('request-ip');
 const axios = require('axios');
 
 const app = express();
-const jwtSecret = 'your_jwt_secret';
-const SESSION_TIMEOUT = 3600;
+const jwtSecret = 'your_jwt_secret'; // JWT 비밀키 설정
+const SESSION_TIMEOUT = 3600; // 세션 타임아웃을 1시간(3600초)으로 설정
 
-// 데이터베이스 연결 설정
+// 데이터베이스 연결을 설정합니다.
 const db_config = {
   host: '211.37.174.218',
   user: 'maxilsan',
@@ -25,6 +25,7 @@ let connection;
 
 function handleDisconnect() {
   connection = mysql.createConnection(db_config);
+
   connection.connect(function (err) {
     if (err) {
       console.log('error when connecting to db:', err);
@@ -33,6 +34,7 @@ function handleDisconnect() {
   });
 
   connection.on('error', function (err) {
+    console.log('db error', err);
     if (err.code === 'PROTOCOL_CONNECTION_LOST') {
       handleDisconnect();
     } else {
@@ -48,7 +50,7 @@ app.use(session({
   secret: 'your_secret_key',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false, sameSite: 'None', maxAge: SESSION_TIMEOUT * 1000 }
+  cookie: { secure: false, sameSite: 'None', maxAge: SESSION_TIMEOUT * 1000 } // 쿠키 설정 조정
 }));
 
 // CORS 설정
@@ -67,7 +69,7 @@ app.use(requestIp.mw({ attributeName: 'clientIp' }));
 const SPREADSHEET_ID = '15VB99hsmTGzZMCWulwdPZeQFCq58xm9xg-Lgmx2Rpm4';
 const RANGE = 'jj!A4:N74';
 const auth = new google.auth.GoogleAuth({
-  keyFile: './supermax/summer-marker-406313-b6a094674f0e.json',
+  keyFile: './supermax/summer-marker-406313-b6a094674f0e.json', // JSON 키 파일 경로
   scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
 });
 
@@ -80,7 +82,7 @@ app.get('/data', async (req, res) => {
       range: RANGE,
     });
 
-    res.json(response.data.values);
+    res.json(response.data.values); // JSON 데이터 반환
   } catch (error) {
     res.status(500).send('Error retrieving data');
   }
