@@ -1,11 +1,10 @@
-const http = require('http');
-const fs = require('fs');
-const mysql = require('mysql');
 const express = require('express');
+const { google } = require('googleapis'); // 추가된 부분
+const cors = require('cors');
+const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const jwt = require('jsonwebtoken');
-const cors = require('cors');
 const requestIp = require('request-ip');
 const axios = require('axios');
 
@@ -66,10 +65,28 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(requestIp.mw({ attributeName: 'clientIp' }));
 
-// HTTP 서버를 생성합니다.
-const server = http.createServer(app);
+// 구글 스프레드시트 API 설정
+const SPREADSHEET_ID = '15VB99hsmTGzZMCWulwdPZeQFCq58xm9xg-Lgmx2Rpm4';
+const RANGE = 'jj!A4:N74';
+const auth = new google.auth.GoogleAuth({
+  keyFile: './supermax/summer-marker-406313-b6a094674f0e.json', // JSON 키 파일 경로
+  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+});
 
+app.get('/data', async (req, res) => {
+  try {
+    const client = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: client });
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: RANGE,
+    });
 
+    res.json(response.data.values); // JSON 데이터 반환
+  } catch (error) {
+    res.status(500).send('Error retrieving data');
+  }
+});
 
 // 로그인 엔드포인트
 app.post('/login', async (req, res) => {
