@@ -461,6 +461,46 @@ app.get('/preparatoryTop50', (req, res) => {
     res.status(200).json(results);
   });
 });
+// 제멀 남여 사우이 50명 데이터 가져오는 엔드포인트
+app.get('/longjump/top50', (req, res) => {
+  const maleQuery = `
+    SELECT exam_number, location, name, grade, longjump_record 
+    FROM participants 
+    WHERE gender = '남'
+    ORDER BY longjump_record DESC 
+    LIMIT 50;
+  `;
+
+  const femaleQuery = `
+    SELECT exam_number, location, name, grade, longjump_record 
+    FROM participants 
+    WHERE gender = '여'
+    ORDER BY longjump_record DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(maleQuery, (err, maleResults) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (남자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
+      return;
+    }
+
+    connection.query(femaleQuery, (err, femaleResults) => {
+      if (err) {
+        console.error('데이터 가져오기 오류 (여자):', err);
+        res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
+        return;
+      }
+
+      res.status(200).json({
+        male: maleResults,
+        female: femaleResults
+      });
+    });
+  });
+});
+
 
 
 
