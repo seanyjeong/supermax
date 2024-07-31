@@ -539,6 +539,83 @@ app.get('/tenMeterShuttle/femaleTop50', (req, res) => {
   });
 });
 
+//메디신
+app.get('/medicineBall/maleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, medicine_ball_record 
+    FROM participants 
+    WHERE gender = '남' AND medicine_ball_record > 0
+    ORDER BY medicine_ball_record DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (남자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+app.get('/medicineBall/femaleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, medicine_ball_record 
+    FROM participants 
+    WHERE gender = '여' AND medicine_ball_record > 0
+    ORDER BY medicine_ball_record DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (여자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+
+//배근력
+app.get('/backStrength/maleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, back_strength_record 
+    FROM participants 
+    WHERE gender = '남' AND back_strength_record > 0
+    ORDER BY back_strength_record DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (남자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+app.get('/backStrength/femaleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, back_strength_record 
+    FROM participants 
+    WHERE gender = '여' AND back_strength_record > 0
+    ORDER BY back_strength_record DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (여자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+
+
 
 
 
