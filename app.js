@@ -347,6 +347,61 @@ app.get('/get-row-counts', (req, res) => {
 });
 // 기존 코드 생략...
 
+// updateScores 함수 정의
+async function updateScores() {
+  console.log('updateScores function started');
+  try {
+    const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
+    console.log('Data fetched from Google Apps Script');
+    const data = response.data;
+
+    const query = `
+      INSERT INTO participants (
+        exam_number, location, name, gender, grade, 
+        longjump_record, longjump_score, shuttle_record, shuttle_score,
+        medicine_ball_record, medicine_ball_score, back_strength_record,
+        back_strength_score, total_score
+      ) VALUES ? 
+      ON DUPLICATE KEY UPDATE 
+        location = VALUES(location),
+        name = VALUES(name),
+        gender = VALUES(gender),
+        grade = VALUES(grade),
+        longjump_record = VALUES(longjump_record),
+        longjump_score = VALUES(longjump_score),
+        shuttle_record = VALUES(shuttle_record),
+        shuttle_score = VALUES(shuttle_score),
+        medicine_ball_record = VALUES(medicine_ball_record),
+        medicine_ball_score = VALUES(medicine_ball_score),
+        back_strength_record = VALUES(back_strength_record),
+        back_strength_score = VALUES(back_strength_score),
+        total_score = VALUES(total_score)
+    `;
+
+    const values = data.map(row => [
+      row.exam_number, row.location, row.name, row.gender, row.grade,
+      row.longjump_record, row.longjump_score, row.shuttle_record, row.shuttle_score,
+      row.medicine_ball_record, row.medicine_ball_score, row.back_strength_record,
+      row.back_strength_score, row.total_score
+    ]);
+
+    connection.query(query, [values], (err, results) => {
+      if (err) {
+        console.error('Error updating scores:', err);
+      } else {
+        console.log('Scores updated successfully');
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching data from Google Sheets:', error);
+  }
+}
+
+// 서버 시작 시 updateScores 즉시 실행
+updateScores();
+
+// 서버 시작 시 1분마다 updateScores 함수 실행
+setInterval(updateScores, 60 * 1000);
 
 
 // MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
@@ -375,6 +430,8 @@ app.get('/update-scores', async (req, res) => {
         res.status(500).send('Failed to update scores');
     }
 });
+
+
 
 
 
