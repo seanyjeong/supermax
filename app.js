@@ -480,12 +480,13 @@ app.get('/longjump/maleTop50', (req, res) => {
     res.status(200).json(results);
   });
 });
+
 app.get('/longjump/femaleTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, grade, longjump_record 
     FROM participants 
     WHERE gender = '여'
-    ORDERBY longjump_record DESC 
+    ORDER BY longjump_record DESC 
     LIMIT 50;
   `;
 
@@ -498,6 +499,7 @@ app.get('/longjump/femaleTop50', (req, res) => {
     res.status(200).json(results);
   });
 });
+
 
 
 
