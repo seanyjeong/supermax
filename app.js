@@ -425,31 +425,22 @@ setInterval(updateScores, 60 * 1000);
 
 
 
-// MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
-app.get('/topmax20', async (req, res) => {
+app.get('/top50', (req, res) => {
   const query = `
-    SELECT exam_number, location, name, gender, grade, total_score
-    FROM participants
-    ORDER BY total_score DESC
-    LIMIT 20
+    SELECT exam_number, location, name, gender, grade, total_score 
+    FROM participants 
+    ORDER BY total_score DESC 
+    LIMIT 50;
   `;
 
   connection.query(query, (err, results) => {
     if (err) {
-      console.error('Database query failed:', err);
-      return res.status(500).json({ success: false, message: 'Database query failed' });
+      console.error('데이터 가져오기 오류:', err);
+      res.status(500).json({ message: '데이터 가져오기 오류', error: err });
+      return;
     }
     res.status(200).json(results);
   });
-});
-
-app.get('/update-scores', async (req, res) => {
-    try {
-        await updateScores();
-        res.status(200).send('Scores updated successfully');
-    } catch (error) {
-        res.status(500).send('Failed to update scores');
-    }
 });
 
 
