@@ -503,10 +503,10 @@ app.get('/longjump/femaleTop50', (req, res) => {
 app.get('/tenMeterShuttle/maleTop50', (req, res) => {
   console.log('Fetching male top 50 shuttle run data');
   const query = `
-    SELECT exam_number, location, name, grade, ten_meter_shuttle_record 
+    SELECT exam_number, location, name, grade, shuttle_record 
     FROM participants 
     WHERE gender = '남'
-    ORDER BY ten_meter_shuttle_record ASC 
+    ORDER BY shuttle_record ASC 
     LIMIT 50;
   `;
 
@@ -524,10 +524,10 @@ app.get('/tenMeterShuttle/maleTop50', (req, res) => {
 app.get('/tenMeterShuttle/femaleTop50', (req, res) => {
   console.log('Fetching female top 50 shuttle run data');
   const query = `
-    SELECT exam_number, location, name, grade, ten_meter_shuttle_record 
+    SELECT exam_number, location, name, grade, shuttle_record 
     FROM participants 
     WHERE gender = '여'
-    ORDER BY ten_meter_shuttle_record ASC 
+    ORDER BY shuttle_record ASC 
     LIMIT 50;
   `;
 
