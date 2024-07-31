@@ -379,12 +379,31 @@ async function updateScores() {
         total_score = VALUES(total_score)
     `;
 
-    const values = data.map(row => [
-      row.exam_number, row.location, row.name, row.gender, row.grade,
-      row.longjump_record, row.longjump_score, row.shuttle_record, row.shuttle_score,
-      row.medicine_ball_record, row.medicine_ball_score, row.back_strength_record,
-      row.back_strength_score, row.total_score
-    ]);
+const values = data.map(row => [
+  row.exam_number,
+  row.location,
+  row.name,
+  row.gender,
+  row.grade,
+  row.longjump_record === '결시' ? null : parseFloat(row.longjump_record) || 0,
+  row.longjump_score,
+  row.shuttle_record === '결시' ? null : parseFloat(row.shuttle_record) || 0,
+  row.shuttle_score,
+  row.medicine_ball_record === '결시' ? null : parseFloat(row.medicine_ball_record) || 0,
+  row.medicine_ball_score,
+  row.back_strength_record === '결시' ? null : parseFloat(row.back_strength_record) || 0,
+  row.back_strength_score,
+  row.total_score
+]);
+
+connection.query(query, [values], (err, results) => {
+  if (err) {
+    console.error('Error updating scores:', err);
+  } else {
+    console.log('Scores updated successfully');
+  }
+});
+
 
     connection.query(query, [values], (err, results) => {
       if (err) {
