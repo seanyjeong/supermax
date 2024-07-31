@@ -383,7 +383,7 @@ async function updateScores() {
       row.exam_number,
       row.location,
       row.name,
-      row.gender,
+      row.gender === '남' || row.gender === '여' ? row.gender : '남', // 잘못된 gender 값을 처리
       row.grade,
       row.longjump_record === '결시' ? null : parseFloat(row.longjump_record) || 0,
       row.longjump_score === '' ? 0 : parseFloat(row.longjump_score) || 0,
