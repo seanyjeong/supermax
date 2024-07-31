@@ -355,6 +355,7 @@ async function updateScores() {
     console.log('Data fetched from Google Apps Script');
     const data = response.data;
 
+    // 변수 이름을 query로 수정
     const query = `
       INSERT INTO participants (
         exam_number, location, name, gender, grade, 
@@ -385,16 +386,13 @@ async function updateScores() {
       row.back_strength_score, row.total_score
     ]);
 
-connection.query(insertQuery, [values], (err, results) => {
-  if (err) {
-    console.error('SQL 쿼리 오류:', err);
-    console.error('실행된 SQL 쿼리:', insertQuery);
-    console.error('전달된 값:', values);
-  } else {
-    console.log('데이터가 성공적으로 업데이트되었습니다:', results.affectedRows);
-  }
-});
-
+    connection.query(query, [values], (err, results) => {
+      if (err) {
+        console.error('Error updating scores:', err);
+      } else {
+        console.log('Scores updated successfully');
+      }
+    });
   } catch (error) {
     console.error('Error fetching data from Google Sheets:', error);
   }
@@ -405,6 +403,7 @@ updateScores();
 
 // 서버 시작 시 1분마다 updateScores 함수 실행
 setInterval(updateScores, 60 * 1000);
+
 
 
 // MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
