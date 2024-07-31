@@ -347,7 +347,7 @@ app.get('/get-row-counts', (req, res) => {
 });
 async function updateScores() {
   try {
-    const response = await axios.get('https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec');
+    const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
     const data = response.data;
 
     console.log('Data fetched:', data);  // 데이터가 제대로 가져오는지 확인
