@@ -385,13 +385,16 @@ async function updateScores() {
       row.back_strength_score, row.total_score
     ]);
 
-    connection.query(query, [values], (err, results) => {
-      if (err) {
-        console.error('Error updating scores:', err);
-      } else {
-        console.log('Scores updated successfully');
-      }
-    });
+connection.query(insertQuery, [values], (err, results) => {
+  if (err) {
+    console.error('SQL 쿼리 오류:', err);
+    console.error('실행된 SQL 쿼리:', insertQuery);
+    console.error('전달된 값:', values);
+  } else {
+    console.log('데이터가 성공적으로 업데이트되었습니다:', results.affectedRows);
+  }
+});
+
   } catch (error) {
     console.error('Error fetching data from Google Sheets:', error);
   }
