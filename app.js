@@ -442,6 +442,25 @@ app.get('/top50', (req, res) => {
     res.status(200).json(results);
   });
 });
+// 예비반 상위 50명 데이터를 가져오는 엔드포인트
+app.get('/preparatoryTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, gender, grade, total_score 
+    FROM participants 
+    WHERE grade IN (1, 2)
+    ORDER BY total_score DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류:', err);
+      res.status(500).json({ message: '데이터 가져오기 오류', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
 
 
 
