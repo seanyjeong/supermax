@@ -429,6 +429,7 @@ app.get('/top50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, gender, grade, total_score 
     FROM participants 
+    WHERE total_score > 0
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
@@ -447,7 +448,7 @@ app.get('/preparatoryTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, gender, grade, total_score 
     FROM participants 
-    WHERE grade IN ('1', '2')
+    WHERE grade IN ('1', '2') AND total_score > 0
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
