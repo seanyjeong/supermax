@@ -347,11 +347,11 @@ app.get('/get-row-counts', (req, res) => {
 });
 async function updateScores() {
   try {
-    // Google Apps Script 웹 앱에서 데이터 가져오기
-    const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
+    const response = await axios.get('https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec');
     const data = response.data;
 
-    // 데이터베이스 삽입 또는 업데이트 쿼리
+    console.log('Data fetched:', data);  // 데이터가 제대로 가져오는지 확인
+
     const query = `
       INSERT INTO participants (
         exam_number, location, name, gender, grade, 
@@ -375,7 +375,6 @@ async function updateScores() {
         total_score = VALUES(total_score)
     `;
 
-    // 데이터를 배열로 변환하여 MySQL에 삽입
     const values = data.map(row => [
       row.exam_number, row.location, row.name, row.gender, row.grade,
       row.longjump_record, row.longjump_score, row.shuttle_record, row.shuttle_score,
@@ -383,11 +382,13 @@ async function updateScores() {
       row.back_strength_score, row.total_score
     ]);
 
+    console.log('Values to insert/update:', values);  // 삽입/업데이트할 데이터 확인
+
     connection.query(query, [values], (err, results) => {
       if (err) {
-        console.error('Error updating scores:', err);
+        console.error('Error updating scores:', err);  // 에러 로그 출력
       } else {
-        console.log('Scores updated successfully');
+        console.log('Scores updated successfully:', results);
       }
     });
   } catch (error) {
@@ -395,7 +396,6 @@ async function updateScores() {
   }
 }
 
-// 서버 시작 시 1분마다 updateScores 함수 실행
 setInterval(updateScores, 60 * 1000); // 1분마다 실행
 // MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
 app.get('/topmax20', async (req, res) => {
