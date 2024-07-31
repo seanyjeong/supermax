@@ -447,7 +447,7 @@ app.get('/preparatoryTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, gender, grade, total_score 
     FROM participants 
-    WHERE grade IN (1, 2)
+    WHERE grade IN ('1', '2')
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
