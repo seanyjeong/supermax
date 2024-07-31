@@ -428,6 +428,15 @@ app.get('/topmax20', async (req, res) => {
   });
 });
 
+app.get('/update-scores', async (req, res) => {
+    try {
+        await updateScores();
+        res.status(200).send('Scores updated successfully');
+    } catch (error) {
+        res.status(500).send('Failed to update scores');
+    }
+});
+
 
 
 
