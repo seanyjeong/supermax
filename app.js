@@ -379,22 +379,22 @@ async function updateScores() {
         total_score = VALUES(total_score)
     `;
 
-const values = data.map(row => [
-  row.exam_number,
-  row.location,
-  row.name,
-  row.gender,
-  row.grade,
-  row.longjump_record === '결시' ? null : parseFloat(row.longjump_record) || 0,
-  row.longjump_score,
-  row.shuttle_record === '결시' ? null : parseFloat(row.shuttle_record) || 0,
-  row.shuttle_score,
-  row.medicine_ball_record === '결시' ? null : parseFloat(row.medicine_ball_record) || 0,
-  row.medicine_ball_score,
-  row.back_strength_record === '결시' ? null : parseFloat(row.back_strength_record) || 0,
-  row.back_strength_score,
-  row.total_score
-]);
+    const values = data.map(row => [
+      row.exam_number,
+      row.location,
+      row.name,
+      row.gender,
+      row.grade,
+      row.longjump_record === '결시' ? null : parseFloat(row.longjump_record) || 0,
+      row.longjump_score === '' ? 0 : parseFloat(row.longjump_score) || 0,
+      row.shuttle_record === '결시' ? null : parseFloat(row.shuttle_record) || 0,
+      row.shuttle_score === '' ? 0 : parseFloat(row.shuttle_score) || 0,
+      row.medicine_ball_record === '결시' ? null : parseFloat(row.medicine_ball_record) || 0,
+      row.medicine_ball_score === '' ? 0 : parseFloat(row.medicine_ball_score) || 0,
+      row.back_strength_record === '결시' ? null : parseFloat(row.back_strength_record) || 0,
+      row.back_strength_score === '' ? 0 : parseFloat(row.back_strength_score) || 0,
+      row.total_score === '' ? 0 : parseFloat(row.total_score) || 0
+    ]);
 
 connection.query(query, [values], (err, results) => {
   if (err) {
