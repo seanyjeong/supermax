@@ -347,22 +347,20 @@ app.get('/get-row-counts', (req, res) => {
 });
 // 기존 코드 생략...
 
-// updateScores 함수 정의
-async function updateScores() {
-  console.log('updateScores function started');
+// Google Sheets 웹 앱에서 데이터를 가져와 데이터베이스에 업데이트하는 함수
+async function updateParticipantsData() {
   try {
     const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
-    console.log('Data fetched from Google Apps Script');
     const data = response.data;
 
-    const query = `
+    const insertQuery = `
       INSERT INTO participants (
-        exam_number, location, name, gender, grade, 
+        exam_number, location, name, gender, grade,
         longjump_record, longjump_score, shuttle_record, shuttle_score,
         medicine_ball_record, medicine_ball_score, back_strength_record,
         back_strength_score, total_score
-      ) VALUES ? 
-      ON DUPLICATE KEY UPDATE 
+      ) VALUES ?
+      ON DUPLICATE KEY UPDATE
         location = VALUES(location),
         name = VALUES(name),
         gender = VALUES(gender),
@@ -385,29 +383,20 @@ async function updateScores() {
       row.back_strength_score, row.total_score
     ]);
 
-    connection.query(query, [values], (err, results) => {
+    connection.query(insertQuery, [values], (err, results) => {
       if (err) {
-        console.error('Error updating scores:', err);
+        console.error('데이터 삽입 오류:', err);
       } else {
-        console.log('Scores updated successfully');
+        console.log('데이터가 성공적으로 업데이트되었습니다:', results.affectedRows);
       }
     });
   } catch (error) {
-    console.error('Error fetching data from Google Sheets:', error);
+    console.error('데이터 가져오기 오류:', error);
   }
 }
 
-// 서버 시작 시 updateScores 즉시 실행
-updateScores();
-
-// 서버 시작 시 1분마다 updateScores 함수 실행
-setInterval(updateScores, 60 * 1000);
-
-// 서버 시작
-server.listen(3000, '0.0.0.0', () => {
-  console.log('Server running at http://0.0.0.0:3000/');
-});
-
+// 데이터를 1분마다 업데이트하도록 스케줄 설정
+cron.schedule('* * * * *', updateParticipantsData);
 
 
 // MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
