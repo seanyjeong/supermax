@@ -345,15 +345,16 @@ app.get('/get-row-counts', (req, res) => {
     res.status(500).json({ message: 'Failed to retrieve row counts', error: err });
   });
 });
+// 기존 코드 생략...
+
+// updateScores 함수 정의
 async function updateScores() {
-  console.log('updateScores function started'); // 함수 시작 시 로그
+  console.log('updateScores function started');
   try {
-    // Google Apps Script 웹 앱에서 데이터 가져오기
     const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
-    console.log('Data fetched from Google Apps Script'); // 데이터 가져오기 성공 시 로그
+    console.log('Data fetched from Google Apps Script');
     const data = response.data;
 
-    // 데이터베이스 삽입 또는 업데이트 쿼리
     const query = `
       INSERT INTO participants (
         exam_number, location, name, gender, grade, 
@@ -376,8 +377,7 @@ async function updateScores() {
         back_strength_score = VALUES(back_strength_score),
         total_score = VALUES(total_score)
     `;
-    
-    // 데이터를 배열로 변환하여 MySQL에 삽입
+
     const values = data.map(row => [
       row.exam_number, row.location, row.name, row.gender, row.grade,
       row.longjump_record, row.longjump_score, row.shuttle_record, row.shuttle_score,
@@ -387,18 +387,27 @@ async function updateScores() {
 
     connection.query(query, [values], (err, results) => {
       if (err) {
-        console.error('Error updating scores:', err); // 오류 발생 시 로그
+        console.error('Error updating scores:', err);
       } else {
-        console.log('Scores updated successfully'); // 성공 시 로그
+        console.log('Scores updated successfully');
       }
     });
   } catch (error) {
-    console.error('Error fetching data from Google Sheets:', error); // 데이터 가져오기 오류 시 로그
+    console.error('Error fetching data from Google Sheets:', error);
   }
 }
 
+// 서버 시작 시 updateScores 즉시 실행
+updateScores();
 
-setInterval(updateScores, 60 * 1000); // 1분마다 실행
+// 서버 시작 시 1분마다 updateScores 함수 실행
+setInterval(updateScores, 60 * 1000);
+
+// 서버 시작
+server.listen(3000, '0.0.0.0', () => {
+  console.log('Server running at http://0.0.0.0:3000/');
+});
+
 
 
 // MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
