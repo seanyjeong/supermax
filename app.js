@@ -499,8 +499,9 @@ app.get('/longjump/femaleTop50', (req, res) => {
     res.status(200).json(results);
   });
 });
-
+//10미
 app.get('/tenMeterShuttle/maleTop50', (req, res) => {
+  console.log('Fetching male top 50 shuttle run data');
   const query = `
     SELECT exam_number, location, name, grade, ten_meter_shuttle_record 
     FROM participants 
@@ -515,10 +516,13 @@ app.get('/tenMeterShuttle/maleTop50', (req, res) => {
       res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
       return;
     }
+    console.log('Data fetched for male:', results);
     res.status(200).json(results);
   });
 });
+
 app.get('/tenMeterShuttle/femaleTop50', (req, res) => {
+  console.log('Fetching female top 50 shuttle run data');
   const query = `
     SELECT exam_number, location, name, grade, ten_meter_shuttle_record 
     FROM participants 
@@ -533,6 +537,7 @@ app.get('/tenMeterShuttle/femaleTop50', (req, res) => {
       res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
       return;
     }
+    console.log('Data fetched for female:', results);
     res.status(200).json(results);
   });
 });
