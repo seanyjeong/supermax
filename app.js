@@ -462,8 +462,8 @@ app.get('/preparatoryTop50', (req, res) => {
   });
 });
 // 제멀 남여 사우이 50명 데이터 가져오는 엔드포인트
-app.get('/longjump/top50', (req, res) => {
-  const maleQuery = `
+app.get('/longjump/maleTop50', (req, res) => {
+  const query = `
     SELECT exam_number, location, name, grade, longjump_record 
     FROM participants 
     WHERE gender = '남'
@@ -471,33 +471,31 @@ app.get('/longjump/top50', (req, res) => {
     LIMIT 50;
   `;
 
-  const femaleQuery = `
-    SELECT exam_number, location, name, grade, longjump_record 
-    FROM participants 
-    WHERE gender = '여'
-    ORDER BY longjump_record DESC 
-    LIMIT 50;
-  `;
-
-  connection.query(maleQuery, (err, maleResults) => {
+  connection.query(query, (err, results) => {
     if (err) {
       console.error('데이터 가져오기 오류 (남자):', err);
       res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
       return;
     }
+    res.status(200).json(results);
+  });
+});
+app.get('/longjump/femaleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, longjump_record 
+    FROM participants 
+    WHERE gender = '여'
+    ORDERBY longjump_record DESC 
+    LIMIT 50;
+  `;
 
-    connection.query(femaleQuery, (err, femaleResults) => {
-      if (err) {
-        console.error('데이터 가져오기 오류 (여자):', err);
-        res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
-        return;
-      }
-
-      res.status(200).json({
-        male: maleResults,
-        female: femaleResults
-      });
-    });
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (여자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
   });
 });
 
