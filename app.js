@@ -500,6 +500,44 @@ app.get('/longjump/femaleTop50', (req, res) => {
   });
 });
 
+app.get('/tenMeterShuttle/maleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, ten_meter_shuttle_record 
+    FROM participants 
+    WHERE gender = '남'
+    ORDER BY ten_meter_shuttle_record ASC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (남자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+app.get('/tenMeterShuttle/femaleTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, ten_meter_shuttle_record 
+    FROM participants 
+    WHERE gender = '여'
+    ORDER BY ten_meter_shuttle_record ASC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (여자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+
+
 
 
 
