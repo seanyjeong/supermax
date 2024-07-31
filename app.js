@@ -397,6 +397,24 @@ async function updateScores() {
 
 // 서버 시작 시 1분마다 updateScores 함수 실행
 setInterval(updateScores, 60 * 1000); // 1분마다 실행
+// MySQL에서 TOPMAX 20 데이터를 가져오는 엔드포인트
+app.get('/topmax20', async (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, gender, grade, total_score
+    FROM participants
+    ORDER BY total_score DESC
+    LIMIT 20
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('Database query failed:', err);
+      return res.status(500).json({ success: false, message: 'Database query failed' });
+    }
+    res.status(200).json(results);
+  });
+});
+
 
 
 
