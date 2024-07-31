@@ -147,58 +147,6 @@ app.post('/logout', authenticateToken, (req, res) => {
   });
 });
 
-// Google Sheets 데이터를 MySQL에 저장하는 엔드포인트
-app.get('/update-scores', async (req, res) => {
-  try {
-    // Google Apps Script 웹 앱에서 데이터 가져오기
-    const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
-    const data = response.data;
-
-    // 데이터베이스 삽입 또는 업데이트 쿼리
-    const query = `
-      INSERT INTO participants (
-        exam_number, location, name, gender, grade, 
-        longjump_record, longjump_score, shuttle_record, shuttle_score,
-        medicine_ball_record, medicine_ball_score, back_strength_record,
-        back_strength_score, total_score
-      ) VALUES ? 
-      ON DUPLICATE KEY UPDATE 
-        location = VALUES(location),
-        name = VALUES(name),
-        gender = VALUES(gender),
-        grade = VALUES(grade),
-        longjump_record = VALUES(longjump_record),
-        longjump_score = VALUES(longjump_score),
-        shuttle_record = VALUES(shuttle_record),
-        shuttle_score = VALUES(shuttle_score),
-        medicine_ball_record = VALUES(medicine_ball_record),
-        medicine_ball_score = VALUES(medicine_ball_score),
-        back_strength_record = VALUES(back_strength_record),
-        back_strength_score = VALUES(back_strength_score),
-        total_score = VALUES(total_score)
-    `;
-
-    // 데이터를 배열로 변환하여 MySQL에 삽입
-    const values = data.map(row => [
-      row.exam_number, row.location, row.name, row.gender, row.grade,
-      row.longjump_record, row.longjump_score, row.shuttle_record, row.shuttle_score,
-      row.medicine_ball_record, row.medicine_ball_score, row.back_strength_record,
-      row.back_strength_score, row.total_score
-    ]);
-
-    connection.query(query, [values], (err, results) => {
-      if (err) {
-        console.error('Error updating scores:', err);
-        res.status(500).json({ success: false, message: 'Failed to update scores' });
-      } else {
-        res.status(200).json({ success: true, message: 'Scores updated successfully' });
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching data from Google Sheets:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch data from Google Sheets' });
-  }
-});
 
 // '25정시' 데이터를 가져오는 엔드포인트
 app.get('/25jeongsi', authenticateToken, (req, res) => {
@@ -397,6 +345,58 @@ app.get('/get-row-counts', (req, res) => {
     res.status(500).json({ message: 'Failed to retrieve row counts', error: err });
   });
 });
+async function updateScores() {
+  try {
+    // Google Apps Script 웹 앱에서 데이터 가져오기
+    const response = await axios.get('https://script.google.com/macros/s/AKfycbwIhwAWuAXQ04XjMdUem7PllWsS-lj1jenbwTWEuIQO6-7AWtdqnVDmDKIG8rjN4V0Gcg/exec');
+    const data = response.data;
+
+    // 데이터베이스 삽입 또는 업데이트 쿼리
+    const query = `
+      INSERT INTO participants (
+        exam_number, location, name, gender, grade, 
+        longjump_record, longjump_score, shuttle_record, shuttle_score,
+        medicine_ball_record, medicine_ball_score, back_strength_record,
+        back_strength_score, total_score
+      ) VALUES ? 
+      ON DUPLICATE KEY UPDATE 
+        location = VALUES(location),
+        name = VALUES(name),
+        gender = VALUES(gender),
+        grade = VALUES(grade),
+        longjump_record = VALUES(longjump_record),
+        longjump_score = VALUES(longjump_score),
+        shuttle_record = VALUES(shuttle_record),
+        shuttle_score = VALUES(shuttle_score),
+        medicine_ball_record = VALUES(medicine_ball_record),
+        medicine_ball_score = VALUES(medicine_ball_score),
+        back_strength_record = VALUES(back_strength_record),
+        back_strength_score = VALUES(back_strength_score),
+        total_score = VALUES(total_score)
+    `;
+
+    // 데이터를 배열로 변환하여 MySQL에 삽입
+    const values = data.map(row => [
+      row.exam_number, row.location, row.name, row.gender, row.grade,
+      row.longjump_record, row.longjump_score, row.shuttle_record, row.shuttle_score,
+      row.medicine_ball_record, row.medicine_ball_score, row.back_strength_record,
+      row.back_strength_score, row.total_score
+    ]);
+
+    connection.query(query, [values], (err, results) => {
+      if (err) {
+        console.error('Error updating scores:', err);
+      } else {
+        console.log('Scores updated successfully');
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching data from Google Sheets:', error);
+  }
+}
+
+// 서버 시작 시 1분마다 updateScores 함수 실행
+setInterval(updateScores, 60 * 1000); // 1분마다 실행
 
 
 
