@@ -466,7 +466,7 @@ app.get('/longjump/maleTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, grade, longjump_record 
     FROM participants 
-    WHERE gender = '남'
+    WHERE gender = '남' AND longjump_record > 0
     ORDER BY longjump_record DESC 
     LIMIT 50;
   `;
@@ -485,7 +485,7 @@ app.get('/longjump/femaleTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, grade, longjump_record 
     FROM participants 
-    WHERE gender = '여'
+    WHERE gender = '여' AND longjump_record > 0
     ORDER BY longjump_record DESC 
     LIMIT 50;
   `;
