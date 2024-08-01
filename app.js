@@ -620,7 +620,7 @@ app.get('/overallTop50/male', (req, res) => {
   const query = `
     SELECT exam_number, location, name, grade, total_score 
     FROM participants 
-    WHERE gender = '남'
+    WHERE gender = '남' AND total_score > 0
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
@@ -638,7 +638,7 @@ app.get('/overallTop50/female', (req, res) => {
   const query = `
     SELECT exam_number, location, name, grade, total_score 
     FROM participants 
-    WHERE gender = '여'
+    WHERE gender = '여' AND total_score > 0
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
@@ -659,7 +659,7 @@ app.get('/admissionsTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, gender, grade, total_score 
     FROM participants 
-    WHERE grade = '3' OR grade = 'N'
+    WHERE grade = '3' OR grade = 'N' AND total_score > 0
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
