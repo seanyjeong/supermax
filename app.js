@@ -615,6 +615,45 @@ app.get('/backStrength/femaleTop50', (req, res) => {
   });
 });
 
+// 남여총점순위
+app.get('/overallTop50/male', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, total_score 
+    FROM participants 
+    WHERE gender = '남'
+    ORDER BY total_score DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (남자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (남자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+app.get('/overallTop50/female', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, grade, total_score 
+    FROM participants 
+    WHERE gender = '여'
+    ORDER BY total_score DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류 (여자):', err);
+      res.status(500).json({ message: '데이터 가져오기 오류 (여자)', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+
+
 
 
 
