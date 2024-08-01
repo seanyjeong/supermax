@@ -425,12 +425,13 @@ setInterval(updateScores, 60 * 1000);
 
 
 
+// TOP 50 데이터를 가져오는 엔드포인트
 app.get('/top50', (req, res) => {
   const query = `
-    SELECT exam_number, location, name, gender, grade, total_score 
+    SELECT exam_number, location, name, gender, grade, total_score, longjump_record, medicine_ball_record, shuttle_record, back_strength_record
     FROM participants 
     WHERE total_score > 0
-    ORDER BY total_score DESC 
+    ORDER BY total_score DESC, longjump_record DESC, medicine_ball_record DESC, shuttle_record ASC, back_strength_record DESC
     LIMIT 50;
   `;
 
@@ -443,13 +444,14 @@ app.get('/top50', (req, res) => {
     res.status(200).json(results);
   });
 });
+
 // 예비반 상위 50명 데이터를 가져오는 엔드포인트
 app.get('/preparatoryTop50', (req, res) => {
   const query = `
-    SELECT exam_number, location, name, gender, grade, total_score 
+    SELECT exam_number, location, name, gender, grade, total_score, longjump_record, medicine_ball_record, shuttle_record, back_strength_record
     FROM participants 
     WHERE grade IN ('1', '2') AND total_score > 0
-    ORDER BY total_score DESC 
+    ORDER BY total_score DESC, longjump_record DESC, medicine_ball_record DESC, shuttle_record ASC, back_strength_record DESC
     LIMIT 50;
   `;
 
@@ -462,6 +464,7 @@ app.get('/preparatoryTop50', (req, res) => {
     res.status(200).json(results);
   });
 });
+
 // 제멀 남여 사우이 50명 데이터 가져오는 엔드포인트
 app.get('/longjump/maleTop50', (req, res) => {
   const query = `
