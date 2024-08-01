@@ -451,7 +451,11 @@ app.get('/preparatoryTop50', (req, res) => {
     SELECT exam_number, location, name, gender, grade, total_score, longjump_record, medicine_ball_record, shuttle_record, back_strength_record
     FROM participants 
     WHERE grade IN ('1', '2') AND total_score > 0
-    ORDER BY total_score DESC, longjump_record DESC, medicine_ball_record DESC, shuttle_record ASC, back_strength_record DESC
+     ORDER BY total_score DESC, 
+             longjump_record DESC,  
+             shuttle_record ASC,  -- 빠른 기록이 더 좋으므로 오름차순으로 정렬
+             back_strength_record DESC,
+             medicine_ball_record DESC
     LIMIT 50;
   `;
 
@@ -665,10 +669,10 @@ app.get('/admissionsTop50', (req, res) => {
     FROM participants 
     WHERE (grade = '3' OR grade = 'N') AND total_score > 0
     ORDER BY total_score DESC, 
-             longjump_record DESC, 
-             medicine_ball_record DESC, 
+             longjump_record DESC,  
              shuttle_record ASC,  -- 빠른 기록이 더 좋으므로 오름차순으로 정렬
-             back_strength_record DESC 
+             back_strength_record DESC,
+             medicine_ball_record DESC
     LIMIT 50;
   `;
 
