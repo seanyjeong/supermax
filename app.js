@@ -659,7 +659,7 @@ app.get('/admissionsTop50', (req, res) => {
   const query = `
     SELECT exam_number, location, name, gender, grade, total_score 
     FROM participants 
-    WHERE grade = '3' OR grade = 'N' AND total_score > 0
+    WHERE (grade = '3' OR grade = 'N') AND total_score > 0
     ORDER BY total_score DESC 
     LIMIT 50;
   `;
