@@ -653,6 +653,27 @@ app.get('/overallTop50/female', (req, res) => {
   });
 });
 
+//입시반TOP50
+
+app.get('/admissionsTop50', (req, res) => {
+  const query = `
+    SELECT exam_number, location, name, gender, grade, total_score 
+    FROM participants 
+    WHERE grade = '3' OR grade = 'N'
+    ORDER BY total_score DESC 
+    LIMIT 50;
+  `;
+
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 가져오기 오류:', err);
+      res.status(500).json({ message: '데이터 가져오기 오류', error: err });
+      return;
+    }
+    res.status(200).json(results);
+  });
+});
+
 
 
 
