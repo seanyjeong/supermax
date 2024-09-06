@@ -687,6 +687,19 @@ app.get('/admissionsTop50', (req, res) => {
 });
 
 
+// '26susi' 데이터를 가져오는 엔드포인트
+app.get('/26susi', authenticateToken, (req, res) => {
+  const query = 'SELECT * FROM 26susi';
+  connection.query(query, (err, rows) => {
+    if (err) {
+      console.error('Database query failed:', err);
+      res.status(500).json({ message: 'Database query failed', error: err });
+      return;
+    }
+    res.status(200).json(rows);
+  });
+});
+
 
 
 
