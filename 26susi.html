@@ -27,13 +27,8 @@
 
   <table id="susiTable">
     <thead>
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Academy</th>
-        <th>Gender</th>
-        <th>Total Score</th>
-        <th>Other Columns...</th>
+      <tr id="tableHeader">
+        <!-- 헤더가 동적으로 생성됩니다 -->
       </tr>
     </thead>
     <tbody>
@@ -54,10 +49,24 @@
           throw new Error('Failed to fetch data');
         }
         const data = await response.json();
-        populateTable(data);
+        if (data.length > 0) {
+          createTableHeader(Object.keys(data[0])); // 데이터의 첫 번째 항목을 기준으로 헤더 생성
+          populateTable(data);
+        } else {
+          console.log('No data available');
+        }
       } catch (error) {
         console.error('Error:', error);
       }
+    }
+
+    function createTableHeader(columns) {
+      const tableHeader = document.getElementById('tableHeader');
+      columns.forEach(column => {
+        const th = document.createElement('th');
+        th.textContent = column;
+        tableHeader.appendChild(th);
+      });
     }
 
     function populateTable(data) {
@@ -65,24 +74,10 @@
       data.forEach(row => {
         const newRow = tableBody.insertRow();
         
-        const idCell = newRow.insertCell();
-        idCell.textContent = row.id;
-
-        const nameCell = newRow.insertCell();
-        nameCell.textContent = row.name;
-
-        const academyCell = newRow.insertCell();
-        academyCell.textContent = row.academy;
-
-        const genderCell = newRow.insertCell();
-        genderCell.textContent = row.gender;
-
-        const scoreCell = newRow.insertCell();
-        scoreCell.textContent = row.total_score;
-
-        // 추가 열이 있다면 여기에 추가
-        const otherCell = newRow.insertCell();
-        otherCell.textContent = '...'; // 실제 데이터에 맞게 수정
+        Object.values(row).forEach(value => {
+          const newCell = newRow.insertCell();
+          newCell.textContent = value;
+        });
       });
     }
 
