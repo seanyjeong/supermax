@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>26susi Table</title>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    table, th, td {
+      border: 1px solid black;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>26susi Table Data</h2>
+
+  <table id="susiTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Academy</th>
+        <th>Gender</th>
+        <th>Total Score</th>
+        <th>Other Columns...</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- 데이터가 여기에 추가됩니다 -->
+    </tbody>
+  </table>
+
+  <script>
+    async function fetchSusiData() {
+      try {
+        const response = await fetch('http://localhost:3000/26susi', {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Bearer your_jwt_token'  // JWT 토큰 필요 시 추가
+          }
+        });
+        if (!response.ok) {
+          throw new Error('Failed to fetch data');
+        }
+        const data = await response.json();
+        populateTable(data);
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    }
+
+    function populateTable(data) {
+      const tableBody = document.getElementById('susiTable').getElementsByTagName('tbody')[0];
+      data.forEach(row => {
+        const newRow = tableBody.insertRow();
+        
+        const idCell = newRow.insertCell();
+        idCell.textContent = row.id;
+
+        const nameCell = newRow.insertCell();
+        nameCell.textContent = row.name;
+
+        const academyCell = newRow.insertCell();
+        academyCell.textContent = row.academy;
+
+        const genderCell = newRow.insertCell();
+        genderCell.textContent = row.gender;
+
+        const scoreCell = newRow.insertCell();
+        scoreCell.textContent = row.total_score;
+
+        // 추가 열이 있다면 여기에 추가
+        const otherCell = newRow.insertCell();
+        otherCell.textContent = '...'; // 실제 데이터에 맞게 수정
+      });
+    }
+
+    // 페이지 로드 시 데이터 가져오기
+    window.onload = fetchSusiData;
+  </script>
+
+</body>
+</html>
