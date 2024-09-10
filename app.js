@@ -700,6 +700,84 @@ app.get('/26susi', authenticateToken, (req, res) => {
   });
 });
 
+// '25susiupdate' 데이터를 업데이트하는 엔드포인트
+app.get('/25susiupdate', async (req, res) => {
+  try {
+    const response = await axios.get('https://script.google.com/macros/s/AKfycby3O3Dvzv-ZnPsgHjfITB7JV8kPL1K5fybnlwwlPKEkCPj2WabmzP0ZQylip6MHQKNPSA/exec');
+    const data = response.data;
+
+    const query = `
+      INSERT INTO 25susiresult (
+        교육원, 이름, 학교, 성별, 학년, 대학명, 학과명, 전형명, 환산내신, 등급, 기타, 실기점수, 총점, 최초합격여부, 최종합격여부,
+        실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수, 실기4종목, 실기4기록, 실기4점수, 실기5종목, 실기5기록, 실기5점수, 실기6종목, 실기6기록, 실기6점수
+      ) VALUES ?
+      ON DUPLICATE KEY UPDATE 
+        교육원 = VALUES(교육원),
+        이름 = VALUES(이름),
+        학교 = VALUES(학교),
+        성별 = VALUES(성별),
+        학년 = VALUES(학년),
+        대학명 = VALUES(대학명),
+        학과명 = VALUES(학과명),
+        전형명 = VALUES(전형명),
+        환산내신 = VALUES(환산내신),
+        등급 = VALUES(등급),
+        기타 = VALUES(기타),
+        실기점수 = VALUES(실기점수),
+        총점 = VALUES(총점),
+        최초합격여부 = VALUES(최초합격여부),
+        최종합격여부 = VALUES(최종합격여부),
+        실기1종목 = VALUES(실기1종목),
+        실기1기록 = VALUES(실기1기록),
+        실기1점수 = VALUES(실기1점수),
+        실기2종목 = VALUES(실기2종목),
+        실기2기록 = VALUES(실기2기록),
+        실기2점수 = VALUES(실기2점수),
+        실기3종목 = VALUES(실기3종목),
+        실기3기록 = VALUES(실기3기록),
+        실기3점수 = VALUES(실기3점수),
+        실기4종목 = VALUES(실기4종목),
+        실기4기록 = VALUES(실기4기록),
+        실기4점수 = VALUES(실기4점수),
+        실기5종목 = VALUES(실기5종목),
+        실기5기록 = VALUES(실기5기록),
+        실기5점수 = VALUES(실기5점수),
+        실기6종목 = VALUES(실기6종목),
+        실기6기록 = VALUES(실기6기록),
+        실기6점수 = VALUES(실기6점수)
+    `;
+
+    const values = data.map(row => [
+      row.education_center, row.name, row.school, row.gender, row.grade, row.university, row.major, row.admission_type,
+      row.score_converted, row.grade_level, row.other_info, row.practical_score, row.total_score, row.initial_pass,
+      row.final_pass, row.practical1_name, row.practical1_record, row.practical1_score, row.practical2_name, row.practical2_record,
+      row.practical2_score, row.practical3_name, row.practical3_record, row.practical3_score, row.practical4_name, row.practical4_record,
+      row.practical4_score, row.practical5_name, row.practical5_record, row.practical5_score, row.practical6_name, row.practical6_record,
+      row.practical6_score
+    ]);
+
+    connection.query(query, [values], (err, results) => {
+      if (err) {
+        console.error('Error updating 25susiresult:', err);
+        res.status(500).json({ message: 'Database update failed', error: err });
+      } else {
+        res.status(200).json({ message: '25susiresult updated successfully' });
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    res.status(500).json({ message: 'Data fetch failed', error });
+  }
+});
+
+// 1분마다 데이터 업데이트
+setInterval(() => {
+  axios.get('http://localhost:3000/25susiupdate')
+    .then(response => console.log('25susiresult updated successfully:', response.data))
+    .catch(error => console.error('Error updating 25susiresult:', error));
+}, 60 * 1000);
+
+
 
 
 
