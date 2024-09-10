@@ -700,7 +700,6 @@ app.get('/26susi', authenticateToken, (req, res) => {
   });
 });
 
-// 25susiupdate 함수 정의
 async function updateSusiData() {
   try {
     const response = await axios.get('https://script.google.com/macros/s/AKfycby3O3Dvzv-ZnPsgHjfITB7JV8kPL1K5fybnlwwlPKEkCPj2WabmzP0ZQylip6MHQKNPSA/exec');
@@ -748,12 +747,39 @@ async function updateSusiData() {
     `;
 
     const values = data.map(row => [
-      row.education_center, row.name, row.school, row.gender, row.grade, row.university, row.major, row.admission_type,
-      row.score_converted, row.grade_level, row.other_info, row.practical_score, row.total_score, row.initial_pass,
-      row.final_pass, row.practical1_name, row.practical1_record, row.practical1_score, row.practical2_name, row.practical2_record,
-      row.practical2_score, row.practical3_name, row.practical3_record, row.practical3_score, row.practical4_name, row.practical4_record,
-      row.practical4_score, row.practical5_name, row.practical5_record, row.practical5_score, row.practical6_name, row.practical6_record,
-      row.practical6_score
+      row.education_center || null, 
+      row.name || null,
+      row.school || null,
+      row.gender || null,
+      row.grade || null,
+      row.university || null,
+      row.major || null,
+      row.admission_type || null,
+      row.score_converted || null,
+      row.grade_level || null,
+      row.other_info || null,
+      row.practical_score || null,
+      row.total_score || null,
+      row.initial_pass || null,
+      row.final_pass || null,
+      row.practical1_name || null,
+      row.practical1_record || null,
+      row.practical1_score || null,
+      row.practical2_name || null,
+      row.practical2_record || null,
+      row.practical2_score || null,
+      row.practical3_name || null,
+      row.practical3_record || null,
+      row.practical3_score || null,
+      row.practical4_name || null,
+      row.practical4_record || null,
+      row.practical4_score || null,
+      row.practical5_name || null,
+      row.practical5_record || null,
+      row.practical5_score || null,
+      row.practical6_name || null,
+      row.practical6_record || null,
+      row.practical6_score || null
     ]);
 
     connection.query(query, [values], (err, results) => {
