@@ -12,29 +12,19 @@
             margin-bottom: 20px;
         }
 
-        /* 필터 및 타이틀 고정 */
-        .sticky-container {
-            position: sticky;
-            top: 0;
-            background-color: white;
-            z-index: 1000;
-            padding: 10px;
-            border-bottom: 2px solid #ddd;
-        }
-
-        /* 전체 필터 영역을 가로로 배치, 요소 간격을 줄이기 */
+        /* 전체 폼 영역을 가로로 배치, 요소 간격을 줄이기 */
         .filter-container {
             display: flex;
             justify-content: flex-start;
-            align-items: center;
-            gap: 15px;
+            align-items: center; /* 수직 중앙 정렬 */
+            gap: 15px; /* 요소 간의 간격을 줄임 */
             margin-bottom: 20px;
         }
 
         .filter-container label {
             font-size: 18px;
             font-weight: bold;
-            margin-right: 5px;
+            margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
         }
 
         .filter-container select, .filter-container input, .filter-container button {
@@ -46,13 +36,7 @@
         /* 검색 버튼 크기를 네모칸과 맞추기 */
         .filter-container button {
             width: 180px;
-            cursor: pointer;
-        }
-
-        /* 테이블 컨테이너로 본문만 스크롤 가능 */
-        .table-container {
-            max-height: 400px; /* 테이블의 최대 높이를 설정 */
-            overflow-y: auto; /* 테이블 본문만 스크롤 가능하게 설정 */
+            cursor: pointer; /* 커서를 포인터로 변경 */
         }
 
         /* 표 전체 스타일 */
@@ -63,26 +47,35 @@
         }
 
         /* 표 헤더 스타일 */
-        th, td {
+        th {
+            background-color: #4CAF50;
+            color: white;
             text-align: center;
             padding: 10px;
             font-size: 14px;
             white-space: nowrap;
-            border: 1px solid #ddd;
         }
 
-        /* 고정된 헤더 스타일 */
-        thead th {
-            position: sticky;
-            top: 0;
-            background-color: #4CAF50;
-            color: white;
-            z-index: 100;
+        /* 표 셀 스타일 */
+        td {
+            text-align: center;
+            padding: 10px;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+            border-bottom: 1px solid #ddd;
         }
 
         /* 마우스를 올릴 때 행 강조 */
         tr:hover {
             background-color: #f1f1f1;
+        }
+
+        /* 테이블 외곽선 */
+        table, td, th {
+            border: 1px solid #ddd;
         }
 
         /* 표 기본 폰트 스타일 */
@@ -98,11 +91,11 @@
             }
 
             .filter-container {
-                flex-wrap: wrap;
+                flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
             }
 
             .filter-container select, .filter-container input, .filter-container button {
-                width: 100%;
+                width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
             }
         }
     </style>
@@ -136,7 +129,7 @@
             const admissionType = document.getElementById('admissionType').value;
 
             if (!university || !major || !admissionType) {
-                return;
+                return; // 모든 드롭다운 값이 선택된 후에만 데이터 가져오기
             }
 
             try {
@@ -159,8 +152,10 @@
                 return;
             }
 
+            // 총점을 기준으로 내림차순 정렬
             data.sort((a, b) => b.총점 - a.총점);
 
+            // 헤더 구성
             let headers = `
                 <th>순위</th>
                 <th>교육원</th>
@@ -175,9 +170,18 @@
                 <th>최초합격여부</th>
                 <th>최종합격여부</th>
             `;
+            
+            // 실기 항목이 있는지 확인하고 동적으로 헤더 추가
+            for (let i = 1; i <= 6; i++) {
+                const practicalField = `실기${i}종목`;
+                if (data.some(row => row[practicalField])) {
+                    headers += `<th colspan="2">${data[0][practicalField] || `실기${i}`}</th>`;
+                }
+            }
 
             resultTableHead.innerHTML = `<tr>${headers}</tr>`;
 
+            // 데이터 행 구성 (순위 추가)
             data.forEach((row, index) => {
                 let rowHtml = `
                     <td>${index + 1}</td>
@@ -194,6 +198,16 @@
                     <td>${row.최종합격여부 || ''}</td>
                 `;
 
+                // 동적으로 실기 항목만 표시
+                for (let i = 1; i <= 6; i++) {
+                    if (row[`실기${i}종목`]) {
+                        rowHtml += `
+                            <td>${row[`실기${i}기록`] || ''}</td>
+                            <td>${row[`실기${i}점수`] || ''}</td>
+                        `;
+                    }
+                }
+
                 resultTableBody.innerHTML += `<tr>${rowHtml}</tr>`;
             });
         }
@@ -204,11 +218,13 @@
             const rows = document.querySelectorAll('tbody tr');
 
             rows.forEach(row => {
+                // 모든 행의 배경색을 기본값으로 설정
                 row.style.backgroundColor = '';
                 const cells = Array.from(row.cells).map(cell => cell.textContent.toLowerCase());
 
+                // 셀 중 하나라도 검색어를 포함하면 배경색을 변경
                 if (cells.some(cell => cell.includes(searchKeyword))) {
-                    row.style.backgroundColor = 'yellow';
+                    row.style.backgroundColor = 'yellow'; // 검색된 행에 배경색 표시
                 }
             });
         }
@@ -227,7 +243,7 @@
                         console.error('Error fetching majors from supermax.kr:', error);
                     }
                 }
-                fetchFilteredData();
+                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
             });
 
             document.getElementById('major').addEventListener('change', async () => {
@@ -242,48 +258,43 @@
                         console.error('Error fetching admission types from supermax.kr:', error);
                     }
                 }
-                fetchFilteredData();
+                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
             });
 
             document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
-            document.getElementById('searchButton').addEventListener('click', highlightRows);
+            document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
         });
     </script>
 </head>
 <body>
+    <h1>맥스체대입시 25수시 실시간 조회</h1>
 
-    <!-- 타이틀 및 필터 고정 영역 -->
-    <div class="sticky-container">
-        <h1>맥스체대입시 25수시 실시간 조회</h1>
-        <div class="filter-container">
-            <div>
-                <label for="university">대학명:</label>
-                <select id="university"></select>
-            </div>
-            <div>
-                <label for="major">학과명:</label>
-                <select id="major"></select>
-            </div>
-            <div>
-                <label for="admissionType">전형명:</label>
-                <select id="admissionType"></select>
-            </div>
-            <div>
-                <label for="searchInput">검색어:</label>
-                <input type="text" id="searchInput" placeholder="텍스트 입력">
-            </div>
-            <div>
-                <button id="searchButton">검색</button>
-            </div>
+    <!-- 필터를 가로로 배치하고 간격을 줄임 -->
+    <div class="filter-container">
+        <div>
+            <label for="university">대학명:</label>
+            <select id="university"></select>
+        </div>
+        <div>
+            <label for="major">학과명:</label>
+            <select id="major"></select>
+        </div>
+        <div>
+            <label for="admissionType">전형명:</label>
+            <select id="admissionType"></select>
+        </div>
+        <div>
+            <label for="searchInput">검색어:</label>
+            <input type="text" id="searchInput" placeholder="텍스트 입력">
+        </div>
+        <div>
+            <button id="searchButton">검색</button>
         </div>
     </div>
 
-    <!-- 테이블 본문만 스크롤 가능하게 설정 -->
-    <div class="table-container">
-        <table>
-            <thead id="resultTableHead"></thead>
-            <tbody id="resultTableBody"></tbody>
-        </table>
-    </div>
+    <table>
+        <thead id="resultTableHead"></thead>
+        <tbody id="resultTableBody"></tbody>
+    </table>
 </body>
 </html>
