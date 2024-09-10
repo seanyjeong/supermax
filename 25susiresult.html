@@ -5,23 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>25susiresult 조회</title>
     <style>
-        /* 전체 폼 영역을 가로로 배치 */
+        /* 전체 폼 영역을 가로로 배치, 요소 간격을 줄이기 */
         .filter-container {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
+            align-items: center; /* 수직 중앙 정렬 */
+            gap: 15px; /* 요소 간의 간격을 줄임 */
             margin-bottom: 20px;
         }
 
         .filter-container label {
             font-size: 18px;
             font-weight: bold;
+            margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
         }
 
         .filter-container select {
-            width: 200px;
-            padding: 10px;
+            width: 180px;
+            padding: 8px;
             font-size: 16px;
-            margin-right: 10px;
         }
 
         /* 표 전체 스타일 */
@@ -73,6 +75,14 @@
         @media screen and (max-width: 768px) {
             td, th {
                 font-size: 12px;
+            }
+
+            .filter-container {
+                flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
+            }
+
+            .filter-container select {
+                width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
             }
         }
     </style>
@@ -229,6 +239,7 @@
 <body>
     <h1>25susiresult 조회</h1>
 
+    <!-- 필터를 가로로 배치하고 간격을 줄임 -->
     <div class="filter-container">
         <div>
             <label for="university">대학명:</label>
