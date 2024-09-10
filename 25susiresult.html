@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>25susiresult 조회</title>
+    <title>맥스25수시실시간 조회</title>
     <style>
         /* 전체 폼 영역을 가로로 배치, 요소 간격을 줄이기 */
         .filter-container {
@@ -20,7 +20,7 @@
             margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
         }
 
-        .filter-container select {
+        .filter-container select, .filter-container input {
             width: 180px;
             padding: 8px;
             font-size: 16px;
@@ -81,7 +81,7 @@
                 flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
             }
 
-            .filter-container select {
+            .filter-container select, .filter-container input {
                 width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
             }
         }
@@ -200,6 +200,23 @@
             });
         }
 
+        // 검색어를 포함하는 행의 배경색을 변경하는 함수
+        function highlightRows() {
+            const searchKeyword = document.getElementById('searchInput').value.toLowerCase();
+            const rows = document.querySelectorAll('tbody tr');
+
+            rows.forEach(row => {
+                // 모든 행의 배경색을 기본값으로 설정
+                row.style.backgroundColor = '';
+                const cells = Array.from(row.cells).map(cell => cell.textContent.toLowerCase());
+
+                // 셀 중 하나라도 검색어를 포함하면 배경색을 변경
+                if (cells.some(cell => cell.includes(searchKeyword))) {
+                    row.style.backgroundColor = 'yellow'; // 검색된 행에 배경색 표시
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             fetchDropdownData();
 
@@ -233,11 +250,12 @@
             });
 
             document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
+            document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
         });
     </script>
 </head>
 <body>
-    <h1>25susiresult 조회</h1>
+    <h1>맥스체대입시 25수시 실시간 조회</h1>
 
     <!-- 필터를 가로로 배치하고 간격을 줄임 -->
     <div class="filter-container">
@@ -252,6 +270,13 @@
         <div>
             <label for="admissionType">전형명:</label>
             <select id="admissionType"></select>
+        </div>
+        <div>
+            <label for="searchInput">검색어:</label>
+            <input type="text" id="searchInput" placeholder="텍스트 입력">
+        </div>
+        <div>
+            <button id="searchButton">검색</button>
         </div>
     </div>
 
