@@ -12,7 +12,17 @@
             margin-bottom: 20px;
         }
 
-        /* 전체 폼 영역을 가로로 배치, 요소 간격을 줄이기 */
+        /* 필터 및 타이틀 고정 */
+        .sticky-container {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 1000;
+            padding: 10px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        /* 전체 필터 영역을 가로로 배치, 요소 간격을 줄이기 */
         .filter-container {
             display: flex;
             justify-content: flex-start;
@@ -47,35 +57,37 @@
         }
 
         /* 표 헤더 스타일 */
-        th {
-            background-color: #4CAF50;
-            color: white;
+        th, td {
             text-align: center;
             padding: 10px;
             font-size: 14px;
             white-space: nowrap;
+            border: 1px solid #ddd;
         }
 
-        /* 표 셀 스타일 */
-        td {
-            text-align: center;
-            padding: 10px;
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 150px;
-            border-bottom: 1px solid #ddd;
+        /* 상위 헤더 */
+        .main-header {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        /* 하위 헤더 */
+        .sub-header {
+            background-color: #87CEFA;
+            color: black;
+        }
+
+        /* 고정된 헤더 스타일 */
+        thead {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 1000;
         }
 
         /* 마우스를 올릴 때 행 강조 */
         tr:hover {
             background-color: #f1f1f1;
-        }
-
-        /* 테이블 외곽선 */
-        table, td, th {
-            border: 1px solid #ddd;
         }
 
         /* 표 기본 폰트 스타일 */
@@ -141,7 +153,7 @@
             }
         }
 
-        // 결과 데이터를 화면에 표시하는 함수 (총점 내림차순 정렬, 순위 추가)
+        // 결과 데이터를 화면에 표시하는 함수 (총점 내림차순 정렬, 순위 추가, 실기종목 상위 헤더 설정)
         function displayData(data) {
             const resultTableHead = document.getElementById('resultTableHead');
             const resultTableBody = document.getElementById('resultTableBody');
@@ -155,33 +167,33 @@
             // 총점을 기준으로 내림차순 정렬
             data.sort((a, b) => b.총점 - a.총점);
 
-            // 헤더 구성
-            let headers = `
-                <th>순위</th>
-                <th>교육원</th>
-                <th>이름</th>
-                <th>학교</th>
-                <th>성별</th>
-                <th>학년</th>
-                <th>환산내신</th>
-                <th>등급</th>
-                <th>실기점수</th>
-                <th>총점</th>
-                <th>최초합격여부</th>
-                <th>최종합격여부</th>
+            // 상위 헤더 구성
+            let mainHeaders = `
+                <th rowspan="2" class="main-header">순위</th>
+                <th rowspan="2" class="main-header">교육원</th>
+                <th rowspan="2" class="main-header">이름</th>
+                <th rowspan="2" class="main-header">학교</th>
+                <th rowspan="2" class="main-header">성별</th>
+                <th rowspan="2" class="main-header">학년</th>
+                <th rowspan="2" class="main-header">환산내신</th>
+                <th rowspan="2" class="main-header">등급</th>
+                <th rowspan="2" class="main-header">실기점수</th>
+                <th rowspan="2" class="main-header">총점</th>
+                <th rowspan="2" class="main-header">최초합격여부</th>
+                <th rowspan="2" class="main-header">최종합격여부</th>
             `;
-            let maxPractical = 0;
+            let subHeaders = '';
 
             // 실기 항목이 있는지 확인하고 동적으로 헤더 추가
             for (let i = 1; i <= 6; i++) {
                 const practicalField = `실기${i}종목`;
                 if (data.some(row => row[practicalField])) {
-                    headers += `<th>실기${i}종목</th><th>실기${i}기록</th><th>실기${i}점수</th>`;
-                    maxPractical = i;
+                    mainHeaders += `<th colspan="2" class="main-header">${data[0][`실기${i}종목`] || `실기${i}`}</th>`;
+                    subHeaders += `<th class="sub-header">기록</th><th class="sub-header">점수</th>`;
                 }
             }
 
-            resultTableHead.innerHTML = `<tr>${headers}</tr>`;
+            resultTableHead.innerHTML = `<tr>${mainHeaders}</tr><tr>${subHeaders}</tr>`;
 
             // 데이터 행 구성 (순위 추가)
             data.forEach((row, index) => {
@@ -201,9 +213,8 @@
                 `;
 
                 // 동적으로 실기 항목만 표시
-                for (let i = 1; i <= maxPractical; i++) {
+                for (let i = 1; i <= 6; i++) {
                     rowHtml += `
-                        <td>${row[`실기${i}종목`] || ''}</td>
                         <td>${row[`실기${i}기록`] || ''}</td>
                         <td>${row[`실기${i}점수`] || ''}</td>
                     `;
@@ -268,28 +279,30 @@
     </script>
 </head>
 <body>
-    <h1>맥스체대입시 25수시 실시간 조회</h1>
 
-    <!-- 필터를 가로로 배치하고 간격을 줄임 -->
-    <div class="filter-container">
-        <div>
-            <label for="university">대학명:</label>
-            <select id="university"></select>
-        </div>
-        <div>
-            <label for="major">학과명:</label>
-            <select id="major"></select>
-        </div>
-        <div>
-            <label for="admissionType">전형명:</label>
-            <select id="admissionType"></select>
-        </div>
-        <div>
-            <label for="searchInput">검색어:</label>
-            <input type="text" id="searchInput" placeholder="텍스트 입력">
-        </div>
-        <div>
-            <button id="searchButton">검색</button>
+    <!-- 타이틀 및 필터 고정 영역 -->
+    <div class="sticky-container">
+        <h1>맥스체대입시 25수시 실시간 조회</h1>
+        <div class="filter-container">
+            <div>
+                <label for="university">대학명:</label>
+                <select id="university"></select>
+            </div>
+            <div>
+                <label for="major">학과명:</label>
+                <select id="major"></select>
+            </div>
+            <div>
+                <label for="admissionType">전형명:</label>
+                <select id="admissionType"></select>
+            </div>
+            <div>
+                <label for="searchInput">검색어:</label>
+                <input type="text" id="searchInput" placeholder="텍스트 입력">
+            </div>
+            <div>
+                <button id="searchButton">검색</button>
+            </div>
         </div>
     </div>
 
