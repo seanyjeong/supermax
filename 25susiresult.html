@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>25수시실시간수합</title>
+    <title>25susiresult 조회</title>
     <style>
         /* 표 전체 스타일 */
         table {
@@ -27,10 +27,10 @@
             text-align: center;
             padding: 10px;
             font-size: 13px;
-            white-space: nowrap; /* 줄바꿈 방지 */
-            overflow: hidden; /* 내용이 넘칠 경우 숨기기 */
-            text-overflow: ellipsis; /* 내용이 넘치면 생략표시 (...) */
-            max-width: 150px; /* 각 셀의 최대 너비를 제한 */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
             border-bottom: 1px solid #ddd;
         }
 
@@ -80,7 +80,7 @@
             });
         }
 
-        // 슈퍼맥스 서버에서 필터된 데이터를 가져오는 함수
+        // 필터링된 데이터를 가져와 표시하는 함수
         async function fetchFilteredData() {
             const university = document.getElementById('university').value;
             const major = document.getElementById('major').value;
@@ -99,13 +99,47 @@
             }
         }
 
-        // 결과 데이터를 화면에 표시하는 함수
+        // 결과 데이터를 화면에 표시하는 함수 (실기종목이 있는 경우만 표시)
         function displayData(data) {
-            const resultTable = document.getElementById('resultTableBody');
-            resultTable.innerHTML = '';
+            const resultTableHead = document.getElementById('resultTableHead');
+            const resultTableBody = document.getElementById('resultTableBody');
+            resultTableHead.innerHTML = '';
+            resultTableBody.innerHTML = '';
+
+            if (data.length === 0) {
+                return;
+            }
+
+            // 헤더 구성
+            let headers = `
+                <th>교육원</th>
+                <th>이름</th>
+                <th>학교</th>
+                <th>성별</th>
+                <th>학년</th>
+                <th>환산내신</th>
+                <th>등급</th>
+                <th>실기점수</th>
+                <th>총점</th>
+                <th>최초합격여부</th>
+                <th>최종합격여부</th>
+            `;
+            let maxPractical = 0;
+
+            // 실기 항목이 있는지 확인하고 동적으로 헤더 추가
+            for (let i = 1; i <= 6; i++) {
+                const practicalField = `실기${i}종목`;
+                if (data.some(row => row[practicalField])) {
+                    headers += `<th>실기${i}종목</th><th>실기${i}기록</th><th>실기${i}점수</th>`;
+                    maxPractical = i;
+                }
+            }
+
+            resultTableHead.innerHTML = `<tr>${headers}</tr>`;
+
+            // 데이터 행 구성
             data.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
+                let rowHtml = `
                     <td>${row.교육원 || ''}</td>
                     <td>${row.이름 || ''}</td>
                     <td>${row.학교 || ''}</td>
@@ -117,26 +151,18 @@
                     <td>${row.총점 || ''}</td>
                     <td>${row.최초합격여부 || ''}</td>
                     <td>${row.최종합격여부 || ''}</td>
-                    <td>${row.실기1종목 || ''}</td>
-                    <td>${row.실기1기록 || ''}</td>
-                    <td>${row.실기1점수 || ''}</td>
-                    <td>${row.실기2종목 || ''}</td>
-                    <td>${row.실기2기록 || ''}</td>
-                    <td>${row.실기2점수 || ''}</td>
-                    <td>${row.실기3종목 || ''}</td>
-                    <td>${row.실기3기록 || ''}</td>
-                    <td>${row.실기3점수 || ''}</td>
-                    <td>${row.실기4종목 || ''}</td>
-                    <td>${row.실기4기록 || ''}</td>
-                    <td>${row.실기4점수 || ''}</td>
-                    <td>${row.실기5종목 || ''}</td>
-                    <td>${row.실기5기록 || ''}</td>
-                    <td>${row.실기5점수 || ''}</td>
-                    <td>${row.실기6종목 || ''}</td>
-                    <td>${row.실기6기록 || ''}</td>
-                    <td>${row.실기6점수 || ''}</td>
                 `;
-                resultTable.appendChild(tr);
+
+                // 동적으로 실기 항목만 표시
+                for (let i = 1; i <= maxPractical; i++) {
+                    rowHtml += `
+                        <td>${row[`실기${i}종목`] || ''}</td>
+                        <td>${row[`실기${i}기록`] || ''}</td>
+                        <td>${row[`실기${i}점수`] || ''}</td>
+                    `;
+                }
+
+                resultTableBody.innerHTML += `<tr>${rowHtml}</tr>`;
             });
         }
 
@@ -177,7 +203,7 @@
     </script>
 </head>
 <body>
-    <h1>25수시실시간수합</h1>
+    <h1>25수시 실시간 조회</h1>
 
     <label for="university">대학명:</label>
     <select id="university"></select><br>
@@ -189,39 +215,7 @@
     <select id="admissionType"></select><br>
 
     <table>
-        <thead>
-            <tr>
-                <th>교육원</th>
-                <th>이름</th>
-                <th>학교</th>
-                <th>성별</th>
-                <th>학년</th>
-                <th>환산내신</th>
-                <th>등급</th>
-                <th>실기점수</th>
-                <th>총점</th>
-                <th>최초합격여부</th>
-                <th>최종합격여부</th>
-                <th>실기1종목</th>
-                <th>실기1기록</th>
-                <th>실기1점수</th>
-                <th>실기2종목</th>
-                <th>실기2기록</th>
-                <th>실기2점수</th>
-                <th>실기3종목</th>
-                <th>실기3기록</th>
-                <th>실기3점수</th>
-                <th>실기4종목</th>
-                <th>실기4기록</th>
-                <th>실기4점수</th>
-                <th>실기5종목</th>
-                <th>실기5기록</th>
-                <th>실기5점수</th>
-                <th>실기6종목</th>
-                <th>실기6기록</th>
-                <th>실기6점수</th>
-            </tr>
-        </thead>
+        <thead id="resultTableHead"></thead>
         <tbody id="resultTableBody"></tbody>
     </table>
 </body>
