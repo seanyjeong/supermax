@@ -754,7 +754,7 @@ async function updateSusiData() {
       row.grade || null,
       row.university || null,
       row.major || null,
-      row.admission_type || null,
+      row.admission_type || '',
       row.score_converted || null,
       row.grade_level || null,
       row.other_info || null,
