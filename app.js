@@ -816,6 +816,62 @@ setInterval(updateSusiData, 60 * 1000);
 
 
 
+// 대학명, 학과명, 전형명 드롭다운 데이터를 가져오는 엔드포인트
+app.get('/25susi-dropdowns', (req, res) => {
+  const query = 'SELECT DISTINCT 대학명 FROM 25susiresult ORDER BY 대학명 ASC';
+  connection.query(query, (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error fetching universities', error: err });
+    }
+    const universities = results.map(row => row.대학명);
+    res.status(200).json({ universities });
+  });
+});
+
+// 학과명 드롭다운 데이터를 가져오는 엔드포인트
+app.get('/25susi-majors', (req, res) => {
+  const university = req.query.university;
+  const query = 'SELECT DISTINCT 학과명 FROM 25susiresult WHERE 대학명 = ? ORDER BY 학과명 ASC';
+  connection.query(query, [university], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error fetching majors', error: err });
+    }
+    const majors = results.map(row => row.학과명);
+    res.status(200).json({ majors });
+  });
+});
+
+// 전형명 드롭다운 데이터를 가져오는 엔드포인트
+app.get('/25susi-admissionTypes', (req, res) => {
+  const { university, major } = req.query;
+  const query = 'SELECT DISTINCT 전형명 FROM 25susiresult WHERE 대학명 = ? AND 학과명 = ? ORDER BY 전형명 ASC';
+  connection.query(query, [university, major], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error fetching admission types', error: err });
+    }
+    const admissionTypes = results.map(row => row.전형명);
+    res.status(200).json({ admissionTypes });
+  });
+});
+
+// 필터 조건에 맞는 데이터를 가져오는 엔드포인트
+app.get('/25susi-filter', (req, res) => {
+  const { university, major, admissionType } = req.query;
+  const query = `
+    SELECT 교육원, 이름, 학교, 성별, 학년, 환산내신, 등급, 실기점수, 총점, 최초합격여부, 최종합격여부,
+           실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수,
+           실기4종목, 실기4기록, 실기4점수, 실기5종목, 실기5기록, 실기5점수, 실기6종목, 실기6기록, 실기6점수
+    FROM 25susiresult 
+    WHERE 대학명 = ? AND 학과명 = ? AND 전형명 = ?
+  `;
+  connection.query(query, [university, major, admissionType], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Error fetching filtered data', error: err });
+    }
+    res.status(200).json(results);
+  });
+});
+
 
 
 
