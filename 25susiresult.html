@@ -26,15 +26,15 @@
         .filter-container {
             display: flex;
             justify-content: flex-start;
-            align-items: center; /* 수직 중앙 정렬 */
-            gap: 15px; /* 요소 간의 간격을 줄임 */
+            align-items: center;
+            gap: 15px;
             margin-bottom: 20px;
         }
 
         .filter-container label {
             font-size: 18px;
             font-weight: bold;
-            margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
+            margin-right: 5px;
         }
 
         .filter-container select, .filter-container input, .filter-container button {
@@ -46,7 +46,13 @@
         /* 검색 버튼 크기를 네모칸과 맞추기 */
         .filter-container button {
             width: 180px;
-            cursor: pointer; /* 커서를 포인터로 변경 */
+            cursor: pointer;
+        }
+
+        /* 테이블 컨테이너로 본문만 스크롤 가능 */
+        .table-container {
+            max-height: 400px; /* 테이블의 최대 높이를 설정 */
+            overflow-y: auto; /* 테이블 본문만 스크롤 가능하게 설정 */
         }
 
         /* 표 전체 스타일 */
@@ -65,24 +71,13 @@
             border: 1px solid #ddd;
         }
 
-        /* 상위 헤더 */
-        .main-header {
-            background-color: #4CAF50;
-            color: white;
-        }
-
-        /* 하위 헤더 */
-        .sub-header {
-            background-color: #87CEFA;
-            color: black;
-        }
-
         /* 고정된 헤더 스타일 */
-        thead {
+        thead th {
             position: sticky;
             top: 0;
-            background-color: white;
-            z-index: 1000;
+            background-color: #4CAF50;
+            color: white;
+            z-index: 100;
         }
 
         /* 마우스를 올릴 때 행 강조 */
@@ -103,11 +98,11 @@
             }
 
             .filter-container {
-                flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
+                flex-wrap: wrap;
             }
 
             .filter-container select, .filter-container input, .filter-container button {
-                width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
+                width: 100%;
             }
         }
     </style>
@@ -141,7 +136,7 @@
             const admissionType = document.getElementById('admissionType').value;
 
             if (!university || !major || !admissionType) {
-                return; // 모든 드롭다운 값이 선택된 후에만 데이터 가져오기
+                return;
             }
 
             try {
@@ -153,7 +148,7 @@
             }
         }
 
-        // 결과 데이터를 화면에 표시하는 함수 (총점 내림차순 정렬, 순위 추가, 실기종목 상위 헤더 설정)
+        // 결과 데이터를 화면에 표시하는 함수 (총점 내림차순 정렬, 순위 추가)
         function displayData(data) {
             const resultTableHead = document.getElementById('resultTableHead');
             const resultTableBody = document.getElementById('resultTableBody');
@@ -164,38 +159,25 @@
                 return;
             }
 
-            // 총점을 기준으로 내림차순 정렬
             data.sort((a, b) => b.총점 - a.총점);
 
-            // 상위 헤더 구성
-            let mainHeaders = `
-                <th rowspan="2" class="main-header">순위</th>
-                <th rowspan="2" class="main-header">교육원</th>
-                <th rowspan="2" class="main-header">이름</th>
-                <th rowspan="2" class="main-header">학교</th>
-                <th rowspan="2" class="main-header">성별</th>
-                <th rowspan="2" class="main-header">학년</th>
-                <th rowspan="2" class="main-header">환산내신</th>
-                <th rowspan="2" class="main-header">등급</th>
-                <th rowspan="2" class="main-header">실기점수</th>
-                <th rowspan="2" class="main-header">총점</th>
-                <th rowspan="2" class="main-header">최초합격여부</th>
-                <th rowspan="2" class="main-header">최종합격여부</th>
+            let headers = `
+                <th>순위</th>
+                <th>교육원</th>
+                <th>이름</th>
+                <th>학교</th>
+                <th>성별</th>
+                <th>학년</th>
+                <th>환산내신</th>
+                <th>등급</th>
+                <th>실기점수</th>
+                <th>총점</th>
+                <th>최초합격여부</th>
+                <th>최종합격여부</th>
             `;
-            let subHeaders = '';
 
-            // 실기 항목이 있는지 확인하고 동적으로 헤더 추가
-            for (let i = 1; i <= 6; i++) {
-                const practicalField = `실기${i}종목`;
-                if (data.some(row => row[practicalField])) {
-                    mainHeaders += `<th colspan="2" class="main-header">${data[0][`실기${i}종목`] || `실기${i}`}</th>`;
-                    subHeaders += `<th class="sub-header">기록</th><th class="sub-header">점수</th>`;
-                }
-            }
+            resultTableHead.innerHTML = `<tr>${headers}</tr>`;
 
-            resultTableHead.innerHTML = `<tr>${mainHeaders}</tr><tr>${subHeaders}</tr>`;
-
-            // 데이터 행 구성 (순위 추가)
             data.forEach((row, index) => {
                 let rowHtml = `
                     <td>${index + 1}</td>
@@ -212,14 +194,6 @@
                     <td>${row.최종합격여부 || ''}</td>
                 `;
 
-                // 동적으로 실기 항목만 표시
-                for (let i = 1; i <= 6; i++) {
-                    rowHtml += `
-                        <td>${row[`실기${i}기록`] || ''}</td>
-                        <td>${row[`실기${i}점수`] || ''}</td>
-                    `;
-                }
-
                 resultTableBody.innerHTML += `<tr>${rowHtml}</tr>`;
             });
         }
@@ -230,13 +204,11 @@
             const rows = document.querySelectorAll('tbody tr');
 
             rows.forEach(row => {
-                // 모든 행의 배경색을 기본값으로 설정
                 row.style.backgroundColor = '';
                 const cells = Array.from(row.cells).map(cell => cell.textContent.toLowerCase());
 
-                // 셀 중 하나라도 검색어를 포함하면 배경색을 변경
                 if (cells.some(cell => cell.includes(searchKeyword))) {
-                    row.style.backgroundColor = 'yellow'; // 검색된 행에 배경색 표시
+                    row.style.backgroundColor = 'yellow';
                 }
             });
         }
@@ -255,7 +227,7 @@
                         console.error('Error fetching majors from supermax.kr:', error);
                     }
                 }
-                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
+                fetchFilteredData();
             });
 
             document.getElementById('major').addEventListener('change', async () => {
@@ -270,11 +242,11 @@
                         console.error('Error fetching admission types from supermax.kr:', error);
                     }
                 }
-                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
+                fetchFilteredData();
             });
 
             document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
-            document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
+            document.getElementById('searchButton').addEventListener('click', highlightRows);
         });
     </script>
 </head>
@@ -306,9 +278,12 @@
         </div>
     </div>
 
-    <table>
-        <thead id="resultTableHead"></thead>
-        <tbody id="resultTableBody"></tbody>
-    </table>
+    <!-- 테이블 본문만 스크롤 가능하게 설정 -->
+    <div class="table-container">
+        <table>
+            <thead id="resultTableHead"></thead>
+            <tbody id="resultTableBody"></tbody>
+        </table>
+    </div>
 </body>
 </html>
