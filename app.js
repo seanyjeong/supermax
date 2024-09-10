@@ -705,7 +705,7 @@ async function updateSusiData() {
     const response = await axios.get('https://script.google.com/macros/s/AKfycby3O3Dvzv-ZnPsgHjfITB7JV8kPL1K5fybnlwwlPKEkCPj2WabmzP0ZQylip6MHQKNPSA/exec');
     const data = response.data;
 
-    const query = 
+    const query = `
       INSERT INTO 25susiresult (
         교육원, 이름, 학교, 성별, 학년, 대학명, 학과명, 전형명, 환산내신, 등급, 기타, 실기점수, 총점, 최초합격여부, 최종합격여부,
         실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수, 실기4종목, 실기4기록, 실기4점수, 실기5종목, 실기5기록, 실기5점수, 실기6종목, 실기6기록, 실기6점수
@@ -744,7 +744,7 @@ async function updateSusiData() {
         실기6종목 = VALUES(실기6종목),
         실기6기록 = VALUES(실기6기록),
         실기6점수 = VALUES(실기6점수)
-    ;
+    `;
 
     const values = data.map(row => [
       row.education_center || null, 
@@ -809,6 +809,7 @@ updateSusiData();
 
 // 서버 시작 시 1분마다 updateSusiData 함수 실행
 setInterval(updateSusiData, 60 * 1000);
+
 
 
 
