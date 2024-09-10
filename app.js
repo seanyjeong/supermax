@@ -705,46 +705,46 @@ async function updateSusiData() {
     const response = await axios.get('https://script.google.com/macros/s/AKfycby3O3Dvzv-ZnPsgHjfITB7JV8kPL1K5fybnlwwlPKEkCPj2WabmzP0ZQylip6MHQKNPSA/exec');
     const data = response.data;
 
-    const query = `
+    const query = 
       INSERT INTO 25susiresult (
         교육원, 이름, 학교, 성별, 학년, 대학명, 학과명, 전형명, 환산내신, 등급, 기타, 실기점수, 총점, 최초합격여부, 최종합격여부,
         실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수, 실기4종목, 실기4기록, 실기4점수, 실기5종목, 실기5기록, 실기5점수, 실기6종목, 실기6기록, 실기6점수
       ) VALUES ?
       ON DUPLICATE KEY UPDATE 
-        교육원 = VALUES(교육원),
-        이름 = VALUES(이름),
-        학교 = VALUES(학교),
-        성별 = VALUES(성별),
-        학년 = VALUES(학년),
-        대학명 = VALUES(대학명),
-        학과명 = VALUES(학과명),
-        전형명 = VALUES(전형명),
-        환산내신 = VALUES(환산내신),
-        등급 = VALUES(등급),
-        기타 = VALUES(기타),
-        실기점수 = VALUES(실기점수),
-        총점 = VALUES(총점),
-        최초합격여부 = VALUES(최초합격여부),
-        최종합격여부 = VALUES(최종합격여부),
-        실기1종목 = VALUES(실기1종목),
-        실기1기록 = VALUES(실기1기록),
-        실기1점수 = VALUES(실기1점수),
-        실기2종목 = VALUES(실기2종목),
-        실기2기록 = VALUES(실기2기록),
-        실기2점수 = VALUES(실기2점수),
-        실기3종목 = VALUES(실기3종목),
-        실기3기록 = VALUES(실기3기록),
-        실기3점수 = VALUES(실기3점수),
-        실기4종목 = VALUES(실기4종목),
-        실기4기록 = VALUES(실기4기록),
-        실기4점수 = VALUES(실기4점수),
-        실기5종목 = VALUES(실기5종목),
-        실기5기록 = VALUES(실기5기록),
-        실기5점수 = VALUES(실기5점수),
-        실기6종목 = VALUES(실기6종목),
-        실기6기록 = VALUES(실기6기록),
-        실기6점수 = VALUES(실기6점수)
-    `;
+        교육원 = IF(교육원 != VALUES(교육원), VALUES(교육원), 교육원),
+        이름 = IF(이름 != VALUES(이름), VALUES(이름), 이름),
+        학교 = IF(학교 != VALUES(학교), VALUES(학교), 학교),
+        성별 = IF(성별 != VALUES(성별), VALUES(성별), 성별),
+        학년 = IF(학년 != VALUES(학년), VALUES(학년), 학년),
+        대학명 = IF(대학명 != VALUES(대학명), VALUES(대학명), 대학명),
+        학과명 = IF(학과명 != VALUES(학과명), VALUES(학과명), 학과명),
+        전형명 = IF(전형명 != VALUES(전형명), VALUES(전형명), 전형명),
+        환산내신 = IF(환산내신 != VALUES(환산내신), VALUES(환산내신), 환산내신),
+        등급 = IF(등급 != VALUES(등급), VALUES(등급), 등급),
+        기타 = IF(기타 != VALUES(기타), VALUES(기타), 기타),
+        실기점수 = IF(실기점수 != VALUES(실기점수), VALUES(실기점수), 실기점수),
+        총점 = IF(총점 != VALUES(총점), VALUES(총점), 총점),
+        최초합격여부 = IF(최초합격여부 != VALUES(최초합격여부), VALUES(최초합격여부), 최초합격여부),
+        최종합격여부 = IF(최종합격여부 != VALUES(최종합격여부), VALUES(최종합격여부), 최종합격여부),
+        실기1종목 = IF(실기1종목 != VALUES(실기1종목), VALUES(실기1종목), 실기1종목),
+        실기1기록 = IF(실기1기록 != VALUES(실기1기록), VALUES(실기1기록), 실기1기록),
+        실기1점수 = IF(실기1점수 != VALUES(실기1점수), VALUES(실기1점수), 실기1점수),
+        실기2종목 = IF(실기2종목 != VALUES(실기2종목), VALUES(실기2종목), 실기2종목),
+        실기2기록 = IF(실기2기록 != VALUES(실기2기록), VALUES(실기2기록), 실기2기록),
+        실기2점수 = IF(실기2점수 != VALUES(실기2점수), VALUES(실기2점수), 실기2점수),
+        실기3종목 = IF(실기3종목 != VALUES(실기3종목), VALUES(실기3종목), 실기3종목),
+        실기3기록 = IF(실기3기록 != VALUES(실기3기록), VALUES(실기3기록), 실기3기록),
+        실기3점수 = IF(실기3점수 != VALUES(실기3점수), VALUES(실기3점수), 실기3점수),
+        실기4종목 = IF(실기4종목 != VALUES(실기4종목), VALUES(실기4종목), 실기4종목),
+        실기4기록 = IF(실기4기록 != VALUES(실기4기록), VALUES(실기4기록), 실기4기록),
+        실기4점수 = IF(실기4점수 != VALUES(실기4점수), VALUES(실기4점수), 실기4점수),
+        실기5종목 = IF(실기5종목 != VALUES(실기5종목), VALUES(실기5종목), 실기5종목),
+        실기5기록 = IF(실기5기록 != VALUES(실기5기록), VALUES(실기5기록), 실기5기록),
+        실기5점수 = IF(실기5점수 != VALUES(실기5점수), VALUES(실기5점수), 실기5점수),
+        실기6종목 = IF(실기6종목 != VALUES(실기6종목), VALUES(실기6종목), 실기6종목),
+        실기6기록 = IF(실기6기록 != VALUES(실기6기록), VALUES(실기6기록), 실기6기록),
+        실기6점수 = IF(실기6점수 != VALUES(실기6점수), VALUES(실기6점수), 실기6점수)
+    ;
 
     const values = data.map(row => [
       row.education_center || null, 
@@ -792,24 +792,12 @@ async function updateSusiData() {
   } catch (error) {
     console.error('Error fetching data:', error);
   }
-}
-
-// '25susiupdate' 데이터를 업데이트하는 엔드포인트
-app.get('/25susiupdate', async (req, res) => {
-  try {
-    await updateSusiData();
-    res.status(200).json({ message: '25susiresult updated successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Update failed', error });
-  }
-});
-
+} 
 // 서버 시작 시 25susiupdate 즉시 실행
-// updateSusiData();
+updateSusiData();
 
 // 서버 시작 시 1분마다 updateSusiData 함수 실행
-// setInterval(updateSusiData, 60 * 1000);
-
+setInterval(updateSusiData, 60 * 1000);
 
 
 
