@@ -700,8 +700,8 @@ app.get('/26susi', authenticateToken, (req, res) => {
   });
 });
 
-// '25susiupdate' 데이터를 업데이트하는 엔드포인트
-app.get('/25susiupdate', async (req, res) => {
+// 25susiupdate 함수 정의
+async function updateSusiData() {
   try {
     const response = await axios.get('https://script.google.com/macros/s/AKfycby3O3Dvzv-ZnPsgHjfITB7JV8kPL1K5fybnlwwlPKEkCPj2WabmzP0ZQylip6MHQKNPSA/exec');
     const data = response.data;
@@ -759,23 +759,31 @@ app.get('/25susiupdate', async (req, res) => {
     connection.query(query, [values], (err, results) => {
       if (err) {
         console.error('Error updating 25susiresult:', err);
-        res.status(500).json({ message: 'Database update failed', error: err });
       } else {
-        res.status(200).json({ message: '25susiresult updated successfully' });
+        console.log('25susiresult updated successfully');
       }
     });
   } catch (error) {
     console.error('Error fetching data:', error);
-    res.status(500).json({ message: 'Data fetch failed', error });
+  }
+}
+
+// '25susiupdate' 데이터를 업데이트하는 엔드포인트
+app.get('/25susiupdate', async (req, res) => {
+  try {
+    await updateSusiData();
+    res.status(200).json({ message: '25susiresult updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Update failed', error });
   }
 });
 
-// 1분마다 데이터 업데이트
-setInterval(() => {
-  axios.get('http://localhost:3000/25susiupdate')
-    .then(response => console.log('25susiresult updated successfully:', response.data))
-    .catch(error => console.error('Error updating 25susiresult:', error));
-}, 60 * 1000);
+// 서버 시작 시 25susiupdate 즉시 실행
+updateSusiData();
+
+// 서버 시작 시 1분마다 updateSusiData 함수 실행
+setInterval(updateSusiData, 60 * 1000);
+
 
 
 
