@@ -3,8 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>맥스25수시실시간 조회</title>
+    <title>맥스체대입시 25수시 실시간 조회</title>
     <style>
+        /* 타이틀을 중앙 정렬 */
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
         /* 전체 폼 영역을 가로로 배치, 요소 간격을 줄이기 */
         .filter-container {
             display: flex;
@@ -20,10 +27,16 @@
             margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
         }
 
-        .filter-container select, .filter-container input {
+        .filter-container select, .filter-container input, .filter-container button {
             width: 180px;
             padding: 8px;
             font-size: 16px;
+        }
+
+        /* 검색 버튼 크기를 네모칸과 맞추기 */
+        .filter-container button {
+            width: 180px;
+            cursor: pointer; /* 커서를 포인터로 변경 */
         }
 
         /* 표 전체 스타일 */
@@ -81,7 +94,7 @@
                 flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
             }
 
-            .filter-container select, .filter-container input {
+            .filter-container select, .filter-container input, .filter-container button {
                 width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
             }
         }
