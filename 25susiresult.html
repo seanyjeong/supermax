@@ -3,7 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>25susiresult 조회</title>
+    <title>25수시실시간수합</title>
+    <style>
+        /* 표 전체 스타일 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        /* 표 헤더 스타일 */
+        th {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        /* 표 셀 스타일 */
+        td {
+            text-align: center;
+            padding: 10px;
+            font-size: 13px;
+            white-space: nowrap; /* 줄바꿈 방지 */
+            overflow: hidden; /* 내용이 넘칠 경우 숨기기 */
+            text-overflow: ellipsis; /* 내용이 넘치면 생략표시 (...) */
+            max-width: 150px; /* 각 셀의 최대 너비를 제한 */
+            border-bottom: 1px solid #ddd;
+        }
+
+        /* 마우스를 올릴 때 행 강조 */
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        /* 테이블 외곽선 */
+        table, td, th {
+            border: 1px solid #ddd;
+        }
+
+        /* 표 기본 폰트 스타일 */
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        /* 반응형 처리 */
+        @media screen and (max-width: 768px) {
+            td, th {
+                font-size: 12px;
+            }
+        }
+    </style>
     <script>
         // 슈퍼맥스 서버에서 데이터를 가져오는 함수
         async function fetchDropdownData() {
@@ -135,7 +188,7 @@
     <label for="admissionType">전형명:</label>
     <select id="admissionType"></select><br>
 
-    <table border="1">
+    <table>
         <thead>
             <tr>
                 <th>교육원</th>
