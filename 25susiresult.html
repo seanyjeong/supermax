@@ -155,31 +155,37 @@
             // 총점을 기준으로 내림차순 정렬
             data.sort((a, b) => b.총점 - a.총점);
 
-            // 헤더 구성
-            let headers = `
-                <th>순위</th>
-                <th>교육원</th>
-                <th>이름</th>
-                <th>학교</th>
-                <th>성별</th>
-                <th>학년</th>
-                <th>환산내신</th>
-                <th>등급</th>
-                <th>실기점수</th>
-                <th>총점</th>
-                <th>최초합격여부</th>
-                <th>최종합격여부</th>
+            // 첫 번째 줄 헤더 구성
+            let headers1 = `
+                <th rowspan="2">순위</th>
+                <th rowspan="2">교육원</th>
+                <th rowspan="2">이름</th>
+                <th rowspan="2">학교</th>
+                <th rowspan="2">성별</th>
+                <th rowspan="2">학년</th>
+                <th rowspan="2">환산내신</th>
+                <th rowspan="2">등급</th>
+                <th rowspan="2">실기점수</th>
+                <th rowspan="2">총점</th>
+                <th rowspan="2">최초합격여부</th>
+                <th rowspan="2">최종합격여부</th>
             `;
-            
+
+            // 두 번째 줄 헤더 구성 (기록/점수)
+            let headers2 = ``;
+            let maxPractical = 0;
+
             // 실기 항목이 있는지 확인하고 동적으로 헤더 추가
             for (let i = 1; i <= 6; i++) {
                 const practicalField = `실기${i}종목`;
                 if (data.some(row => row[practicalField])) {
-                    headers += `<th colspan="2">${data[0][practicalField] || `실기${i}`}</th>`;
+                    headers1 += `<th colspan="2">${data[0][practicalField] || `실기${i}`}</th>`;
+                    headers2 += `<th>기록</th><th>점수</th>`;
+                    maxPractical = i;
                 }
             }
 
-            resultTableHead.innerHTML = `<tr>${headers}</tr>`;
+            resultTableHead.innerHTML = `<tr>${headers1}</tr><tr>${headers2}</tr>`;
 
             // 데이터 행 구성 (순위 추가)
             data.forEach((row, index) => {
@@ -199,7 +205,7 @@
                 `;
 
                 // 동적으로 실기 항목만 표시
-                for (let i = 1; i <= 6; i++) {
+                for (let i = 1; i <= maxPractical; i++) {
                     if (row[`실기${i}종목`]) {
                         rowHtml += `
                             <td>${row[`실기${i}기록`] || ''}</td>
