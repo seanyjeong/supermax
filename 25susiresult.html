@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>25susiresult 조회</title>
     <style>
+        /* 전체 폼 영역을 가로로 배치 */
+        .filter-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .filter-container label {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .filter-container select {
+            width: 200px;
+            padding: 10px;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
         /* 표 전체 스타일 */
         table {
             width: 100%;
@@ -99,7 +118,7 @@
             }
         }
 
-        // 결과 데이터를 화면에 표시하는 함수 (실기종목이 있는 경우만 표시)
+        // 결과 데이터를 화면에 표시하는 함수 (총점 내림차순 정렬, 순위 추가)
         function displayData(data) {
             const resultTableHead = document.getElementById('resultTableHead');
             const resultTableBody = document.getElementById('resultTableBody');
@@ -110,8 +129,12 @@
                 return;
             }
 
+            // 총점을 기준으로 내림차순 정렬
+            data.sort((a, b) => b.총점 - a.총점);
+
             // 헤더 구성
             let headers = `
+                <th>순위</th>
                 <th>교육원</th>
                 <th>이름</th>
                 <th>학교</th>
@@ -137,9 +160,10 @@
 
             resultTableHead.innerHTML = `<tr>${headers}</tr>`;
 
-            // 데이터 행 구성
-            data.forEach(row => {
+            // 데이터 행 구성 (순위 추가)
+            data.forEach((row, index) => {
                 let rowHtml = `
+                    <td>${index + 1}</td>
                     <td>${row.교육원 || ''}</td>
                     <td>${row.이름 || ''}</td>
                     <td>${row.학교 || ''}</td>
@@ -203,16 +227,22 @@
     </script>
 </head>
 <body>
-    <h1>25수시 실시간 조회</h1>
+    <h1>25susiresult 조회</h1>
 
-    <label for="university">대학명:</label>
-    <select id="university"></select><br>
-
-    <label for="major">학과명:</label>
-    <select id="major"></select><br>
-
-    <label for="admissionType">전형명:</label>
-    <select id="admissionType"></select><br>
+    <div class="filter-container">
+        <div>
+            <label for="university">대학명:</label>
+            <select id="university"></select>
+        </div>
+        <div>
+            <label for="major">학과명:</label>
+            <select id="major"></select>
+        </div>
+        <div>
+            <label for="admissionType">전형명:</label>
+            <select id="admissionType"></select>
+        </div>
+    </div>
 
     <table>
         <thead id="resultTableHead"></thead>
