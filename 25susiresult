@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>25susiresult 조회</title>
+    <script>
+        // 슈퍼맥스 서버에서 데이터를 가져오는 함수
+        async function fetchDropdownData() {
+            try {
+                const response = await fetch('https://supermax.kr/25susi-dropdowns');
+                const data = await response.json();
+                populateDropdown('university', data.universities);
+            } catch (error) {
+                console.error('Error fetching dropdown data from supermax.kr:', error);
+            }
+        }
+
+        function populateDropdown(elementId, items) {
+            const select = document.getElementById(elementId);
+            select.innerHTML = `<option value="">선택하세요</option>`;
+            items.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item;
+                option.text = item;
+                select.appendChild(option);
+            });
+        }
+
+        // 슈퍼맥스 서버에서 필터된 데이터를 가져오는 함수
+        async function fetchFilteredData() {
+            const university = document.getElementById('university').value;
+            const major = document.getElementById('major').value;
+            const admissionType = document.getElementById('admissionType').value;
+
+            try {
+                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`);
+                const data = await response.json();
+                displayData(data);
+            } catch (error) {
+                console.error('Error fetching filtered data from supermax.kr:', error);
+            }
+        }
+
+        function displayData(data) {
+            const resultTable = document.getElementById('resultTableBody');
+            resultTable.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.교육원}</td>
+                    <td>${row.이름}</td>
+                    <td>${row.학교}</td>
+                    <td>${row.성별}</td>
+                    <td>${row.학년}</td>
+                    <td>${row.환산내신}</td>
+                    <td>${row.등급}</td>
+                    <td>${row.실기점수}</td>
+                    <td>${row.총점}</td>
+                    <td>${row.최초합격여부}</td>
+                    <td>${row.최종합격여부}</td>
+                    <td>${row.실기1종목}</td>
+                    <td>${row.실기1기록}</td>
+                    <td>${row.실기1점수}</td>
+                    <td>${row.실기2종목}</td>
+                    <td>${row.실기2기록}</td>
+                    <td>${row.실기2점수}</td>
+                    <td>${row.실기3종목}</td>
+                    <td>${row.실기3기록}</td>
+                    <td>${row.실기3점수}</td>
+                    <td>${row.실기4종목}</td>
+                    <td>${row.실기4기록}</td>
+                    <td>${row.실기4점수}</td>
+                    <td>${row.실기5종목}</td>
+                    <td>${row.실기5기록}</td>
+                    <td>${row.실기5점수}</td>
+                    <td>${row.실기6종목}</td>
+                    <td>${row.실기6기록}</td>
+                    <td>${row.실기6점수}</td>
+                `;
+                resultTable.appendChild(tr);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchDropdownData();
+
+            document.getElementById('university').addEventListener('change', async () => {
+                const university = document.getElementById('university').value;
+                try {
+                    const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`);
+                    const data = await response.json();
+                    populateDropdown('major', data.majors);
+                } catch (error) {
+                    console.error('Error fetching majors from supermax.kr:', error);
+                }
+            });
+
+            document.getElementById('major').addEventListener('change', async () => {
+                const university = document.getElementById('university').value;
+                const major = document.getElementById('major').value;
+                try {
+                    const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`);
+                    const data = await response.json();
+                    populateDropdown('admissionType', data.admissionTypes);
+                } catch (error) {
+                    console.error('Error fetching admission types from supermax.kr:', error);
+                }
+            });
+
+            document.getElementById('searchButton').addEventListener('click', fetchFilteredData);
+        });
+    </script>
+</head>
+<body>
+    <h1>25susiresult 조회</h1>
+
+    <label for="university">대학명:</label>
+    <select id="university"></select><br>
+
+    <label for="major">학과명:</label>
+    <select id="major"></select><br>
+
+    <label for="admissionType">전형명:</label>
+    <select id="admissionType"></select><br>
+
+    <button id="searchButton">검색</button>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>교육원</th>
+                <th>이름</th>
+                <th>학교</th>
+                <th>성별</th>
+                <th>학년</th>
+                <th>환산내신</th>
+                <th>등급</th>
+                <th>실기점수</th>
+                <th>총점</th>
+                <th>최초합격여부</th>
+                <th>최종합격여부</th>
+                <th>실기1종목</th>
+                <th>실기1기록</th>
+                <th>실기1점수</th>
+                <th>실기2종목</th>
+                <th>실기2기록</th>
+                <th>실기2점수</th>
+                <th>실기3종목</th>
+                <th>실기3기록</th>
+                <th>실기3점수</th>
+                <th>실기4종목</th>
+                <th>실기4기록</th>
+                <th>실기4점수</th>
+                <th>실기5종목</th>
+                <th>실기5기록</th>
+                <th>실기5점수</th>
+                <th>실기6종목</th>
+                <th>실기6기록</th>
+                <th>실기6점수</th>
+            </tr>
+        </thead>
+        <tbody id="resultTableBody"></tbody>
+    </table>
+</body>
+</html>
