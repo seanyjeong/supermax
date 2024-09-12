@@ -773,6 +773,11 @@ async function updateSusiData() {
     console.error('Error fetching data:', error);
   }
 }
+// 서버 시작 시 25susiupdate 즉시 실행
+updateSusiData();
+
+// 서버 시작 시 1분마다 updateSusiData 함수 실행
+setInterval(updateSusiData, 60 * 1000);
 
 
 
