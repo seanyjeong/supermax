@@ -705,110 +705,74 @@ async function updateSusiData() {
     const response = await axios.get('https://script.google.com/macros/s/AKfycby3O3Dvzv-ZnPsgHjfITB7JV8kPL1K5fybnlwwlPKEkCPj2WabmzP0ZQylip6MHQKNPSA/exec');
     const data = response.data;
 
-    const query = `
-      INSERT INTO 25susiresult (
-        교육원, 이름, 학교, 성별, 학년, 대학명, 학과명, 전형명, 환산내신, 등급, 기타, 실기점수, 총점, 최초합격여부, 최종합격여부,
-        실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수, 실기4종목, 실기4기록, 실기4점수, 실기5종목, 실기5기록, 실기5점수, 실기6종목, 실기6기록, 실기6점수
-      ) VALUES ?
-      ON DUPLICATE KEY UPDATE 
-        교육원 = VALUES(교육원),
-        이름 = VALUES(이름),
-        학교 = VALUES(학교),
-        성별 = VALUES(성별),
-        학년 = VALUES(학년),
-        대학명 = VALUES(대학명),
-        학과명 = VALUES(학과명),
-        전형명 = VALUES(전형명),
-        환산내신 = VALUES(환산내신),
-        등급 = VALUES(등급),
-        기타 = VALUES(기타),
-        실기점수 = VALUES(실기점수),
-        총점 = VALUES(총점),
-        최초합격여부 = VALUES(최초합격여부),
-        최종합격여부 = VALUES(최종합격여부),
-        실기1종목 = VALUES(실기1종목),
-        실기1기록 = VALUES(실기1기록),
-        실기1점수 = VALUES(실기1점수),
-        실기2종목 = VALUES(실기2종목),
-        실기2기록 = VALUES(실기2기록),
-        실기2점수 = VALUES(실기2점수),
-        실기3종목 = VALUES(실기3종목),
-        실기3기록 = VALUES(실기3기록),
-        실기3점수 = VALUES(실기3점수),
-        실기4종목 = VALUES(실기4종목),
-        실기4기록 = VALUES(실기4기록),
-        실기4점수 = VALUES(실기4점수),
-        실기5종목 = VALUES(실기5종목),
-        실기5기록 = VALUES(실기5기록),
-        실기5점수 = VALUES(실기5점수),
-        실기6종목 = VALUES(실기6종목),
-        실기6기록 = VALUES(실기6기록),
-        실기6점수 = VALUES(실기6점수)
-    `;
+    // 테이블 비우기
+    const truncateQuery = `TRUNCATE TABLE 25susiresult`;
 
-    const values = data.map(row => [
-      row.education_center || null, 
-      row.name || null,
-      row.school || null,
-      row.gender || '',
-      row.grade || '',
-      row.university || null,
-      row.major || null,
-      row.admission_type || '',
-      row.score_converted || null,
-      row.grade_level || null,
-      row.other_info || null,
-      row.practical_score || null,
-      row.total_score || null,
-      row.initial_pass || null,
-      row.final_pass || null,
-      row.practical1_name || null,
-      row.practical1_record || null,
-      row.practical1_score || null,
-      row.practical2_name || null,
-      row.practical2_record || null,
-      row.practical2_score || null,
-      row.practical3_name || null,
-      row.practical3_record || null,
-      row.practical3_score || null,
-      row.practical4_name || null,
-      row.practical4_record || null,
-      row.practical4_score || null,
-      row.practical5_name || null,
-      row.practical5_record || null,
-      row.practical5_score || null,
-      row.practical6_name || null,
-      row.practical6_record || null,
-      row.practical6_score || null
-    ]);
-
-    connection.query(query, [values], (err, results) => {
+    connection.query(truncateQuery, (err) => {
       if (err) {
-        console.error('Error updating 25susiresult:', err);
-      } else {
-        console.log('25susiresult updated successfully');
+        console.error('Error truncating 25susiresult:', err);
+        return;
       }
+
+      console.log('25susiresult table truncated successfully');
+
+      // 새로운 데이터 삽입
+      const insertQuery = `
+        INSERT INTO 25susiresult (
+          교육원, 이름, 학교, 성별, 학년, 대학명, 학과명, 전형명, 환산내신, 등급, 기타, 실기점수, 총점, 최초합격여부, 최종합격여부,
+          실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수, 실기4종목, 실기4기록, 실기4점수, 실기5종목, 실기5기록, 실기5점수, 실기6종목, 실기6기록, 실기6점수
+        ) VALUES ?
+      `;
+
+      const values = data.map(row => [
+        row.education_center || null, 
+        row.name || null,
+        row.school || null,
+        row.gender || '',
+        row.grade || '',
+        row.university || null,
+        row.major || null,
+        row.admission_type || '',
+        row.score_converted || null,
+        row.grade_level || null,
+        row.other_info || null,
+        row.practical_score || null,
+        row.total_score || null,
+        row.initial_pass || null,
+        row.final_pass || null,
+        row.practical1_name || null,
+        row.practical1_record || null,
+        row.practical1_score || null,
+        row.practical2_name || null,
+        row.practical2_record || null,
+        row.practical2_score || null,
+        row.practical3_name || null,
+        row.practical3_record || null,
+        row.practical3_score || null,
+        row.practical4_name || null,
+        row.practical4_record || null,
+        row.practical4_score || null,
+        row.practical5_name || null,
+        row.practical5_record || null,
+        row.practical5_score || null,
+        row.practical6_name || null,
+        row.practical6_record || null,
+        row.practical6_score || null
+      ]);
+
+      connection.query(insertQuery, [values], (err, results) => {
+        if (err) {
+          console.error('Error inserting data into 25susiresult:', err);
+        } else {
+          console.log('25susiresult updated successfully');
+        }
+      });
     });
   } catch (error) {
     console.error('Error fetching data:', error);
   }
 }
 
-// '25susiupdate' 데이터를 업데이트하는 엔드포인트
-app.get('/25susiupdate', async (req, res) => {
-  try {
-    await updateSusiData();
-    res.status(200).json({ message: '25susiresult updated successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Update failed', error });
-  }
-});
-
-// 서버 시작 시 25susiupdate 즉시 실행
-updateSusiData();
-
-// 서버 시작 시 1분마다 updateSusiData 함수 실행
-setInterval(updateSusiData, 60 * 1000);
 
 
 
