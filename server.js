@@ -37,7 +37,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // 학생 정보를 입력받아 저장하는 POST 엔드포인트
-app.post('/students', (req, res) => {
+app.post('/api/students', (req, res) => {
   const { student_name, korean, math, english, science1, science2 } = req.body;
 
   const query = 'INSERT INTO test (student_name, korean, math, english, science1, science2) VALUES (?, ?, ?, ?, ?, ?)';
@@ -53,7 +53,7 @@ app.post('/students', (req, res) => {
 });
 
 // 저장된 학생 정보를 조회하는 GET 엔드포인트
-app.get('/students', (req, res) => {
+app.get('/api/students', (req, res) => {
   const query = 'SELECT * FROM test';
   connection.query(query, (err, results) => {
     if (err) {
