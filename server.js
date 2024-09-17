@@ -49,47 +49,55 @@ app.post('/api/calculate', (req, res) => {
 
   connection.query(query, [major, name, school], async (err, results) => {
     if (err) {
-      console.error('데이터 조회 오류:', err); // 로그에 오류 기록
+      console.error('데이터 조회 오류:', err);
       return res.status(500).json({ message: '데이터베이스 조회 오류' });
     }
 
     if (results.length === 0) {
-      console.log('해당 학생 또는 학교 정보를 찾을 수 없습니다.'); // 추가 로그
+      console.log('해당 학생 또는 학교 정보를 찾을 수 없습니다.');
       return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
     }
 
     const student = results[0];
-    console.log('조회된 학생 정보:', student); // 학생 정보 확인
-
     let totalScore = 0;
 
     // 1. 계산 방법에 따른 처리 (백/백)
-    if (student.계산방법 === '백/백') {
-      if (student.선택과목규칙 === '국수영탐택3') {
-        // 국수영탐 상위 3개 과목을 백분위로 계산
-        const top3SubjectsScore = calculateTop3SubjectsWithPercentile(student, student.국어반영비율, student.수학반영비율, student.영어반영비율);
-        totalScore = top3SubjectsScore;
-      } else if (student.선택과목규칙 === '국수영택2') {
-        // 국수영 중 상위 2개 과목을 백분위로 계산
-        const top2SubjectsScore = calculateTop2SubjectsWithPercentile(student, student.국어반영비율, student.수학반영비율, student.영어반영비율);
-        totalScore = top2SubjectsScore;
+    try {
+      if (student.계산방법 === '백/백') {
+        if (student.선택과목규칙 === '국수영탐택3') {
+          // 국수영탐 상위 3개 과목을 백분위로 계산
+          const top3SubjectsScore = calculateTop3SubjectsWithPercentile(student, student.국어반영비율, student.수학반영비율, student.영어반영비율);
+          totalScore = top3SubjectsScore;
+        } else if (student.선택과목규칙 === '국수영택2') {
+          // 국수영 중 상위 2개 과목을 백분위로 계산
+          const top2SubjectsScore = calculateTop2SubjectsWithPercentile(student, student.국어반영비율, student.수학반영비율, student.영어반영비율);
+          totalScore = top2SubjectsScore;
+        }
+        // 탐구 점수 추가
+        const scienceScore = calculateScienceScore(student.탐구1백분위, student.탐구2백분위, student.탐구반영과목수, student.탐구반영비율);
+        totalScore += scienceScore;
       }
-      // 탐구 점수 추가
-      const scienceScore = calculateScienceScore(student.탐구1백분위, student.탐구2백분위, student.탐구반영과목수, student.탐구반영비율);
-      totalScore += scienceScore;
-    }
 
-    // 2. 한국사 반영 방법 확인
-    if (student.한국사반영방법 === '총점합산') {
-      // 한국사 점수를 가져와서 총점에 추가
-      const koreanHistoryScore = await getKoreanHistoryScore(student.한국사등급);
-      totalScore += koreanHistoryScore;
-    }
+      // 2. 한국사 반영 방법 확인
+      if (student.한국사반영방법 === '총점합산') {
+        try {
+          const koreanHistoryScore = await getKoreanHistoryScore(student.한국사등급);
+          totalScore += koreanHistoryScore;
+        } catch (historyError) {
+          console.error('한국사 점수 조회 오류:', historyError);
+          return res.status(500).json({ message: '한국사 점수 조회 오류' });
+        }
+      }
 
-    console.log('최종 계산된 점수:', totalScore); // 최종 점수 로그 확인
-    res.json({ name: student.이름, totalScore });  // 최종 점수 반환
+      console.log('최종 계산된 점수:', totalScore);
+      res.json({ name: student.이름, totalScore });
+    } catch (error) {
+      console.error('점수 계산 중 오류 발생:', error);
+      res.status(500).json({ message: '점수 계산 중 오류가 발생했습니다.' });
+    }
   });
 });
+
 
 
 
