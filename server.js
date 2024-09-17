@@ -46,6 +46,8 @@ app.post('/api/calculate', (req, res) => {
     JOIN 학교 ON 학생정보.학교 = 학교.학교명 AND 학교.전공 = ?
     WHERE 학생정보.이름 = ? AND 학생정보.학교 = ?
   `;
+    console.log('쿼리 실행: ', query); // 쿼리 로그 추가
+  console.log('쿼리 파라미터: ', [major, name, school]); // 쿼리 파라미터 로그 추가
 
   connection.query(query, [major, name, school], async (err, results) => {
     if (err) {
