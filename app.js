@@ -751,7 +751,7 @@ async function updateSusiData() {
       `;
 
     const values = data.map(row => [
-      row.education_center || '', row.name || null, row.school || '', row.gender || '', row.grade || '', row.university || null,
+      row.education_center || '', row.name || '', row.school || '', row.gender || '', row.grade || '', row.university || null,
       row.major || '', row.admission_type || '', row.score_converted || null, row.grade_level || null, row.other_info || null,
       row.practical_score || null, row.total_score || null, row.initial_pass || null, row.final_pass || null,
       row.practical1_name || null, row.practical1_record || null, row.practical1_score || null,
