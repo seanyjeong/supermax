@@ -1,5 +1,3 @@
-// server.js
-
 const express = require('express');
 const mysql = require('mysql');
 
@@ -26,19 +24,42 @@ connection.connect((err) => {
 // Express 앱 생성
 const app = express();
 
-// 간단한 라우터 설정 (예: 데이터베이스에서 데이터를 가져오는 예시)
-app.get('/', (req, res) => {
-  connection.query('SELECT * FROM some_table LIMIT 10', (err, results) => {
+// JSON 형식의 데이터를 처리할 수 있게 설정
+app.use(express.json());
+
+// 정적 파일 제공 (public 폴더 내의 파일을 제공)
+app.use(express.static('public'));
+
+// 학생 정보를 입력받아 저장하는 POST 엔드포인트
+app.post('/students', (req, res) => {
+  const { student_name, korean, math, english, science1, science2 } = req.body;
+
+  const query = 'INSERT INTO test (student_name, korean, math, english, science1, science2) VALUES (?, ?, ?, ?, ?, ?)';
+  const values = [student_name, korean, math, english, science1, science2];
+
+  connection.query(query, values, (err, result) => {
     if (err) {
+      console.error('데이터 입력 오류:', err);
+      return res.status(500).send('데이터베이스 쿼리 오류');
+    }
+    res.send('데이터가 성공적으로 저장되었습니다.');
+  });
+});
+
+// 저장된 학생 정보를 조회하는 GET 엔드포인트
+app.get('/students', (req, res) => {
+  const query = 'SELECT * FROM test';
+  connection.query(query, (err, results) => {
+    if (err) {
+      console.error('데이터 조회 오류:', err);
       return res.status(500).send('데이터베이스 쿼리 오류');
     }
     res.json(results);
   });
 });
 
-// 3000번 포트가 사용 중이므로 다른 포트로 설정 (예: 4000)
+// 서버 실행 (포트 4000 사용)
 const PORT = 4000;
-
 app.listen(PORT, () => {
   console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
 });
