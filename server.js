@@ -36,7 +36,6 @@ app.use(express.json());
 // 정적 파일 제공 (public 폴더 내의 파일을 제공)
 app.use(express.static('public'));
 
-// 학생 정보를 조회하고 점수를 계산하는 엔드포인트 (학교명과 전공 추가)
 app.post('/api/calculate', (req, res) => {
   const { name, school, major } = req.body;
 
@@ -51,11 +50,11 @@ app.post('/api/calculate', (req, res) => {
   connection.query(query, [major, name, school], async (err, results) => {
     if (err) {
       console.error('데이터 조회 오류:', err);
-      return res.status(500).send('데이터베이스 조회 오류');
+      return res.status(500).json({ message: '데이터베이스 조회 오류' });  // 오류 메시지를 JSON으로 반환
     }
 
     if (results.length === 0) {
-      return res.status(404).send('학생 정보를 찾을 수 없습니다.');
+      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });  // 학생을 찾을 수 없을 때도 JSON으로 반환
     }
 
     const student = results[0];
@@ -84,58 +83,10 @@ app.post('/api/calculate', (req, res) => {
       totalScore += koreanHistoryScore;
     }
 
-    res.json({ name: student.이름, totalScore });
+    res.json({ name: student.이름, totalScore });  // 최종 점수 계산 후 JSON으로 반환
   });
 });
 
-// 백분위를 사용하는 상위 3개 과목 계산 로직 (국수영탐택3)
-function calculateTop3SubjectsWithPercentile(student, koreanRatio, mathRatio, englishRatio) {
-  const subjects = [
-    student.국어백분위 * (koreanRatio / 100),
-    student.수학백분위 * (mathRatio / 100),
-    student.영어백분위 * (englishRatio / 100),
-    student.탐구1백분위,
-    student.탐구2백분위
-  ];
-  subjects.sort((a, b) => b - a);  // 내림차순 정렬
-  const top3 = subjects.slice(0, 3);  // 상위 3개 선택
-  return top3.reduce((acc, score) => acc + score, 0);
-}
-
-// 백분위를 사용하는 상위 2개 과목 계산 로직 (국수영택2)
-function calculateTop2SubjectsWithPercentile(student, koreanRatio, mathRatio, englishRatio) {
-  const subjects = [
-    student.국어백분위 * (koreanRatio / 100),
-    student.수학백분위 * (mathRatio / 100),
-    student.영어백분위 * (englishRatio / 100)
-  ];
-  subjects.sort((a, b) => b - a);  // 내림차순 정렬
-  const top2 = subjects.slice(0, 2);  // 상위 2개 선택
-  return top2.reduce((acc, score) => acc + score, 0);
-}
-
-// 탐구 과목 점수 계산 로직 (비율에 따른 백분위 계산)
-function calculateScienceScore(science1, science2, subjectCount, scienceRatio) {
-  if (subjectCount === 2) {
-    return ((science1 + science2) / 2) * (scienceRatio / 100);
-  } else if (subjectCount === 1) {
-    return Math.max(science1, science2) * (scienceRatio / 100);
-  }
-  return 0;
-}
-
-// 한국사 점수 조회
-function getKoreanHistoryScore(grade) {
-  const query = 'SELECT 점수 FROM 한국사점수 WHERE 등급 = ?';
-  return new Promise((resolve, reject) => {
-    connection.query(query, [grade], (err, results) => {
-      if (err) {
-        return reject('데이터베이스 조회 오류');
-      }
-      resolve(results[0].점수);
-    });
-  });
-}
 
 
 // 서버 실행 (포트 4000 사용)
