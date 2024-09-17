@@ -36,33 +36,76 @@ app.use(express.json());
 // 정적 파일 제공 (public 폴더 내의 파일을 제공)
 app.use(express.static('public'));
 
-// 학생 정보를 입력받아 저장하는 POST 엔드포인트
-app.post('/api/students', (req, res) => {
-  const { student_name, korean, math, english, science1, science2 } = req.body;
+// 학생 정보를 조회하고 점수를 계산하는 엔드포인트
+app.post('/api/calculate', (req, res) => {
+  const { name } = req.body;
 
-  const query = 'INSERT INTO test (student_name, korean, math, english, science1, science2) VALUES (?, ?, ?, ?, ?, ?)';
-  const values = [student_name, korean, math, english, science1, science2];
-
-  connection.query(query, values, (err, result) => {
-    if (err) {
-      console.error('데이터 입력 오류:', err);
-      return res.status(500).send('데이터베이스 쿼리 오류');
-    }
-    res.send('데이터가 성공적으로 저장되었습니다.');
-  });
-});
-
-// 저장된 학생 정보를 조회하는 GET 엔드포인트
-app.get('/api/students', (req, res) => {
-  const query = 'SELECT * FROM test';
-  connection.query(query, (err, results) => {
+  // 학생 이름으로 해당 학생의 점수를 조회하는 쿼리
+  const query = 'SELECT * FROM 학생정보 WHERE 이름 = ?';
+  connection.query(query, [name], (err, results) => {
     if (err) {
       console.error('데이터 조회 오류:', err);
-      return res.status(500).send('데이터베이스 쿼리 오류');
+      return res.status(500).send('데이터베이스 조회 오류');
     }
-    res.json(results);
+
+    if (results.length === 0) {
+      return res.status(404).send('학생을 찾을 수 없습니다.');
+    }
+
+    // 학생 정보 가져오기
+    const student = results[0];
+
+    // 상위 3개 과목 점수 계산
+    const top3SubjectsScore = calculateTop3Subjects(student);
+
+    // 탐구 과목 계산
+    const scienceScore = calculateScienceScore(student.탐구1표준점수, student.탐구2표준점수, student.탐구반영과목수);
+
+    // 총점 계산
+    let totalScore = top3SubjectsScore + scienceScore;
+
+    // 한국사 점수 추가 (총점합산 방식)
+    if (student.한국사반영방법 === '총점합산') {
+      totalScore += getKoreanHistoryScore(student.한국사등급);
+    }
+
+    res.json({ name: student.이름, totalScore });
   });
 });
+
+// 상위 3개 과목 계산 로직
+function calculateTop3Subjects(student) {
+  const subjects = [student.국어표준점수, student.수학표준점수, student.영어표준점수, student.탐구1표준점수, student.탐구2표준점수];
+  subjects.sort((a, b) => b - a);  // 내림차순 정렬
+  const top3 = subjects.slice(0, 3);  // 상위 3개 선택
+  return top3.reduce((acc, score) => acc + score, 0);
+}
+
+// 탐구 과목 점수 계산 로직
+function calculateScienceScore(science1, science2, count) {
+  if (count === 2) {
+    return (science1 + science2) / 2;  // 두 과목 평균
+  } else if (count === 1) {
+    return Math.max(science1, science2);  // 높은 값 선택
+  }
+  return 0;  // 탐구 과목 반영 안할 경우
+}
+
+// 한국사 점수 계산
+function getKoreanHistoryScore(grade) {
+  const koreanHistoryScores = {
+    1: 2.0,
+    2: 1.5,
+    3: 1.0,
+    4: 0.5,
+    5: 0.0,
+    6: 0.0,
+    7: 0.0,
+    8: 0.0,
+    9: 0.0
+  };
+  return koreanHistoryScores[grade];
+}
 
 // 서버 실행 (포트 4000 사용)
 const PORT = 4000;
