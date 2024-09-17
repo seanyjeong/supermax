@@ -9,7 +9,20 @@
   <h1>학생 점수 계산</h1>
   <form id="scoreForm">
     <label for="name">학생 이름:</label>
-    <input type="text" id="name" name="name" required>
+    <input type="text" id="name" name="name" required><br>
+
+    <label for="school">학교명:</label>
+    <select id="school" name="school" required>
+      <option value="성신여자대학교">성신여자대학교</option>
+      <option value="백석대학교">백석대학교</option>
+    </select><br>
+
+    <label for="major">전공:</label>
+    <select id="major" name="major" required>
+      <option value="스포츠레저전공">스포츠레저전공</option>
+      <option value="스포츠과학부">스포츠과학부</option>
+    </select><br>
+
     <button type="submit">계산</button>
   </form>
 
@@ -20,6 +33,8 @@
       event.preventDefault();  // 기본 폼 제출 방지
 
       const name = document.getElementById('name').value;
+      const school = document.getElementById('school').value;
+      const major = document.getElementById('major').value;
 
       // POST 요청을 통해 점수 계산 API 호출
       fetch('https://supermax.kr/api/calculate', {
@@ -27,7 +42,7 @@
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name, school, major })
       })
       .then(response => response.json())
       .then(data => {
