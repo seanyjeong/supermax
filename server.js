@@ -49,15 +49,18 @@ app.post('/api/calculate', (req, res) => {
 
   connection.query(query, [major, name, school], async (err, results) => {
     if (err) {
-      console.error('데이터 조회 오류:', err);
-      return res.status(500).json({ message: '데이터베이스 조회 오류' });  // 오류 메시지를 JSON으로 반환
+      console.error('데이터 조회 오류:', err); // 로그에 오류 기록
+      return res.status(500).json({ message: '데이터베이스 조회 오류' });
     }
 
     if (results.length === 0) {
-      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });  // 학생을 찾을 수 없을 때도 JSON으로 반환
+      console.log('해당 학생 또는 학교 정보를 찾을 수 없습니다.'); // 추가 로그
+      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
     }
 
     const student = results[0];
+    console.log('조회된 학생 정보:', student); // 학생 정보 확인
+
     let totalScore = 0;
 
     // 1. 계산 방법에 따른 처리 (백/백)
@@ -83,9 +86,11 @@ app.post('/api/calculate', (req, res) => {
       totalScore += koreanHistoryScore;
     }
 
-    res.json({ name: student.이름, totalScore });  // 최종 점수 계산 후 JSON으로 반환
+    console.log('최종 계산된 점수:', totalScore); // 최종 점수 로그 확인
+    res.json({ name: student.이름, totalScore });  // 최종 점수 반환
   });
 });
+
 
 
 
