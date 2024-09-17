@@ -1,5 +1,6 @@
 const express = require('express');
 const mysql = require('mysql');
+const cors = require('cors');  // CORS 미들웨어 추가
 
 // 데이터베이스 연결 설정
 const db_config = {
@@ -23,6 +24,11 @@ connection.connect((err) => {
 
 // Express 앱 생성
 const app = express();
+
+// CORS 설정: 특정 도메인만 허용
+app.use(cors({
+  origin: ['https://supermax.co.kr', 'https://seanyjeong.github.io', 'https://chejump.com', 'https://score.ilsanmax.com']
+}));
 
 // JSON 형식의 데이터를 처리할 수 있게 설정
 app.use(express.json());
