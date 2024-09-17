@@ -1,7 +1,7 @@
 // server.js
 
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('mysql');
 
 // 데이터베이스 연결 설정
 const db_config = {
