@@ -31,26 +31,6 @@ app.use(cors({
   origin: ['https://supermax.co.kr', 'https://seanyjeong.github.io', 'https://chejump.com', 'https://score.ilsanmax.com']
 }));
 
-// 학생 목록 API
-app.get('/api/students', (req, res) => {
-  connection.query('SELECT 이름 FROM 학생정보', (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: 'DB 조회 오류' });
-    }
-    res.json(results);
-  });
-});
-
-// 학교 목록 API
-app.get('/api/schools', (req, res) => {
-  connection.query('SELECT DISTINCT 학교명, 전공 FROM 학교', (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: 'DB 조회 오류' });
-    }
-    res.json(results);
-  });
-});
-
 // 점수 계산 API
 app.post('/api/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
@@ -95,46 +75,51 @@ app.post('/api/calculate-score', (req, res) => {
           }
 
           let totalScore = 0;
+          let logMessages = []; // 로그 저장 배열
 
           // 국어, 수학 점수 계산 (계산방법에 따라 백분위 사용)
-          totalScore += student.국어백분위 * school.국어반영비율;
-          totalScore += student.수학백분위 * school.수학반영비율;
+          const 국어점수 = student.국어백분위 * school.국어반영비율;
+          const 수학점수 = student.수학백분위 * school.수학반영비율;
+          totalScore += 국어점수;
+          totalScore += 수학점수;
+          logMessages.push(`국어 점수: ${student.국어백분위} * ${school.국어반영비율} = ${국어점수}`);
+          logMessages.push(`수학 점수: ${student.수학백분위} * ${school.수학반영비율} = ${수학점수}`);
 
           // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
           let 탐구점수;
           if (school.탐구반영과목수 === 1) {
-            // 탐구 과목 1개 반영: 탐구1과 탐구2 중 더 높은 백분위 사용
             탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
+            logMessages.push(`탐구 과목 (1개 반영): 최고 점수 = ${탐구점수}`);
           } else if (school.탐구반영과목수 === 2) {
-            // 탐구 과목 2개 반영: 두 과목의 평균 사용
             탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
+            logMessages.push(`탐구 과목 (2개 반영): 평균 점수 = ${탐구점수}`);
           }
           totalScore += 탐구점수 * school.탐구반영비율;
+          logMessages.push(`탐구 점수: ${탐구점수} * ${school.탐구반영비율} = ${탐구점수 * school.탐구반영비율}`);
 
           // 영어 점수 처리
           const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
           totalScore += englishGradeScore * school.영어반영비율;
+          logMessages.push(`영어 점수: ${englishGradeScore} * ${school.영어반영비율} = ${englishGradeScore * school.영어반영비율}`);
 
           // 한국사 점수 처리
           const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
           if (school.한국사반영방법 === '총점합산') {
             totalScore += koreanHistoryGradeScore;
+            logMessages.push(`한국사 점수: ${koreanHistoryGradeScore}`);
           }
 
-          // 총점 환산 (300점 만점)
+          // 총점 환산 (300점 만점 기준)
           totalScore = (totalScore / 100) * school.총점만점;
+          logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
 
-          // 디버깅을 위해 각 부분 출력
-          console.log("총 점수 (총점환산 전):", totalScore);
-          
-          // 소수점 자릿수 제한 (두 번째 자리까지)
-          res.json({ totalScore: totalScore.toFixed(2) });
+          // 결과 반환 (점수와 로그 함께)
+          res.json({ totalScore: totalScore.toFixed(2), logs: logMessages });
         });
       });
     });
   });
 });
-
 
 // 포트 설정
 const PORT = 4000;
