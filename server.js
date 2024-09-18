@@ -127,16 +127,16 @@ app.post('/api/calculate-score', (req, res) => {
             logMessages.push(탐구 점수: ${탐구점수} * 비율(${school.탐구반영비율}) = ${탐구점수 * school.탐구반영비율});
 
           } else if (school.선택과목규칙 === '국수영탐택3') {
-            // 상위 3개 과목을 선택해서 합산
-            scores.push({ name: '탐구', value: 탐구점수 });
-            scores.sort((a, b) => b.value - a.value);
-            let selectedScores = scores.slice(0, 3);
-            selectedScores.forEach(score => {
-              totalScore += score.value;
-              logMessages.push(${score.name} 점수: ${score.value});
-            });
+    // 상위 3개 과목을 선택해서 합산
+    scores.push({ name: '탐구', value: 탐구점수 });
+    scores.sort((a, b) => b.value - a.value);
+    let selectedScores = scores.slice(0, 3);
 
-          } else if (school.선택과목규칙 === '국수영택2') {
+    selectedScores.forEach(score => {
+        totalScore += score.value;
+        logMessages.push(`${score.name} 점수: ${score.value}`);
+    });
+} else if (school.선택과목규칙 === '국수영택2') {
             // 국어, 수학, 영어 중 상위 2개를 비율대로 계산
             scores.sort((a, b) => b.value - a.value);
             let selectedScores = scores.slice(0, 2);
