@@ -96,30 +96,31 @@ app.post('/api/calculate-score', (req, res) => {
           let totalScore = 0;
           let logMessages = []; // 로그 저장 배열
 
-          // 국어, 수학 점수 계산 (계산방법에 따라 백분위 사용)
-          const 국어점수 = student.국어백분위 * school.국어반영비율;
-          const 수학점수 = student.수학백분위 * school.수학반영비율;
-          totalScore += 국어점수;
-          totalScore += 수학점수;
-          logMessages.push(`국어 점수: ${student.국어백분위} * ${school.국어반영비율} = ${국어점수}`);
-          logMessages.push(`수학 점수: ${student.수학백분위} * ${school.수학반영비율} = ${수학점수}`);
+          // 국어, 수학, 탐구, 영어 점수들을 배열에 저장
+          let scores = [
+            { name: '국어', value: student.국어백분위 * school.국어반영비율 },
+            { name: '수학', value: student.수학백분위 * school.수학반영비율 },
+            { name: '영어', value: englishResults[0][`등급${student.영어등급}`] * school.영어반영비율 }
+          ];
 
           // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
           let 탐구점수;
           if (school.탐구반영과목수 === 1) {
             탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
-            logMessages.push(`탐구 과목 (1개 반영): 최고 점수 = ${탐구점수}`);
           } else if (school.탐구반영과목수 === 2) {
             탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
-            logMessages.push(`탐구 과목 (2개 반영): 평균 점수 = ${탐구점수}`);
           }
-          totalScore += 탐구점수 * school.탐구반영비율;
-          logMessages.push(`탐구 점수: ${탐구점수} * ${school.탐구반영비율} = ${탐구점수 * school.탐구반영비율}`);
+          scores.push({ name: '탐구', value: 탐구점수 * school.탐구반영비율 });
 
-          // 영어 점수 처리
-          const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
-          totalScore += englishGradeScore * school.영어반영비율;
-          logMessages.push(`영어 점수: ${englishGradeScore} * ${school.영어반영비율} = ${englishGradeScore * school.영어반영비율}`);
+          // 점수들을 value 기준으로 정렬하고 상위 3개만 선택
+          scores.sort((a, b) => b.value - a.value);
+          let selectedScores = scores.slice(0, 3);
+
+          // 상위 3개 과목의 점수 합산
+          selectedScores.forEach(score => {
+            totalScore += score.value;
+            logMessages.push(`${score.name} 점수: ${score.value}`);
+          });
 
           // 한국사 점수 처리
           const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
@@ -139,6 +140,7 @@ app.post('/api/calculate-score', (req, res) => {
     });
   });
 });
+
 
 // 포트 설정
 const PORT = 4000;
