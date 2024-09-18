@@ -97,18 +97,35 @@ app.post('/api/calculate-score', (req, res) => {
           let logMessages = []; // 로그 저장 배열
 
           // 국어, 수학, 탐구, 영어 점수들을 배열에 저장
-          let scores = [
-            { name: '국어', value: student.국어백분위 * school.국어반영비율 },
-            { name: '수학', value: student.수학백분위 * school.수학반영비율 },
-            { name: '영어', value: englishResults[0][`등급${student.영어등급}`] * school.영어반영비율 }
-          ];
+          let scores = [];
+
+          // 백/백일 경우 백분위를 가져옴
+          if (school.계산방법 === '백/백') {
+            scores.push({ name: '국어', value: student.국어백분위 * school.국어반영비율 });
+            scores.push({ name: '수학', value: student.수학백분위 * school.수학반영비율 });
+          } else if (school.계산방법 === '백/표') {
+            scores.push({ name: '국어', value: student.국어표준점수 * school.국어반영비율 });
+            scores.push({ name: '수학', value: student.수학표준점수 * school.수학반영비율 });
+          }
+
+          // 영어 점수 처리
+          const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
+          scores.push({ name: '영어', value: englishGradeScore * school.영어반영비율 });
 
           // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
           let 탐구점수;
           if (school.탐구반영과목수 === 1) {
-            탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
+            if (school.계산방법 === '백/백') {
+              탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
+            } else if (school.계산방법 === '백/표') {
+              탐구점수 = Math.max(student.탐구1표준점수, student.탐구2표준점수);
+            }
           } else if (school.탐구반영과목수 === 2) {
-            탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
+            if (school.계산방법 === '백/백') {
+              탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
+            } else if (school.계산방법 === '백/표') {
+              탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
+            }
           }
           scores.push({ name: '탐구', value: 탐구점수 * school.탐구반영비율 });
 
@@ -122,16 +139,16 @@ app.post('/api/calculate-score', (req, res) => {
             logMessages.push(`${score.name} 점수: ${score.value}`);
           });
 
-          // 한국사 점수 처리
+          // 총점 환산 (300점 만점 기준)
+          totalScore = (totalScore / 100) * school.총점만점;
+          logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
+
+          // 한국사 점수 처리 (총점합산일 경우 마지막에 더함)
           const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
           if (school.한국사반영방법 === '총점합산') {
             totalScore += koreanHistoryGradeScore;
             logMessages.push(`한국사 점수: ${koreanHistoryGradeScore}`);
           }
-
-          // 총점 환산 (300점 만점 기준)
-          totalScore = (totalScore / 100) * school.총점만점;
-          logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
 
           // 결과 반환 (점수와 로그 함께)
           res.json({ totalScore: totalScore.toFixed(2), logs: logMessages });
