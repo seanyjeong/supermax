@@ -26,51 +26,53 @@ connection.connect((err) => {
 const app = express();
 app.use(express.json());  // JSON 파싱
 
-// CORS 설정: 특정 도메인만 허용
+// CORS 설정
 app.use(cors({
   origin: ['https://supermax.co.kr', 'https://seanyjeong.github.io', 'https://chejump.com', 'https://score.ilsanmax.com']
 }));
 
-// 학생 목록 API
-app.get('/api/students', (req, res) => {
-  connection.query('SELECT 이름 FROM 학생정보', (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: 'DB 조회 오류' });
-    }
-    res.json(results);
-  });
-});
-
-// 학교 목록 API
-app.get('/api/schools', (req, res) => {
-  connection.query('SELECT DISTINCT 학교명, 전공 FROM 학교', (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: 'DB 조회 오류' });
-    }
-    res.json(results);
-  });
-});
-
 // 점수 계산 API
-app.post('/api/calculate-score', (req, res) => {
+app.post('/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
+
+  if (!studentName || !schoolName || !major) {
+    return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
+  }
 
   // 학생 정보 가져오기
   connection.query('SELECT * FROM 학생정보 WHERE 이름 = ?', [studentName], (err, studentResults) => {
-    if (err) return res.status(500).json({ error: 'DB 조회 오류' });
+    if (err) {
+      console.error('학생 정보 조회 오류:', err);
+      return res.status(500).json({ error: '학생 정보를 불러오는 중 오류가 발생했습니다.' });
+    }
+    if (!studentResults.length) {
+      return res.status(404).json({ error: '해당 학생을 찾을 수 없습니다.' });
+    }
     const student = studentResults[0];
 
     // 학교 정보 가져오기
     connection.query('SELECT * FROM 학교 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, schoolResults) => {
-      if (err) return res.status(500).json({ error: 'DB 조회 오류' });
+      if (err) {
+        console.error('학교 정보 조회 오류:', err);
+        return res.status(500).json({ error: '학교 정보를 불러오는 중 오류가 발생했습니다.' });
+      }
+      if (!schoolResults.length) {
+        return res.status(404).json({ error: '해당 학교 또는 전공을 찾을 수 없습니다.' });
+      }
       const school = schoolResults[0];
 
       // 영어와 한국사 점수 가져오기
       connection.query('SELECT * FROM 영어 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, englishResults) => {
-        if (err) return res.status(500).json({ error: 'DB 조회 오류' });
+        if (err) {
+          console.error('영어 점수 조회 오류:', err);
+          return res.status(500).json({ error: '영어 점수를 불러오는 중 오류가 발생했습니다.' });
+        }
 
         connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, koreanHistoryResults) => {
-          if (err) return res.status(500).json({ error: 'DB 조회 오류' });
+          if (err) {
+            console.error('한국사 점수 조회 오류:', err);
+            return res.status(500).json({ error: '한국사 점수를 불러오는 중 오류가 발생했습니다.' });
+          }
 
           let totalScore = 0;
 
