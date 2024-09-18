@@ -163,6 +163,24 @@ app.post('/api/calculate-score', (req, res) => {
             totalScore = (totalScore / 100) * school.총점만점;
             logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
 
+          } else if (school.선택과목규칙 === '국수영탐532') {
+            // 상위 3개의 점수에 각각 50%, 30%, 20% 비율 적용
+            scores.push({ name: '탐구', value: 탐구점수 });
+            scores.sort((a, b) => b.value - a.value);
+            let selectedScores = scores.slice(0, 3);
+
+            // 50%, 30%, 20% 비율 적용
+            totalScore += selectedScores[0].value * 0.5;
+            totalScore += selectedScores[1].value * 0.3;
+            totalScore += selectedScores[2].value * 0.2;
+
+            logMessages.push(`${selectedScores[0].name} 점수: ${selectedScores[0].value} * 0.5 = ${selectedScores[0].value * 0.5}`);
+            logMessages.push(`${selectedScores[1].name} 점수: ${selectedScores[1].value} * 0.3 = ${selectedScores[1].value * 0.3}`);
+            logMessages.push(`${selectedScores[2].name} 점수: ${selectedScores[2].value} * 0.2 = ${selectedScores[2].value * 0.2}`);
+
+            // 총점 환산
+            totalScore = (totalScore / 100) * school.총점만점;
+            logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
           } else if (!school.선택과목규칙) {
             // 선택과목규칙이 null인 경우 반영비율 그대로 계산
             totalScore += student.국어백분위 * school.국어반영비율;
