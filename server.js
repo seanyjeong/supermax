@@ -96,7 +96,7 @@ app.post('/api/calculate-score', (req, res) => {
 
           let totalScore = 0;
 
-          // 국어, 수학, 탐구 점수 계산
+          // 국어, 수학 점수 계산 (계산방법에 따라 백분위 사용)
           if (school.계산방법 === '백/백') {
             totalScore += student.국어백분위 * school.국어반영비율;
             totalScore += student.수학백분위 * school.수학반영비율;
@@ -105,12 +105,22 @@ app.post('/api/calculate-score', (req, res) => {
             totalScore += student.수학백분위 * school.수학반영비율;
           }
 
-          // 탐구 과목 처리
+          // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
           let 탐구점수;
           if (school.탐구반영과목수 === 1) {
-            탐구점수 = Math.max(student.탐구1표준점수, student.탐구2표준점수);
+            // 탐구 과목 1개 반영: 탐구1과 탐구2 중 더 높은 백분위 또는 표준점수 사용
+            if (school.계산방법 === '백/백') {
+              탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
+            } else if (school.계산방법 === '백/표') {
+              탐구점수 = Math.max(student.탐구1표준점수, student.탐구2표준점수);
+            }
           } else if (school.탐구반영과목수 === 2) {
-            탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
+            // 탐구 과목 2개 반영: 두 과목의 평균 사용
+            if (school.계산방법 === '백/백') {
+              탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
+            } else if (school.계산방법 === '백/표') {
+              탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
+            }
           }
           totalScore += 탐구점수 * school.탐구반영비율;
 
@@ -124,10 +134,11 @@ app.post('/api/calculate-score', (req, res) => {
             totalScore += koreanHistoryGradeScore;
           }
 
-          // 총점 환산
+          // 최종 총점 환산 (300점 만점 기준)
           totalScore = (totalScore / 100) * school.총점만점;
 
-          res.json({ totalScore });
+          // 소수점 자릿수 제한 (두 번째 자리까지)
+          res.json({ totalScore: totalScore.toFixed(2) });
         });
       });
     });
