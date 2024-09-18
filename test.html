@@ -7,51 +7,83 @@
 </head>
 <body>
   <h1>학생 점수 계산</h1>
-  <form id="scoreForm">
-    <label for="name">학생 이름:</label>
-    <input type="text" id="name" name="name" required><br>
 
-    <label for="school">학교명:</label>
-    <select id="school" name="school" required>
-      <option value="성신여자대학교">성신여자대학교</option>
-      <option value="백석대학교">백석대학교</option>
-    </select><br>
+  <label for="studentSelect">학생 이름:</label>
+  <select id="studentSelect"></select>
 
-    <label for="major">전공:</label>
-    <select id="major" name="major" required>
-      <option value="스포츠레저전공">스포츠레저전공</option>
-      <option value="스포츠과학부">스포츠과학부</option>
-    </select><br>
+  <label for="schoolSelect">학교명:</label>
+  <select id="schoolSelect"></select>
 
-    <button type="submit">계산</button>
-  </form>
+  <label for="majorSelect">전공:</label>
+  <select id="majorSelect"></select>
 
-  <div id="result"></div>
+  <button onclick="calculateScore()">점수 계산</button>
+
+  <h2>계산 결과</h2>
+  <p id="result">점수를 계산해주세요.</p>
 
   <script>
-    document.getElementById('scoreForm').addEventListener('submit', function(event) {
-      event.preventDefault();  // 기본 폼 제출 방지
+    // 학생 목록 불러오기
+    fetch('https://supermax.kr/api/students')
+      .then(response => response.json())
+      .then(data => {
+        const studentSelect = document.getElementById('studentSelect');
+        data.forEach(student => {
+          const option = document.createElement('option');
+          option.value = student.이름;
+          option.textContent = student.이름;
+          studentSelect.appendChild(option);
+        });
+      });
 
-      const name = document.getElementById('name').value;
-      const school = document.getElementById('school').value;
-      const major = document.getElementById('major').value;
+    // 학교 목록 불러오기
+    fetch('https://supermax.kr/api/schools')
+      .then(response => response.json())
+      .then(data => {
+        const schoolSelect = document.getElementById('schoolSelect');
+        const majorSelect = document.getElementById('majorSelect');
+        
+        // 학교명 선택에 맞춰 전공 필드도 업데이트
+        const uniqueSchools = [...new Set(data.map(s => s.학교명))];
+        uniqueSchools.forEach(school => {
+          const option = document.createElement('option');
+          option.value = school;
+          option.textContent = school;
+          schoolSelect.appendChild(option);
+        });
 
-      // POST 요청을 통해 점수 계산 API 호출
-      fetch('https://supermax.kr/api/calculate', {
+        // 전공 목록 업데이트
+        schoolSelect.addEventListener('change', () => {
+          majorSelect.innerHTML = '';  // 전공 초기화
+          const selectedSchool = schoolSelect.value;
+          const majors = data.filter(s => s.학교명 === selectedSchool);
+          majors.forEach(major => {
+            const option = document.createElement('option');
+            option.value = major.전공;
+            option.textContent = major.전공;
+            majorSelect.appendChild(option);
+          });
+        });
+      });
+
+    // 점수 계산 함수
+    function calculateScore() {
+      const studentName = document.getElementById('studentSelect').value;
+      const schoolName = document.getElementById('schoolSelect').value;
+      const major = document.getElementById('majorSelect').value;
+
+      fetch('https://supermax.kr/api/calculate-score', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ name, school, major })
+        body: JSON.stringify({ studentName, schoolName, major })
       })
       .then(response => response.json())
       .then(data => {
-        document.getElementById('result').innerHTML = `<p>${data.name} 학생의 총점: ${data.totalScore}</p>`;
-      })
-      .catch(error => {
-        document.getElementById('result').innerHTML = `<p>점수 계산에 실패했습니다: ${error.message}</p>`;
+        document.getElementById('result').textContent = `최종 점수: ${data.totalScore}`;
       });
-    });
+    }
   </script>
 </body>
 </html>
