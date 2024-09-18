@@ -206,10 +206,9 @@ app.post('/api/calculate-score', (req, res) => {
   });
 });
 
-
 // 포트 설정
 const PORT = 4000;
 // 서버 시작
 app.listen(PORT, () => {
-  console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
+  console.log(서버가 포트 ${PORT}에서 실행 중입니다.);
 });
