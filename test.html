@@ -21,6 +21,7 @@
 
   <h2>계산 결과</h2>
   <p id="result">점수를 계산해주세요.</p>
+  <div id="logs"></div> <!-- 로그를 보여줄 공간 -->
 
   <script>
     // 학생 목록 불러오기
@@ -43,7 +44,6 @@
         const schoolSelect = document.getElementById('schoolSelect');
         const majorSelect = document.getElementById('majorSelect');
         
-        // 학교명 선택에 맞춰 전공 필드도 업데이트
         const uniqueSchools = [...new Set(data.map(s => s.학교명))];
         uniqueSchools.forEach(school => {
           const option = document.createElement('option');
@@ -52,9 +52,8 @@
           schoolSelect.appendChild(option);
         });
 
-        // 전공 목록 업데이트
         schoolSelect.addEventListener('change', () => {
-          majorSelect.innerHTML = '';  // 전공 초기화
+          majorSelect.innerHTML = '';
           const selectedSchool = schoolSelect.value;
           const majors = data.filter(s => s.학교명 === selectedSchool);
           majors.forEach(major => {
@@ -82,6 +81,14 @@
       .then(response => response.json())
       .then(data => {
         document.getElementById('result').textContent = `최종 점수: ${data.totalScore}`;
+
+        const logsDiv = document.getElementById('logs');
+        logsDiv.innerHTML = '<h3>계산 로그</h3>';
+        data.logs.forEach(log => {
+          const logItem = document.createElement('p');
+          logItem.textContent = log;
+          logsDiv.appendChild(logItem);
+        });
       });
     }
   </script>
