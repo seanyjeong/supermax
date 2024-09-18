@@ -44,6 +44,7 @@ app.get('/api/schools', (req, res) => {
   });
 });
 // 점수 계산 API
+// 점수 계산 API
 app.post('/api/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
 
@@ -131,12 +132,13 @@ app.post('/api/calculate-score', (req, res) => {
             scores.push({ name: '탐구', value: 탐구점수 });
             scores.sort((a, b) => b.value - a.value);
             let selectedScores = scores.slice(0, 3);
+
             selectedScores.forEach(score => {
-              totalScore += score.value;
-              logMessages.push(`${score.name} 점수: ${score.value}`);
+                totalScore += score.value;
+                logMessages.push(`${score.name} 점수: ${score.value}`);
             });
 
-          } else if (school.선택과목규칙 === '국수영택2') {
+          } else if (school.선택과목규칙 === '국수영탐택2') {
             // 국어, 수학, 영어 중 상위 2개를 비율대로 계산
             scores.sort((a, b) => b.value - a.value);
             let selectedScores = scores.slice(0, 2);
@@ -205,6 +207,7 @@ app.post('/api/calculate-score', (req, res) => {
     });
   });
 });
+
 
 // 포트 설정
 const PORT = 4000;
