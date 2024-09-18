@@ -24,134 +24,98 @@ connection.connect((err) => {
 
 // Express 앱 생성
 const app = express();
+app.use(express.json());  // JSON 파싱
 
 // CORS 설정: 특정 도메인만 허용
 app.use(cors({
   origin: ['https://supermax.co.kr', 'https://seanyjeong.github.io', 'https://chejump.com', 'https://score.ilsanmax.com']
 }));
 
-// JSON 형식의 데이터를 처리할 수 있게 설정
-app.use(express.json());
-
-// 정적 파일 제공 (public 폴더 내의 파일을 제공)
-app.use(express.static('public'));
-
-app.post('/api/calculate', (req, res) => {
-  const { name, school, major } = req.body;
-
-  // 학생 정보를 조회하는 쿼리
-  const studentQuery = `SELECT * FROM 학생정보 WHERE 이름 = ?`;
-  // 선택된 학교와 전공의 규칙을 조회하는 쿼리
-  const schoolQuery = `
-    SELECT 국어반영비율, 수학반영비율, 영어반영비율, 탐구반영비율, 계산방법, 탐구반영과목수, 한국사반영방법, 선택과목규칙
-    FROM 학교
-    WHERE 학교명 = ? AND 전공 = ?
-  `;
-
-  // 학생 정보 조회
-  connection.query(studentQuery, [name], (err, studentResults) => {
+// 학생 목록 API
+app.get('/api/students', (req, res) => {
+  connection.query('SELECT 이름 FROM 학생정보', (err, results) => {
     if (err) {
-      console.error('학생 정보 조회 오류:', err);
-      return res.status(500).json({ message: '학생 정보 조회 오류' });
+      return res.status(500).json({ error: 'DB 조회 오류' });
     }
+    res.json(results);
+  });
+});
 
-    if (studentResults.length === 0) {
-      console.log('해당 학생을 찾을 수 없습니다.');
-      return res.status(404).json({ message: '학생 정보를 찾을 수 없습니다.' });
+// 학교 목록 API
+app.get('/api/schools', (req, res) => {
+  connection.query('SELECT DISTINCT 학교명, 전공 FROM 학교', (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: 'DB 조회 오류' });
     }
+    res.json(results);
+  });
+});
 
+// 점수 계산 API
+app.post('/api/calculate-score', (req, res) => {
+  const { studentName, schoolName, major } = req.body;
+
+  // 학생 정보 가져오기
+  connection.query('SELECT * FROM 학생정보 WHERE 이름 = ?', [studentName], (err, studentResults) => {
+    if (err) return res.status(500).json({ error: 'DB 조회 오류' });
     const student = studentResults[0];
 
-    // 선택된 학교의 규칙 조회
-    connection.query(schoolQuery, [school, major], (err, schoolResults) => {
-      if (err) {
-        console.error('학교 정보 조회 오류:', err);
-        return res.status(500).json({ message: '학교 정보 조회 오류' });
-      }
+    // 학교 정보 가져오기
+    connection.query('SELECT * FROM 학교 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, schoolResults) => {
+      if (err) return res.status(500).json({ error: 'DB 조회 오류' });
+      const school = schoolResults[0];
 
-      if (schoolResults.length === 0) {
-        console.log('해당 학교/전공 정보를 찾을 수 없습니다.');
-        return res.status(404).json({ message: '학교 정보를 찾을 수 없습니다.' });
-      }
+      // 영어와 한국사 점수 가져오기
+      connection.query('SELECT * FROM 영어 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, englishResults) => {
+        if (err) return res.status(500).json({ error: 'DB 조회 오류' });
 
-      const schoolInfo = schoolResults[0];
-      let totalScore = 0;
+        connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, koreanHistoryResults) => {
+          if (err) return res.status(500).json({ error: 'DB 조회 오류' });
 
-      // 규칙에 따른 점수 계산 시작
-      if (schoolInfo.계산방법 === '백/백') {
-        if (schoolInfo.선택과목규칙 === '국수영탐택3') {
-          // 상위 3개 과목을 같은 비율로 계산
-          const top3SubjectsScore = calculateTop3SubjectsWithPercentile(student, schoolInfo.국어반영비율, schoolInfo.수학반영비율, schoolInfo.영어반영비율);
-          totalScore = top3SubjectsScore;
-        } else if (schoolInfo.선택과목규칙 === '국수영택2') {
-          // 국어, 수학, 영어 중 상위 2개 과목을 선택하고, 탐구는 비율로 계산
-          const top2SubjectsScore = calculateTop2SubjectsWithPercentile(student, schoolInfo.국어반영비율, schoolInfo.수학반영비율, schoolInfo.영어반영비율);
-          totalScore = top2SubjectsScore;
-        }
-        // 탐구 과목 계산
-        const scienceScore = calculateScienceScore(student.탐구1백분위, student.탐구2백분위, schoolInfo.탐구반영과목수, schoolInfo.탐구반영비율);
-        totalScore += scienceScore;
-      }
+          let totalScore = 0;
 
-      // 한국사 반영 방법 확인
-      if (schoolInfo.한국사반영방법 === '총점합산') {
-        getKoreanHistoryScore(student.한국사등급).then((koreanHistoryScore) => {
-          totalScore += koreanHistoryScore;
-          res.json({ name: student.이름, totalScore });
-        }).catch((historyError) => {
-          console.error('한국사 점수 조회 오류:', historyError);
-          res.status(500).json({ message: '한국사 점수 조회 오류' });
+          // 국어, 수학, 탐구 점수 계산
+          if (school.계산방법 === '백/백') {
+            totalScore += student.국어백분위 * school.국어반영비율;
+            totalScore += student.수학백분위 * school.수학반영비율;
+          } else if (school.계산방법 === '백/표') {
+            totalScore += student.국어백분위 * school.국어반영비율;
+            totalScore += student.수학백분위 * school.수학반영비율;
+          }
+
+          // 탐구 과목 처리
+          let 탐구점수;
+          if (school.탐구반영과목수 === 1) {
+            탐구점수 = Math.max(student.탐구1표준점수, student.탐구2표준점수);
+          } else if (school.탐구반영과목수 === 2) {
+            탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
+          }
+          totalScore += 탐구점수 * school.탐구반영비율;
+
+          // 영어 등급 점수 처리
+          const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
+          totalScore += englishGradeScore * school.영어반영비율;
+
+          // 한국사 점수 처리
+          const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
+          if (school.한국사반영방법 === '총점합산') {
+            totalScore += koreanHistoryGradeScore;
+          }
+
+          // 총점 환산
+          totalScore = (totalScore / 100) * school.총점만점;
+
+          res.json({ totalScore });
         });
-      } else {
-        res.json({ name: student.이름, totalScore });
-      }
+      });
     });
   });
 });
 
-// 국수영탐 상위 3개 과목을 백분위로 계산
-function calculateTop3SubjectsWithPercentile(student, koreanRatio, mathRatio, englishRatio) {
-  const subjects = [
-    student.국어백분위 * (koreanRatio / 100),
-    student.수학백분위 * (mathRatio / 100),
-    student.영어백분위 * (englishRatio / 100),
-    student.탐구1백분위,
-    student.탐구2백분위
-  ];
-  subjects.sort((a, b) => b - a);  // 내림차순으로 정렬하여 상위 3개 선택
-  const top3 = subjects.slice(0, 3);
-  return top3.reduce((acc, score) => acc + score, 0);
-}
-
-// 국수영 중 상위 2개 과목을 백분위로 계산
-function calculateTop2SubjectsWithPercentile(student, koreanRatio, mathRatio, englishRatio) {
-  const subjects = [
-    student.국어백분위 * (koreanRatio / 100),
-    student.수학백분위 * (mathRatio / 100),
-    student.영어백분위 * (englishRatio / 100)
-  ];
-  subjects.sort((a, b) => b - a);  // 내림차순으로 정렬하여 상위 2개 선택
-  const top2 = subjects.slice(0, 2);
-  return top2.reduce((acc, score) => acc + score, 0);
-}
-
-// 탐구 과목 계산
-function calculateScienceScore(science1, science2, subjectCount, scienceRatio) {
-  if (subjectCount === 2) {
-    return ((science1 + science2) / 2) * (scienceRatio / 100);
-  } else if (subjectCount === 1) {
-    return Math.max(science1, science2) * (scienceRatio / 100);
-  }
-  return 0;
-}
-
-
-
-
-
-
-// 서버 실행 (포트 4000 사용)
+// 포트 설정
 const PORT = 4000;
+
+// 서버 시작
 app.listen(PORT, () => {
   console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
 });
