@@ -46,9 +46,11 @@ app.get('/api/schools', (req, res) => {
 // 점수 계산 API
 app.post('/api/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
+
   if (!studentName || !schoolName || !major) {
     return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
   }
+
   // 학생 정보 가져오기
   connection.query('SELECT * FROM 학생정보 WHERE 이름 = ?', [studentName], (err, studentResults) => {
     if (err) {
@@ -59,6 +61,7 @@ app.post('/api/calculate-score', (req, res) => {
       return res.status(404).json({ error: '해당 학생을 찾을 수 없습니다.' });
     }
     const student = studentResults[0];
+
     // 학교 정보 가져오기
     connection.query('SELECT * FROM 학교 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, schoolResults) => {
       if (err) {
@@ -80,7 +83,9 @@ app.post('/api/calculate-score', (req, res) => {
         connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, koreanHistoryResults) => {
           if (err) {
             console.error('한국사 점수 조회 오류:', err);
-	@@ -97,166 +96,113 @@ app.post('/api/calculate-score', (req, res) => {
+            return res.status(500).json({ error: '한국사 점수를 불러오는 중 오류가 발생했습니다.' });
+          }
+
           let totalScore = 0;
           let logMessages = []; // 로그 저장 배열
 
@@ -200,6 +205,7 @@ app.post('/api/calculate-score', (req, res) => {
     });
   });
 });
+
 // 포트 설정
 const PORT = 4000;
 // 서버 시작
