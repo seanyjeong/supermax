@@ -60,6 +60,45 @@ const calculationStrategies = {
   'default': calculateByRatio // 선택과목 규칙이 없을 경우 기본 계산
 };
 
+function calculateByRatio(school, scores, 탐구점수, logMessages) {
+  // 탐구 점수도 추가
+  scores.push({ name: '탐구', value: 탐구점수 });
+
+  let totalScore = 0;
+
+  // 각 과목에 대해 비율대로 점수 계산
+  scores.forEach(score => {
+    let 반영비율;
+    switch (score.name) {
+      case '국어':
+        반영비율 = school.국어반영비율;
+        break;
+      case '수학':
+        반영비율 = school.수학반영비율;
+        break;
+      case '영어':
+        반영비율 = school.영어반영비율;
+        break;
+      case '탐구':
+        반영비율 = school.탐구반영비율;
+        break;
+      default:
+        반영비율 = 0;
+    }
+    
+    // 반영비율에 따라 점수 계산
+    const 계산된점수 = score.value * 반영비율;
+    totalScore += 계산된점수;
+    logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${계산된점수.toFixed(2)}`);
+  });
+
+  // 최종 총점 환산 (예: 100점 기준 총점 만점)
+  totalScore = (totalScore / 100) * school.총점만점;
+  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+
+  return totalScore;
+}
+
 // 규칙 5: 국수영택2 - 국어, 수학, 영어 중 상위 2개 + 탐구는 필수 반영
 function calculateRule5(school, scores, 탐구점수, logMessages) {
   // 탐구 점수는 필수 반영
