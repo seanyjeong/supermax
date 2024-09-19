@@ -1,5 +1,3 @@
-
-나의 말:
 const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');  // CORS 미들웨어 추가
