@@ -97,8 +97,8 @@ function calculateKangwon(school, scores, 탐구점수, logMessages) {
   // 탐구는 반영하지 않음 (탐구 점수는 고려하지 않음)
 
   // 총점 환산
-  totalScore = (totalScore / 100) * school.총점만점;
-  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+  totalScore = totalScore ;
+
 
   return totalScore;
 }
