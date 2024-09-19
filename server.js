@@ -542,7 +542,7 @@ app.post('/api/calculate-all-scores', (req, res) => {
       let logMessages = [];
 
       // 각 학교와 전공에 대해 점수를 계산
-      schoolResults.forEach((school, index) => {
+      schoolResults.forEach((school) => {
         let scores = [];
         logMessages = []; // 로그 초기화
 
@@ -575,11 +575,12 @@ app.post('/api/calculate-all-scores', (req, res) => {
             탐구점수 = 0; // 탐구 반영 안함
           }
 
-          // 규칙에 따른 점수 계산
+          // **규칙에 따른 점수 계산**
           const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
 
           let totalScore;
           try {
+            // **여기에서 규칙대로 점수를 계산**
             totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
           } catch (error) {
             console.error('점수 계산 오류:', error);
