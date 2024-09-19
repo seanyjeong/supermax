@@ -62,23 +62,23 @@ const calculationStrategies = {
   '국수택1': calculateRule6,  // 새로운 규칙 추가
   '관동대': calculateKwandong,  // 새로운 규칙 추가
 };
-// 규칙 8: 관동대 - 국어, 수학 중 상위 2개 + 탐구 필수 + 영어 점수는 마지막에 그대로 합산
+// 규칙 8: 관동대 - 국어, 수학, 탐구 중 상위 2개 + 영어 점수는 비율 없이 그대로 합산
 function calculateKwandong(school, scores, 탐구점수, logMessages) {
   let totalScore = 0;
 
-  // 국어와 수학 중 상위 2개 점수 선택
+  // 국어, 수학, 탐구 점수들 중 상위 2개 선택
   const 국어점수 = scores.find(score => score.name === '국어');
   const 수학점수 = scores.find(score => score.name === '수학');
+  const 탐구점수Obj = { name: '탐구', value: 탐구점수 }; // 탐구는 따로 전달된 값으로 추가
 
-  if (!국어점수 || !수학점수) {
-    return logMessages.push('국어 또는 수학 점수가 누락되었습니다.');
-  }
+  // 국어, 수학, 탐구의 점수를 배열에 넣고, 높은 점수순으로 정렬
+  const 국수탐점수들 = [국어점수, 수학점수, 탐구점수Obj].filter(Boolean); // 유효한 점수만 필터링
+  국수탐점수들.sort((a, b) => b.value - a.value); // 높은 점수순으로 정렬
 
-  const 국수점수들 = [국어점수, 수학점수].filter(Boolean); // 유효한 점수만 필터링
-  국수점수들.sort((a, b) => b.value - a.value); // 높은 점수순으로 정렬
+  // 상위 2개 선택
+  const selectedScores = 국수탐점수들.slice(0, 2);
 
-  // 상위 2개 과목 점수에 대해 반영 비율 적용
-  const selectedScores = 국수점수들.slice(0, 2);
+  // 선택된 과목들에 대해 반영 비율 적용
   selectedScores.forEach(score => {
     let 반영비율;
     switch (score.name) {
@@ -88,6 +88,9 @@ function calculateKwandong(school, scores, 탐구점수, logMessages) {
       case '수학':
         반영비율 = school.수학반영비율;
         break;
+      case '탐구':
+        반영비율 = school.탐구반영비율;
+        break;
       default:
         반영비율 = 0;
     }
@@ -95,16 +98,11 @@ function calculateKwandong(school, scores, 탐구점수, logMessages) {
     logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${(score.value * 반영비율).toFixed(2)}`);
   });
 
-  // 탐구 점수 필수 반영
-  const 탐구비율 = school.탐구반영비율;
-  totalScore += 탐구점수 * 탐구비율;
-  logMessages.push(`탐구 점수: ${탐구점수} * 비율(${탐구비율}) = ${(탐구점수 * 탐구비율).toFixed(2)}`);
-
-  // 총점 환산 (탐구, 국어, 수학 기준으로 먼저 계산)
+  // 중간 총점 계산 (국어, 수학, 탐구 기준으로)
   totalScore = (totalScore / 100) * school.총점만점;
   logMessages.push(`중간 총점 (국어, 수학, 탐구): (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
 
-  // 영어 점수는 마지막에 그대로 더함
+  // 영어 점수는 마지막에 비율 없이 그대로 더함
   const 영어점수 = scores.find(score => score.name === '영어');
   if (영어점수) {
     totalScore += 영어점수.value; // 비율 없이 그대로 합산
