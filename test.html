@@ -37,7 +37,9 @@
   <h1>학생 점수 계산</h1>
 
   <label for="studentSelect">학생 이름:</label>
-  <select id="studentSelect"></select>
+  <select id="studentSelect">
+    <option value="">학생을 선택해주세요</option> <!-- 기본 선택 안내 옵션 -->
+  </select>
 
   <h2>계산 결과</h2>
   <p id="result">학생 이름을 선택하면 해당 학생의 점수가 표시됩니다.</p>
@@ -75,6 +77,12 @@
     // 학생 점수 불러오기
     function fetchStudentScores() {
       const studentName = document.getElementById('studentSelect').value;
+
+      // 학생이 선택되지 않았을 때는 실행하지 않음
+      if (!studentName) {
+        document.getElementById('result').textContent = '학생 이름을 선택해주세요.';
+        return;
+      }
 
       fetch('https://supermax.kr/api/get-student-scores', {
         method: 'POST',
