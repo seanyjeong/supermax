@@ -604,11 +604,10 @@ app.post('/api/calculate-all-scores', (req, res) => {
   });
 });
 // 학생 개별 정보 API (학생 성적표 정보 불러오기)
-app.get('/api/student-info/:id', (req, res) => {
-  const studentId = req.params.id;  // 학생의 ID를 URL에서 받음
+app.post('/api/student-info', (req, res) => {
+  const { name } = req.body;  // 요청 본문에서 이름을 받음
 
-  // 학생 정보 가져오기
-  connection.query('SELECT * FROM 학생정보 WHERE id = ?', [studentId], (err, results) => {
+  connection.query('SELECT * FROM 학생정보 WHERE 이름 = ?', [name], (err, results) => {
     if (err) {
       console.error('학생 정보 조회 오류:', err);
       return res.status(500).json({ error: '학생 정보를 불러오는 중 오류가 발생했습니다.' });
@@ -618,29 +617,8 @@ app.get('/api/student-info/:id', (req, res) => {
       return res.status(404).json({ error: '해당 학생을 찾을 수 없습니다.' });
     }
 
-    // 결과 반환 (학생 성적 정보)
     const student = results[0];
-    res.json({
-      이름: student.이름,
-      국어선택과목: student.국어선택과목,
-      국어표준점수: student.국어표준점수,
-      국어백분위: student.국어백분위,
-      국어등급: student.국어등급,
-      수학선택과목: student.수학선택과목,
-      수학표준점수: student.수학표준점수,
-      수학백분위: student.수학백분위,
-      수학등급: student.수학등급,
-      영어등급: student.영어등급,
-      탐구1선택과목: student.탐구1선택과목,
-      탐구1표준점수: student.탐구1표준점수,
-      탐구1백분위: student.탐구1백분위,
-      탐구1등급: student.탐구1등급,
-      탐구2선택과목: student.탐구2선택과목,
-      탐구2표준점수: student.탐구2표준점수,
-      탐구2백분위: student.탐구2백분위,
-      탐구2등급: student.탐구2등급,
-      한국사등급: student.한국사등급
-    });
+    res.json(student);
   });
 });
 
