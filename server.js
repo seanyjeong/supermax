@@ -60,7 +60,7 @@ const calculationStrategies = {
   '강원대': calculateKangwon,
   '국수택1': calculateRule6,
   '국수탐택2': calculateRule7,
-  '관동대': calculateKwandong // 관동대 규칙 추가
+  '관동대': calculateKwandong, // 관동대 규칙 추가
 };
 
 
