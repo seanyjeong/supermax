@@ -51,14 +51,57 @@ app.get('/api/schools', (req, res) => {
 });
 
 // 규칙별 계산 함수 정의
+// 규칙별 계산 함수 정의
 const calculationStrategies = {
   '국수영탐택3': calculateRule1,
   '국수영탐택2': calculateRule2,
   '국수영탐532': calculateRule3,
   '상위3개평균': calculateRule4,
-  '국수영택2': calculateRule5, // 새로운 규칙 추가
+  '국수영택2': calculateRule5,
+  '강원대': calculateKangwon,  // 강원대 규칙 추가
 };
 
+// 규칙: 강원대 - 국어 필수 + 수학/영어 중 하나 선택, 탐구는 반영하지 않음
+function calculateKangwon(school, scores, 탐구점수, logMessages) {
+  let totalScore = 0;
+
+  // 국어는 필수로 반영
+  const 국어점수 = scores.find(score => score.name === '국어');
+  if (국어점수) {
+    const 국어비율 = school.국어반영비율;
+    totalScore += 국어점수.value * 국어비율;
+    logMessages.push(`국어 점수: ${국어점수.value} * 비율(${국어비율}) = ${(국어점수.value * 국어비율).toFixed(2)}`);
+  } else {
+    return logMessages.push('국어 점수가 누락되었습니다.');
+  }
+
+  // 수학과 영어 중 상위 점수 선택
+  const 수학점수 = scores.find(score => score.name === '수학');
+  const 영어점수 = scores.find(score => score.name === '영어');
+
+  let 선택과목;
+  if (수학점수 && 영어점수) {
+    선택과목 = 수학점수.value > 영어점수.value ? 수학점수 : 영어점수;
+  } else if (수학점수) {
+    선택과목 = 수학점수;
+  } else if (영어점수) {
+    선택과목 = 영어점수;
+  } else {
+    return logMessages.push('수학 또는 영어 점수가 누락되었습니다.');
+  }
+
+  const 선택과목비율 = 선택과목.name === '수학' ? school.수학반영비율 : school.영어반영비율;
+  totalScore += 선택과목.value * 선택과목비율;
+  logMessages.push(`${선택과목.name} 점수: ${선택과목.value} * 비율(${선택과목비율}) = ${(선택과목.value * 선택과목비율).toFixed(2)}`);
+
+  // 탐구는 반영하지 않음 (탐구 점수는 고려하지 않음)
+
+  // 총점 환산
+  totalScore = (totalScore / 100) * school.총점만점;
+  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+
+  return totalScore;
+}
 // 기본 계산: 선택과목 규칙이 없을 때 적용
 function calculateByRatio(school, scores, 탐구점수, logMessages) {
   // 탐구반영과목수가 0일 경우 탐구 제외
