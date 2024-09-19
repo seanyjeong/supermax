@@ -59,11 +59,8 @@ const calculationStrategies = {
   '상위3개평균': calculateRule4,
   '국수영택2': calculateRule5,
   '강원대': calculateKangwon,
-  '국수택1': calculateRule6, 
-  '국수탐택2': calculateRule7,// 새로운 규칙 추가
+  '국수택1': calculateRule6,  // 새로운 규칙 추가
 };
-
-
 
 // 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 다른 한 과목
 // 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 영어 + 탐구 (탐구과목수가 0이면 탐구 제외)
