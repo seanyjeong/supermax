@@ -512,7 +512,6 @@ app.post('/api/calculate-score', (req, res) => {
   });
 });
 // 모든 학교에 대한 환산 점수를 계산하는 API 추가
-// 모든 학교에 대한 환산 점수를 계산하는 API 추가
 app.post('/api/calculate-all-scores', (req, res) => {
   const { studentName } = req.body;
 
@@ -520,7 +519,7 @@ app.post('/api/calculate-all-scores', (req, res) => {
     return res.status(400).json({ error: '학생 이름이 필요합니다.' });
   }
 
-  // 학생 정보 가져오기
+  // 1. 학생 정보 가져오기
   connection.query('SELECT * FROM 학생정보 WHERE 이름 = ?', [studentName], (err, studentResults) => {
     if (err) {
       console.error('학생 정보 조회 오류:', err);
@@ -529,24 +528,23 @@ app.post('/api/calculate-all-scores', (req, res) => {
     if (!studentResults.length) {
       return res.status(404).json({ error: '해당 학생을 찾을 수 없습니다.' });
     }
-    const student = studentResults[0];
+    const student = studentResults[0];  // 학생 정보
 
-    // 모든 학교와 전공 정보 가져오기
+    // 2. 모든 학교 정보 가져오기
     connection.query('SELECT * FROM 학교', (err, schoolResults) => {
       if (err) {
         console.error('학교 정보 조회 오류:', err);
         return res.status(500).json({ error: '학교 정보를 불러오는 중 오류가 발생했습니다.' });
       }
 
-      let totalScores = [];
-      let logMessages = [];
+      let totalScores = [];  // 각 학교별 점수 저장
 
-      // 각 학교와 전공에 대해 점수를 계산
-      schoolResults.forEach((school) => {
+      // 3. 각 학교에 대해 점수를 계산
+      schoolResults.forEach(school => {
         let scores = [];
-        logMessages = []; // 로그 초기화
+        let logMessages = []; // 로그 초기화
 
-        // 학생의 국어, 수학, 영어 점수를 배열에 저장
+        // 4. 이미 불러온 학생 데이터를 사용하여 점수를 계산
         if (school.계산방법 === '백/백') {
           scores.push({ name: '국어', value: student.국어백분위 });
           scores.push({ name: '수학', value: student.수학백분위 });
@@ -555,65 +553,49 @@ app.post('/api/calculate-all-scores', (req, res) => {
           scores.push({ name: '수학', value: student.수학표준점수 });
         }
 
-        // 영어 점수 처리
+        // 영어 점수 처리 (이미 가져온 데이터 사용)
         connection.query('SELECT * FROM 영어 WHERE 학교명 = ? AND 전공 = ?', [school.학교명, school.전공], (err, englishResults) => {
-          if (err) {
-            console.error('영어 점수 조회 오류:', err);
-            return res.status(500).json({ error: '영어 점수를 불러오는 중 오류가 발생했습니다.' });
+          if (err || !englishResults.length) {
+            logMessages.push('영어 점수를 불러오는 중 오류가 발생했습니다.');
+            return;
           }
 
           const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
           scores.push({ name: '영어', value: englishGradeScore });
 
-          // 탐구 점수 처리 (탐구반영과목수에 따른 처리)
-          let 탐구점수;
+          // 5. 탐구 점수 처리
+          let 탐구점수 = 0;
           if (school.탐구반영과목수 === 1) {
-            탐구점수 = Math.max(student.탐구1표준점수, student.탐구2표준점수);
+            탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
           } else if (school.탐구반영과목수 === 2) {
-            탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
-          } else {
-            탐구점수 = 0; // 탐구 반영 안함
+            탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
           }
 
-          // **규칙에 따른 점수 계산**
+          // 6. 규칙에 따라 점수 계산
           const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
+          let totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
 
-          let totalScore;
-          try {
-            // **여기에서 규칙대로 점수를 계산**
-            totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
-          } catch (error) {
-            console.error('점수 계산 오류:', error);
-            return res.status(500).json({ error: '점수 계산 중 오류가 발생했습니다.' });
-          }
-
-          // 한국사 점수 처리 (총점합산일 경우 마지막에 더함)
+          // 7. 한국사 점수 처리
           connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [school.학교명, school.전공], (err, koreanHistoryResults) => {
-            if (err) {
-              console.error('한국사 점수 조회 오류:', err);
-              return res.status(500).json({ error: '한국사 점수를 불러오는 중 오류가 발생했습니다.' });
+            if (!err && koreanHistoryResults.length) {
+              const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
+              if (school.한국사반영방법 === '총점합산') {
+                totalScore += koreanHistoryGradeScore;
+                logMessages.push(`한국사 점수: ${koreanHistoryGradeScore}`);
+              }
             }
 
-            const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
-            if (school.한국사반영방법 === '총점합산') {
-              totalScore += koreanHistoryGradeScore;
-              logMessages.push(`한국사 점수: ${koreanHistoryGradeScore}`);
-            }
-
-            // 총점 소수점 2자리로 고정
-            totalScore = parseFloat(totalScore.toFixed(2));
-
-            // 결과 저장
+            // 8. 최종 점수 저장
             totalScores.push({
               학교명: school.학교명,
               전공: school.전공,
-              totalScore,
+              totalScore: totalScore.toFixed(2),
               logs: logMessages
             });
 
-            // 모든 학교의 점수 계산이 끝난 후 결과 반환
+            // 9. 결과 반환
             if (totalScores.length === schoolResults.length) {
-              res.json(totalScores);
+              res.json(totalScores);  // 모든 학교에 대한 점수 계산이 완료되면 반환
             }
           });
         });
@@ -621,6 +603,7 @@ app.post('/api/calculate-all-scores', (req, res) => {
     });
   });
 });
+
 
 
 
