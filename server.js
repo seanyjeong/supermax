@@ -61,7 +61,62 @@ const calculationStrategies = {
   '강원대': calculateKangwon,
   '국수택1': calculateRule6, 
   '국수탐택2': calculateRule7,// 새로운 규칙 추가
+  '관동대': calculateRule8,// 새로운 규칙 추가
 };
+// 규칙 8: 관동대 - 국어, 수학 중 상위 2개 + 탐구 필수 + 영어 점수는 비율 없이 더함
+function calculateKwandong(school, scores, 탐구점수, logMessages) {
+  let totalScore = 0;
+
+  // 국어와 수학 중 상위 2개 점수 선택
+  const 국어점수 = scores.find(score => score.name === '국어');
+  const 수학점수 = scores.find(score => score.name === '수학');
+
+  if (!국어점수 || !수학점수) {
+    return logMessages.push('국어 또는 수학 점수가 누락되었습니다.');
+  }
+
+  const 국수점수들 = [국어점수, 수학점수].filter(Boolean); // 유효한 점수만 필터링
+  국수점수들.sort((a, b) => b.value - a.value); // 높은 점수순으로 정렬
+
+  // 상위 2개 과목 점수에 대해 반영 비율 적용
+  const selectedScores = 국수점수들.slice(0, 2);
+  selectedScores.forEach(score => {
+    let 반영비율;
+    switch (score.name) {
+      case '국어':
+        반영비율 = school.국어반영비율;
+        break;
+      case '수학':
+        반영비율 = school.수학반영비율;
+        break;
+      default:
+        반영비율 = 0;
+    }
+    totalScore += score.value * 반영비율;
+    logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${(score.value * 반영비율).toFixed(2)}`);
+  });
+
+  // 탐구 점수 필수 반영
+  const 탐구비율 = school.탐구반영비율;
+  totalScore += 탐구점수 * 탐구비율;
+  logMessages.push(`탐구 점수: ${탐구점수} * 비율(${탐구비율}) = ${(탐구점수 * 탐구비율).toFixed(2)}`);
+
+  // 영어 점수는 비율 없이 그대로 더함
+  const 영어점수 = scores.find(score => score.name === '영어');
+  if (영어점수) {
+    totalScore += 영어점수.value;
+    logMessages.push(`영어 점수: ${영어점수.value} (비율 없이 그대로 합산)`);
+  } else {
+    return logMessages.push('영어 점수가 누락되었습니다.');
+  }
+
+  // 총점 환산
+  totalScore = (totalScore / 100) * school.총점만점;
+  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+
+  return totalScore;
+}
+
 // 규칙 7: 국수탐택2 - 국어, 수학, 탐구 중 상위 2개 + 영어는 필수 반영
 function calculateRule7(school, scores, 탐구점수, logMessages) {
   let totalScore = 0;
