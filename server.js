@@ -94,19 +94,21 @@ function calculateKangwon(school, scores, 탐구점수, logMessages) {
   totalScore += 선택과목.value * 선택과목비율;
   logMessages.push(`${선택과목.name} 점수: ${선택과목.value} * 비율(${선택과목비율}) = ${(선택과목.value * 선택과목비율).toFixed(2)}`);
 
-  // 탐구 과목 처리 (탐구반영과목수가 0일 경우 탐구를 반영하지 않음)
+  // 탐구 과목 처리 (탐구반영과목수가 0이 아닐 경우 탐구를 반영)
   if (school.탐구반영과목수 > 0) {
-    totalScore += 탐구점수;
-    logMessages.push(`탐구 점수: ${탐구점수}가 반영되었습니다.`);
+    const 탐구비율 = school.탐구반영비율;
+    totalScore += 탐구점수 * 탐구비율;
+    logMessages.push(`탐구 점수: ${탐구점수} * 비율(${탐구비율}) = ${(탐구점수 * 탐구비율).toFixed(2)}`);
   } else {
     logMessages.push('탐구 과목은 반영되지 않았습니다.');
   }
 
   // 총점 환산
-  totalScore = totalScore;  // 필요시 별도 환산 적용
+  totalScore = totalScore;  // 필요시 환산 추가
 
   return totalScore;
 }
+
 
 // 기본 계산: 선택과목 규칙이 없을 때 적용
 function calculateByRatio(school, scores, 탐구점수, logMessages) {
