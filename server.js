@@ -79,22 +79,33 @@ function calculateRule1(school, scores, 탐구점수, logMessages) {
 
 // 규칙 2: 국수영탐택2
 function calculateRule2(school, scores, 탐구점수, logMessages) {
+  // 국, 수, 영, 탐의 4과목 중 상위 2개 선택
+  scores.push({ name: '탐구', value: 탐구점수 });
   scores.sort((a, b) => b.value - a.value);
   const selectedScores = scores.slice(0, 2);
   let totalScore = 0;
 
   selectedScores.forEach(score => {
     let 반영비율;
-    if (score.name === '국어') 반영비율 = school.국어반영비율;
-    if (score.name === '수학') 반영비율 = school.수학반영비율;
-    if (score.name === '영어') 반영비율 = school.영어반영비율;
+    switch (score.name) {
+      case '국어':
+        반영비율 = school.국어반영비율;
+        break;
+      case '수학':
+        반영비율 = school.수학반영비율;
+        break;
+      case '영어':
+        반영비율 = school.영어반영비율;
+        break;
+      case '탐구':
+        반영비율 = school.탐구반영비율;
+        break;
+      default:
+        반영비율 = 0;
+    }
     totalScore += score.value * 반영비율;
     logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${(score.value * 반영비율).toFixed(2)}`);
   });
-
-  // 탐구 과목 비율 계산
-  totalScore += 탐구점수 * school.탐구반영비율;
-  logMessages.push(`탐구 점수: ${탐구점수} * 비율(${school.탐구반영비율}) = ${(탐구점수 * school.탐구반영비율).toFixed(2)}`);
 
   // 총점 환산
   totalScore = (totalScore / 100) * school.총점만점;
@@ -189,7 +200,7 @@ app.post('/api/calculate-score', (req, res) => {
 
           let logMessages = []; // 로그 저장 배열
 
-          // 국어, 수학, 탐구, 영어 점수들을 배열에 저장
+          // 국어, 수학, 영어 점수들을 배열에 저장
           let scores = [];
 
           // 백/백일 경우 백분위를 가져옴
@@ -246,8 +257,13 @@ app.post('/api/calculate-score', (req, res) => {
           // 총점 소수점 2자리로 고정
           totalScore = parseFloat(totalScore.toFixed(2));
 
+          // 최종 점수 계산 (총점 + 한국사 점수)
+          const finalScore = koreanHistoryResults[0].한국사반영방법 === '총점합산'
+            ? parseFloat((totalScore + koreanHistoryGradeScore).toFixed(2))
+            : parseFloat(totalScore.toFixed(2));
+
           // 결과 반환 (점수와 로그 함께)
-          res.json({ totalScore, logs: logMessages });
+          res.json({ totalScore: finalScore, logs: logMessages });
         });
       });
     });
