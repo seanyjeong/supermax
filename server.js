@@ -55,8 +55,62 @@ const calculationStrategies = {
   '국수영탐택3': calculateRule1,
   '국수영탐택2': calculateRule2,
   '국수영탐532': calculateRule3,
-  '상위3개평균': calculateRule4
+  '상위3개평균': calculateRule4,
+  '국수영택2': calculateRule5, // 새로운 규칙 추가
+  'default': calculateByRatio // 선택과목 규칙이 없을 경우 기본 계산
 };
+
+// 규칙 5: 국수영택2 - 국어, 수학, 영어 중 상위 2개 + 탐구는 필수 반영
+function calculateRule5(school, scores, 탐구점수, logMessages) {
+  // 탐구 점수는 필수 반영
+  scores.push({ name: '탐구', value: 탐구점수 });
+  
+  // 국어, 수학, 영어 중 상위 2개 과목 선택
+  const coreScores = scores.filter(score => ['국어', '수학', '영어'].includes(score.name));
+  coreScores.sort((a, b) => b.value - a.value);
+  const selectedCoreScores = coreScores.slice(0, 2);
+
+  let totalScore = 0;
+
+  // 선택된 국, 수, 영 2개 점수에 각 과목의 반영 비율 적용
+  selectedCoreScores.forEach(score => {
+    let 반영비율;
+    switch (score.name) {
+      case '국어':
+        반영비율 = school.국어반영비율;
+        break;
+      case '수학':
+        반영비율 = school.수학반영비율;
+        break;
+      case '영어':
+        반영비율 = school.영어반영비율;
+        break;
+      default:
+        반영비율 = 0;
+    }
+    totalScore += score.value * 반영비율;
+    logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${(score.value * 반영비율).toFixed(2)}`);
+  });
+
+  // 탐구 점수도 비율 적용
+  const 탐구비율 = school.탐구반영비율;
+  totalScore += 탐구점수 * 탐구비율;
+  logMessages.push(`탐구 점수: ${탐구점수} * 비율(${탐구비율}) = ${(탐구점수 * 탐구비율).toFixed(2)}`);
+
+  // 총점 환산
+  totalScore = (totalScore / 100) * school.총점만점;
+  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+
+  return totalScore;
+}
+
+// 예시: 선택과목규칙이 없는 경우 국수영탐 비율대로 계산하는 기본 규칙
+function calculateByRatio(school, scores, 탐구점수, logMessages) {
+  // 국어, 수학, 영어, 탐구 점수 반영 비율에 따른 기본 계산 로직
+  // 필요에 따라 구현
+}
+
+
 
 // 규칙 1: 국수영탐택3
 function calculateRule1(school, scores, 탐구점수, logMessages) {
