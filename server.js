@@ -43,7 +43,7 @@ app.get('/api/schools', (req, res) => {
     res.json(results);
   });
 });
-// 학교 목록 API
+// 계산 API
 app.post('/api/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
 
@@ -73,14 +73,13 @@ app.post('/api/calculate-score', (req, res) => {
       }
       const school = schoolResults[0];
 
-      // 영어 점수 가져오기
+      // 영어와 한국사 점수 가져오기
       connection.query('SELECT * FROM 영어 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, englishResults) => {
         if (err) {
           console.error('영어 점수 조회 오류:', err);
           return res.status(500).json({ error: '영어 점수를 불러오는 중 오류가 발생했습니다.' });
         }
 
-        // 한국사 점수 가져오기
         connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [schoolName, major], (err, koreanHistoryResults) => {
           if (err) {
             console.error('한국사 점수 조회 오류:', err);
@@ -90,20 +89,15 @@ app.post('/api/calculate-score', (req, res) => {
           let totalScore = 0;
           let logMessages = []; // 로그 저장 배열
 
-          // 국어, 수학, 영어, 탐구 점수들을 배열에 저장
+          // 국어, 수학, 탐구, 영어 점수들을 배열에 저장
           let scores = [];
 
-          // 국어 점수 처리
+          // 백/백일 경우 백분위를 가져옴
           if (school.계산방법 === '백/백') {
             scores.push({ name: '국어', value: student.국어백분위 });
-          } else if (school.계산방법 === '백/표') {
-            scores.push({ name: '국어', value: student.국어표준점수 });
-          }
-
-          // 수학 점수 처리
-          if (school.계산방법 === '백/백') {
             scores.push({ name: '수학', value: student.수학백분위 });
           } else if (school.계산방법 === '백/표') {
+            scores.push({ name: '국어', value: student.국어표준점수 });
             scores.push({ name: '수학', value: student.수학표준점수 });
           }
 
@@ -111,7 +105,7 @@ app.post('/api/calculate-score', (req, res) => {
           const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
           scores.push({ name: '영어', value: englishGradeScore });
 
-          // 탐구 과목 처리
+          // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
           let 탐구점수;
           if (school.탐구반영과목수 === 1) {
             if (school.계산방법 === '백/백') {
@@ -126,121 +120,73 @@ app.post('/api/calculate-score', (req, res) => {
               탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
             }
           }
-          scores.push({ name: '탐구', value: 탐구점수 });
 
-          // 선택과목 규칙 처리
-          switch (school.선택과목규칙) {
-            case '국수영탐택3':
-              // 상위 3개 과목을 선택해서 합산
-              scores.sort((a, b) => b.value - a.value);
-              let selectedScores3 = scores.slice(0, 3);
-              selectedScores3.forEach(score => {
-                totalScore += score.value;
-                logMessages.push(`${score.name} 점수: ${score.value}`);
-              });
-              break;
+          if (school.선택과목규칙 === '국수영탐택3') {
+            // 상위 3개 과목을 선택해서 합산
+            scores.push({ name: '탐구', value: 탐구점수 });
+            scores.sort((a, b) => b.value - a.value);
+            let selectedScores = scores.slice(0, 3);
+            selectedScores.forEach(score => {
+              totalScore += score.value;
+              logMessages.push(`${score.name} 점수: ${score.value}`);
+            });
 
-            case '국수영탐532':
-              // 상위 3개의 점수에 각각 50%, 30%, 20% 비율 적용
-              scores.sort((a, b) => b.value - a.value);
-              let selectedScores532 = scores.slice(0, 3);
-              if (selectedScores532.length === 3) {
-                totalScore += selectedScores532[0].value * 0.5;
-                logMessages.push(`${selectedScores532[0].name} 점수: ${selectedScores532[0].value} * 0.5 = ${selectedScores532[0].value * 0.5}`);
-                totalScore += selectedScores532[1].value * 0.3;
-                logMessages.push(`${selectedScores532[1].name} 점수: ${selectedScores532[1].value} * 0.3 = ${selectedScores532[1].value * 0.3}`);
-                totalScore += selectedScores532[2].value * 0.2;
-                logMessages.push(`${selectedScores532[2].name} 점수: ${selectedScores532[2].value} * 0.2 = ${selectedScores532[2].value * 0.2}`);
-              }
-              break;
+            // 총점 환산 (300점 만점 기준)
+            totalScore = (totalScore / 300) * school.총점만점;
+            logMessages.push(`최종 환산 점수: (총점 / 300) * ${school.총점만점} = ${totalScore}`);
 
-            case '국수택1':
-              // 국어, 수학 중 상위 1개 선택, 나머지(영어, 탐구)는 그대로 비율대로
-              let 국수점수 = Math.max(
-                school.계산방법 === '백/백' ? student.국어백분위 : student.국어표준점수,
-                school.계산방법 === '백/백' ? student.수학백분위 : student.수학표준점수
-              ) * (school.국어반영비율 > school.수학반영비율 ? school.국어반영비율 : school.수학반영비율);
-              totalScore += 국수점수;
-              logMessages.push(`국어/수학 중 선택된 점수: ${국수점수}`);
+          } else if (school.선택과목규칙 === '국수영택2') {
+            // 국어, 수학, 영어 중 상위 2개를 비율대로 계산
+            scores.sort((a, b) => b.value - a.value);
+            let selectedScores = scores.slice(0, 2);
+            selectedScores.forEach(score => {
+              let 반영비율;
+              if (score.name === '국어') 반영비율 = school.국어반영비율;
+              if (score.name === '수학') 반영비율 = school.수학반영비율;
+              if (score.name === '영어') 반영비율 = school.영어반영비율;
+              totalScore += score.value * 반영비율;
+              logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${score.value * 반영비율}`);
+            });
 
-              // 영어 점수 추가
-              totalScore += englishGradeScore * school.영어반영비율;
-              logMessages.push(`영어 점수: ${englishGradeScore} * 비율(${school.영어반영비율}) = ${englishGradeScore * school.영어반영비율}`);
+            // 탐구 과목 비율 계산
+            totalScore += 탐구점수 * school.탐구반영비율;
+            logMessages.push(`탐구 점수: ${탐구점수} * 비율(${school.탐구반영비율}) = ${탐구점수 * school.탐구반영비율}`);
 
-              // 탐구 점수 추가
-              totalScore += 탐구점수 * school.탐구반영비율;
-              logMessages.push(`탐구 점수: ${탐구점수} * 비율(${school.탐구반영비율}) = ${탐구점수 * school.탐구반영비율}`);
-              break;
+            // 총점 환산
+            totalScore = (totalScore / 100) * school.총점만점;
+            logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
 
-            case '국수영탐택2':
-              // 국어, 수학, 영어, 탐구 중 상위 2개를 비율대로 계산
-              scores.sort((a, b) => b.value - a.value);
-              let selectedScores2 = scores.slice(0, 2);
-              selectedScores2.forEach(score => {
-                let 반영비율;
-                switch (score.name) {
-                  case '국어':
-                    반영비율 = school.국어반영비율;
-                    break;
-                  case '수학':
-                    반영비율 = school.수학반영비율;
-                    break;
-                  case '영어':
-                    반영비율 = school.영어반영비율;
-                    break;
-                  case '탐구':
-                    반영비율 = school.탐구반영비율;
-                    break;
-                }
-                totalScore += score.value * 반영비율;
-                logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${score.value * 반영비율}`);
-              });
+          } else if (school.선택과목규칙 === '국수영탐532') {
+            // 상위 3개의 점수에 각각 50%, 30%, 20% 비율 적용
+            scores.push({ name: '탐구', value: 탐구점수 });
+            scores.sort((a, b) => b.value - a.value);
+            let selectedScores = scores.slice(0, 3);
 
-              // 남은 과목은 반영비율대로 계산
-              let remainingScores2 = scores.slice(2);
-              remainingScores2.forEach(score => {
-                let 반영비율;
-                switch (score.name) {
-                  case '국어':
-                    반영비율 = school.국어반영비율;
-                    break;
-                  case '수학':
-                    반영비율 = school.수학반영비율;
-                    break;
-                  case '영어':
-                    반영비율 = school.영어반영비율;
-                    break;
-                  case '탐구':
-                    반영비율 = school.탐구반영비율;
-                    break;
-                }
-                totalScore += score.value * 반영비율;
-                logMessages.push(`${score.name} 점수: ${score.value} * 비율(${반영비율}) = ${score.value * 반영비율}`);
-              });
-              break;
+            // 50%, 30%, 20% 비율 적용
+            totalScore += selectedScores[0].value * 0.5;
+            totalScore += selectedScores[1].value * 0.3;
+            totalScore += selectedScores[2].value * 0.2;
 
-            case '상위3개평균':
-              // 국어, 수학, 영어, 탐구 중 상위 3개의 평균을 구함
-              scores.sort((a, b) => b.value - a.value);
-              let selectedScoresAvg = scores.slice(0, 3);
-              let sum = selectedScoresAvg.reduce((acc, score) => acc + score.value, 0);
-              let average = sum / 3;
-              totalScore = average;
-              logMessages.push(`선택된 3개 점수의 합: ${sum}, 평균: ${average}`);
-              break;
+            logMessages.push(`${selectedScores[0].name} 점수: ${selectedScores[0].value} * 0.5 = ${selectedScores[0].value * 0.5}`);
+            logMessages.push(`${selectedScores[1].name} 점수: ${selectedScores[1].value} * 0.3 = ${selectedScores[1].value * 0.3}`);
+            logMessages.push(`${selectedScores[2].name} 점수: ${selectedScores[2].value} * 0.2 = ${selectedScores[2].value * 0.2}`);
 
-            default:
-              // 선택과목규칙이 null이 아닌 다른 규칙들이 이미 처리되었으므로 여기서는 추가 처리 없음
-              break;
-          }
-
-          // 총점 환산
-          if (['국수영탐택3', '국수영탐532', '국수택1', '국수영탐택2'].includes(school.선택과목규칙) || school.선택과목규칙 === '상위3개평균') {
-            // 선택과목규칙이 있을 경우 환산 (300점 또는 400점 등 학교에 따라 다름)
+            // 총점 환산
             totalScore = (totalScore / 100) * school.총점만점;
             logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
           } else if (!school.선택과목규칙) {
-            // 선택과목규칙이 null인 경우 이미 환산된 점수
+            // 선택과목규칙이 null인 경우 반영비율 그대로 계산
+            totalScore += student.국어백분위 * school.국어반영비율;
+            totalScore += student.수학백분위 * school.수학반영비율;
+            totalScore += englishGradeScore * school.영어반영비율;
+            totalScore += 탐구점수 * school.탐구반영비율;
+
+            logMessages.push(`국어 점수: ${student.국어백분위} * 비율(${school.국어반영비율}) = ${student.국어백분위 * school.국어반영비율}`);
+            logMessages.push(`수학 점수: ${student.수학백분위} * 비율(${school.수학반영비율}) = ${student.수학백분위 * school.수학반영비율}`);
+            logMessages.push(`영어 점수: ${englishGradeScore} * 비율(${school.영어반영비율}) = ${englishGradeScore * school.영어반영비율}`);
+            logMessages.push(`탐구 점수: ${탐구점수} * 비율(${school.탐구반영비율}) = ${탐구점수 * school.탐구반영비율}`);
+
+            // 총점 환산
             totalScore = (totalScore / 100) * school.총점만점;
             logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
           }
