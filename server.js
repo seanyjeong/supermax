@@ -35,6 +35,15 @@ app.get('/api/students', (req, res) => {
   });
 });
 // 학교 목록 API
+app.get('/api/schools', (req, res) => {
+  connection.query('SELECT DISTINCT 학교명, 전공 FROM 학교', (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: 'DB 조회 오류' });
+    }
+    res.json(results);
+  });
+});
+// 학교 목록 API
 app.post('/api/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
 
