@@ -58,8 +58,51 @@ const calculationStrategies = {
   '국수영탐532': calculateRule3,
   '상위3개평균': calculateRule4,
   '국수영택2': calculateRule5,
-  '강원대': calculateKangwon,  // 강원대 규칙 추가
+  '강원대': calculateKangwon,
+  '국수택1': calculateRule6,  // 새로운 규칙 추가
 };
+
+// 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 다른 한 과목
+function calculateRule6(school, scores, 탐구점수, logMessages) {
+  let totalScore = 0;
+
+  // 국어와 수학 중 상위 점수 선택
+  const 국어점수 = scores.find(score => score.name === '국어');
+  const 수학점수 = scores.find(score => score.name === '수학');
+  
+  if (!국어점수 || !수학점수) {
+    return logMessages.push('국어 또는 수학 점수가 누락되었습니다.');
+  }
+  
+  const 선택과목 = 국어점수.value > 수학점수.value ? 국어점수 : 수학점수;
+  const 나머지과목 = 국어점수.value <= 수학점수.value ? 국어점수 : 수학점수;
+
+  // 선택된 과목과 나머지 과목의 점수에 반영 비율 적용
+  const 선택과목비율 = 선택과목.name === '국어' ? school.국어반영비율 : school.수학반영비율;
+  const 나머지과목비율 = 나머지과목.name === '국어' ? school.국어반영비율 : school.수학반영비율;
+
+  totalScore += 선택과목.value * 선택과목비율;
+  logMessages.push(`${선택과목.name} 점수: ${선택과목.value} * 비율(${선택과목비율}) = ${(선택과목.value * 선택과목비율).toFixed(2)}`);
+
+  totalScore += 나머지과목.value * 나머지과목비율;
+  logMessages.push(`${나머지과목.name} 점수: ${나머지과목.value} * 비율(${나머지과목비율}) = ${(나머지과목.value * 나머지과목비율).toFixed(2)}`);
+
+  // 탐구 과목 반영 여부 확인 (탐구반영과목수가 0이면 탐구 점수를 반영하지 않음)
+  if (school.탐구반영과목수 > 0) {
+    const 탐구비율 = school.탐구반영비율;
+    totalScore += 탐구점수 * 탐구비율;
+    logMessages.push(`탐구 점수: ${탐구점수} * 비율(${탐구비율}) = ${(탐구점수 * 탐구비율).toFixed(2)}`);
+  } else {
+    logMessages.push('탐구 과목은 반영되지 않았습니다.');
+  }
+
+  // 총점 환산
+  totalScore = (totalScore / 100) * school.총점만점;
+  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+
+  return totalScore;
+}
+
 
 // 규칙: 강원대 - 국어 필수 + 수학/영어 중 하나 선택, 탐구는 반영하지 않음
 function calculateKangwon(school, scores, 탐구점수, logMessages) {
