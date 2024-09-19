@@ -61,8 +61,10 @@ const calculationStrategies = {
 
 // 기본 계산: 선택과목 규칙이 없을 때 적용
 function calculateByRatio(school, scores, 탐구점수, logMessages) {
-  // 탐구 점수도 추가
-  scores.push({ name: '탐구', value: 탐구점수 });
+  // 탐구반영과목수가 0일 경우 탐구 제외
+  if (school.탐구반영과목수 > 0) {
+    scores.push({ name: '탐구', value: 탐구점수 });
+  }
 
   let totalScore = 0;
 
@@ -301,7 +303,7 @@ app.post('/api/calculate-score', (req, res) => {
           const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
           scores.push({ name: '영어', value: englishGradeScore });
 
-          // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
+ // 탐구 과목 처리 (탐구반영과목수에 따른 처리)
           let 탐구점수;
           if (school.탐구반영과목수 === 1) {
             if (school.계산방법 === '백/백') {
@@ -315,7 +317,10 @@ app.post('/api/calculate-score', (req, res) => {
             } else if (school.계산방법 === '백/표') {
               탐구점수 = (student.탐구1표준점수 + student.탐구2표준점수) / 2;
             }
+          } else if (school.탐구반영과목수 === 0) {
+            탐구점수 = 0; // 탐구를 반영하지 않음
           }
+
 
           // 선택과목규칙에 따른 처리
           const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
