@@ -57,9 +57,9 @@ const calculationStrategies = {
   '국수영탐532': calculateRule3,
   '상위3개평균': calculateRule4,
   '국수영택2': calculateRule5, // 새로운 규칙 추가
-  'default': calculateByRatio // 선택과목 규칙이 없을 경우 기본 계산
 };
 
+// 기본 계산: 선택과목 규칙이 없을 때 적용
 function calculateByRatio(school, scores, 탐구점수, logMessages) {
   // 탐구 점수도 추가
   scores.push({ name: '탐구', value: 탐구점수 });
@@ -142,14 +142,6 @@ function calculateRule5(school, scores, 탐구점수, logMessages) {
 
   return totalScore;
 }
-
-// 예시: 선택과목규칙이 없는 경우 국수영탐 비율대로 계산하는 기본 규칙
-function calculateByRatio(school, scores, 탐구점수, logMessages) {
-  // 국어, 수학, 영어, 탐구 점수 반영 비율에 따른 기본 계산 로직
-  // 필요에 따라 구현
-}
-
-
 
 // 규칙 1: 국수영탐택3
 function calculateRule1(school, scores, 탐구점수, logMessages) {
@@ -326,11 +318,7 @@ app.post('/api/calculate-score', (req, res) => {
           }
 
           // 선택과목규칙에 따른 처리
-          const calculateStrategy = calculationStrategies[school.선택과목규칙];
-
-          if (!calculateStrategy) {
-            return res.status(400).json({ error: '지원되지 않는 선택과목규칙입니다.' });
-          }
+          const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
 
           let totalScore;
           try {
