@@ -49,7 +49,7 @@
       <tr>
         <th>학교명</th>
         <th>전공</th>
-        <th>점수</th>
+        <th>환산 점수</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -71,11 +71,11 @@
         });
 
         // 학생이 선택되었을 때 이벤트 설정
-        studentSelect.addEventListener('change', fetchStudentScores);
+        studentSelect.addEventListener('change', fetchAllSchoolScores);
       });
 
-    // 학생 점수 불러오기
-    function fetchStudentScores() {
+    // 모든 학교에 대한 점수 계산 요청
+    function fetchAllSchoolScores() {
       const studentName = document.getElementById('studentSelect').value;
 
       // 학생이 선택되지 않았을 때는 실행하지 않음
@@ -84,7 +84,8 @@
         return;
       }
 
-      fetch('https://supermax.kr/api/get-student-scores', {
+      // API 호출: 선택된 학생의 모든 학교에 대한 점수 계산
+      fetch('https://supermax.kr/api/calculate-all-scores', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -96,19 +97,19 @@
         const tableBody = document.querySelector('#scoreTable tbody');
         tableBody.innerHTML = ''; // 기존 데이터를 지우고 새로 추가
 
-        data.scores.forEach(score => {
+        data.forEach(schoolScore => {
           const row = document.createElement('tr');
-          
+
           const schoolCell = document.createElement('td');
-          schoolCell.textContent = score.학교명;
+          schoolCell.textContent = schoolScore.학교명;
           row.appendChild(schoolCell);
-          
+
           const majorCell = document.createElement('td');
-          majorCell.textContent = score.전공;
+          majorCell.textContent = schoolScore.전공;
           row.appendChild(majorCell);
-          
+
           const scoreCell = document.createElement('td');
-          scoreCell.textContent = score.점수;
+          scoreCell.textContent = schoolScore.totalScore;
           row.appendChild(scoreCell);
 
           tableBody.appendChild(row);
@@ -117,11 +118,14 @@
         // 로그 업데이트
         const logsDiv = document.getElementById('logs');
         logsDiv.innerHTML = '<h3>계산 로그</h3>';
-        data.logs.forEach(log => {
+        data.forEach(schoolScore => {
           const logItem = document.createElement('p');
-          logItem.textContent = log;
+          logItem.textContent = `${schoolScore.학교명} (${schoolScore.전공}): ${schoolScore.logs.join(', ')}`;
           logsDiv.appendChild(logItem);
         });
+      })
+      .catch(error => {
+        console.error('점수 계산 오류:', error);
       });
     }
   </script>
