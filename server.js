@@ -62,7 +62,7 @@ const calculationStrategies = {
   '국수택1': calculateRule6,  // 새로운 규칙 추가
   '관동대': calculateKwandong,  // 새로운 규칙 추가
 };
-// 규칙 8: 관동대 - 국어, 수학 중 상위 2개 + 탐구 필수 + 영어 점수는 비율 없이 더함
+// 규칙 8: 관동대 - 국어, 수학 중 상위 2개 + 탐구 필수 + 영어 점수는 마지막에 그대로 합산
 function calculateKwandong(school, scores, 탐구점수, logMessages) {
   let totalScore = 0;
 
@@ -100,21 +100,26 @@ function calculateKwandong(school, scores, 탐구점수, logMessages) {
   totalScore += 탐구점수 * 탐구비율;
   logMessages.push(`탐구 점수: ${탐구점수} * 비율(${탐구비율}) = ${(탐구점수 * 탐구비율).toFixed(2)}`);
 
-  // 영어 점수는 비율 없이 그대로 더함
+  // 총점 환산 (탐구, 국어, 수학 기준으로 먼저 계산)
+  totalScore = (totalScore / 100) * school.총점만점;
+  logMessages.push(`중간 총점 (국어, 수학, 탐구): (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+
+  // 영어 점수는 마지막에 그대로 더함
   const 영어점수 = scores.find(score => score.name === '영어');
   if (영어점수) {
-    totalScore += 영어점수.value;
+    totalScore += 영어점수.value; // 비율 없이 그대로 합산
     logMessages.push(`영어 점수: ${영어점수.value} (비율 없이 그대로 합산)`);
   } else {
     return logMessages.push('영어 점수가 누락되었습니다.');
   }
 
-  // 총점 환산
-  totalScore = (totalScore / 100) * school.총점만점;
-  logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore.toFixed(2)}`);
+  // 최종 총점 반환
+  totalScore = parseFloat(totalScore.toFixed(2)); // 소수점 2자리로 고정
+  logMessages.push(`최종 환산 점수: ${totalScore}`);
 
   return totalScore;
 }
+
 
 // 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 다른 한 과목
 // 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 영어 + 탐구 (탐구과목수가 0이면 탐구 제외)
