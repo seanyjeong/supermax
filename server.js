@@ -512,6 +512,7 @@ app.post('/api/calculate-score', (req, res) => {
   });
 });
 // 모든 학교에 대한 환산 점수를 계산하는 API 추가
+// 모든 학교에 대한 환산 점수를 계산하는 API 추가
 app.post('/api/calculate-all-scores', (req, res) => {
   const { studentName } = req.body;
 
@@ -541,7 +542,7 @@ app.post('/api/calculate-all-scores', (req, res) => {
       let logMessages = [];
 
       // 각 학교와 전공에 대해 점수를 계산
-      schoolResults.forEach(school => {
+      schoolResults.forEach((school, index) => {
         let scores = [];
         logMessages = []; // 로그 초기화
 
@@ -609,7 +610,7 @@ app.post('/api/calculate-all-scores', (req, res) => {
               logs: logMessages
             });
 
-            // 모든 계산이 끝나면 응답 전송
+            // 모든 학교의 점수 계산이 끝난 후 결과 반환
             if (totalScores.length === schoolResults.length) {
               res.json(totalScores);
             }
@@ -619,6 +620,7 @@ app.post('/api/calculate-all-scores', (req, res) => {
     });
   });
 });
+
 
 
 // 포트 설정
