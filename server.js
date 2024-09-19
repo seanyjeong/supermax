@@ -63,6 +63,7 @@ const calculationStrategies = {
 };
 
 // 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 다른 한 과목
+// 규칙 6: 국수택1 - 국어, 수학 중 상위 1개 + 영어 + 탐구 (탐구과목수가 0이면 탐구 제외)
 function calculateRule6(school, scores, 탐구점수, logMessages) {
   let totalScore = 0;
 
@@ -75,17 +76,21 @@ function calculateRule6(school, scores, 탐구점수, logMessages) {
   }
   
   const 선택과목 = 국어점수.value > 수학점수.value ? 국어점수 : 수학점수;
-  const 나머지과목 = 국어점수.value <= 수학점수.value ? 국어점수 : 수학점수;
-
-  // 선택된 과목과 나머지 과목의 점수에 반영 비율 적용
+  
+  // 선택된 과목의 반영 비율 적용
   const 선택과목비율 = 선택과목.name === '국어' ? school.국어반영비율 : school.수학반영비율;
-  const 나머지과목비율 = 나머지과목.name === '국어' ? school.국어반영비율 : school.수학반영비율;
-
   totalScore += 선택과목.value * 선택과목비율;
   logMessages.push(`${선택과목.name} 점수: ${선택과목.value} * 비율(${선택과목비율}) = ${(선택과목.value * 선택과목비율).toFixed(2)}`);
 
-  totalScore += 나머지과목.value * 나머지과목비율;
-  logMessages.push(`${나머지과목.name} 점수: ${나머지과목.value} * 비율(${나머지과목비율}) = ${(나머지과목.value * 나머지과목비율).toFixed(2)}`);
+  // 영어 점수 반영
+  const 영어점수 = scores.find(score => score.name === '영어');
+  if (영어점수) {
+    const 영어비율 = school.영어반영비율;
+    totalScore += 영어점수.value * 영어비율;
+    logMessages.push(`영어 점수: ${영어점수.value} * 비율(${영어비율}) = ${(영어점수.value * 영어비율).toFixed(2)}`);
+  } else {
+    return logMessages.push('영어 점수가 누락되었습니다.');
+  }
 
   // 탐구 과목 반영 여부 확인 (탐구반영과목수가 0이면 탐구 점수를 반영하지 않음)
   if (school.탐구반영과목수 > 0) {
