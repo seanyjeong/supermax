@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');  // CORS 미들웨어 추가
+
 // 데이터베이스 연결 설정
 const db_config = {
   host: '211.37.174.218',
@@ -9,6 +10,7 @@ const db_config = {
   database: 'max',
   charset: 'utf8mb4'
 };
+
 // MySQL 데이터베이스 연결
 const connection = mysql.createConnection(db_config);
 connection.connect((err) => {
@@ -18,13 +20,16 @@ connection.connect((err) => {
   }
   console.log('MySQL에 연결되었습니다.');
 });
+
 // Express 앱 생성
 const app = express();
 app.use(express.json());  // JSON 파싱
+
 // CORS 설정
 app.use(cors({
   origin: ['https://supermax.co.kr', 'https://seanyjeong.github.io', 'https://chejump.com', 'https://score.ilsanmax.com']
 }));
+
 // 학생 목록 API
 app.get('/api/students', (req, res) => {
   connection.query('SELECT 이름 FROM 학생정보', (err, results) => {
@@ -34,6 +39,7 @@ app.get('/api/students', (req, res) => {
     res.json(results);
   });
 });
+
 // 학교 목록 API
 app.get('/api/schools', (req, res) => {
   connection.query('SELECT DISTINCT 학교명, 전공 FROM 학교', (err, results) => {
@@ -43,6 +49,7 @@ app.get('/api/schools', (req, res) => {
     res.json(results);
   });
 });
+
 // 계산 API
 app.post('/api/calculate-score', (req, res) => {
   const { studentName, schoolName, major } = req.body;
@@ -135,7 +142,7 @@ app.post('/api/calculate-score', (req, res) => {
             totalScore = (totalScore / 300) * school.총점만점;
             logMessages.push(`최종 환산 점수: (총점 / 300) * ${school.총점만점} = ${totalScore}`);
 
-          } else if (school.선택과목규칙 === '국수영택2') {
+          } else if (school.선택과목규칙 === '국수영탐택2') {
             // 국어, 수학, 영어 중 상위 2개를 비율대로 계산
             scores.sort((a, b) => b.value - a.value);
             let selectedScores = scores.slice(0, 2);
@@ -174,6 +181,24 @@ app.post('/api/calculate-score', (req, res) => {
             // 총점 환산
             totalScore = (totalScore / 100) * school.총점만점;
             logMessages.push(`최종 환산 점수: (총점 / 100) * ${school.총점만점} = ${totalScore}`);
+          
+          // **여기에 새로운 선택과목규칙 '상위3개평균'을 추가합니다.**
+          } else if (school.선택과목규칙 === '상위3개평균') {
+            // 국어, 수학, 영어, 탐구 점수를 포함하여 상위 3개의 평균을 계산
+            scores.push({ name: '탐구', value: 탐구점수 });
+            // 정렬하여 상위 3개 선택
+            scores.sort((a, b) => b.value - a.value);
+            let selectedScores = scores.slice(0, 3);
+            // 평균 계산
+            let sum = selectedScores.reduce((acc, score) => acc + score.value, 0);
+            let average = sum / 3;
+            totalScore = (average / 100) * school.총점만점; // 총점만점 기준으로 환산
+
+            // 로그 추가
+            logMessages.push(`선택된 과목 점수: ${selectedScores.map(s => `${s.name}: ${s.value}`).join(', ')}`);
+            logMessages.push(`평균 점수: ${average.toFixed(2)}`);
+            logMessages.push(`최종 환산 점수: (${average.toFixed(2)} / 100) * ${school.총점만점} = ${totalScore}`);
+          
           } else if (!school.선택과목규칙) {
             // 선택과목규칙이 null인 경우 반영비율 그대로 계산
             totalScore += student.국어백분위 * school.국어반영비율;
@@ -205,8 +230,6 @@ app.post('/api/calculate-score', (req, res) => {
     });
   });
 });
-
-
 
 // 포트 설정
 const PORT = 4000;
