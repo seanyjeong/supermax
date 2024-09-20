@@ -623,23 +623,18 @@ app.post('/api/student-info', (req, res) => {
 });
 
 // 모든 학생에 대한 모든 학교의 점수를 계산하는 API
-app.post('/api/calculate-scores-for-all-students', (req, res) => {
-  const { studentName } = req.body;
-
-  if (!studentName) {
-    return res.status(400).json({ error: '학생 이름이 필요합니다.' });
-  }
-
-  // 1. 학생 정보 가져오기
-  connection.query('SELECT * FROM 학생정보 WHERE 이름 = ?', [studentName], (err, studentResults) => {
+// 모든 학생에 대한 모든 학교의 점수를 계산하는 API
+app.get('/api/calculate-scores-for-all-students', (req, res) => {
+  // 1. 모든 학생 정보 가져오기
+  connection.query('SELECT * FROM 학생정보', (err, studentResults) => {
     if (err) {
       console.error('학생 정보 조회 오류:', err);
       return res.status(500).json({ error: '학생 정보를 불러오는 중 오류가 발생했습니다.' });
     }
+
     if (!studentResults.length) {
-      return res.status(404).json({ error: '해당 학생을 찾을 수 없습니다.' });
+      return res.status(404).json({ error: '학생 정보가 없습니다.' });
     }
-    const student = studentResults[0];  // 학생 정보
 
     // 2. 모든 학교 정보 가져오기
     connection.query('SELECT * FROM 학교', (err, schoolResults) => {
@@ -648,71 +643,84 @@ app.post('/api/calculate-scores-for-all-students', (req, res) => {
         return res.status(500).json({ error: '학교 정보를 불러오는 중 오류가 발생했습니다.' });
       }
 
-      let totalScores = [];  // 각 학교별 점수 저장
+      if (!schoolResults.length) {
+        return res.status(404).json({ error: '학교 정보가 없습니다.' });
+      }
 
-      // 3. 영어 점수를 비동기 처리하기 위한 Promise 배열 생성
-      const schoolPromises = schoolResults.map(school => {
+      let allScores = [];  // 전체 결과 저장
+
+      // 3. 학생 별로 점수를 계산하는 비동기 작업을 Promise로 처리
+      const studentPromises = studentResults.map(student => {
         return new Promise((resolve, reject) => {
-          let scores = [];
-          let logMessages = [];
+          let studentScores = { studentName: student.이름, scores: [] };
 
-          // 4. 국어, 수학 점수 설정
-          if (school.계산방법 === '백/백') {
-            scores.push({ name: '국어', value: student.국어백분위 });
-            scores.push({ name: '수학', value: student.수학백분위 });
-          } else if (school.계산방법 === '백/표') {
-            scores.push({ name: '국어', value: student.국어표준점수 });
-            scores.push({ name: '수학', value: student.수학표준점수 });
-          }
+          // 4. 학교 별로 점수를 계산하는 Promise 배열
+          const schoolPromises = schoolResults.map(school => {
+            return new Promise((resolve, reject) => {
+              let scores = [];
+              let logMessages = [];
 
-          // 5. 영어 점수 처리 (Promise 사용)
-          connection.query('SELECT * FROM 영어 WHERE 학교명 = ? AND 전공 = ?', [school.학교명, school.전공], (err, englishResults) => {
-            if (err || !englishResults.length) {
-              logMessages.push('영어 점수를 불러오는 중 오류가 발생했습니다.');
-              return resolve({ 학교명: school.학교명, 전공: school.전공, totalScore: 0, logs: logMessages });
-            }
-
-            const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
-            scores.push({ name: '영어', value: englishGradeScore });
-
-            // 6. 탐구 점수 처리
-            let 탐구점수 = 0;
-            if (school.탐구반영과목수 === 1) {
-              탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
-            } else if (school.탐구반영과목수 === 2) {
-              탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
-            }
-
-            // 7. 점수 계산 함수 호출
-            const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
-            let totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
-
-            // 8. 한국사 점수 처리 (총점합산일 경우)
-            connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [school.학교명, school.전공], (err, koreanHistoryResults) => {
-              if (!err && koreanHistoryResults.length) {
-                const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
-                if (school.한국사반영방법 === '총점합산') {
-                  totalScore += koreanHistoryGradeScore;
-                  logMessages.push(`한국사 점수: ${koreanHistoryGradeScore}`);
-                }
+              // 5. 학생 성적 정보로 점수 계산 (백/백 또는 백/표)
+              if (school.계산방법 === '백/백') {
+                scores.push({ name: '국어', value: student.국어백분위 });
+                scores.push({ name: '수학', value: student.수학백분위 });
+              } else if (school.계산방법 === '백/표') {
+                scores.push({ name: '국어', value: student.국어표준점수 });
+                scores.push({ name: '수학', value: student.수학표준점수 });
               }
 
-              // 9. 결과 resolve (Promise 완료)
-              resolve({
-                학교명: school.학교명,
-                전공: school.전공,
-                totalScore: totalScore.toFixed(2),
-                logs: logMessages
+              // 6. 영어 점수 가져오기
+              connection.query('SELECT * FROM 영어 WHERE 학교명 = ? AND 전공 = ?', [school.학교명, school.전공], (err, englishResults) => {
+                if (err || !englishResults.length) {
+                  logMessages.push('영어 점수를 불러오는 중 오류가 발생했습니다.');
+                  return resolve({
+                    학교명: school.학교명,
+                    전공: school.전공,
+                    totalScore: 0,
+                    logs: logMessages
+                  });
+                }
+
+                const englishGradeScore = englishResults[0][`등급${student.영어등급}`];
+                scores.push({ name: '영어', value: englishGradeScore });
+
+                // 7. 탐구 점수 처리
+                let 탐구점수 = 0;
+                if (school.탐구반영과목수 === 1) {
+                  탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
+                } else if (school.탐구반영과목수 === 2) {
+                  탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
+                }
+
+                // 8. 선택과목규칙에 따른 점수 계산
+                const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
+                let totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
+
+                // 9. 각 학교별로 점수를 저장
+                resolve({
+                  학교명: school.학교명,
+                  전공: school.전공,
+                  totalScore: totalScore.toFixed(2),
+                  logs: logMessages
+                });
               });
             });
           });
+
+          // 10. 학교 별 점수 계산이 완료되면 결과 저장
+          Promise.all(schoolPromises)
+            .then(schoolScores => {
+              studentScores.scores = schoolScores;
+              resolve(studentScores);  // 학생의 모든 점수 계산 완료
+            })
+            .catch(error => reject(error));
         });
       });
 
-      // 10. 모든 학교 점수 계산이 완료된 후 결과 반환
-      Promise.all(schoolPromises)
+      // 11. 모든 학생에 대한 점수 계산이 완료되면 결과 반환
+      Promise.all(studentPromises)
         .then(results => {
-          res.json(results);  // 모든 학교에 대한 점수 계산이 완료되면 반환
+          res.json(results);  // 모든 학생에 대한 점수 계산이 완료되면 반환
         })
         .catch(error => {
           console.error('점수 계산 중 오류:', error);
@@ -721,6 +729,7 @@ app.post('/api/calculate-scores-for-all-students', (req, res) => {
     });
   });
 });
+
 
 
 
