@@ -622,6 +622,86 @@ app.post('/api/student-info', (req, res) => {
   });
 });
 
+// 모든 학생에 대한 모든 학교의 점수를 계산하는 API
+app.get('/api/calculate-scores-for-all-students', (req, res) => {
+  // 1. 모든 학생 정보 가져오기
+  connection.query('SELECT * FROM 학생정보', (err, studentResults) => {
+    if (err) {
+      console.error('학생 정보 조회 오류:', err);
+      return res.status(500).json({ error: '학생 정보를 불러오는 중 오류가 발생했습니다.' });
+    }
+
+    if (!studentResults.length) {
+      return res.status(404).json({ error: '학생 정보가 없습니다.' });
+    }
+
+    // 2. 모든 학교 정보 가져오기
+    connection.query('SELECT * FROM 학교', (err, schoolResults) => {
+      if (err) {
+        console.error('학교 정보 조회 오류:', err);
+        return res.status(500).json({ error: '학교 정보를 불러오는 중 오류가 발생했습니다.' });
+      }
+
+      if (!schoolResults.length) {
+        return res.status(404).json({ error: '학교 정보가 없습니다.' });
+      }
+
+      let allScores = [];  // 전체 결과 저장
+      let completedCount = 0; // 완료된 학생 수 체크
+
+      // 3. 모든 학생에 대해 각 학교의 점수를 계산
+      studentResults.forEach(student => {
+        let studentScores = { studentName: student.이름, scores: [] };
+
+        // 각 학교에 대해 점수를 계산
+        schoolResults.forEach(school => {
+          let scores = [];
+          let logMessages = [];
+
+          // 4. 학생 성적 정보로 점수 계산 (백/백 또는 백/표)
+          if (school.계산방법 === '백/백') {
+            scores.push({ name: '국어', value: student.국어백분위 });
+            scores.push({ name: '수학', value: student.수학백분위 });
+          } else if (school.계산방법 === '백/표') {
+            scores.push({ name: '국어', value: student.국어표준점수 });
+            scores.push({ name: '수학', value: student.수학표준점수 });
+          }
+
+          // 탐구 점수 처리 (탐구 반영 과목수에 따른 계산)
+          let 탐구점수 = 0;
+          if (school.탐구반영과목수 === 1) {
+            탐구점수 = Math.max(student.탐구1백분위, student.탐구2백분위);
+          } else if (school.탐구반영과목수 === 2) {
+            탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
+          }
+
+          // 5. 선택과목규칙에 따른 점수 계산
+          const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
+          let totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
+
+          // 6. 각 학교별로 점수를 저장
+          studentScores.scores.push({
+            학교명: school.학교명,
+            전공: school.전공,
+            totalScore: totalScore.toFixed(2),
+            logs: logMessages
+          });
+        });
+
+        // 7. 모든 학생의 점수를 저장
+        allScores.push(studentScores);
+        completedCount++;
+
+        // 모든 학생에 대한 점수 계산이 완료되면 결과를 반환
+        if (completedCount === studentResults.length) {
+          res.json(allScores);
+        }
+      });
+    });
+  });
+});
+
+
 
 
 
