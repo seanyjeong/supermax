@@ -692,22 +692,44 @@ app.get('/api/calculate-scores-for-all-students', (req, res) => {
                   탐구점수 = (student.탐구1백분위 + student.탐구2백분위) / 2;
                 }
 
-                // 8. 선택과목규칙에 따른 점수 계산
-                const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
-                let totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
+                // 8. 한국사 점수 가져오기
+                connection.query('SELECT * FROM 한국사 WHERE 학교명 = ? AND 전공 = ?', [school.학교명, school.전공], (err, koreanHistoryResults) => {
+                  if (err || !koreanHistoryResults.length) {
+                    logMessages.push('한국사 점수를 불러오는 중 오류가 발생했습니다.');
+                    return resolve({
+                      학교명: school.학교명,
+                      전공: school.전공,
+                      totalScore: 0,
+                      logs: logMessages
+                    });
+                  }
 
-                // 9. 각 학교별로 점수를 저장
-                resolve({
-                  학교명: school.학교명,
-                  전공: school.전공,
-                  totalScore: totalScore.toFixed(2),
-                  logs: logMessages
+                  const koreanHistoryGradeScore = koreanHistoryResults[0][`등급${student.한국사등급}`];
+                  scores.push({ name: '한국사', value: koreanHistoryGradeScore });
+
+                  // 9. 선택과목규칙에 따른 점수 계산
+                  const calculateStrategy = calculationStrategies[school.선택과목규칙] || calculateByRatio;
+                  let totalScore = calculateStrategy(school, scores, 탐구점수, logMessages);
+
+                  // 10. 총점합산 방식일 경우 한국사 점수 추가
+                  if (school.한국사반영방법 === '총점합산') {
+                    totalScore += koreanHistoryGradeScore;
+                    logMessages.push(`한국사 점수: ${koreanHistoryGradeScore} (총점 합산)`);
+                  }
+
+                  // 11. 각 학교별로 점수를 저장
+                  resolve({
+                    학교명: school.학교명,
+                    전공: school.전공,
+                    totalScore: totalScore.toFixed(2),
+                    logs: logMessages
+                  });
                 });
               });
             });
           });
 
-          // 10. 학교 별 점수 계산이 완료되면 결과 저장
+          // 12. 학교 별 점수 계산이 완료되면 결과 저장
           Promise.all(schoolPromises)
             .then(schoolScores => {
               studentScores.scores = schoolScores;
@@ -717,7 +739,7 @@ app.get('/api/calculate-scores-for-all-students', (req, res) => {
         });
       });
 
-      // 11. 모든 학생에 대한 점수 계산이 완료되면 결과 반환
+      // 13. 모든 학생에 대한 점수 계산이 완료되면 결과 반환
       Promise.all(studentPromises)
         .then(results => {
           res.json(results);  // 모든 학생에 대한 점수 계산이 완료되면 반환
@@ -729,6 +751,7 @@ app.get('/api/calculate-scores-for-all-students', (req, res) => {
     });
   });
 });
+
 
 
 
