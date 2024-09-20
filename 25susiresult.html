@@ -100,10 +100,26 @@
         }
     </style>
     <script>
-        // 슈퍼맥스 서버에서 데이터를 가져오는 함수
+        // 사용자 인증 확인
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('로그인이 만료되었습니다.');
+                window.location.href = 'login.html'; // 로그인 페이지로 이동
+            }
+        }
+
+        // 슈퍼맥스 서버에서 데이터를 가져오는 함수 (토큰 필요)
         async function fetchDropdownData() {
+            checkAuth(); // 토큰 유효성 확인
+            const token = localStorage.getItem('token');
             try {
-                const response = await fetch('https://supermax.kr/25susi-dropdowns');
+                const response = await fetch('https://supermax.kr/25susi-dropdowns', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
+                    }
+                });
                 const data = await response.json();
                 populateDropdown('university', data.universities);
             } catch (error) {
@@ -122,8 +138,10 @@
             });
         }
 
-        // 필터링된 데이터를 가져와 표시하는 함수
+        // 필터링된 데이터를 가져와 표시하는 함수 (토큰 필요)
         async function fetchFilteredData() {
+            checkAuth(); // 토큰 유효성 확인
+            const token = localStorage.getItem('token');
             const university = document.getElementById('university').value;
             const major = document.getElementById('major').value;
             const admissionType = document.getElementById('admissionType').value;
@@ -133,7 +151,12 @@
             }
 
             try {
-                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`);
+                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
+                    }
+                });
                 const data = await response.json();
                 displayData(data);
             } catch (error) {
@@ -236,13 +259,20 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            checkAuth(); // 페이지 로드 시 인증 확인
             fetchDropdownData();
 
             document.getElementById('university').addEventListener('change', async () => {
                 const university = document.getElementById('university').value;
                 if (university) {
                     try {
-                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`);
+                        const token = localStorage.getItem('token');
+                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
+                            }
+                        });
                         const data = await response.json();
                         populateDropdown('major', data.majors);
                     } catch (error) {
@@ -257,7 +287,13 @@
                 const major = document.getElementById('major').value;
                 if (university && major) {
                     try {
-                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`);
+                        const token = localStorage.getItem('token');
+                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
+                            }
+                        });
                         const data = await response.json();
                         populateDropdown('admissionType', data.admissionTypes);
                     } catch (error) {
