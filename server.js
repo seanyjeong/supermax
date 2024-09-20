@@ -623,7 +623,7 @@ app.post('/api/student-info', (req, res) => {
 });
 
 // 모든 학생에 대한 모든 학교의 점수를 계산하는 API
-app.post('/api/calculate-all-scores', (req, res) => {
+app.post('/api/calculate-scores-for-all-students', (req, res) => {
   const { studentName } = req.body;
 
   if (!studentName) {
