@@ -826,7 +826,7 @@ app.get('/25susi-admissionTypes', (req, res) => {
 
 // 필터 조건에 맞는 데이터를 가져오는 엔드포인트
 // JWT 인증을 적용한 필터 데이터 엔드포인트
-app.get('/25susi-filter', authenticateToken, (req, res) => {
+app.get('/25susi-filter' (req, res) => {
   const { university, major, admissionType } = req.query;
   
   const query = `
