@@ -825,8 +825,10 @@ app.get('/25susi-admissionTypes', (req, res) => {
 });
 
 // 필터 조건에 맞는 데이터를 가져오는 엔드포인트
-app.get('/25susi-filter', (req, res) => {
+// JWT 인증을 적용한 필터 데이터 엔드포인트
+app.get('/25susi-filter', authenticateToken, (req, res) => {
   const { university, major, admissionType } = req.query;
+  
   const query = `
     SELECT 교육원, 이름, 학교, 성별, 학년, 환산내신, 등급, 실기점수, 총점, 최초합격여부, 최종합격여부,
            실기1종목, 실기1기록, 실기1점수, 실기2종목, 실기2기록, 실기2점수, 실기3종목, 실기3기록, 실기3점수,
@@ -834,6 +836,7 @@ app.get('/25susi-filter', (req, res) => {
     FROM 25susiresult 
     WHERE 대학명 = ? AND 학과명 = ? AND 전형명 = ?
   `;
+
   connection.query(query, [university, major, admissionType], (err, results) => {
     if (err) {
       return res.status(500).json({ message: 'Error fetching filtered data', error: err });
@@ -841,6 +844,7 @@ app.get('/25susi-filter', (req, res) => {
     res.status(200).json(results);
   });
 });
+
 
 
 
