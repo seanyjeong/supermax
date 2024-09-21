@@ -102,8 +102,19 @@
     <script>
         // 슈퍼맥스 서버에서 데이터를 가져오는 함수
         async function fetchDropdownData() {
+            const token = localStorage.getItem('jwtToken'); // JWT 토큰을 로컬스토리지에서 가져옴
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = 'https://supermax.co.kr'; // 로그인 페이지로 리다이렉트
+                return;
+            }
+
             try {
-                const response = await fetch('https://supermax.kr/25susi-dropdowns');
+                const response = await fetch('https://supermax.kr/25susi-dropdowns', {
+                    headers: {
+                        'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
+                    }
+                });
                 const data = await response.json();
                 populateDropdown('university', data.universities);
             } catch (error) {
@@ -132,8 +143,19 @@
                 return; // 모든 드롭다운 값이 선택된 후에만 데이터 가져오기
             }
 
+            const token = localStorage.getItem('jwtToken');
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                window.location.href = 'https://supermax.co.kr';
+                return;
+            }
+
             try {
-                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`);
+                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
+                    }
+                });
                 const data = await response.json();
                 displayData(data);
             } catch (error) {
@@ -241,8 +263,19 @@
             document.getElementById('university').addEventListener('change', async () => {
                 const university = document.getElementById('university').value;
                 if (university) {
+                    const token = localStorage.getItem('jwtToken');
+                    if (!token) {
+                        alert('로그인이 필요합니다.');
+                        window.location.href = 'https://supermax.co.kr';
+                        return;
+                    }
+
                     try {
-                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`);
+                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
+                            }
+                        });
                         const data = await response.json();
                         populateDropdown('major', data.majors);
                     } catch (error) {
@@ -256,8 +289,19 @@
                 const university = document.getElementById('university').value;
                 const major = document.getElementById('major').value;
                 if (university && major) {
+                    const token = localStorage.getItem('jwtToken');
+                    if (!token) {
+                        alert('로그인이 필요합니다.');
+                        window.location.href = 'https://supermax.co.kr';
+                        return;
+                    }
+
                     try {
-                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`);
+                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
+                            }
+                        });
                         const data = await response.json();
                         populateDropdown('admissionType', data.admissionTypes);
                     } catch (error) {
