@@ -98,20 +98,25 @@
                 width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
             }
         }
+
+        /* 페이지 전체를 숨기기 위한 기본 설정 */
+        .hidden {
+            display: none;
+        }
     </style>
     <script>
         // 사용자 인증 확인
         function checkAuth() {
             const token = localStorage.getItem('token');
             if (!token) {
-                alert('로그인이 만료되었습니다.');
-                window.location.href = 'login.html'; // 로그인 페이지로 이동
+                document.body.innerHTML = ''; // 토큰이 없으면 아무것도 표시하지 않음
+                return false;
             }
+            return true;
         }
 
         // 슈퍼맥스 서버에서 데이터를 가져오는 함수 (토큰 필요)
         async function fetchDropdownData() {
-            checkAuth(); // 토큰 유효성 확인
             const token = localStorage.getItem('token');
             try {
                 const response = await fetch('https://supermax.kr/25susi-dropdowns', {
@@ -140,7 +145,6 @@
 
         // 필터링된 데이터를 가져와 표시하는 함수 (토큰 필요)
         async function fetchFilteredData() {
-            checkAuth(); // 토큰 유효성 확인
             const token = localStorage.getItem('token');
             const university = document.getElementById('university').value;
             const major = document.getElementById('major').value;
@@ -253,62 +257,64 @@
 
                 // 셀 중 하나라도 검색어를 포함하면 배경색을 변경
                 if (cells.some(cell => cell.includes(searchKeyword))) {
-                    row.style.backgroundColor = 'yellow'; // 검색된 행에 배경색 표시
+                    row.style.backgroundColor = '#82d697'; // 검색된 행에 배경색 표시
+
                 }
             });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            checkAuth(); // 페이지 로드 시 인증 확인
-            fetchDropdownData();
+            if (checkAuth()) { // 토큰이 있는 경우에만 데이터 로드
+                fetchDropdownData();
 
-            document.getElementById('university').addEventListener('change', async () => {
-                const university = document.getElementById('university').value;
-                if (university) {
-                    try {
-                        const token = localStorage.getItem('token');
-                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`, {
-                            method: 'GET',
-                            headers: {
-                                'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
-                            }
-                        });
-                        const data = await response.json();
-                        populateDropdown('major', data.majors);
-                    } catch (error) {
-                        console.error('Error fetching majors from supermax.kr:', error);
+                document.getElementById('university').addEventListener('change', async () => {
+                    const university = document.getElementById('university').value;
+                    if (university) {
+                        try {
+                            const token = localStorage.getItem('token');
+                            const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
+                                }
+                            });
+                            const data = await response.json();
+                            populateDropdown('major', data.majors);
+                        } catch (error) {
+                            console.error('Error fetching majors from supermax.kr:', error);
+                        }
                     }
-                }
-                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
-            });
+                    fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
+                });
 
-            document.getElementById('major').addEventListener('change', async () => {
-                const university = document.getElementById('university').value;
-                const major = document.getElementById('major').value;
-                if (university && major) {
-                    try {
-                        const token = localStorage.getItem('token');
-                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`, {
-                            method: 'GET',
-                            headers: {
-                                'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
-                            }
-                        });
-                        const data = await response.json();
-                        populateDropdown('admissionType', data.admissionTypes);
-                    } catch (error) {
-                        console.error('Error fetching admission types from supermax.kr:', error);
+                document.getElementById('major').addEventListener('change', async () => {
+                    const university = document.getElementById('university').value;
+                    const major = document.getElementById('major').value;
+                    if (university && major) {
+                        try {
+                            const token = localStorage.getItem('token');
+                            const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`, {
+                                method: 'GET',
+                                headers: {
+                                    'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
+                                }
+                            });
+                            const data = await response.json();
+                            populateDropdown('admissionType', data.admissionTypes);
+                        } catch (error) {
+                            console.error('Error fetching admission types from supermax.kr:', error);
+                        }
                     }
-                }
-                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
-            });
+                    fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
+                });
 
-            document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
-            document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
+                document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
+                document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
+            }
         });
     </script>
 </head>
-<body>
+<body class="hidden">
     <h1>
         <!-- 타이틀 이미지 수정 -->
         <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%88%98%EC%8B%9C%EC%88%98%ED%95%A9.png?raw=true" alt="맥스체대입시 로고" style="display: block; margin: 0 auto; max-width: 900px;">
