@@ -16,15 +16,15 @@
         .filter-container {
             display: flex;
             justify-content: flex-start;
-            align-items: center; /* 수직 중앙 정렬 */
-            gap: 15px; /* 요소 간의 간격을 줄임 */
+            align-items: center;
+            gap: 15px;
             margin-bottom: 20px;
         }
 
         .filter-container label {
             font-size: 18px;
             font-weight: bold;
-            margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
+            margin-right: 5px;
         }
 
         .filter-container select, .filter-container input, .filter-container button {
@@ -33,10 +33,9 @@
             font-size: 16px;
         }
 
-        /* 검색 버튼 크기를 네모칸과 맞추기 */
         .filter-container button {
             width: 180px;
-            cursor: pointer; /* 커서를 포인터로 변경 */
+            cursor: pointer;
         }
 
         /* 표 전체 스타일 */
@@ -91,236 +90,121 @@
             }
 
             .filter-container {
-                flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
+                flex-wrap: wrap;
             }
 
             .filter-container select, .filter-container input, .filter-container button {
-                width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
+                width: 100%;
             }
         }
 
-        /* 페이지 전체를 숨기기 위한 기본 설정 */
-        .hidden {
-            display: none;
+        /* 로그인 알림 메시지 스타일 */
+        .login-alert {
+            color: red;
+            font-size: 16px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .login-button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
         }
     </style>
     <script>
-        // 사용자 인증 확인
-        function checkAuth() {
-            const token = localStorage.getItem('token');
+        // JWT 토큰 검증 및 로그인 상태 확인 함수
+        function checkLoginStatus() {
+            const token = localStorage.getItem('jwtToken'); // 로컬 스토리지에서 JWT 토큰 가져오기
             if (!token) {
-                document.body.innerHTML = ''; // 토큰이 없으면 아무것도 표시하지 않음
-                return false;
-            }
-            return true;
-        }
-
-        // 슈퍼맥스 서버에서 데이터를 가져오는 함수 (토큰 필요)
-        async function fetchDropdownData() {
-            const token = localStorage.getItem('token');
-            try {
-                const response = await fetch('https://supermax.kr/25susi-dropdowns', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
-                    }
-                });
-                const data = await response.json();
-                populateDropdown('university', data.universities);
-            } catch (error) {
-                console.error('Error fetching dropdown data from supermax.kr:', error);
-            }
-        }
-
-        function populateDropdown(elementId, items) {
-            const select = document.getElementById(elementId);
-            select.innerHTML = `<option value="">선택하세요</option>`;
-            items.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item;
-                option.text = item;
-                select.appendChild(option);
-            });
-        }
-
-        // 필터링된 데이터를 가져와 표시하는 함수 (토큰 필요)
-        async function fetchFilteredData() {
-            const token = localStorage.getItem('token');
-            const university = document.getElementById('university').value;
-            const major = document.getElementById('major').value;
-            const admissionType = document.getElementById('admissionType').value;
-
-            if (!university || !major || !admissionType) {
-                return; // 모든 드롭다운 값이 선택된 후에만 데이터 가져오기
-            }
-
-            try {
-                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
-                    }
-                });
-                const data = await response.json();
-                displayData(data);
-            } catch (error) {
-                console.error('Error fetching filtered data from supermax.kr:', error);
-            }
-        }
-
-        // 결과 데이터를 화면에 표시하는 함수 (총점 내림차순 정렬, 순위 추가)
-        function displayData(data) {
-            const resultTableHead = document.getElementById('resultTableHead');
-            const resultTableBody = document.getElementById('resultTableBody');
-            resultTableHead.innerHTML = '';
-            resultTableBody.innerHTML = '';
-
-            if (data.length === 0) {
+                displayLoginAlert();
                 return;
             }
 
-            // 총점을 기준으로 내림차순 정렬
-            data.sort((a, b) => b.총점 - a.총점);
-
-            // 첫 번째 줄 헤더 구성
-            let headers1 = `
-                <th rowspan="2">순위</th>
-                <th rowspan="2">교육원</th>
-                <th rowspan="2">이름</th>
-                <th rowspan="2">학교</th>
-                <th rowspan="2">성별</th>
-                <th rowspan="2">학년</th>
-                <th rowspan="2">환산내신</th>
-                <th rowspan="2">등급</th>
-                <th rowspan="2">실기점수</th>
-                <th rowspan="2">총점</th>
-                <th rowspan="2">최초합격여부</th>
-                <th rowspan="2">최종합격여부</th>
-            `;
-
-            // 두 번째 줄 헤더 구성 (기록/점수)
-            let headers2 = ``;
-            let maxPractical = 0;
-
-            // 실기 항목이 있는지 확인하고 동적으로 헤더 추가
-            for (let i = 1; i <= 6; i++) {
-                const practicalField = `실기${i}종목`;
-                if (data.some(row => row[practicalField])) {
-                    headers1 += `<th colspan="2">${data[0][practicalField] || `실기${i}`}</th>`;
-                    headers2 += `<th>기록</th><th>점수</th>`;
-                    maxPractical = i;
+            // 토큰 유효성 확인
+            fetch('https://supermax.kr/25susi', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
                 }
-            }
-
-            resultTableHead.innerHTML = `<tr>${headers1}</tr><tr>${headers2}</tr>`;
-
-            // 데이터 행 구성 (순위 추가)
-            data.forEach((row, index) => {
-                let rowHtml = `
-                    <td>${index + 1}</td>
-                    <td>${row.교육원 || ''}</td>
-                    <td>${row.이름 || ''}</td>
-                    <td>${row.학교 || ''}</td>
-                    <td>${row.성별 || ''}</td>
-                    <td>${row.학년 || ''}</td>
-                    <td>${row.환산내신 || ''}</td>
-                    <td>${row.등급 || ''}</td>
-                    <td>${row.실기점수 || ''}</td>
-                    <td>${row.총점 || ''}</td>
-                    <td>${row.최초합격여부 || ''}</td>
-                    <td>${row.최종합격여부 || ''}</td>
-                `;
-
-                // 동적으로 실기 항목만 표시
-                for (let i = 1; i <= maxPractical; i++) {
-                    if (row[`실기${i}종목`]) {
-                        rowHtml += `
-                            <td>${row[`실기${i}기록`] || ''}</td>
-                            <td>${row[`실기${i}점수`] || ''}</td>
-                        `;
-                    }
+            }).then(response => {
+                if (!response.ok) {
+                    // 토큰이 유효하지 않으면 로그인 알림 표시
+                    displayLoginAlert();
                 }
-
-                resultTableBody.innerHTML += `<tr>${rowHtml}</tr>`;
+            }).catch(error => {
+                console.error('Error validating token:', error);
+                displayLoginAlert();
             });
         }
 
-        // 검색어를 포함하는 행의 배경색을 변경하는 함수
-        function highlightRows() {
-            const searchKeyword = document.getElementById('searchInput').value.toLowerCase();
-            const rows = document.querySelectorAll('tbody tr');
+        // 로그인 알림 표시 함수
+        function displayLoginAlert() {
+            const loginAlert = document.createElement('div');
+            loginAlert.className = 'login-alert';
+            loginAlert.innerHTML = '로그인하지 않았습니다. 로그인을 해주세요.';
+            
+            const loginButton = document.createElement('button');
+            loginButton.className = 'login-button';
+            loginButton.innerHTML = '로그인하기';
+            loginButton.onclick = () => {
+                window.location.href = 'https://supermax.co.kr'; // 로그인 페이지로 리다이렉트
+            };
 
-            rows.forEach(row => {
-                // 모든 행의 배경색을 기본값으로 설정
-                row.style.backgroundColor = '';
-                const cells = Array.from(row.cells).map(cell => cell.textContent.toLowerCase());
-
-                // 셀 중 하나라도 검색어를 포함하면 배경색을 변경
-                if (cells.some(cell => cell.includes(searchKeyword))) {
-                    row.style.backgroundColor = '#82d697'; // 검색된 행에 배경색 표시
-
-                }
-            });
+            document.body.innerHTML = ''; // 현재 페이지 내용을 지우고
+            document.body.appendChild(loginAlert); // 로그인 메시지와 버튼 추가
+            document.body.appendChild(loginButton);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            if (checkAuth()) { // 토큰이 있는 경우에만 데이터 로드
-                fetchDropdownData();
+            checkLoginStatus();
 
-                document.getElementById('university').addEventListener('change', async () => {
-                    const university = document.getElementById('university').value;
-                    if (university) {
-                        try {
-                            const token = localStorage.getItem('token');
-                            const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`, {
-                                method: 'GET',
-                                headers: {
-                                    'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
-                                }
-                            });
-                            const data = await response.json();
-                            populateDropdown('major', data.majors);
-                        } catch (error) {
-                            console.error('Error fetching majors from supermax.kr:', error);
+            // 필터링된 데이터를 가져오는 함수
+            async function fetchFilteredData() {
+                const token = localStorage.getItem('jwtToken');
+                if (!token) return;
+
+                const university = document.getElementById('university').value;
+                const major = document.getElementById('major').value;
+                const admissionType = document.getElementById('admissionType').value;
+
+                if (!university || !major || !admissionType) return;
+
+                try {
+                    const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
                         }
-                    }
-                    fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
-                });
+                    });
 
-                document.getElementById('major').addEventListener('change', async () => {
-                    const university = document.getElementById('university').value;
-                    const major = document.getElementById('major').value;
-                    if (university && major) {
-                        try {
-                            const token = localStorage.getItem('token');
-                            const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`, {
-                                method: 'GET',
-                                headers: {
-                                    'Authorization': `Bearer ${token}` // 토큰을 Authorization 헤더에 포함
-                                }
-                            });
-                            const data = await response.json();
-                            populateDropdown('admissionType', data.admissionTypes);
-                        } catch (error) {
-                            console.error('Error fetching admission types from supermax.kr:', error);
-                        }
+                    if (response.ok) {
+                        const data = await response.json();
+                        displayData(data);
+                    } else {
+                        console.error('Failed to fetch filtered data');
                     }
-                    fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
-                });
-
-                document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
-                document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
+                } catch (error) {
+                    console.error('Error fetching filtered data:', error);
+                }
             }
+
+            // 데이터 필터링 추가
+            document.getElementById('university').addEventListener('change', fetchFilteredData);
+            document.getElementById('major').addEventListener('change', fetchFilteredData);
+            document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
         });
     </script>
 </head>
-<body class="hidden">
+<body>
     <h1>
-        <!-- 타이틀 이미지 수정 -->
         <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%88%98%EC%8B%9C%EC%88%98%ED%95%A9.png?raw=true" alt="맥스체대입시 로고" style="display: block; margin: 0 auto; max-width: 900px;">
     </h1>
 
-    <!-- 필터를 가로로 배치하고 간격을 줄임 -->
     <div class="filter-container">
         <div>
             <label for="university">대학명:</label>
@@ -333,13 +217,6 @@
         <div>
             <label for="admissionType">전형명:</label>
             <select id="admissionType"></select>
-        </div>
-        <div>
-            <label for="searchInput">검색어:</label>
-            <input type="text" id="searchInput" placeholder="텍스트 입력">
-        </div>
-        <div>
-            <button id="searchButton">검색</button>
         </div>
     </div>
 
