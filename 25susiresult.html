@@ -100,31 +100,11 @@
         }
     </style>
     <script>
-        // JWT 토큰이 제대로 저장되었는지, 요청 시 토큰이 포함되는지 확인하기 위해 콘솔 로그를 추가
+        // 슈퍼맥스 서버에서 데이터를 가져오는 함수
         async function fetchDropdownData() {
-            const token = localStorage.getItem('jwtToken'); // JWT 토큰을 로컬스토리지에서 가져옴
-            console.log('Retrieved JWT Token:', token); // 토큰 로그 출력
-            if (!token) {
-                alert('로그인이 필요합니다.');
-                window.location.href = 'https://supermax.co.kr'; // 로그인 페이지로 리다이렉트
-                return;
-            }
-
             try {
-                const response = await fetch('https://supermax.kr/25susi-dropdowns', {
-                    headers: {
-                        'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
-                    }
-                });
-
-                console.log('Dropdown data response status:', response.status); // 응답 상태 코드 출력
-                if (response.status === 401) {
-                    handleUnauthorized();
-                    return;
-                }
-
+                const response = await fetch('https://supermax.kr/25susi-dropdowns');
                 const data = await response.json();
-                console.log('Dropdown data:', data); // 서버에서 받은 데이터 출력
                 populateDropdown('university', data.universities);
             } catch (error) {
                 console.error('Error fetching dropdown data from supermax.kr:', error);
@@ -152,35 +132,10 @@
                 return; // 모든 드롭다운 값이 선택된 후에만 데이터 가져오기
             }
 
-            const token = localStorage.getItem('jwtToken');
-            console.log('Using JWT Token for filtered data:', token); // 토큰 로그 출력
-            if (!token) {
-                handleUnauthorized();
-                return;
-            }
-
             try {
-                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`, // JWT 토큰을 포함하여 요청
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                console.log('Filtered data response status:', response.status); // 응답 상태 코드 출력
-                if (response.status === 401) {
-                    handleUnauthorized();
-                    return;
-                }
-
+                const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`);
                 const data = await response.json();
-                console.log('Filtered data:', data); // 서버에서 받은 데이터 출력
-
-                if (!Array.isArray(data)) {
-                    throw new Error('서버에서 배열 형식의 데이터를 반환하지 않았습니다.');
-                }
-
-                displayData(data); // 데이터가 배열인 경우에만 정렬 및 표시
+                displayData(data);
             } catch (error) {
                 console.error('Error fetching filtered data from supermax.kr:', error);
             }
@@ -280,36 +235,14 @@
             });
         }
 
-        function handleUnauthorized() {
-            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
-            localStorage.removeItem('jwtToken'); // 만료된 토큰 삭제
-            window.location.href = 'https://supermax.co.kr'; // 로그인 페이지로 리다이렉트
-        }
-
         document.addEventListener('DOMContentLoaded', () => {
             fetchDropdownData();
 
             document.getElementById('university').addEventListener('change', async () => {
                 const university = document.getElementById('university').value;
                 if (university) {
-                    const token = localStorage.getItem('jwtToken');
-                    if (!token) {
-                        handleUnauthorized();
-                        return;
-                    }
-
                     try {
-                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
-                            }
-                        });
-
-                        if (response.status === 401) {
-                            handleUnauthorized();
-                            return;
-                        }
-
+                        const response = await fetch(`https://supermax.kr/25susi-majors?university=${university}`);
                         const data = await response.json();
                         populateDropdown('major', data.majors);
                     } catch (error) {
@@ -323,24 +256,8 @@
                 const university = document.getElementById('university').value;
                 const major = document.getElementById('major').value;
                 if (university && major) {
-                    const token = localStorage.getItem('jwtToken');
-                    if (!token) {
-                        handleUnauthorized();
-                        return;
-                    }
-
                     try {
-                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`, {
-                            headers: {
-                                'Authorization': `Bearer ${token}` // JWT 토큰을 포함하여 요청
-                            }
-                        });
-
-                        if (response.status === 401) {
-                            handleUnauthorized();
-                            return;
-                        }
-
+                        const response = await fetch(`https://supermax.kr/25susi-admissionTypes?university=${university}&major=${major}`);
                         const data = await response.json();
                         populateDropdown('admissionType', data.admissionTypes);
                     } catch (error) {
