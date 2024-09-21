@@ -100,9 +100,10 @@
         }
     </style>
     <script>
-        // 슈퍼맥스 서버에서 데이터를 가져오는 함수
+        // JWT 토큰이 제대로 저장되었는지, 요청 시 토큰이 포함되는지 확인하기 위해 콘솔 로그를 추가
         async function fetchDropdownData() {
             const token = localStorage.getItem('jwtToken'); // JWT 토큰을 로컬스토리지에서 가져옴
+            console.log('Retrieved JWT Token:', token); // 토큰 로그 출력
             if (!token) {
                 alert('로그인이 필요합니다.');
                 window.location.href = 'https://supermax.co.kr'; // 로그인 페이지로 리다이렉트
@@ -116,12 +117,14 @@
                     }
                 });
 
+                console.log('Dropdown data response status:', response.status); // 응답 상태 코드 출력
                 if (response.status === 401) {
                     handleUnauthorized();
                     return;
                 }
 
                 const data = await response.json();
+                console.log('Dropdown data:', data); // 서버에서 받은 데이터 출력
                 populateDropdown('university', data.universities);
             } catch (error) {
                 console.error('Error fetching dropdown data from supermax.kr:', error);
@@ -150,6 +153,7 @@
             }
 
             const token = localStorage.getItem('jwtToken');
+            console.log('Using JWT Token for filtered data:', token); // 토큰 로그 출력
             if (!token) {
                 handleUnauthorized();
                 return;
@@ -163,12 +167,14 @@
                     }
                 });
 
+                console.log('Filtered data response status:', response.status); // 응답 상태 코드 출력
                 if (response.status === 401) {
                     handleUnauthorized();
                     return;
                 }
 
                 const data = await response.json();
+                console.log('Filtered data:', data); // 서버에서 받은 데이터 출력
 
                 if (!Array.isArray(data)) {
                     throw new Error('서버에서 배열 형식의 데이터를 반환하지 않았습니다.');
