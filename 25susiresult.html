@@ -16,15 +16,16 @@
         .filter-container {
             display: flex;
             justify-content: flex-start;
-            align-items: center; /* 수직 중앙 정렬 */
-            gap: 15px; /* 요소 간의 간격을 줄임 */
+            align-items: center;
+            gap: 15px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
         .filter-container label {
             font-size: 18px;
             font-weight: bold;
-            margin-right: 5px; /* 레이블과 셀렉트 박스 간 간격 */
+            margin-right: 5px;
         }
 
         .filter-container select, .filter-container input, .filter-container button {
@@ -33,17 +34,22 @@
             font-size: 16px;
         }
 
-        /* 검색 버튼 크기를 네모칸과 맞추기 */
         .filter-container button {
-            width: 180px;
-            cursor: pointer; /* 커서를 포인터로 변경 */
+            cursor: pointer;
+        }
+
+        /* 테이블 컨테이너 스타일 */
+        .table-container {
+            position: relative;
+            max-height: 500px;
+            overflow: auto;
         }
 
         /* 표 전체 스타일 */
         table {
             width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
+            border-collapse: separate;
+            border-spacing: 0;
         }
 
         /* 표 헤더 스타일 */
@@ -54,6 +60,14 @@
             padding: 10px;
             font-size: 14px;
             white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        /* 두 번째 헤더 행 스타일 */
+        tr:nth-child(2) th {
+            top: 41px; /* 첫 번째 헤더의 높이에 맞춰 조정 */
         }
 
         /* 표 셀 스타일 */
@@ -65,16 +79,16 @@
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 150px;
-            border-bottom: 1px solid #ddd;
+            background-color: #fff;
         }
 
         /* 마우스를 올릴 때 행 강조 */
-        tr:hover {
+        tr:hover td {
             background-color: #f1f1f1;
         }
 
         /* 테이블 외곽선 */
-        table, td, th {
+        th, td {
             border: 1px solid #ddd;
         }
 
@@ -90,12 +104,8 @@
                 font-size: 12px;
             }
 
-            .filter-container {
-                flex-wrap: wrap; /* 작은 화면에서는 줄바꿈 */
-            }
-
             .filter-container select, .filter-container input, .filter-container button {
-                width: 100%; /* 작은 화면에서 select 요소가 가득 차게 */
+                width: 100%;
             }
         }
     </style>
@@ -274,7 +284,6 @@
 </head>
 <body>
     <h1>
-        <!-- 타이틀 이미지 수정 -->
         <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%88%98%EC%8B%9C%EC%88%98%ED%95%A9.png?raw=true" alt="맥스체대입시 로고" style="display: block; margin: 0 auto; max-width: 900px;">
     </h1>
 
@@ -301,9 +310,11 @@
         </div>
     </div>
 
-    <table>
-        <thead id="resultTableHead"></thead>
-        <tbody id="resultTableBody"></tbody>
-    </table>
+    <div class="table-container">
+        <table>
+            <thead id="resultTableHead"></thead>
+            <tbody id="resultTableBody"></tbody>
+        </table>
+    </div>
 </body>
 </html>
