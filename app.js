@@ -845,6 +845,31 @@ app.get('/25susi-filter', (req, res) => {
   });
 });
 
+// 새로운 엔드포인트 추가: /25susi-list
+app.get('/25susi-list', (req, res) => {
+  const { university, major } = req.query;
+
+  const query = `
+    SELECT other.대학명, other.학과명, COUNT(DISTINCT other.이름, other.학교) AS 지원자수
+    FROM 25susiresult AS base
+    JOIN 25susiresult AS other ON base.이름 = other.이름 
+                                AND base.학교 = other.학교
+    WHERE base.대학명 = ? AND base.학과명 = ?
+      AND (other.대학명 != ? OR other.학과명 != ?)
+    GROUP BY other.대학명, other.학과명
+    ORDER BY 지원자수 DESC
+    LIMIT 5;
+  `;
+
+  connection.query(query, [university, major, university, major], (err, results) => {
+    if (err) {
+      console.error('Error fetching top 5 university rankings:', err);
+      return res.status(500).json({ message: 'Error fetching top 5 university rankings', error: err });
+    }
+    res.status(200).json(results);
+  });
+});
+
 
 
 
