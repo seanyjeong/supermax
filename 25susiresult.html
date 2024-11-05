@@ -136,6 +136,7 @@
                 const response = await fetch(`https://supermax.kr/25susi-filter?university=${university}&major=${major}&admissionType=${admissionType}`);
                 const data = await response.json();
                 displayData(data);
+                fetchRankingData(university, major); // 순위 데이터 가져오기
             } catch (error) {
                 console.error('Error fetching filtered data from supermax.kr:', error);
             }
@@ -171,7 +172,6 @@
                 <th rowspan="2">최종합격여부</th>
             `;
 
-            // 두 번째 줄 헤더 구성 (기록/점수)
             let headers2 = ``;
             let maxPractical = 0;
 
@@ -218,19 +218,39 @@
             });
         }
 
+        // 상위 5개 대학/학과 순위를 가져와 표시하는 함수
+        async function fetchRankingData(university, major) {
+            try {
+                const response = await fetch(`https://supermax.kr/25susi-list?university=${university}&major=${major}`);
+                const rankingData = await response.json();
+                displayRanking(rankingData);
+            } catch (error) {
+                console.error('Error fetching ranking data from supermax.kr:', error);
+            }
+        }
+
+        function displayRanking(rankingData) {
+            const rankingList = document.getElementById('rankingList');
+            rankingList.innerHTML = ''; // 기존 내용을 초기화
+
+            rankingData.forEach((item, index) => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${index + 1}. ${item.대학명} ${item.학과명} (${item.지원자수}명)`;
+                rankingList.appendChild(listItem);
+            });
+        }
+
         // 검색어를 포함하는 행의 배경색을 변경하는 함수
         function highlightRows() {
             const searchKeyword = document.getElementById('searchInput').value.toLowerCase();
             const rows = document.querySelectorAll('tbody tr');
 
             rows.forEach(row => {
-                // 모든 행의 배경색을 기본값으로 설정
                 row.style.backgroundColor = '';
                 const cells = Array.from(row.cells).map(cell => cell.textContent.toLowerCase());
 
-                // 셀 중 하나라도 검색어를 포함하면 배경색을 변경
                 if (cells.some(cell => cell.includes(searchKeyword))) {
-                    row.style.backgroundColor = '#71bb84'; // 검색된 행에 배경색 표시
+                    row.style.backgroundColor = '#71bb84';
                 }
             });
         }
@@ -249,7 +269,7 @@
                         console.error('Error fetching majors from supermax.kr:', error);
                     }
                 }
-                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
+                fetchFilteredData();
             });
 
             document.getElementById('major').addEventListener('change', async () => {
@@ -264,17 +284,16 @@
                         console.error('Error fetching admission types from supermax.kr:', error);
                     }
                 }
-                fetchFilteredData(); // 필터링된 데이터를 자동으로 가져오기
+                fetchFilteredData();
             });
 
             document.getElementById('admissionType').addEventListener('change', fetchFilteredData);
-            document.getElementById('searchButton').addEventListener('click', highlightRows); // 검색 버튼 클릭 시
+            document.getElementById('searchButton').addEventListener('click', highlightRows);
         });
     </script>
 </head>
 <body>
     <h1>
-        <!-- 타이틀 이미지 수정 -->
         <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%88%98%EC%8B%9C%EC%88%98%ED%95%A9.png?raw=true" alt="맥스체대입시 로고" style="display: block; margin: 0 auto; max-width: 900px;">
     </h1>
 
@@ -300,6 +319,9 @@
             <button id="searchButton">검색</button>
         </div>
     </div>
+
+    <h2>위 학교를 선택한 학생들의 지원대학 순위</h2>
+    <ul id="rankingList"></ul>
 
     <table>
         <thead id="resultTableHead"></thead>
