@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>25학년도 정시 맥스체대입시 실시간 데이터</title>
+  <title>군, 대학명, 학과별 데이터 조회</title>
   <style>
     /* 기본 스타일 */
     body {
@@ -149,50 +149,30 @@
       const response = await fetch(`https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`);
       const data = await response.json();
 
+      // 총점을 기준으로 내림차순 정렬
+      data.sort((a, b) => b.총점 - a.총점);
+
       const table = document.getElementById('resultTable');
       table.innerHTML = `
         <tr>
-          <th>지점</th><th>학교</th><th>학년</th><th>성별</th><th>이름</th><th>국어과목</th><th>국어원점수</th><th>국어표점</th>
-          <th>국어백분위</th><th>국어등급</th><th>수학과목</th><th>수학원점수</th><th>수학표점</th><th>수학백분위</th><th>수학등급</th>
-          <th>영어원점수</th><th>영어등급</th><th>탐1과목</th><th>탐1원점수</th><th>탐1표점</th><th>탐1백분위</th><th>탐1등급</th>
-          <th>탐2과목</th><th>탐2원점수</th><th>탐2표점</th><th>탐2백분위</th><th>탐2등급</th><th>한국사원점수</th><th>한국사등급</th>
-          <th>내신</th><th>총점</th><th>최초결과</th><th>최종결과</th>
+          <th>순위</th><th>지점</th><th>이름</th><th>학년</th><th>대학명</th><th>학과명</th>
+          <th>수능</th><th>내신</th><th>실기</th><th>총점</th><th>최초결과</th><th>최종결과</th>
         </tr>
       `;
 
-      data.forEach(row => {
+      // 순위를 포함하여 테이블에 데이터 표시
+      data.forEach((row, index) => {
         table.innerHTML += `
           <tr>
+            <td>${index + 1}</td>
             <td>${row.지점}</td>
-            <td>${row.학교}</td>
-            <td>${row.학년}</td>
-            <td>${row.성별}</td>
             <td>${row.이름}</td>
-            <td>${row.국어과목}</td>
-            <td>${row.국어원점수}</td>
-            <td>${row.국어표점}</td>
-            <td>${row.국어백분위}</td>
-            <td>${row.국어등급}</td>
-            <td>${row.수학과목}</td>
-            <td>${row.수학원점수}</td>
-            <td>${row.수학표점}</td>
-            <td>${row.수학백분위}</td>
-            <td>${row.수학등급}</td>
-            <td>${row.영어원점수}</td>
-            <td>${row.영어등급}</td>
-            <td>${row.탐1과목}</td>
-            <td>${row.탐1원점수}</td>
-            <td>${row.탐1표점}</td>
-            <td>${row.탐1백분위}</td>
-            <td>${row.탐1등급}</td>
-            <td>${row.탐2과목}</td>
-            <td>${row.탐2원점수}</td>
-            <td>${row.탐2표점}</td>
-            <td>${row.탐2백분위}</td>
-            <td>${row.탐2등급}</td>
-            <td>${row.한국사원점수}</td>
-            <td>${row.한국사등급}</td>
+            <td>${row.학년}</td>
+            <td>${row.대학명}</td>
+            <td>${row.학과명}</td>
+            <td>${row.수능}</td>
             <td>${row.내신}</td>
+            <td>${row.실기}</td>
             <td>${row.총점}</td>
             <td>${row.최초결과}</td>
             <td>${row.최종결과}</td>
@@ -206,7 +186,7 @@
   </script>
 </head>
 <body>
-  <h1>군, 대학명, 학과 선택</h1>
+  <h1> 25정시 맥스체대입시 실시간 데이터</h1>
 
   <!-- 선택한 학교의 추가 정보 표시 영역 -->
   <div id="schoolDetails" class="school-details">학교를 선택하면 모집 정보가 여기에 표시됩니다.</div>
