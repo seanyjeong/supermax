@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>군, 대학명, 학과별 데이터 조회</title>
+  <style>
+    /* 기본 스타일 */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .school-details {
+      margin-bottom: 20px;
+      font-size: 1.2em;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+    }
+
+    .dropdown-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      justify-content: flex-start;
+    }
+
+    select, button {
+      padding: 10px;
+      font-size: 1em;
+    }
+
+    #resultTable {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    #resultTable th, #resultTable td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+
+    #resultTable th {
+      background-color: #f2f2f2;
+    }
+  </style>
+  <script>
+    // 드롭다운 데이터 로드
+    async function loadDropdownData() {
+      const response = await fetch('http://localhost:3000/getSelectionData');
+      const data = await response.json();
+
+      const 군Dropdown = document.getElementById('군Dropdown');
+      const 대학명Dropdown = document.getElementById('대학명Dropdown');
+      const 학과명Dropdown = document.getElementById('학과명Dropdown');
+
+      const 군Set = new Set();
+      const 대학명Set = new Set();
+      const 학과명Set = new Set();
+
+      data.forEach(item => {
+        군Set.add(item.군);
+        대학명Set.add(item.대학명);
+        학과명Set.add(item.학과명);
+      });
+
+      군Set.forEach(군 => {
+        군Dropdown.innerHTML += `<option value="${군}">${군}</option>`;
+      });
+      대학명Set.forEach(대학명 => {
+        대학명Dropdown.innerHTML += `<option value="${대학명}">${대학명}</option>`;
+      });
+      학과명Set.forEach(학과명 => {
+        학과명Dropdown.innerHTML += `<option value="${학과명}">${학과명}</option>`;
+      });
+    }
+
+    // 선택한 대학의 추가 정보 로드
+    async function fetchSchoolDetails() {
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+
+      if (대학명) {
+        const response = await fetch(`http://localhost:3000/getSchoolDetails?대학명=${대학명}`);
+        const data = await response.json();
+
+        const detailsDiv = document.getElementById('schoolDetails');
+        detailsDiv.innerHTML = `
+          <strong>모집인원:</strong> ${data.모집인원 || 'N/A'}, 
+          <strong>24모집인원:</strong> ${data['24모집인원'] || 'N/A'}, 
+          <strong>24지원인원:</strong> ${data['24지원인원'] || 'N/A'}, 
+          <strong>24경쟁률:</strong> ${data['24경쟁률'] || 'N/A'}, 
+          <strong>1단계및면접일정:</strong> ${data['1단계및면접일정'] || 'N/A'}, 
+          <strong>실기일정:</strong> ${data.실기일정 || 'N/A'}, 
+          <strong>합격자발표일정:</strong> ${data.합격자발표일정 || 'N/A'}
+        `;
+      }
+    }
+
+    // 선택한 군, 대학명, 학과명에 해당하는 결과 데이터 로드
+    async function fetchSchoolResult() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (!군 || !대학명 || !학과명) {
+        alert("모든 옵션을 선택해 주세요.");
+        return;
+      }
+
+      const response = await fetch(`http://localhost:3000/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+      const data = await response.json();
+
+      const table = document.getElementById('resultTable');
+      table.innerHTML = `
+        <tr>
+          <th>지점</th><th>학교</th><th>학년</th><th>성별</th><th>이름</th><th>국어과목</th><th>국어원점수</th><th>국어표점</th>
+          <th>국어백분위</th><th>국어등급</th><th>수학과목</th><th>수학원점수</th><th>수학표점</th><th>수학백분위</th><th>수학등급</th>
+          <th>영어원점수</th><th>영어등급</th><th>탐1과목</th><th>탐1원점수</th><th>탐1표점</th><th>탐1백분위</th><th>탐1등급</th>
+          <th>탐2과목</th><th>탐2원점수</th><th>탐2표점</th><th>탐2백분위</th><th>탐2등급</th><th>한국사원점수</th><th>한국사등급</th>
+          <th>내신</th><th>총점</th><th>최초결과</th><th>최종결과</th>
+        </tr>
+      `;
+
+      data.forEach(row => {
+        table.innerHTML += `
+          <tr>
+            <td>${row.지점}</td>
+            <td>${row.학교}</td>
+            <td>${row.학년}</td>
+            <td>${row.성별}</td>
+            <td>${row.이름}</td>
+            <td>${row.국어과목}</td>
+            <td>${row.국어원점수}</td>
+            <td>${row.국어표점}</td>
+            <td>${row.국어백분위}</td>
+            <td>${row.국어등급}</td>
+            <td>${row.수학과목}</td>
+            <td>${row.수학원점수}</td>
+            <td>${row.수학표점}</td>
+            <td>${row.수학백분위}</td>
+            <td>${row.수학등급}</td>
+            <td>${row.영어원점수}</td>
+            <td>${row.영어등급}</td>
+            <td>${row.탐1과목}</td>
+            <td>${row.탐1원점수}</td>
+            <td>${row.탐1표점}</td>
+            <td>${row.탐1백분위}</td>
+            <td>${row.탐1등급}</td>
+            <td>${row.탐2과목}</td>
+            <td>${row.탐2원점수}</td>
+            <td>${row.탐2표점}</td>
+            <td>${row.탐2백분위}</td>
+            <td>${row.탐2등급}</td>
+            <td>${row.한국사원점수}</td>
+            <td>${row.한국사등급}</td>
+            <td>${row.내신}</td>
+            <td>${row.총점}</td>
+            <td>${row.최초결과}</td>
+            <td>${row.최종결과}</td>
+          </tr>
+        `;
+      });
+    }
+
+    // 페이지 로드 시 드롭다운 데이터 불러오기 및 이벤트 설정
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDropdownData();
+      document.getElementById('대학명Dropdown').addEventListener('change', fetchSchoolDetails);
+    });
+  </script>
+</head>
+<body>
+  <h1>군, 대학명, 학과 선택</h1>
+
+  <!-- 선택한 학교의 추가 정보 표시 영역 -->
+  <div id="schoolDetails" class="school-details">학교를 선택하면 모집 정보가 여기에 표시됩니다.</div>
+
+  <!-- 드롭다운 메뉴 영역 -->
+  <div class="dropdown-container">
+    <label for="군Dropdown">군:</label>
+    <select id="군Dropdown">
+      <option value="">선택</option>
+    </select>
+
+    <label for="대학명Dropdown">대학명:</label>
+    <select id="대학명Dropdown">
+      <option value="">선택</option>
+    </select>
+
+    <label for="학과명Dropdown">학과명:</label>
+    <select id="학과명Dropdown">
+      <option value="">선택</option>
+    </select>
+
+    <button onclick="fetchSchoolResult()">조회</button>
+  </div>
+
+  <!-- 결과 테이블 -->
+  <table id="resultTable">
+    <!-- 컬럼 제목이 포함된 첫 번째 행 -->
+  </table>
+</body>
+</html>
