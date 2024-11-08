@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>군, 대학명, 학과별 데이터 조회</title>
+  <title>25학년도 정시 맥스체대입시 실시간 데이터</title>
   <style>
     /* 기본 스타일 */
     body {
@@ -63,24 +63,55 @@
       const 학과명Dropdown = document.getElementById('학과명Dropdown');
 
       const 군Set = new Set();
-      const 대학명Set = new Set();
-      const 학과명Set = new Set();
-
-      data.forEach(item => {
-        군Set.add(item.군);
-        대학명Set.add(item.대학명);
-        학과명Set.add(item.학과명);
-      });
+      data.forEach(item => 군Set.add(item.군));
 
       군Set.forEach(군 => {
         군Dropdown.innerHTML += `<option value="${군}">${군}</option>`;
       });
-      대학명Set.forEach(대학명 => {
+
+      군Dropdown.addEventListener('change', () => filterUniversities(data));
+      대학명Dropdown.addEventListener('change', () => filterMajors(data));
+      학과명Dropdown.addEventListener('change', fetchSchoolResult);
+    }
+
+    // 선택한 군에 따라 대학 필터링
+    function filterUniversities(data) {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명Dropdown = document.getElementById('대학명Dropdown');
+      const 학과명Dropdown = document.getElementById('학과명Dropdown');
+
+      대학명Dropdown.innerHTML = '<option value="">선택</option>';
+      학과명Dropdown.innerHTML = '<option value="">선택</option>';
+
+      const filteredUniversities = data.filter(item => item.군 === 군);
+      const uniqueUniversities = new Set(filteredUniversities.map(item => item.대학명));
+
+      uniqueUniversities.forEach(대학명 => {
         대학명Dropdown.innerHTML += `<option value="${대학명}">${대학명}</option>`;
       });
-      학과명Set.forEach(학과명 => {
+
+      // 학교 정보 초기화
+      document.getElementById('schoolDetails').innerHTML = '학교를 선택하면 모집 정보가 여기에 표시됩니다.';
+      document.getElementById('resultTable').innerHTML = '';
+    }
+
+    // 선택한 군과 대학에 따라 학과 필터링
+    function filterMajors(data) {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명Dropdown = document.getElementById('학과명Dropdown');
+
+      학과명Dropdown.innerHTML = '<option value="">선택</option>';
+
+      const filteredMajors = data.filter(item => item.군 === 군 && item.대학명 === 대학명);
+      const uniqueMajors = new Set(filteredMajors.map(item => item.학과명));
+
+      uniqueMajors.forEach(학과명 => {
         학과명Dropdown.innerHTML += `<option value="${학과명}">${학과명}</option>`;
       });
+
+      // 학교 세부 정보 가져오기
+      if (대학명) fetchSchoolDetails();
     }
 
     // 선택한 대학의 추가 정보 로드
@@ -170,11 +201,8 @@
       });
     }
 
-    // 페이지 로드 시 드롭다운 데이터 불러오기 및 이벤트 설정
-    document.addEventListener('DOMContentLoaded', () => {
-      loadDropdownData();
-      document.getElementById('대학명Dropdown').addEventListener('change', fetchSchoolDetails);
-    });
+    // 페이지 로드 시 드롭다운 데이터 불러오기
+    document.addEventListener('DOMContentLoaded', loadDropdownData);
   </script>
 </head>
 <body>
@@ -199,8 +227,6 @@
     <select id="학과명Dropdown">
       <option value="">선택</option>
     </select>
-
-    <button onclick="fetchSchoolResult()">조회</button>
   </div>
 
   <!-- 결과 테이블 -->
