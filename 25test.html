@@ -150,7 +150,7 @@
       const data = await response.json();
 
       // 총점을 기준으로 내림차순 정렬
-      data.sort((a, b) => b.총점 - a.총점);
+      data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
       const table = document.getElementById('resultTable');
       table.innerHTML = `
@@ -168,14 +168,14 @@
             <td>${row.지점}</td>
             <td>${row.이름}</td>
             <td>${row.학년}</td>
-            <td>${row.대학명}</td>
-            <td>${row.학과명}</td>
-            <td>${row.수능}</td>
-            <td>${row.내신}</td>
-            <td>${row.실기}</td>
-            <td>${row.총점}</td>
-            <td>${row.최초결과}</td>
-            <td>${row.최종결과}</td>
+            <td>${row[`${군}_대학명`]}</td>
+            <td>${row[`${군}_학과명`]}</td>
+            <td>${row[`${군}_수능`]}</td>
+            <td>${row[`${군}_내신`]}</td>
+            <td>${row[`${군}_실기`]}</td>
+            <td>${row[`${군}_총점`]}</td>
+            <td>${row[`${군}_최초결과`]}</td>
+            <td>${row[`${군}_최종결과`]}</td>
           </tr>
         `;
       });
@@ -186,7 +186,7 @@
   </script>
 </head>
 <body>
-  <h1> 25정시 맥스체대입시 실시간 데이터</h1>
+  <h1>군, 대학명, 학과 선택</h1>
 
   <!-- 선택한 학교의 추가 정보 표시 영역 -->
   <div id="schoolDetails" class="school-details">학교를 선택하면 모집 정보가 여기에 표시됩니다.</div>
