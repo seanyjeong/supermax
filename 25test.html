@@ -55,7 +55,7 @@
   <script>
     // 드롭다운 데이터 로드
     async function loadDropdownData() {
-      const response = await fetch('http://localhost:3000/getSelectionData');
+      const response = await fetch('https://supermax.kr/getSelectionData');
       const data = await response.json();
 
       const 군Dropdown = document.getElementById('군Dropdown');
@@ -88,7 +88,7 @@
       const 대학명 = document.getElementById('대학명Dropdown').value;
 
       if (대학명) {
-        const response = await fetch(`http://localhost:3000/getSchoolDetails?대학명=${대학명}`);
+        const response = await fetch(`https://supermax.kr/getSchoolDetails?대학명=${대학명}`);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
@@ -115,7 +115,7 @@
         return;
       }
 
-      const response = await fetch(`http://localhost:3000/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+      const response = await fetch(`https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`);
       const data = await response.json();
 
       const table = document.getElementById('resultTable');
