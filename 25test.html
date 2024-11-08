@@ -117,20 +117,25 @@
       const 대학명 = document.getElementById('대학명Dropdown').value;
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
+      // 모든 값이 선택된 경우에만 요청 전송
       if (군 && 대학명 && 학과명) {
         const response = await fetch(`https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
-        detailsDiv.innerHTML = `
-          <strong>모집인원:</strong> ${data.모집인원 || 'N/A'}, 
-          <strong>24모집인원:</strong> ${data['24모집인원'] || 'N/A'}, 
-          <strong>24지원인원:</strong> ${data['24지원인원'] || 'N/A'}, 
-          <strong>24경쟁률:</strong> ${data['24경쟁률'] || 'N/A'}, 
-          <strong>1단계및면접일정:</strong> ${data['1단계및면접일정'] || 'N/A'}, 
-          <strong>실기일정:</strong> ${data.실기일정 || 'N/A'}, 
-          <strong>합격자발표일정:</strong> ${data.합격자발표일정 || 'N/A'}
-        `;
+        if (data) {
+          detailsDiv.innerHTML = `
+            <strong>모집인원:</strong> ${data.모집인원 || 'N/A'}, 
+            <strong>24모집인원:</strong> ${data['24모집인원'] || 'N/A'}, 
+            <strong>24지원인원:</strong> ${data['24지원인원'] || 'N/A'}, 
+            <strong>24경쟁률:</strong> ${data['24경쟁률'] || 'N/A'}, 
+            <strong>1단계및면접일정:</strong> ${data['1단계및면접일정'] || 'N/A'}, 
+            <strong>실기일정:</strong> ${data.실기일정 || 'N/A'}, 
+            <strong>합격자발표일정:</strong> ${data.합격자발표일정 || 'N/A'}
+          `;
+        } else {
+          detailsDiv.innerHTML = '일치하는 정보가 없습니다.';
+        }
       }
     }
 
