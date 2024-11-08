@@ -47,7 +47,7 @@ app.use(session({
 }));
 // CORS 설정
 app.use(cors({
-  origin: ['https://supermax.co.kr','https://seanyjeong.github.io','https://chejump.com','https://score.ilsanmax.com'],
+  origin: ['https://supermax.co.kr','https://seanyjeong.github.io','https://chejump.com','https://score.ilsanmax.com','http://localhost:3000','http://127.0.0.1:3000'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
