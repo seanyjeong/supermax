@@ -876,6 +876,62 @@ app.get('/25susi-list', (req, res) => {
 
 
 
+// 군, 대학명, 학과명 드롭다운 데이터를 가져오는 엔드포인트
+app.get('/getSelectionData', (req, res) => {
+  const query = 'SELECT DISTINCT 군, 대학명, 학과명 FROM `25정시정보`';
+  
+  connection.query(query, (error, results) => {
+    if (error) {
+      return res.status(500).send(error);
+    }
+    res.json(results);
+  });
+});
+
+// 특정 대학에 대한 세부 정보 (모집인원, 일정 등)를 가져오는 엔드포인트
+app.get('/getSchoolDetails', (req, res) => {
+  const { 대학명 } = req.query;
+
+  const query = `
+    SELECT 모집인원, 24모집인원, 24지원인원, 24경쟁률, 1단계및면접일정, 실기일정, 합격자발표일정
+    FROM \`25정시정보\`
+    WHERE 대학명 = ?`;
+
+  connection.query(query, [대학명], (error, results) => {
+    if (error) {
+      return res.status(500).send(error);
+    }
+    res.json(results[0]);
+  });
+});
+
+// 선택한 군, 대학명, 학과명에 따른 결과 데이터를 25정시결과 테이블에서 가져오는 엔드포인트
+app.get('/getSchoolResult', (req, res) => {
+  const { 군, 대학명, 학과명 } = req.query;
+
+  const query = `
+    SELECT 지점, 학교, 학년, 성별, 이름, 국어과목, 국어원점수, 국어표점, 국어백분위, 국어등급,
+           수학과목, 수학원점수, 수학표점, 수학백분위, 수학등급, 영어원점수, 영어등급,
+           탐1과목, 탐1원점수, 탐1표점, 탐1백분위, 탐1등급, 탐2과목, 탐2원점수, 탐2표점,
+           탐2백분위, 탐2등급, 한국사원점수, 한국사등급, 내신,
+           ${군}_군, ${군}_대학명, ${군}_학과명, ${군}_수능, ${군}_내신, ${군}_실기,
+           ${군}_총점, ${군}_최초결과, ${군}_최종결과,
+           ${군}_실기종목1, ${군}1_기록, ${군}1_점수,
+           ${군}_실기종목2, ${군}2_기록, ${군}2_점수,
+           ${군}_실기종목3, ${군}3_기록, ${군}3_점수,
+           ${군}_실기종목4, ${군}4_기록, ${군}4_점수,
+           ${군}_실기종목5, ${군}5_기록, ${군}5_점수,
+           ${군}_실기종목6, ${군}6_기록, ${군}6_점수
+    FROM \`25정시결과\`
+    WHERE ${군}_군 = ? AND ${군}_대학명 = ? AND ${군}_학과명 = ?`;
+
+  connection.query(query, [군, 대학명, 학과명], (error, results) => {
+    if (error) {
+      return res.status(500).send(error);
+    }
+    res.json(results);
+  });
+});
 
 
 
