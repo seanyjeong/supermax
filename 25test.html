@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>25정시 맥스체대입시 실시간데이터</title>
+  <title>군, 대학명, 학과별 데이터 조회</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -21,7 +21,7 @@
       gap: 20px;
       font-size: 1.2em;
       margin-bottom: 20px;
-      justify-content: center;
+      justify-content: flex-start; /* 왼쪽 정렬 */
     }
 
     .detail-item {
@@ -80,7 +80,11 @@
   </style>
 </head>
 <body>
-  <h1>25정시 맥스체대입시 실시간 데이터</h1>
+  <h1>군, 대학명, 학과 선택</h1>
+
+  <div id="schoolDetails" class="school-details">
+    <!-- 모집 정보가 여기에 표시됩니다. -->
+  </div>
 
   <div class="dropdown-container">
     <label for="군Dropdown">군:</label>
@@ -97,10 +101,6 @@
     <select id="학과명Dropdown">
       <option value="">선택</option>
     </select>
-  </div>
-
-  <div id="schoolDetails" class="school-details">
-    <!-- 모집 정보가 여기에 표시됩니다. -->
   </div>
 
   <table id="resultTable">
