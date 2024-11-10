@@ -27,6 +27,7 @@
       font-size: 1.2em;
       margin-bottom: 20px;
       justify-content: flex-start;
+      position: relative;
     }
 
     .detail-item {
@@ -84,8 +85,10 @@
     }
 
     .top-schools {
-      font-size: 0.9em;
-      margin-top: 20px;
+      position: absolute;
+      top: 0;
+      right: -300px; /* school-details 오른쪽에 위치하도록 조정 */
+      max-width: 300px;
     }
 
     .top-schools h2 {
@@ -103,6 +106,9 @@
 
   <div id="schoolDetails" class="school-details">
     <!-- 모집 정보가 여기에 표시됩니다. -->
+    <div id="topSchools" class="top-schools">
+      <!-- 상위 5개 학교가 여기에 표시됩니다 -->
+    </div>
   </div>
 
   <div class="dropdown-container">
@@ -170,11 +176,6 @@
               <div class="header">합격 발표</div>
               <div class="value">${data.합격자발표일정 || '-'}</div>
             </div>
-            <div class="top-schools">
-              ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${getTop5(data, '가')}</p>` : ''}
-              ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${getTop5(data, '나')}</p>` : ''}
-              ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${getTop5(data, '다')}</p>` : ''}
-            </div>
           `;
           detailsDiv.innerHTML = detailsHTML;
         } else {
@@ -200,10 +201,43 @@
         const response = await fetch(url);
         const data = await response.json();
 
-        if (!data || data.length === 0) {
+        if (data.length === 0) {
           document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">일치하는 데이터가 없습니다.</td></tr>';
           return;
         }
+
+        data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+
+        const 가군Counts = {};
+        const 나군Counts = {};
+        const 다군Counts = {};
+
+        data.forEach((student) => {
+          if (군 !== '가' && student['가_대학명'] && student['가_학과명']) {
+            const 가군조합 = `${student['가_대학명']} - ${student['가_학과명']}`;
+            가군Counts[가군조합] = (가군Counts[가군조합] || 0) + 1;
+          }
+          if (군 !== '나' && student['나_대학명'] && student['나_학과명']) {
+            const 나군조합 = `${student['나_대학명']} - ${student['나_학과명']}`;
+            나군Counts[나군조합] = (나군Counts[나군조합] || 0) + 1;
+          }
+          if (군 !== '다' && student['다_대학명'] && student['다_학과명']) {
+            const 다군조합 = `${student['다_대학명']} - ${student['다_학과명']}`;
+            다군Counts[다군조합] = (다군Counts[다군조합] || 0) + 1;
+          }
+        });
+
+        const getTop5 = (counts) => {
+          return Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([combo, count]) => `${combo} (${count}명)`)
+            .join('<br>');
+        };
+
+        const 가군Top5 = getTop5(가군Counts);
+        const 나군Top5 = getTop5(나군Counts);
+        const 다군Top5 = getTop5(다군Counts);
 
         // 테이블 생성
         const table = document.getElementById('resultTable');
@@ -266,27 +300,17 @@
 
         table.innerHTML = tableHeaders + tableRows;
 
+        // 상위 학교 정보 업데이트
+        const topSchoolsDiv = document.getElementById('topSchools');
+        topSchoolsDiv.innerHTML = `
+          ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p>` : ''}
+          ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p>` : ''}
+          ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p>` : ''}
+        `;
       } catch (error) {
         console.error('데이터 불러오기 실패:', error);
         document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
       }
-    }
-
-    function getTop5(data, 군Type) {
-      const 군Counts = {};
-      data.forEach((student) => {
-        const 대학명 = student[`${군Type}_대학명`];
-        const 학과명 = student[`${군Type}_학과명`];
-        if (대학명 && 학과명) {
-          const combo = `${대학명} - ${학과명}`;
-          군Counts[combo] = (군Counts[combo] || 0) + 1;
-        }
-      });
-      return Object.entries(군Counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([combo, count]) => `${combo} (${count}명)`)
-        .join('<br>');
     }
 
     async function loadDropdownData() {
@@ -335,6 +359,8 @@
       });
 
       document.getElementById('schoolDetails').innerHTML = '학교를 선택하면 모집 정보가 여기에 표시됩니다.';
+      document.getElementById('resultTable').innerHTML = '';
+      document.getElementById('topSchools').innerHTML = '';
     }
 
     function filterMajors(data) {
