@@ -84,6 +84,7 @@
     }
 
     .top-schools {
+      font-size: 0.9em;
       margin-top: 20px;
     }
 
@@ -125,11 +126,6 @@
     <table id="resultTable">
       <!-- 컬럼 제목이 포함된 첫 번째 행 -->
     </table>
-
-    <!-- 상위 5개 학교 정보가 '합격 발표' 바로 옆에 표시될 영역 -->
-    <div id="topSchools" class="top-schools">
-      <!-- 상위 5개 학교가 여기에 표시됩니다 -->
-    </div>
   </div>
 
   <script>
@@ -174,16 +170,13 @@
               <div class="header">합격 발표</div>
               <div class="value">${data.합격자발표일정 || '-'}</div>
             </div>
+            <div class="top-schools">
+              ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${getTop5(data, '가')}</p>` : ''}
+              ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${getTop5(data, '나')}</p>` : ''}
+              ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${getTop5(data, '다')}</p>` : ''}
+            </div>
           `;
           detailsDiv.innerHTML = detailsHTML;
-
-          // 상위 5개 학교 정보도 합격발표 바로 옆에 표시
-          const topSchoolsDiv = document.getElementById('topSchools');
-          topSchoolsDiv.innerHTML = `
-            ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${getTop5(data, '가')}</p>` : ''}
-            ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${getTop5(data, '나')}</p>` : ''}
-            ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${getTop5(data, '다')}</p>` : ''}
-          `;
         } else {
           detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
         }
@@ -212,44 +205,67 @@
           return;
         }
 
-        // 결과 테이블을 생성하고 데이터 표시
+        // 테이블 생성
+        const table = document.getElementById('resultTable');
+        const 실기종목Headers = [];
+
+        for (let i = 1; i <= 6; i++) {
+          const 실기종목 = data[0][`${군}_실기종목${i}`];
+          if (실기종목) {
+            실기종목Headers.push({
+              name: 실기종목,
+              recordKey: `${군}${i}_기록`,
+              scoreKey: `${군}${i}_점수`
+            });
+          }
+        }
+
+        // 테이블 헤더 생성
         const tableHeaders = `
           <tr>
-            <th>순위</th>
-            <th>지점</th>
-            <th>이름</th>
-            <th>학년</th>
-            <th>대학명</th>
-            <th>학과명</th>
-            <th>수능</th>
-            <th>내신</th>
-            <th>실기</th>
-            <th>총점</th>
-            <th>최초결과</th>
-            <th>최종결과</th>
-            <th>실기 기록</th>
-            <th>실기 점수</th>
-          </tr>`;
+            <th rowspan="2">순위</th>
+            <th rowspan="2">지점</th>
+            <th rowspan="2">이름</th>
+            <th rowspan="2">학년</th>
+            <th rowspan="2">대학명</th>
+            <th rowspan="2">학과명</th>
+            <th rowspan="2">수능</th>
+            <th rowspan="2">내신</th>
+            <th rowspan="2">실기</th>
+            <th rowspan="2">총점</th>
+            <th rowspan="2">최초결과</th>
+            <th rowspan="2">최종결과</th>
+            ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+          </tr>
+          <tr>
+            ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
+          </tr>
+        `;
 
+        // 테이블 데이터 행 생성
         const tableRows = data.map((row, index) => `
           <tr>
             <td>${index + 1}</td>
-            <td>${row.지점 || '-'}</td>
-            <td>${row.이름 || '-'}</td>
-            <td>${row.학년 || '-'}</td>
-            <td>${row[`${군}_대학명`] || '-'}</td>
-            <td>${row[`${군}_학과명`] || '-'}</td>
-            <td>${row[`${군}_수능`] || '-'}</td>
-            <td>${row[`${군}_내신`] || '-'}</td>
-            <td>${row[`${군}_실기`] || '-'}</td>
-            <td>${row[`${군}_총점`] || '-'}</td>
-            <td>${row[`${군}_최초결과`] || '-'}</td>
-            <td>${row[`${군}_최종결과`] || '-'}</td>
-            <td>${row[`${군}_실기기록`] || '-'}</td>
-            <td>${row[`${군}_실기점수`] || '-'}</td>
-          </tr>`).join('');
+            <td>${row.지점}</td>
+            <td>${row.이름}</td>
+            <td>${row.학년}</td>
+            <td>${row[`${군}_대학명`]}</td>
+            <td>${row[`${군}_학과명`]}</td>
+            <td>${row[`${군}_수능`]}</td>
+            <td>${row[`${군}_내신`]}</td>
+            <td>${row[`${군}_실기`]}</td>
+            <td>${row[`${군}_총점`]}</td>
+            <td>${row[`${군}_최초결과`]}</td>
+            <td>${row[`${군}_최종결과`]}</td>
+            ${실기종목Headers.map(header => `
+              <td>${row[header.recordKey] || '-'}</td>
+              <td>${row[header.scoreKey] || '-'}</td>
+            `).join('')}
+          </tr>
+        `).join('');
 
-        document.getElementById('resultTable').innerHTML = tableHeaders + tableRows;
+        table.innerHTML = tableHeaders + tableRows;
+
       } catch (error) {
         console.error('데이터 불러오기 실패:', error);
         document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
@@ -319,8 +335,6 @@
       });
 
       document.getElementById('schoolDetails').innerHTML = '학교를 선택하면 모집 정보가 여기에 표시됩니다.';
-      document.getElementById('resultTable').innerHTML = '';
-      document.getElementById('topSchools').innerHTML = '';
     }
 
     function filterMajors(data) {
