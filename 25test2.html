@@ -21,7 +21,7 @@
       gap: 20px;
       font-size: 1.2em;
       margin-bottom: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
+      justify-content: flex-start;
     }
 
     .detail-item {
@@ -130,14 +130,34 @@
         const detailsDiv = document.getElementById('schoolDetails');
         if (data && Object.keys(data).length > 0) {
           const detailsHTML = `
-            <div class="detail-item"><div class="header">모집인원</div><div class="value">${data.모집인원 || '-'}</div></div>
-            <div class="detail-item"><div class="header">24모집인원</div><div class="value">${data['24모집인원'] || '-'}</div></div>
-            <div class="detail-item"><div class="header">24지원인원</div><div class="value">${data['24지원인원'] || '-'}</div></div>
-            <div class="detail-item"><div class="header">24경쟁률</div><div class="value">${data['24경쟁률'] || '-'}</div></div>
-            <div class="detail-item"><div class="header">1단계 일정</div><div class="value">${data['1단계및면접일정'] || '-'}</div></div>
-            <div class="detail-item"><div class="header">실기 일정</div><div class="value">${data.실기일정 || '-'}</div></div>
-            <div class="detail-item"><div class="header">합격 발표</div><div class="value">${data.합격자발표일정 || '-'}</div></div>
-            <div class="detail-item"><div class="header">반영지표</div><div class="value">${data.반영지표 || '-'}</div></div>
+            <div class="detail-item">
+              <div class="header">모집인원</div>
+              <div class="value">${data.모집인원 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24모집인원</div>
+              <div class="value">${data['24모집인원'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24지원인원</div>
+              <div class="value">${data['24지원인원'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24경쟁률</div>
+              <div class="value">${data['24경쟁률'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">1단계 일정</div>
+              <div class="value">${data['1단계및면접일정'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">실기 일정</div>
+              <div class="value">${data.실기일정 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">합격 발표</div>
+              <div class="value">${data.합격자발표일정 || '-'}</div>
+            </div>
           `;
           detailsDiv.innerHTML = detailsHTML;
         } else {
@@ -212,43 +232,37 @@
         `;
       });
 
-      calculateTop50PercentAverages(data, data[0].반영지표, data[0].탐구수, data[0].영어필수여부);
+      calculateTop50PercentAverages(data);
     }
 
-    function calculateTop50PercentAverages(data, 반영지표, 탐구수, 영어필수여부) {
+    function calculateTop50PercentAverages(data) {
+      const 반영지표 = data[0].반영지표; // 예시로 반영지표를 데이터의 첫 번째 항목에서 가져옴
+
+      // 상위 50% 필터링
       const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
 
-      const englishScores = top50PercentData
-        .filter(row => 영어필수여부 || row.영어등급)
+      // 영어 평균 등급 계산
+      const englishGrades = top50PercentData
+        .filter(row => row.영어등급) // 영어 등급이 존재하는 경우에만
         .map(row => row.영어등급);
+      const englishAvgGrade = englishGrades.length > 0
+        ? englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length
+        : '-';
 
-      const englishAvgScore = englishScores.length ? (englishScores.reduce((sum, score) => sum + score, 0) / englishScores.length) : 0;
-
-      const optionalSubjects = 반영지표 === '백' ? ['국어백분위', '수학백분위'] : ['국어표점', '수학표점'];
-      const optionalScores = top50PercentData.map(row => {
-        const 탐구1 = 반영지표 === '백' ? row.탐1백분위 : row.탐1표점;
-        const 탐구2 = 반영지표 === '백' ? row.탐2백분위 : row.탐2표점;
-        const 한국사등급 = row.한국사등급 || 0;
-        const 한국사백분위 = 한국사등급 > 0 && row.탐1대체 ? row[`한국사${한국사등급}`] || 0 : 0;
-
-        let 탐구점수;
-        if (탐구수 === 2) {
-          탐구점수 = [탐구1, 탐구2, 한국사백분위].sort((a, b) => b - a).slice(0, 2);
-          탐구점수 = (탐구점수[0] + 탐구점수[1]) / 2;
+      // 선택 과목 평균 백분위 또는 표준점수 계산
+      const subjectScores = top50PercentData.map(row => {
+        if (반영지표 === '백') {
+          return [row.국어백분위, row.수학백분위, row.탐구백분위];
         } else {
-          탐구점수 = Math.max(탐구1, 탐구2, 한국사백분위);
+          return [row.국어표점, row.수학표점, row.탐구표점];
         }
+      }).flat();
 
-        const coreScores = optionalSubjects.map(subject => row[subject] || 0);
-
-        return [...coreScores, 탐구점수];
-      });
-
-      const optionalAvgScore = optionalScores.flat().reduce((sum, score) => sum + score, 0) / optionalScores.flat().length;
+      const optionalAvgScore = subjectScores.reduce((sum, score) => sum + (score || 0), 0) / subjectScores.length;
 
       document.getElementById('averageResults').innerHTML = `
-        <div>상위 50% 영어 평균 등급: ${englishAvgScore.toFixed(2)}</div>
-        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
+        <div>상위 50% 영어 평균 등급: ${englishAvgGrade}</div>
+        <div>상위 50% 선택 과목 평균 점수: ${optionalAvgScore.toFixed(2)}</div>
       `;
     }
 
