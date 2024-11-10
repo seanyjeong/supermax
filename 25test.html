@@ -84,23 +84,26 @@
     }
 
     .top-schools {
-      max-width: 300px;
-      margin-top: 20px; /* 상위 정보 영역 스타일 */
-    }
-
-    .top-schools h2 {
-      font-size: 1.2em;
-      margin-bottom: 10px;
-    }
-
-    .top-schools p {
-      line-height: 1.5;
-    }
-
-    .school-info-container { /* 추가 스타일 */
       display: flex;
-      align-items: flex-start;
       gap: 20px;
+      margin-top: 20px;
+      flex-direction: row;
+    }
+
+    .top-schools .school-group {
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .top-schools .school-group h2 {
+      margin: 0;
+      font-size: 1.1em;
+    }
+
+    .top-schools .school-group p {
+      margin: 5px 0;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -124,14 +127,12 @@
     </select>
   </div>
 
-  <div class="school-info-container"> <!-- 추가 컨테이너 -->
-    <div id="schoolDetails" class="school-details">
-      <!-- 모집 정보가 여기에 표시됩니다. -->
-    </div>
-    <!-- 상위 5개 학교 정보가 표시될 오른쪽 영역 -->
-    <div id="topSchools" class="top-schools">
-      <!-- 상위 5개 학교가 여기에 표시됩니다 -->
-    </div>
+  <div id="schoolDetails" class="school-details">
+    <!-- 모집 정보가 여기에 표시됩니다. -->
+  </div>
+
+  <div class="top-schools" id="topSchools">
+    <!-- 상위 5개 학교 정보가 표시될 영역 -->
   </div>
 
   <div class="content-container">
@@ -305,9 +306,9 @@
 
         const topSchoolsDiv = document.getElementById('topSchools');
         topSchoolsDiv.innerHTML = `
-          ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p>` : ''}
-          ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p>` : ''}
-          ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p>` : ''}
+          ${군 !== '가' ? `<div class="school-group"><h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p></div>` : ''}
+          ${군 !== '나' ? `<div class="school-group"><h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p></div>` : ''}
+          ${군 !== '다' ? `<div class="school-group"><h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p></div>` : ''}
         `;
       } catch (error) {
         console.error('데이터 불러오기 실패:', error);
