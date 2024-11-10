@@ -160,69 +160,75 @@
     }
 
     async function fetchSchoolResult() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
+  const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      if (!군 || !대학명 || !학과명) {
-        alert("모든 옵션을 선택해 주세요.");
-        return;
-      }
+  if (!군 || !대학명 || !학과명) {
+    alert("모든 옵션을 선택해 주세요.");
+    return;
+  }
 
-      const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
-      const response = await fetch(url);
-      const data = await response.json();
+  const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+  const response = await fetch(url);
+  const data = await response.json();
 
-      data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+  if (data.length === 0) {
+    document.getElementById('resultTable').innerHTML = '<tr><td colspan="12">일치하는 데이터가 없습니다.</td></tr>';
+    return;
+  }
 
-      const table = document.getElementById('resultTable');
-      const 실기종목Headers = [];
-      for (let i = 1; i <= 6; i++) {
-        const 실기종목 = data[0][`${군}_실기종목${i}`];
-        if (실기종목) {
-          실기종목Headers.push({
-            name: 실기종목,
-            recordKey: `${군}${i}_기록`,
-            scoreKey: `${군}${i}_점수`
-          });
-        }
-      }
+  data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
-      table.innerHTML = `
-        <tr>
-          <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
-          <th rowspan="2">대학명</th><th rowspan="2">학과명</th><th rowspan="2">수능</th><th rowspan="2">내신</th>
-          <th rowspan="2">실기</th><th rowspan="2">총점</th><th rowspan="2">최초결과</th><th rowspan="2">최종결과</th>
-          ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
-        </tr>
-        <tr>
-          ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
-        </tr>
-      `;
+  const table = document.getElementById('resultTable');
+  const 실기종목Headers = [];
 
-      data.forEach((row, index) => {
-        table.innerHTML += `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${row.지점}</td>
-            <td>${row.이름}</td>
-            <td>${row.학년}</td>
-            <td>${row[`${군}_대학명`]}</td>
-            <td>${row[`${군}_학과명`]}</td>
-            <td>${row[`${군}_수능`]}</td>
-            <td>${row[`${군}_내신`]}</td>
-            <td>${row[`${군}_실기`]}</td>
-            <td>${row[`${군}_총점`]}</td>
-            <td>${row[`${군}_최초결과`]}</td>
-            <td>${row[`${군}_최종결과`]}</td>
-            ${실기종목Headers.map(header => `
-              <td>${row[header.recordKey] || '-'}</td>
-              <td>${row[header.scoreKey] || '-'}</td>
-            `).join('')}
-          </tr>
-        `;
+  // 실기종목이 비어있는 경우 헤더를 생성하지 않음
+  for (let i = 1; i <= 6; i++) {
+    const 실기종목 = data[0][`${군}_실기종목${i}`];
+    if (실기종목) {
+      실기종목Headers.push({
+        name: 실기종목,
+        recordKey: `${군}${i}_기록`,
+        scoreKey: `${군}${i}_점수`
       });
     }
+  }
+
+  // 기본적인 테이블 헤더 설정 (실기종목이 비어있으면 해당 헤더 생략)
+  table.innerHTML = `
+    <tr>
+      <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
+      <th rowspan="2">대학명</th><th rowspan="2">학과명</th><th rowspan="2">수능</th><th rowspan="2">내신</th>
+      <th rowspan="2">실기</th><th rowspan="2">총점</th><th rowspan="2">최초결과</th><th rowspan="2">최종결과</th>
+      ${실기종목Headers.length > 0 ? 실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('') : ''}
+    </tr>
+    ${실기종목Headers.length > 0 ? `<tr>${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}</tr>` : ''}
+  `;
+
+  data.forEach((row, index) => {
+    table.innerHTML += `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${row.지점}</td>
+        <td>${row.이름}</td>
+        <td>${row.학년}</td>
+        <td>${row[`${군}_대학명`]}</td>
+        <td>${row[`${군}_학과명`]}</td>
+        <td>${row[`${군}_수능`]}</td>
+        <td>${row[`${군}_내신`]}</td>
+        <td>${row[`${군}_실기`]}</td>
+        <td>${row[`${군}_총점`]}</td>
+        <td>${row[`${군}_최초결과`]}</td>
+        <td>${row[`${군}_최종결과`]}</td>
+        ${실기종목Headers.length > 0 ? 실기종목Headers.map(header => `
+          <td>${row[header.recordKey] || '-'}</td>
+          <td>${row[header.scoreKey] || '-'}</td>
+        `).join('') : ''}
+      </tr>
+    `;
+  });
+}
 
     async function loadDropdownData() {
       const response = await fetch('https://supermax.kr/getSelectionData');
