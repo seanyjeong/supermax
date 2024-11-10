@@ -241,12 +241,14 @@
 
       군Dropdown.addEventListener('change', () => filterUniversities(data));
       대학명Dropdown.addEventListener('change', () => filterMajors(data));
+
       학과명Dropdown.addEventListener('change', () => {
         if (군Dropdown.value && 대학명Dropdown.value && 학과명Dropdown.value) {
           fetchSchoolDetails();
           fetchSchoolResult();
         } else {
-          alert("모든 옵션을 선택해 주세요.");
+          document.getElementById('schoolDetails').innerHTML = '<div>모든 항목을 선택해 주세요.</div>';
+          document.getElementById('resultTable').innerHTML = '';
         }
       });
     }
