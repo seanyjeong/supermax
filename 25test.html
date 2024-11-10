@@ -52,6 +52,110 @@
     }
   </style>
   <script>
+    // 군, 대학명, 학과명에 해당하는 세부 정보 로드
+    async function fetchSchoolDetails() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (군 && 대학명 && 학과명) {
+        const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+        console.log("Fetching details with URL:", url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        console.log("School details data:", data);
+
+        const detailsDiv = document.getElementById('schoolDetails');
+        if (data && Object.keys(data).length > 0) {
+          detailsDiv.innerHTML = `
+            <strong>모집인원:</strong> ${data.모집인원 || 'N/A'}, 
+            <strong>24모집인원:</strong> ${data['24모집인원'] || 'N/A'}, 
+            <strong>24지원인원:</strong> ${data['24지원인원'] || 'N/A'}, 
+            <strong>24경쟁률:</strong> ${data['24경쟁률'] || 'N/A'}, 
+            <strong>1단계 및 면접 일정:</strong> ${data['1단계및면접일정'] || 'N/A'}, 
+            <strong>실기일정:</strong> ${data.실기일정 || 'N/A'}, 
+            <strong>합격자발표일정:</strong> ${data.합격자발표일정 || 'N/A'}
+          `;
+        } else {
+          detailsDiv.innerHTML = '일치하는 정보가 없습니다.';
+        }
+      }
+    }
+
+    // 선택한 군, 대학명, 학과명에 해당하는 결과 데이터 로드
+    async function fetchSchoolResult() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (!군 || !대학명 || !학과명) {
+        alert("모든 옵션을 선택해 주세요.");
+        return;
+      }
+
+      const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+      console.log("Fetching results with URL:", url);
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      console.log("School result data:", data);
+
+      data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+
+      const table = document.getElementById('resultTable');
+      table.innerHTML = `
+        <tr>
+          <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
+          <th rowspan="2">대학명</th><th rowspan="2">학과명</th><th rowspan="2">수능</th><th rowspan="2">내신</th>
+          <th rowspan="2">실기</th><th rowspan="2">총점</th><th rowspan="2">최초결과</th><th rowspan="2">최종결과</th>
+          <th colspan="2">실기종목1</th><th colspan="2">실기종목2</th><th colspan="2">실기종목3</th>
+          <th colspan="2">실기종목4</th><th colspan="2">실기종목5</th><th colspan="2">실기종목6</th>
+        </tr>
+        <tr>
+          <th>기록</th><th>점수</th><th>기록</th><th>점수</th><th>기록</th><th>점수</th>
+          <th>기록</th><th>점수</th><th>기록</th><th>점수</th><th>기록</th><th>점수</th>
+        </tr>
+      `;
+
+      data.forEach((row, index) => {
+        table.innerHTML += `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${row.지점}</td>
+            <td>${row.이름}</td>
+            <td>${row.학년}</td>
+            <td>${row[`${군}_대학명`]}</td>
+            <td>${row[`${군}_학과명`]}</td>
+            <td>${row[`${군}_수능`]}</td>
+            <td>${row[`${군}_내신`]}</td>
+            <td>${row[`${군}_실기`]}</td>
+            <td>${row[`${군}_총점`]}</td>
+            <td>${row[`${군}_최초결과`]}</td>
+            <td>${row[`${군}_최종결과`]}</td>
+            <td>${row[`${군}_실기종목1`] || '-'}</td>
+            <td>${row[`${군}1_기록`] || '-'}</td>
+            <td>${row[`${군}1_점수`] || '-'}</td>
+            <td>${row[`${군}_실기종목2`] || '-'}</td>
+            <td>${row[`${군}2_기록`] || '-'}</td>
+            <td>${row[`${군}2_점수`] || '-'}</td>
+            <td>${row[`${군}_실기종목3`] || '-'}</td>
+            <td>${row[`${군}3_기록`] || '-'}</td>
+            <td>${row[`${군}3_점수`] || '-'}</td>
+            <td>${row[`${군}_실기종목4`] || '-'}</td>
+            <td>${row[`${군}4_기록`] || '-'}</td>
+            <td>${row[`${군}4_점수`] || '-'}</td>
+            <td>${row[`${군}_실기종목5`] || '-'}</td>
+            <td>${row[`${군}5_기록`] || '-'}</td>
+            <td>${row[`${군}5_점수`] || '-'}</td>
+            <td>${row[`${군}_실기종목6`] || '-'}</td>
+            <td>${row[`${군}6_기록`] || '-'}</td>
+            <td>${row[`${군}6_점수`] || '-'}</td>
+          </tr>
+        `;
+      });
+    }
+
     async function loadDropdownData() {
       const response = await fetch('https://supermax.kr/getSelectionData');
       const data = await response.json();
@@ -106,79 +210,6 @@
 
       uniqueMajors.forEach(학과명 => {
         학과명Dropdown.innerHTML += `<option value="${학과명}">${학과명}</option>`;
-      });
-    }
-
-    // 선택한 군, 대학명, 학과명에 해당하는 결과 데이터 로드
-    async function fetchSchoolResult() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
-
-      if (!군 || !대학명 || !학과명) {
-        alert("모든 옵션을 선택해 주세요.");
-        return;
-      }
-
-      const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      // 총점을 기준으로 내림차순 정렬
-      data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
-
-      const table = document.getElementById('resultTable');
-      // 첫 번째 행: 기본 정보 및 실기 종목 헤더
-      table.innerHTML = `
-        <tr>
-          <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
-          <th rowspan="2">대학명</th><th rowspan="2">학과명</th><th rowspan="2">수능</th><th rowspan="2">내신</th>
-          <th rowspan="2">실기</th><th rowspan="2">총점</th><th rowspan="2">최초결과</th><th rowspan="2">최종결과</th>
-          <th colspan="2">실기종목1</th><th colspan="2">실기종목2</th><th colspan="2">실기종목3</th>
-          <th colspan="2">실기종목4</th><th colspan="2">실기종목5</th><th colspan="2">실기종목6</th>
-        </tr>
-        <tr>
-          <th>기록</th><th>점수</th><th>기록</th><th>점수</th><th>기록</th><th>점수</th>
-          <th>기록</th><th>점수</th><th>기록</th><th>점수</th><th>기록</th><th>점수</th>
-        </tr>
-      `;
-
-      // 데이터 행 생성
-      data.forEach((row, index) => {
-        table.innerHTML += `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${row.지점}</td>
-            <td>${row.이름}</td>
-            <td>${row.학년}</td>
-            <td>${row[`${군}_대학명`]}</td>
-            <td>${row[`${군}_학과명`]}</td>
-            <td>${row[`${군}_수능`]}</td>
-            <td>${row[`${군}_내신`]}</td>
-            <td>${row[`${군}_실기`]}</td>
-            <td>${row[`${군}_총점`]}</td>
-            <td>${row[`${군}_최초결과`]}</td>
-            <td>${row[`${군}_최종결과`]}</td>
-            <td>${row[`${군}_실기종목1`] || '-'}</td>
-            <td>${row[`${군}1_기록`] || '-'}</td>
-            <td>${row[`${군}1_점수`] || '-'}</td>
-            <td>${row[`${군}_실기종목2`] || '-'}</td>
-            <td>${row[`${군}2_기록`] || '-'}</td>
-            <td>${row[`${군}2_점수`] || '-'}</td>
-            <td>${row[`${군}_실기종목3`] || '-'}</td>
-            <td>${row[`${군}3_기록`] || '-'}</td>
-            <td>${row[`${군}3_점수`] || '-'}</td>
-            <td>${row[`${군}_실기종목4`] || '-'}</td>
-            <td>${row[`${군}4_기록`] || '-'}</td>
-            <td>${row[`${군}4_점수`] || '-'}</td>
-            <td>${row[`${군}_실기종목5`] || '-'}</td>
-            <td>${row[`${군}5_기록`] || '-'}</td>
-            <td>${row[`${군}5_점수`] || '-'}</td>
-            <td>${row[`${군}_실기종목6`] || '-'}</td>
-            <td>${row[`${군}6_기록`] || '-'}</td>
-            <td>${row[`${군}6_점수`] || '-'}</td>
-          </tr>
-        `;
       });
     }
 
