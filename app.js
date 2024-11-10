@@ -893,7 +893,7 @@ app.get('/getSchoolDetails', (req, res) => {
   const { 군, 대학명, 학과명 } = req.query;
 
   const query = `
-    SELECT 모집인원, 24모집인원, 24지원인원, 24경쟁률, 1단계및면접일정, 실기일정, 합격자발표일정
+    SELECT 모집인원, 24모집인원, 24지원인원, 24경쟁률, 1단계및면접일정, 실기일정, 합격자발표일정, 국어, 수학, 영어, 탐구, 탐구수
     FROM \`25정시정보\`
     WHERE 군 = ? AND 대학명 = ? AND 학과명 = ?`;
 
