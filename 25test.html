@@ -30,22 +30,6 @@
       position: relative;
     }
 
-    .top-schools {
-      position: absolute;
-      top: 0;
-      right: -250px;
-      max-width: 300px;
-    }
-
-    .top-schools h2 {
-      font-size: 1.2em;
-      margin-bottom: 10px;
-    }
-
-    .top-schools p {
-      line-height: 1.5;
-    }
-
     .detail-item {
       display: flex;
       flex-direction: column;
@@ -98,6 +82,22 @@
 
     #resultTable th {
       background-color: #f2f2f2;
+    }
+
+    .top-schools {
+      position: absolute;
+      top: 0;
+      right: -300px; /* school-details 오른쪽에 위치하도록 조정 */
+      max-width: 300px;
+    }
+
+    .top-schools h2 {
+      font-size: 1.2em;
+      margin-bottom: 10px;
+    }
+
+    .top-schools p {
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -206,12 +206,6 @@
           return;
         }
 
-        console.log("데이터 로드 완료:", data);
-
-        // 학교 정보와 학과명 확인 로그 추가
-        data.forEach(row => console.log(`학교: ${row[`${군}_대학명`]}, 학과: ${row[`${군}_학과명`]}`));
-
-        // 데이터 정렬 및 상위 5개 학교 표시
         data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
         const 가군Counts = {};
@@ -245,15 +239,10 @@
         const 나군Top5 = getTop5(나군Counts);
         const 다군Top5 = getTop5(다군Counts);
 
-        const topSchoolsDiv = document.getElementById('topSchools');
-        topSchoolsDiv.innerHTML = `
-          ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p>` : ''}
-          ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p>` : ''}
-          ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p>` : ''}
-        `;
-
-        // 테이블 헤더 설정
+        // 테이블 생성
+        const table = document.getElementById('resultTable');
         const 실기종목Headers = [];
+
         for (let i = 1; i <= 6; i++) {
           const 실기종목 = data[0][`${군}_실기종목${i}`];
           if (실기종목) {
@@ -265,6 +254,7 @@
           }
         }
 
+        // 테이블 헤더 생성
         const tableHeaders = `
           <tr>
             <th rowspan="2">순위</th>
@@ -286,6 +276,7 @@
           </tr>
         `;
 
+        // 테이블 데이터 행 생성
         const tableRows = data.map((row, index) => `
           <tr>
             <td>${index + 1}</td>
@@ -307,8 +298,15 @@
           </tr>
         `).join('');
 
-        document.getElementById('resultTable').innerHTML = tableHeaders + tableRows;
+        table.innerHTML = tableHeaders + tableRows;
 
+        // 상위 학교 정보 업데이트
+        const topSchoolsDiv = document.getElementById('topSchools');
+        topSchoolsDiv.innerHTML = `
+          ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p>` : ''}
+          ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p>` : ''}
+          ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p>` : ''}
+        `;
       } catch (error) {
         console.error('데이터 불러오기 실패:', error);
         document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
