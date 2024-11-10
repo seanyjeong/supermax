@@ -888,20 +888,20 @@ app.get('/getSelectionData', (req, res) => {
   });
 });
 
-// 특정 대학에 대한 세부 정보 (모집인원, 일정 등)를 가져오는 엔드포인트
+// 군, 대학명, 학과명에 대한 세부 정보 (모집인원, 일정 등)를 가져오는 엔드포인트
 app.get('/getSchoolDetails', (req, res) => {
-  const { 대학명 } = req.query;
+  const { 군, 대학명, 학과명 } = req.query;
 
   const query = `
     SELECT 모집인원, 24모집인원, 24지원인원, 24경쟁률, 1단계및면접일정, 실기일정, 합격자발표일정
     FROM \`25정시정보\`
-    WHERE 대학명 = ?`;
+    WHERE 군 = ? AND 대학명 = ? AND 학과명 = ?`;
 
-  connection.query(query, [대학명], (error, results) => {
+  connection.query(query, [군, 대학명, 학과명], (error, results) => {
     if (error) {
       return res.status(500).send(error);
     }
-    res.json(results[0]);
+    res.json(results[0] || {}); // 데이터가 없을 경우 빈 객체 반환
   });
 });
 
