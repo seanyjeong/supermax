@@ -21,7 +21,7 @@
       gap: 20px;
       font-size: 1.2em;
       margin-bottom: 20px;
-      justify-content: flex-start;
+      justify-content: flex-start; /* 왼쪽 정렬 */
     }
 
     .detail-item {
@@ -236,33 +236,46 @@
     }
 
     function calculateTop50PercentAverages(data) {
-      const 반영지표 = data[0].반영지표; // 예시로 반영지표를 데이터의 첫 번째 항목에서 가져옴
+      const 탐구수 = data[0].탐구수 || 1;  // 예시로 탐구수를 데이터의 첫 번째 항목에서 가져옴
+      const 탐1대체 = data[0].한국사 === '탐1대체'; // 한국사가 탐구 대체 과목인지 확인
 
       // 상위 50% 필터링
       const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
 
       // 영어 평균 등급 계산
-      const englishGrades = top50PercentData
-        .filter(row => row.영어등급) // 영어 등급이 존재하는 경우에만
-        .map(row => row.영어등급);
-      const englishAvgGrade = englishGrades.length > 0
-        ? englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length
-        : '-';
+      const englishGrades = top50PercentData.map(row => row.영어등급 || 0);
+      const englishAvgGrade = englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length;
 
-      // 선택 과목 평균 백분위 또는 표준점수 계산
-      const subjectScores = top50PercentData.map(row => {
-        if (반영지표 === '백') {
-          return [row.국어백분위, row.수학백분위, row.탐구백분위];
+      // 선택 과목 평균 백분위 계산
+      const optionalSubjects = ['국어백분위', '수학백분위'];
+      const optionalScores = top50PercentData.map(row => {
+        const 탐구1 = row.탐1백분위 || 0;
+        const 탐구2 = row.탐2백분위 || 0;
+
+        // 한국사 백분위 값 추출 (예: 한국사등급 3이면 한국사3의 백분위 사용)
+        const 한국사등급 = row.한국사등급 || 0;
+        const 한국사백분위 = 한국사등급 > 0 && 탐1대체 ? row[`한국사${한국사등급}`] || 0 : 0;
+
+        // 탐구수와 탐1대체 여부에 따라 탐구 백분위 계산
+        let 탐구백분위;
+        if (탐구수 === 2) {
+          탐구백분위 = [탐구1, 탐구2, 한국사백분위].sort((a, b) => b - a).slice(0, 2);
+          탐구백분위 = (탐구백분위[0] + 탐구백분위[1]) / 2;
         } else {
-          return [row.국어표점, row.수학표점, row.탐구표점];
+          탐구백분위 = Math.max(탐구1, 탐구2, 한국사백분위);
         }
-      }).flat();
 
-      const optionalAvgScore = subjectScores.reduce((sum, score) => sum + (score || 0), 0) / subjectScores.length;
+        const coreScores = optionalSubjects.map(subject => row[subject] || 0);
+
+        return [...coreScores, 탐구백분위];
+      });
+
+      // 각 학생의 선택 과목 백분위 평균을 계산
+      const optionalAvgScore = optionalScores.flat().reduce((sum, score) => sum + score, 0) / optionalScores.flat().length;
 
       document.getElementById('averageResults').innerHTML = `
-        <div>상위 50% 영어 평균 등급: ${englishAvgGrade}</div>
-        <div>상위 50% 선택 과목 평균 점수: ${optionalAvgScore.toFixed(2)}</div>
+        <div>상위 50% 영어 평균 등급: ${englishAvgGrade.toFixed(2)}</div>
+        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
       `;
     }
 
