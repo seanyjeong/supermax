@@ -9,21 +9,18 @@
       margin: 0;
       padding: 20px;
     }
-
     h1 {
       text-align: center;
       margin-bottom: 20px;
     }
-
     .school-details {
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
       font-size: 1.2em;
       margin-bottom: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
+      justify-content: flex-start;
     }
-
     .detail-item {
       display: flex;
       flex-direction: column;
@@ -31,12 +28,10 @@
       text-align: center;
       width: 120px;
     }
-
     .detail-item .header {
       font-weight: bold;
       margin-bottom: 10px;
     }
-
     .detail-item .value {
       display: flex;
       align-items: center;
@@ -49,35 +44,29 @@
       font-size: 1em;
       color: #333;
     }
-
     .dropdown-container {
       display: flex;
       gap: 10px;
       margin-bottom: 20px;
       justify-content: flex-start;
     }
-
     select, button {
       padding: 10px;
       font-size: 1em;
     }
-
     #resultTable {
       width: 100%;
       border-collapse: collapse;
       margin-top: 20px;
     }
-
     #resultTable th, #resultTable td {
       border: 1px solid #ddd;
       padding: 8px;
       text-align: center;
     }
-
     #resultTable th {
       background-color: #f2f2f2;
     }
-    
     .average-results {
       font-size: 1.2em;
       margin-top: 20px;
@@ -86,36 +75,17 @@
 </head>
 <body>
   <h1>군, 대학명, 학과 선택</h1>
-
-  <div id="schoolDetails" class="school-details">
-    <!-- 모집 정보가 여기에 표시됩니다. -->
-  </div>
-
+  <div id="schoolDetails" class="school-details"></div>
   <div class="dropdown-container">
     <label for="군Dropdown">군:</label>
-    <select id="군Dropdown">
-      <option value="">선택</option>
-    </select>
-
+    <select id="군Dropdown"><option value="">선택</option></select>
     <label for="대학명Dropdown">대학명:</label>
-    <select id="대학명Dropdown">
-      <option value="">선택</option>
-    </select>
-
+    <select id="대학명Dropdown"><option value="">선택</option></select>
     <label for="학과명Dropdown">학과명:</label>
-    <select id="학과명Dropdown">
-      <option value="">선택</option>
-    </select>
+    <select id="학과명Dropdown"><option value="">선택</option></select>
   </div>
-
-  <table id="resultTable">
-    <!-- 기존 결과 데이터가 여기에 표시됩니다. -->
-  </table>
-
-  <div id="averageResults" class="average-results">
-    <!-- 상위 50% 영어 평균 등급 및 선택 과목 평균 백분위가 여기에 표시됩니다. -->
-  </div>
-
+  <table id="resultTable"></table>
+  <div id="averageResults" class="average-results"></div>
   <script>
     async function fetchSchoolDetails() {
       const 군 = document.getElementById('군Dropdown').value;
@@ -126,45 +96,20 @@
         const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
         const response = await fetch(url);
         const data = await response.json();
-
         const detailsDiv = document.getElementById('schoolDetails');
         if (data && Object.keys(data).length > 0) {
           const detailsHTML = `
-            <div class="detail-item">
-              <div class="header">모집인원</div>
-              <div class="value">${data.모집인원 || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">24모집인원</div>
-              <div class="value">${data['24모집인원'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">24지원인원</div>
-              <div class="value">${data['24지원인원'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">24경쟁률</div>
-              <div class="value">${data['24경쟁률'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">1단계 일정</div>
-              <div class="value">${data['1단계및면접일정'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">실기 일정</div>
-              <div class="value">${data.실기일정 || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">합격 발표</div>
-              <div class="value">${data.합격자발표일정 || '-'}</div>
-            </div>
-          `;
+            <div class="detail-item"><div class="header">모집인원</div><div class="value">${data.모집인원 || '-'}</div></div>
+            <div class="detail-item"><div class="header">24모집인원</div><div class="value">${data['24모집인원'] || '-'}</div></div>
+            <div class="detail-item"><div class="header">24지원인원</div><div class="value">${data['24지원인원'] || '-'}</div></div>
+            <div class="detail-item"><div class="header">24경쟁률</div><div class="value">${data['24경쟁률'] || '-'}</div></div>
+            <div class="detail-item"><div class="header">1단계 일정</div><div class="value">${data['1단계및면접일정'] || '-'}</div></div>
+            <div class="detail-item"><div class="header">실기 일정</div><div class="value">${data.실기일정 || '-'}</div></div>
+            <div class="detail-item"><div class="header">합격 발표</div><div class="value">${data.합격자발표일정 || '-'}</div></div>`;
           detailsDiv.innerHTML = detailsHTML;
         } else {
           detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
         }
-      } else {
-        document.getElementById('schoolDetails').innerHTML = '<div>모든 항목을 선택해 주세요.</div>';
       }
     }
 
@@ -181,7 +126,6 @@
       const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
       const response = await fetch(url);
       const data = await response.json();
-
       data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
       const table = document.getElementById('resultTable');
@@ -206,77 +150,37 @@
         </tr>
         <tr>
           ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
-        </tr>
-      `;
+        </tr>`;
 
       data.forEach((row, index) => {
         table.innerHTML += `
           <tr>
-            <td>${index + 1}</td>
-            <td>${row.지점}</td>
-            <td>${row.이름}</td>
-            <td>${row.학년}</td>
-            <td>${row[`${군}_대학명`]}</td>
-            <td>${row[`${군}_학과명`]}</td>
-            <td>${row[`${군}_수능`]}</td>
-            <td>${row[`${군}_내신`]}</td>
-            <td>${row[`${군}_실기`]}</td>
-            <td>${row[`${군}_총점`]}</td>
-            <td>${row[`${군}_최초결과`]}</td>
-            <td>${row[`${군}_최종결과`]}</td>
-            ${실기종목Headers.map(header => `
-              <td>${row[header.recordKey] || '-'}</td>
-              <td>${row[header.scoreKey] || '-'}</td>
-            `).join('')}
-          </tr>
-        `;
+            <td>${index + 1}</td><td>${row.지점}</td><td>${row.이름}</td><td>${row.학년}</td>
+            <td>${row[`${군}_대학명`]}</td><td>${row[`${군}_학과명`]}</td>
+            <td>${row[`${군}_수능`]}</td><td>${row[`${군}_내신`]}</td><td>${row[`${군}_실기`]}</td><td>${row[`${군}_총점`]}</td>
+            <td>${row[`${군}_최초결과`]}</td><td>${row[`${군}_최종결과`]}</td>
+            ${실기종목Headers.map(header => `<td>${row[header.recordKey] || '-'}</td><td>${row[header.scoreKey] || '-'}</td>`).join('')}
+          </tr>`;
       });
 
       calculateTop50PercentAverages(data);
     }
 
     function calculateTop50PercentAverages(data) {
-      const 탐구수 = data[0].탐구수 || 1;  // 예시로 탐구수를 데이터의 첫 번째 항목에서 가져옴
-      const 탐1대체 = data[0].한국사 === '탐1대체'; // 한국사가 탐구 대체 과목인지 확인
-
-      // 상위 50% 필터링
       const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
+      const englishGrades = top50PercentData.filter(row => row.영어등급).map(row => row.영어등급);
+      const englishAvgGrade = englishGrades.length ? (englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length).toFixed(2) : 'N/A';
 
-      // 영어 평균 등급 계산
-      const englishGrades = top50PercentData.map(row => row.영어등급 || 0);
-      const englishAvgGrade = englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length;
-
-      // 선택 과목 평균 백분위 계산
       const optionalSubjects = ['국어백분위', '수학백분위'];
       const optionalScores = top50PercentData.map(row => {
         const 탐구1 = row.탐1백분위 || 0;
         const 탐구2 = row.탐2백분위 || 0;
-
-        // 한국사 백분위 값 추출 (예: 한국사등급 3이면 한국사3의 백분위 사용)
-        const 한국사등급 = row.한국사등급 || 0;
-        const 한국사백분위 = 한국사등급 > 0 && 탐1대체 ? row[`한국사${한국사등급}`] || 0 : 0;
-
-        // 탐구수와 탐1대체 여부에 따라 탐구 백분위 계산
-        let 탐구백분위;
-        if (탐구수 === 2) {
-          탐구백분위 = [탐구1, 탐구2, 한국사백분위].sort((a, b) => b - a).slice(0, 2);
-          탐구백분위 = (탐구백분위[0] + 탐구백분위[1]) / 2;
-        } else {
-          탐구백분위 = Math.max(탐구1, 탐구2, 한국사백분위);
-        }
-
-        const coreScores = optionalSubjects.map(subject => row[subject] || 0);
-
-        return [...coreScores, 탐구백분위];
+        return Math.max(탐구1, 탐구2);
       });
-
-      // 각 학생의 선택 과목 백분위 평균을 계산
-      const optionalAvgScore = optionalScores.flat().reduce((sum, score) => sum + score, 0) / optionalScores.flat().length;
-
+      const optionalAvgScore = optionalScores.reduce((sum, score) => sum + score, 0) / optionalScores.length;
       document.getElementById('averageResults').innerHTML = `
-        <div>상위 50% 영어 평균 등급: ${englishAvgGrade.toFixed(2)}</div>
-        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
-      `;
+        <div>상위 50% 영어 평균 등급: ${englishAvgGrade}</div>
+        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>`;
     }
 
     async function loadDropdownData() {
@@ -289,19 +193,13 @@
 
       const 군Set = new Set();
       data.forEach(item => 군Set.add(item.군));
-
-      군Set.forEach(군 => {
-        군Dropdown.innerHTML += `<option value="${군}">${군}</option>`;
-      });
-
+      군Set.forEach(군 => 군Dropdown.innerHTML += `<option value="${군}">${군}</option>`);
       군Dropdown.addEventListener('change', () => filterUniversities(data));
       대학명Dropdown.addEventListener('change', () => filterMajors(data));
       학과명Dropdown.addEventListener('change', () => {
         if (군Dropdown.value && 대학명Dropdown.value && 학과명Dropdown.value) {
           fetchSchoolDetails();
           fetchSchoolResult();
-        } else {
-          alert("모든 옵션을 선택해 주세요.");
         }
       });
     }
@@ -310,34 +208,19 @@
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명Dropdown = document.getElementById('대학명Dropdown');
       const 학과명Dropdown = document.getElementById('학과명Dropdown');
-
       대학명Dropdown.innerHTML = '<option value="">선택</option>';
       학과명Dropdown.innerHTML = '<option value="">선택</option>';
-
       const filteredUniversities = data.filter(item => item.군 === 군);
-      const uniqueUniversities = new Set(filteredUniversities.map(item => item.대학명));
-
-      uniqueUniversities.forEach(대학명 => {
-        대학명Dropdown.innerHTML += `<option value="${대학명}">${대학명}</option>`;
-      });
-
-      document.getElementById('schoolDetails').innerHTML = '학교를 선택하면 모집 정보가 여기에 표시됩니다.';
-      document.getElementById('resultTable').innerHTML = '';
+      new Set(filteredUniversities.map(item => item.대학명)).forEach(대학명 => 대학명Dropdown.innerHTML += `<option value="${대학명}">${대학명}</option>`);
     }
 
     function filterMajors(data) {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
       const 학과명Dropdown = document.getElementById('학과명Dropdown');
-
       학과명Dropdown.innerHTML = '<option value="">선택</option>';
-
       const filteredMajors = data.filter(item => item.군 === 군 && item.대학명 === 대학명);
-      const uniqueMajors = new Set(filteredMajors.map(item => item.학과명));
-
-      uniqueMajors.forEach(학과명 => {
-        학과명Dropdown.innerHTML += `<option value="${학과명}">${학과명}</option>`;
-      });
+      new Set(filteredMajors.map(item => item.학과명)).forEach(학과명 => 학과명Dropdown.innerHTML += `<option value="${학과명}">${학과명}</option>`);
     }
 
     document.addEventListener('DOMContentLoaded', loadDropdownData);
