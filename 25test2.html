@@ -237,7 +237,8 @@
 
 function calculateTop50PercentAverages(data) {
   const 탐구수 = data[0].탐구수 || 1;  // 예시로 탐구수를 데이터의 첫 번째 항목에서 가져옴
-  
+  const 탐1대체 = data[0].한국사 === '탐1대체'; // 한국사가 탐구 대체 과목인지 확인
+
   // 상위 50% 필터링
   const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
 
@@ -251,8 +252,19 @@ function calculateTop50PercentAverages(data) {
     const 탐구1 = row.탐1백분위 || 0;
     const 탐구2 = row.탐2백분위 || 0;
 
-    // 탐구수가 2일 경우 두 과목의 평균을 사용, 탐구수가 1일 경우 높은 백분위를 선택
-    const 탐구백분위 = 탐구수 === 2 ? (탐구1 + 탐구2) / 2 : Math.max(탐구1, 탐구2);
+    // 한국사 백분위 값 추출 (예: 한국사등급 3이면 한국사3의 백분위 사용)
+    const 한국사등급 = row.한국사등급 || 0;
+    const 한국사백분위 = 한국사등급 > 0 && 탐1대체 ? row[`한국사${한국사등급}`] || 0 : 0;
+
+    // 탐구수와 탐1대체 여부에 따라 탐구 백분위 계산
+    let 탐구백분위;
+    if (탐구수 === 2) {
+      탐구백분위 = [탐구1, 탐구2, 한국사백분위].sort((a, b) => b - a).slice(0, 2);
+      탐구백분위 = (탐구백분위[0] + 탐구백분위[1]) / 2;
+    } else {
+      탐구백분위 = Math.max(탐구1, 탐구2, 한국사백분위);
+    }
+
     const coreScores = optionalSubjects.map(subject => row[subject] || 0);
 
     return [...coreScores, 탐구백분위];
@@ -266,6 +278,7 @@ function calculateTop50PercentAverages(data) {
     <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
   `;
 }
+
 
 
     async function loadDropdownData() {
