@@ -235,29 +235,38 @@
       calculateTop50PercentAverages(data);
     }
 
-    function calculateTop50PercentAverages(data) {
-      // 상위 50% 필터링
-      const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
+function calculateTop50PercentAverages(data) {
+  const 탐구수 = data[0].탐구수 || 1;  // 예시로 탐구수를 데이터의 첫 번째 항목에서 가져옴
+  
+  // 상위 50% 필터링
+  const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
 
-      // 영어 평균 등급 계산
-      const englishGrades = top50PercentData.map(row => row.영어등급 || 0);
-      const englishAvgGrade = englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length;
+  // 영어 평균 등급 계산
+  const englishGrades = top50PercentData.map(row => row.영어등급 || 0);
+  const englishAvgGrade = englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length;
 
-      // 선택 과목 평균 백분위 계산
-      const optionalSubjects = ['국어백분위', '수학백분위', '탐1백분위', '탐2백분위'];
-      const optionalScores = top50PercentData.map(row => 
-        optionalSubjects.map(subject => row[subject] || 0)
-          .sort((a, b) => b - a)
-          .slice(0, 2)  // 탐구수가 2라 가정
-      ).flat();
+  // 선택 과목 평균 백분위 계산
+  const optionalSubjects = ['국어백분위', '수학백분위'];
+  const optionalScores = top50PercentData.map(row => {
+    const 탐구1 = row.탐1백분위 || 0;
+    const 탐구2 = row.탐2백분위 || 0;
 
-      const optionalAvgScore = optionalScores.reduce((sum, score) => sum + score, 0) / optionalScores.length;
+    // 탐구수가 2일 경우 두 과목의 평균을 사용, 탐구수가 1일 경우 높은 백분위를 선택
+    const 탐구백분위 = 탐구수 === 2 ? (탐구1 + 탐구2) / 2 : Math.max(탐구1, 탐구2);
+    const coreScores = optionalSubjects.map(subject => row[subject] || 0);
 
-      document.getElementById('averageResults').innerHTML = `
-        <div>상위 50% 영어 평균 등급: ${englishAvgGrade.toFixed(2)}</div>
-        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
-      `;
-    }
+    return [...coreScores, 탐구백분위];
+  });
+
+  // 각 학생의 선택 과목 백분위 평균을 계산
+  const optionalAvgScore = optionalScores.flat().reduce((sum, score) => sum + score, 0) / optionalScores.flat().length;
+
+  document.getElementById('averageResults').innerHTML = `
+    <div>상위 50% 영어 평균 등급: ${englishAvgGrade.toFixed(2)}</div>
+    <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
+  `;
+}
+
 
     async function loadDropdownData() {
       const response = await fetch('https://supermax.kr/getSelectionData');
