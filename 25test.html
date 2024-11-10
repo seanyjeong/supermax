@@ -124,12 +124,12 @@
 
   <div class="content-container">
     <div class="school-details" id="schoolDetailsContainer">
-      <!-- 합격발표 일정 오른쪽에 상위 5개 대학/학과가 나타남 -->
+      <!-- 상위 5개 학교 정보가 여기서 '합격발표' 옆에 나타납니다 -->
       <div id="topSchools" class="top-schools">
         <!-- 상위 5개 학교가 여기에 표시됩니다 -->
       </div>
     </div>
-    
+
     <table id="resultTable">
       <!-- 컬럼 제목이 포함된 첫 번째 행 -->
     </table>
@@ -141,14 +141,14 @@
       const 대학명 = document.getElementById('대학명Dropdown').value;
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      console.log("Fetching school details for:", { 군, 대학명, 학과명 });
-
       if (군 && 대학명 && 학과명) {
         const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
         const response = await fetch(url);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
+        console.log("Fetched school details:", data);
+
         if (data && Object.keys(data).length > 0) {
           const detailsHTML = `
             <div class="detail-item">
@@ -178,8 +178,7 @@
             <div class="detail-item">
               <div class="header">합격 발표</div>
               <div class="value">${data.합격자발표일정 || '-'}</div>
-            </div>
-          `;
+            </div>`;
           detailsDiv.innerHTML = detailsHTML;
         } else {
           detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
@@ -194,8 +193,6 @@
       const 대학명 = document.getElementById('대학명Dropdown').value;
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      console.log("Fetching school result for:", { 군, 대학명, 학과명 });
-
       if (!군 || !대학명 || !학과명) {
         alert("모든 옵션을 선택해 주세요.");
         return;
@@ -205,15 +202,12 @@
         const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
         const response = await fetch(url);
         const data = await response.json();
+        console.log("Fetched school result data:", data);
 
-        if (data.length === 0) {
+        if (!data || data.length === 0) {
           document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">일치하는 데이터가 없습니다.</td></tr>';
           return;
         }
-
-        console.log("Fetched data:", data);
-
-        data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
         const 가군Counts = {};
         const 나군Counts = {};
@@ -250,18 +244,70 @@
         topSchoolsDiv.innerHTML = `
           ${군 !== '가' ? `<h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p>` : ''}
           ${군 !== '나' ? `<h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p>` : ''}
-          ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p>` : ''}
-        `;
+          ${군 !== '다' ? `<h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p>` : ''}`;
+
+        // 테이블 헤더 및 데이터 생성
+        const 실기종목Headers = [];
+        for (let i = 1; i <= 6; i++) {
+          const 실기종목 = data[0][`${군}_실기종목${i}`];
+          if (실기종목) {
+            실기종목Headers.push({
+              name: 실기종목,
+              recordKey: `${군}${i}_기록`,
+              scoreKey: `${군}${i}_점수`
+            });
+          }
+        }
+
+        const tableHeaders = `
+          <tr>
+            <th rowspan="2">순위</th>
+            <th rowspan="2">지점</th>
+            <th rowspan="2">이름</th>
+            <th rowspan="2">학년</th>
+            <th rowspan="2">대학명</th>
+            <th rowspan="2">학과명</th>
+            <th rowspan="2">수능</th>
+            <th rowspan="2">내신</th>
+            <th rowspan="2">실기</th>
+            <th rowspan="2">총점</th>
+            <th rowspan="2">최초결과</th>
+            <th rowspan="2">최종결과</th>
+            ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+          </tr>
+          <tr>
+            ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
+          </tr>`;
+
+        const tableRows = data.map((row, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${row.지점 || '-'}</td>
+            <td>${row.이름 || '-'}</td>
+            <td>${row.학년 || '-'}</td>
+            <td>${row[`${군}_대학명`] || '-'}</td>
+            <td>${row[`${군}_학과명`] || '-'}</td>
+            <td>${row[`${군}_수능`] || '-'}</td>
+            <td>${row[`${군}_내신`] || '-'}</td>
+            <td>${row[`${군}_실기`] || '-'}</td>
+            <td>${row[`${군}_총점`] || '-'}</td>
+            <td>${row[`${군}_최초결과`] || '-'}</td>
+            <td>${row[`${군}_최종결과`] || '-'}</td>
+            ${실기종목Headers.map(header => 
+              `<td>${row[header.recordKey] || '-'}</td>
+               <td>${row[header.scoreKey] || '-'}</td>`).join('')}
+          </tr>`).join('');
+
+        document.getElementById('resultTable').innerHTML = tableHeaders + tableRows;
       } catch (error) {
         console.error('데이터 불러오기 실패:', error);
         document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
       }
     }
-
+    
     async function loadDropdownData() {
       const response = await fetch('https://supermax.kr/getSelectionData');
       const data = await response.json();
-
       console.log("Dropdown data:", data);
 
       const 군Dropdown = document.getElementById('군Dropdown');
