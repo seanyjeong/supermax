@@ -71,7 +71,10 @@
 
       군Dropdown.addEventListener('change', () => filterUniversities(data));
       대학명Dropdown.addEventListener('change', () => filterMajors(data));
-      학과명Dropdown.addEventListener('change', fetchSchoolDetails);
+      학과명Dropdown.addEventListener('change', () => {
+        fetchSchoolDetails();
+        fetchSchoolResult();
+      });
     }
 
     // 선택한 군에 따라 대학 필터링
@@ -118,7 +121,8 @@
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
       if (군 && 대학명 && 학과명) {
-        const response = await fetch(`https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+        const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+        const response = await fetch(url);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
@@ -149,7 +153,8 @@
         return;
       }
 
-      const response = await fetch(`https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+      const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+      const response = await fetch(url);
       const data = await response.json();
 
       // 총점을 기준으로 내림차순 정렬
