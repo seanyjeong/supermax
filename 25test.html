@@ -15,11 +15,10 @@
       margin-bottom: 20px;
     }
 
-.content-container {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-}
+    .content-container {
+      display: flex;
+      gap: 20px;
+    }
 
     .school-details {
       display: flex;
@@ -131,16 +130,16 @@
   <div id="schoolDetails" class="school-details">
     <!-- 모집 정보가 여기에 표시됩니다. -->
   </div>
-<div class="content-container">
-  <div id="schoolDetails" class="school-details">
-    <!-- 선택한 대학의 세부 정보가 여기에 표시됩니다. -->
-  </div>
 
-  <div id="topSchools" class="top-schools">
+  <div class="top-schools" id="topSchools">
     <!-- 상위 5개 학교 정보가 표시될 영역 -->
   </div>
-</div>
 
+  <div class="content-container">
+    <table id="resultTable">
+      <!-- 컬럼 제목이 포함된 첫 번째 행 -->
+    </table>
+  </div>
 
   <script>
     async function fetchSchoolDetails() {
@@ -149,13 +148,13 @@
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
       if (군 && 대학명 && 학과명) {
-        const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+        const url = https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명};
         const response = await fetch(url);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
         if (data && Object.keys(data).length > 0) {
-          const detailsHTML = `
+          const detailsHTML = 
             <div class="detail-item">
               <div class="header">모집인원</div>
               <div class="value">${data.모집인원 || '-'}</div>
@@ -184,7 +183,7 @@
               <div class="header">합격 발표</div>
               <div class="value">${data.합격자발표일정 || '-'}</div>
             </div>
-          `;
+          ;
           detailsDiv.innerHTML = detailsHTML;
         } else {
           detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
@@ -205,7 +204,7 @@
       }
 
       try {
-        const url = `https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+        const url = https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명};
         const response = await fetch(url);
         const data = await response.json();
 
@@ -214,7 +213,7 @@
           return;
         }
 
-        data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+        data.sort((a, b) => b[${군}_총점] - a[${군}_총점]);
 
         const 가군Counts = {};
         const 나군Counts = {};
@@ -222,15 +221,15 @@
 
         data.forEach((student) => {
           if (군 !== '가' && student['가_대학명'] && student['가_학과명']) {
-            const 가군조합 = `${student['가_대학명']} - ${student['가_학과명']}`;
+            const 가군조합 = ${student['가_대학명']} - ${student['가_학과명']};
             가군Counts[가군조합] = (가군Counts[가군조합] || 0) + 1;
           }
           if (군 !== '나' && student['나_대학명'] && student['나_학과명']) {
-            const 나군조합 = `${student['나_대학명']} - ${student['나_학과명']}`;
+            const 나군조합 = ${student['나_대학명']} - ${student['나_학과명']};
             나군Counts[나군조합] = (나군Counts[나군조합] || 0) + 1;
           }
           if (군 !== '다' && student['다_대학명'] && student['다_학과명']) {
-            const 다군조합 = `${student['다_대학명']} - ${student['다_학과명']}`;
+            const 다군조합 = ${student['다_대학명']} - ${student['다_학과명']};
             다군Counts[다군조합] = (다군Counts[다군조합] || 0) + 1;
           }
         });
@@ -239,7 +238,7 @@
           return Object.entries(counts)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
-            .map(([combo, count]) => `${combo} (${count}명)`)
+            .map(([combo, count]) => ${combo} (${count}명))
             .join('<br>');
         };
 
@@ -251,17 +250,17 @@
         const 실기종목Headers = [];
 
         for (let i = 1; i <= 6; i++) {
-          const 실기종목 = data[0][`${군}_실기종목${i}`];
+          const 실기종목 = data[0][${군}_실기종목${i}];
           if (실기종목) {
             실기종목Headers.push({
               name: 실기종목,
-              recordKey: `${군}${i}_기록`,
-              scoreKey: `${군}${i}_점수`
+              recordKey: ${군}${i}_기록,
+              scoreKey: ${군}${i}_점수
             });
           }
         }
 
-        const tableHeaders = `
+        const tableHeaders = 
           <tr>
             <th rowspan="2">순위</th>
             <th rowspan="2">지점</th>
@@ -275,42 +274,42 @@
             <th rowspan="2">총점</th>
             <th rowspan="2">최초결과</th>
             <th rowspan="2">최종결과</th>
-            ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+            ${실기종목Headers.map(header => <th colspan="2">${header.name}</th>).join('')}
           </tr>
           <tr>
             ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
           </tr>
-        `;
+        ;
 
-        const tableRows = data.map((row, index) => `
+        const tableRows = data.map((row, index) => 
           <tr>
             <td>${index + 1}</td>
             <td>${row.지점}</td>
             <td>${row.이름}</td>
             <td>${row.학년}</td>
-            <td>${row[`${군}_대학명`]}</td>
-            <td>${row[`${군}_학과명`]}</td>
-            <td>${row[`${군}_수능`]}</td>
-            <td>${row[`${군}_내신`]}</td>
-            <td>${row[`${군}_실기`]}</td>
-            <td>${row[`${군}_총점`]}</td>
-            <td>${row[`${군}_최초결과`]}</td>
-            <td>${row[`${군}_최종결과`]}</td>
-            ${실기종목Headers.map(header => `
+            <td>${row[${군}_대학명]}</td>
+            <td>${row[${군}_학과명]}</td>
+            <td>${row[${군}_수능]}</td>
+            <td>${row[${군}_내신]}</td>
+            <td>${row[${군}_실기]}</td>
+            <td>${row[${군}_총점]}</td>
+            <td>${row[${군}_최초결과]}</td>
+            <td>${row[${군}_최종결과]}</td>
+            ${실기종목Headers.map(header => 
               <td>${row[header.recordKey] || '-'}</td>
               <td>${row[header.scoreKey] || '-'}</td>
-            `).join('')}
+            ).join('')}
           </tr>
-        `).join('');
+        ).join('');
 
         table.innerHTML = tableHeaders + tableRows;
 
         const topSchoolsDiv = document.getElementById('topSchools');
-        topSchoolsDiv.innerHTML = `
-          ${군 !== '가' ? `<div class="school-group"><h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p></div>` : ''}
-          ${군 !== '나' ? `<div class="school-group"><h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p></div>` : ''}
-          ${군 !== '다' ? `<div class="school-group"><h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p></div>` : ''}
-        `;
+        topSchoolsDiv.innerHTML = 
+          ${군 !== '가' ? <div class="school-group"><h2>가 군 상위 5개 대학-학과</h2><p>${가군Top5 || '-'}</p></div> : ''}
+          ${군 !== '나' ? <div class="school-group"><h2>나 군 상위 5개 대학-학과</h2><p>${나군Top5 || '-'}</p></div> : ''}
+          ${군 !== '다' ? <div class="school-group"><h2>다 군 상위 5개 대학-학과</h2><p>${다군Top5 || '-'}</p></div> : ''}
+        ;
       } catch (error) {
         console.error('데이터 불러오기 실패:', error);
         document.getElementById('resultTable').innerHTML = '<tr><td colspan="15">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
@@ -329,7 +328,7 @@
       data.forEach(item => 군Set.add(item.군));
 
       군Set.forEach(군 => {
-        군Dropdown.innerHTML += `<option value="${군}">${군}</option>`;
+        군Dropdown.innerHTML += <option value="${군}">${군}</option>;
       });
 
       군Dropdown.addEventListener('change', () => filterUniversities(data));
@@ -359,7 +358,7 @@
       const uniqueUniversities = new Set(filteredUniversities.map(item => item.대학명));
 
       uniqueUniversities.forEach(대학명 => {
-        대학명Dropdown.innerHTML += `<option value="${대학명}">${대학명}</option>`;
+        대학명Dropdown.innerHTML += <option value="${대학명}">${대학명}</option>;
       });
 
       document.getElementById('schoolDetails').innerHTML = '학교를 선택하면 모집 정보가 여기에 표시됩니다.';
@@ -378,7 +377,7 @@
       const uniqueMajors = new Set(filteredMajors.map(item => item.학과명));
 
       uniqueMajors.forEach(학과명 => {
-        학과명Dropdown.innerHTML += `<option value="${학과명}">${학과명}</option>`;
+        학과명Dropdown.innerHTML += <option value="${학과명}">${학과명}</option>;
       });
     }
 
