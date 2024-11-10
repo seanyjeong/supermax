@@ -180,7 +180,6 @@ async function fetchSchoolResult() {
 
   data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
-  // 집계를 위한 객체 생성
   const 가군Counts = {};
   const 나군Counts = {};
   const 다군Counts = {};
@@ -227,19 +226,32 @@ async function fetchSchoolResult() {
     .join('<br>');
 
   const table = document.getElementById('resultTable');
+  const 실기종목Headers = [];
+
+  // 실기종목 헤더 생성
+  for (let i = 1; i <= 6; i++) {
+    const 실기종목 = data[0][`${군}_실기종목${i}`];
+    if (실기종목) {
+      실기종목Headers.push({
+        name: 실기종목,
+        recordKey: `${군}${i}_기록`,
+        scoreKey: `${군}${i}_점수`
+      });
+    }
+  }
+
   table.innerHTML = `
     <tr>
       <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
       <th rowspan="2">대학명</th><th rowspan="2">학과명</th><th rowspan="2">수능</th><th rowspan="2">내신</th>
       <th rowspan="2">실기</th><th rowspan="2">총점</th><th rowspan="2">최초결과</th><th rowspan="2">최종결과</th>
-      ${군 !== '가' ? `<th colspan="2">가 군 상위 5개 대학-학과</th>` : ''}
-      ${군 !== '나' ? `<th colspan="2">나 군 상위 5개 대학-학과</th>` : ''}
-      ${군 !== '다' ? `<th colspan="2">다 군 상위 5개 대학-학과</th>` : ''}
+      ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+      ${군 !== '가' ? `<th rowspan="2">가 군 상위 5개 대학-학과</th>` : ''}
+      ${군 !== '나' ? `<th rowspan="2">나 군 상위 5개 대학-학과</th>` : ''}
+      ${군 !== '다' ? `<th rowspan="2">다 군 상위 5개 대학-학과</th>` : ''}
     </tr>
     <tr>
-      ${군 !== '가' ? `<th colspan="2">${가군Top5 || '-'}</th>` : ''}
-      ${군 !== '나' ? `<th colspan="2">${나군Top5 || '-'}</th>` : ''}
-      ${군 !== '다' ? `<th colspan="2">${다군Top5 || '-'}</th>` : ''}
+      ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
     </tr>
   `;
 
@@ -257,11 +269,19 @@ async function fetchSchoolResult() {
         <td>${row[`${군}_실기`]}</td>
         <td>${row[`${군}_총점`]}</td>
         <td>${row[`${군}_최초결과`]}</td>
-        <td>${row[`${군}_최종결과`]}</td>
+        <td>${row[`${군}_최종결과`}</td>
+        ${실기종목Headers.map(header => `
+          <td>${row[header.recordKey] || '-'}</td>
+          <td>${row[header.scoreKey] || '-'}</td>
+        `).join('')}
+        ${군 !== '가' ? `<td>${가군Top5 || '-'}</td>` : ''}
+        ${군 !== '나' ? `<td>${나군Top5 || '-'}</td>` : ''}
+        ${군 !== '다' ? `<td>${다군Top5 || '-'}</td>` : ''}
       </tr>
     `;
   });
 }
+
 
 
     async function loadDropdownData() {
