@@ -21,7 +21,7 @@
       gap: 20px;
       font-size: 1.2em;
       margin-bottom: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
+      justify-content: flex-start;
     }
 
     .detail-item {
@@ -127,6 +127,9 @@
         const response = await fetch(url);
         const data = await response.json();
 
+        const { 필수과목, 선택과목 } = parseSubjectReflection(data);
+        console.log("학교 반영 비율 정보:", { 필수과목, 선택과목, 반영지표: data.반영지표 });
+
         const detailsDiv = document.getElementById('schoolDetails');
         if (data && Object.keys(data).length > 0) {
           const detailsHTML = `
@@ -135,28 +138,8 @@
               <div class="value">${data.모집인원 || '-'}</div>
             </div>
             <div class="detail-item">
-              <div class="header">24모집인원</div>
-              <div class="value">${data['24모집인원'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">24지원인원</div>
-              <div class="value">${data['24지원인원'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">24경쟁률</div>
-              <div class="value">${data['24경쟁률'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">1단계 일정</div>
-              <div class="value">${data['1단계및면접일정'] || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">실기 일정</div>
-              <div class="value">${data.실기일정 || '-'}</div>
-            </div>
-            <div class="detail-item">
-              <div class="header">합격 발표</div>
-              <div class="value">${data.합격자발표일정 || '-'}</div>
+              <div class="header">반영 지표</div>
+              <div class="value">${data.반영지표 || '-'}</div>
             </div>
           `;
           detailsDiv.innerHTML = detailsHTML;
@@ -166,6 +149,22 @@
       } else {
         document.getElementById('schoolDetails').innerHTML = '<div>모든 항목을 선택해 주세요.</div>';
       }
+    }
+
+    function parseSubjectReflection(data) {
+      const 필수과목 = [];
+      const 선택과목 = [];
+      const 과목리스트 = ['국어', '수학', '영어', '탐구'];
+
+      과목리스트.forEach((과목) => {
+        if (data[과목].includes('(')) {
+          선택과목.push(과목);
+        } else {
+          필수과목.push(과목);
+        }
+      });
+
+      return { 필수과목, 선택과목 };
     }
 
     async function fetchSchoolResult() {
@@ -236,46 +235,45 @@
     }
 
     function calculateTop50PercentAverages(data) {
-      const 탐구수 = data[0].탐구수 || 1;  // 예시로 탐구수를 데이터의 첫 번째 항목에서 가져옴
-      const 탐1대체 = data[0].한국사 === '탐1대체'; // 한국사가 탐구 대체 과목인지 확인
+      const 탐구수 = data[0].탐구수 || 1;
+      const 탐1대체 = data[0].한국사 === '탐1대체';
+      const 반영지표 = data[0].반영지표 || '백';
 
-      // 상위 50% 필터링
       const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
 
-      // 영어 평균 등급 계산
       const englishGrades = top50PercentData.map(row => row.영어등급 || 0);
       const englishAvgGrade = englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length;
 
-      // 선택 과목 평균 백분위 계산
-      const optionalSubjects = ['국어백분위', '수학백분위'];
+      const optionalSubjects = 반영지표 === '표' ? ['국어표점', '수학표점'] : ['국어백분위', '수학백분위'];
       const optionalScores = top50PercentData.map(row => {
-        const 탐구1 = row.탐1백분위 || 0;
-        const 탐구2 = row.탐2백분위 || 0;
-
-        // 한국사 백분위 값 추출 (예: 한국사등급 3이면 한국사3의 백분위 사용)
+        const 탐구1 = 반영지표 === '표' ? row.탐1표점 : row.탐1백분위;
+        const 탐구2 = 반영지표 === '표' ? row.탐2표점 : row.탐2백분위;
         const 한국사등급 = row.한국사등급 || 0;
-        const 한국사백분위 = 한국사등급 > 0 && 탐1대체 ? row[`한국사${한국사등급}`] || 0 : 0;
+        const 한국사점수 = 한국사등급 > 0 && 탐1대체 ? row[`한국사${한국사등급}`] || 0 : 0;
 
-        // 탐구수와 탐1대체 여부에 따라 탐구 백분위 계산
-        let 탐구백분위;
+        let 탐구점수;
         if (탐구수 === 2) {
-          탐구백분위 = [탐구1, 탐구2, 한국사백분위].sort((a, b) => b - a).slice(0, 2);
-          탐구백분위 = (탐구백분위[0] + 탐구백분위[1]) / 2;
+          탐구점수 = [탐구1, 탐구2, 한국사점수].sort((a, b) => b - a).slice(0, 2);
+          탐구점수 = (탐구점수[0] + 탐구점수[1]) / 2;
         } else {
-          탐구백분위 = Math.max(탐구1, 탐구2, 한국사백분위);
+          탐구점수 = Math.max(탐구1, 탐구2, 한국사점수);
         }
 
         const coreScores = optionalSubjects.map(subject => row[subject] || 0);
-
-        return [...coreScores, 탐구백분위];
+        return [...coreScores, 탐구점수];
       });
 
-      // 각 학생의 선택 과목 백분위 평균을 계산
       const optionalAvgScore = optionalScores.flat().reduce((sum, score) => sum + score, 0) / optionalScores.flat().length;
+
+      console.log("상위 50% 평균 계산:", {
+        영어등급: englishAvgGrade.toFixed(2),
+        선택과목_평균점수: optionalAvgScore.toFixed(2),
+        데이터: top50PercentData
+      });
 
       document.getElementById('averageResults').innerHTML = `
         <div>상위 50% 영어 평균 등급: ${englishAvgGrade.toFixed(2)}</div>
-        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
+        <div>상위 50% 선택 과목 평균 점수: ${optionalAvgScore.toFixed(2)}</div>
       `;
     }
 
@@ -296,11 +294,11 @@
 
       군Dropdown.addEventListener('change', () => {
         filterUniversities(data);
-        resetDetailsAndResults();  // 데이터 초기화
+        resetDetailsAndResults();
       });
       대학명Dropdown.addEventListener('change', () => {
         filterMajors(data);
-        resetDetailsAndResults();  // 데이터 초기화
+        resetDetailsAndResults();
       });
       학과명Dropdown.addEventListener('change', () => {
         if (군Dropdown.value && 대학명Dropdown.value && 학과명Dropdown.value) {
