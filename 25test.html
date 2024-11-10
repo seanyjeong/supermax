@@ -79,7 +79,6 @@
   </table>
 
   <script>
-    // 군, 대학명, 학과명에 해당하는 세부 정보 로드
     async function fetchSchoolDetails() {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
@@ -104,10 +103,11 @@
         } else {
           detailsDiv.innerHTML = '일치하는 정보가 없습니다.';
         }
+      } else {
+        document.getElementById('schoolDetails').innerHTML = '모든 항목을 선택해 주세요.';
       }
     }
 
-    // 선택한 군, 대학명, 학과명에 해당하는 결과 데이터 로드
     async function fetchSchoolResult() {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
@@ -125,8 +125,6 @@
       data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
       const table = document.getElementById('resultTable');
-
-      // 실기종목을 동적으로 가져와서 비어 있지 않은 종목만 필터링
       const 실기종목Headers = [];
       for (let i = 1; i <= 6; i++) {
         const 실기종목 = data[0][`${군}_실기종목${i}`];
@@ -139,7 +137,6 @@
         }
       }
 
-      // 첫 번째 행: 기본 정보 및 실기 종목 헤더
       table.innerHTML = `
         <tr>
           <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
@@ -194,8 +191,12 @@
       군Dropdown.addEventListener('change', () => filterUniversities(data));
       대학명Dropdown.addEventListener('change', () => filterMajors(data));
       학과명Dropdown.addEventListener('change', () => {
-        fetchSchoolDetails();
-        fetchSchoolResult();
+        if (군Dropdown.value && 대학명Dropdown.value && 학과명Dropdown.value) {
+          fetchSchoolDetails();
+          fetchSchoolResult();
+        } else {
+          alert("모든 옵션을 선택해 주세요.");
+        }
       });
     }
 
