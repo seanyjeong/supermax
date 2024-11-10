@@ -21,7 +21,7 @@
       gap: 20px;
       font-size: 1.2em;
       margin-bottom: 20px;
-      justify-content: flex-start;
+      justify-content: flex-start; /* 왼쪽 정렬 */
     }
 
     .detail-item {
@@ -106,15 +106,15 @@
     <select id="학과명Dropdown">
       <option value="">선택</option>
     </select>
-
-    <button id="calculateButton">상위 50% 평균 계산</button>
   </div>
 
-  <div id="averageResults" class="average-results"></div>
-
   <table id="resultTable">
-    <!-- 결과 데이터가 여기에 표시됩니다. -->
+    <!-- 기존 결과 데이터가 여기에 표시됩니다. -->
   </table>
+
+  <div id="averageResults" class="average-results">
+    <!-- 상위 50% 영어 평균 등급 및 선택 과목 평균 백분위가 여기에 표시됩니다. -->
+  </div>
 
   <script>
     async function fetchSchoolDetails() {
@@ -127,43 +127,45 @@
         const response = await fetch(url);
         const data = await response.json();
 
-        if (data) {
-          displaySchoolDetails(data);
+        const detailsDiv = document.getElementById('schoolDetails');
+        if (data && Object.keys(data).length > 0) {
+          const detailsHTML = `
+            <div class="detail-item">
+              <div class="header">모집인원</div>
+              <div class="value">${data.모집인원 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24모집인원</div>
+              <div class="value">${data['24모집인원'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24지원인원</div>
+              <div class="value">${data['24지원인원'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24경쟁률</div>
+              <div class="value">${data['24경쟁률'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">1단계 일정</div>
+              <div class="value">${data['1단계및면접일정'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">실기 일정</div>
+              <div class="value">${data.실기일정 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">합격 발표</div>
+              <div class="value">${data.합격자발표일정 || '-'}</div>
+            </div>
+          `;
+          detailsDiv.innerHTML = detailsHTML;
+        } else {
+          detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
         }
+      } else {
+        document.getElementById('schoolDetails').innerHTML = '<div>모든 항목을 선택해 주세요.</div>';
       }
-    }
-
-    function displaySchoolDetails(data) {
-      const detailsDiv = document.getElementById('schoolDetails');
-      detailsDiv.innerHTML = ''; // 이전 내용 초기화
-
-      const detailsHTML = `
-        <div class="detail-item">
-          <div class="header">모집인원</div>
-          <div class="value">${data.모집인원 || '-'}</div>
-        </div>
-        <div class="detail-item">
-          <div class="header">국어</div>
-          <div class="value">${data.국어 || '-'}</div>
-        </div>
-        <div class="detail-item">
-          <div class="header">수학</div>
-          <div class="value">${data.수학 || '-'}</div>
-        </div>
-        <div class="detail-item">
-          <div class="header">영어</div>
-          <div class="value">${data.영어 || '-'}</div>
-        </div>
-        <div class="detail-item">
-          <div class="header">탐구</div>
-          <div class="value">${data.탐구 || '-'}</div>
-        </div>
-        <div class="detail-item">
-          <div class="header">탐구수</div>
-          <div class="value">${data.탐구수 || '-'}</div>
-        </div>
-      `;
-      detailsDiv.innerHTML = detailsHTML;
     }
 
     async function fetchSchoolResult() {
@@ -180,54 +182,80 @@
       const response = await fetch(url);
       const data = await response.json();
 
-      if (data.length > 0) {
-        calculateAverages(data, 군);
-      } else {
-        console.log('데이터가 없습니다.');
+      data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+
+      const table = document.getElementById('resultTable');
+      const 실기종목Headers = [];
+      for (let i = 1; i <= 6; i++) {
+        const 실기종목 = data[0][`${군}_실기종목${i}`];
+        if (실기종목) {
+          실기종목Headers.push({
+            name: 실기종목,
+            recordKey: `${군}${i}_기록`,
+            scoreKey: `${군}${i}_점수`
+          });
+        }
       }
+
+      table.innerHTML = `
+        <tr>
+          <th rowspan="2">순위</th><th rowspan="2">지점</th><th rowspan="2">이름</th><th rowspan="2">학년</th>
+          <th rowspan="2">대학명</th><th rowspan="2">학과명</th><th rowspan="2">수능</th><th rowspan="2">내신</th>
+          <th rowspan="2">실기</th><th rowspan="2">총점</th><th rowspan="2">최초결과</th><th rowspan="2">최종결과</th>
+          ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+        </tr>
+        <tr>
+          ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
+        </tr>
+      `;
+
+      data.forEach((row, index) => {
+        table.innerHTML += `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${row.지점}</td>
+            <td>${row.이름}</td>
+            <td>${row.학년}</td>
+            <td>${row[`${군}_대학명`]}</td>
+            <td>${row[`${군}_학과명`]}</td>
+            <td>${row[`${군}_수능`]}</td>
+            <td>${row[`${군}_내신`]}</td>
+            <td>${row[`${군}_실기`]}</td>
+            <td>${row[`${군}_총점`]}</td>
+            <td>${row[`${군}_최초결과`]}</td>
+            <td>${row[`${군}_최종결과`]}</td>
+            ${실기종목Headers.map(header => `
+              <td>${row[header.recordKey] || '-'}</td>
+              <td>${row[header.scoreKey] || '-'}</td>
+            `).join('')}
+          </tr>
+        `;
+      });
+
+      calculateTop50PercentAverages(data);
     }
 
-    function calculateAverages(data, 군) {
-      const requiredSubjects = [];
-      const optionalSubjects = [];
-      const 탐구수 = parseInt(data[0].탐구수, 10) || 1; // 탐구수 예시 값
+    function calculateTop50PercentAverages(data) {
+      // 상위 50% 필터링
+      const top50PercentData = data.slice(0, Math.ceil(data.length / 2));
 
-      // 필수 및 선택 반영 과목 구분
-      if (data[0].국어과목 && !data[0].국어과목.includes('(')) requiredSubjects.push('국어');
-      if (data[0].수학과목 && !data[0].수학과목.includes('(')) requiredSubjects.push('수학');
-      if (data[0].영어원점수 && !data[0].영어원점수.includes('(')) requiredSubjects.push('영어');
+      // 영어 평균 등급 계산
+      const englishGrades = top50PercentData.map(row => row.영어등급 || 0);
+      const englishAvgGrade = englishGrades.reduce((sum, grade) => sum + grade, 0) / englishGrades.length;
 
-      if (data[0].국어과목 && data[0].국어과목.includes('(')) optionalSubjects.push('국어');
-      if (data[0].수학과목 && data[0].수학과목.includes('(')) optionalSubjects.push('수학');
-      if (data[0].탐1과목 && data[0].탐1과목.includes('(')) optionalSubjects.push('탐1');
-      if (data[0].탐2과목 && data[0].탐2과목.includes('(')) optionalSubjects.push('탐2');
+      // 선택 과목 평균 백분위 계산
+      const optionalSubjects = ['국어백분위', '수학백분위', '탐1백분위', '탐2백분위'];
+      const optionalScores = top50PercentData.map(row => 
+        optionalSubjects.map(subject => row[subject] || 0)
+          .sort((a, b) => b - a)
+          .slice(0, 2)  // 탐구수가 2라 가정
+      ).flat();
 
-      // 상위 50% 학생 필터링
-      const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
-      const top50PercentData = sortedData.slice(0, Math.ceil(sortedData.length / 2));
+      const optionalAvgScore = optionalScores.reduce((sum, score) => sum + score, 0) / optionalScores.length;
 
-      // 필수 반영 과목 평균 백분위 계산
-      let requiredAvg = 0;
-      requiredSubjects.forEach(subject => {
-        const total = top50PercentData.reduce((sum, student) => sum + (student[`${subject}백분위`] || 0), 0);
-        requiredAvg += total / top50PercentData.length;
-      });
-      requiredAvg /= requiredSubjects.length;
-
-      // 선택 반영 과목 상위 백분위 계산
-      const optionalScores = [];
-      top50PercentData.forEach(student => {
-        const studentScores = optionalSubjects.map(subject => student[`${subject}백분위`] || 0);
-        studentScores.sort((a, b) => b - a); // 내림차순 정렬
-        optionalScores.push(...studentScores.slice(0, 탐구수));
-      });
-
-      const optionalAvg = optionalScores.reduce((sum, score) => sum + score, 0) / optionalScores.length;
-
-      // 결과 표시
       document.getElementById('averageResults').innerHTML = `
-        <div>필수 반영 과목 평균 백분위: ${requiredAvg.toFixed(2)}</div>
-        <div>선택 반영 과목 평균 백분위: ${optionalAvg.toFixed(2)}</div>
+        <div>상위 50% 영어 평균 등급: ${englishAvgGrade.toFixed(2)}</div>
+        <div>상위 50% 선택 과목 평균 백분위: ${optionalAvgScore.toFixed(2)}</div>
       `;
     }
 
@@ -251,6 +279,7 @@
       학과명Dropdown.addEventListener('change', () => {
         if (군Dropdown.value && 대학명Dropdown.value && 학과명Dropdown.value) {
           fetchSchoolDetails();
+          fetchSchoolResult();
         } else {
           alert("모든 옵션을 선택해 주세요.");
         }
@@ -291,10 +320,7 @@
       });
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      loadDropdownData();
-      document.getElementById('calculateButton').addEventListener('click', fetchSchoolResult);
-    });
+    document.addEventListener('DOMContentLoaded', loadDropdownData);
   </script>
 </body>
 </html>
