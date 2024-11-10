@@ -15,10 +15,11 @@
       margin-bottom: 20px;
     }
 
-    .content-container {
-      display: flex;
-      gap: 20px;
-    }
+.content-container {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
 
     .school-details {
       display: flex;
@@ -130,16 +131,16 @@
   <div id="schoolDetails" class="school-details">
     <!-- 모집 정보가 여기에 표시됩니다. -->
   </div>
+<div class="content-container">
+  <div id="schoolDetails" class="school-details">
+    <!-- 선택한 대학의 세부 정보가 여기에 표시됩니다. -->
+  </div>
 
-  <div class="top-schools" id="topSchools">
+  <div id="topSchools" class="top-schools">
     <!-- 상위 5개 학교 정보가 표시될 영역 -->
   </div>
+</div>
 
-  <div class="content-container">
-    <table id="resultTable">
-      <!-- 컬럼 제목이 포함된 첫 번째 행 -->
-    </table>
-  </div>
 
   <script>
     async function fetchSchoolDetails() {
