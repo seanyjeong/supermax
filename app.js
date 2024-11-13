@@ -933,6 +933,35 @@ app.get('/getSchoolResult', (req, res) => {
   });
 });
 
+const axios = require('axios');
+
+// 25 정시 수합
+app.get('/fetch-sheet-data', async (req, res) => {
+  try {
+    const response = await axios.get('https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec');
+    const data = response.data;
+
+    // 필요한 경우 MySQL 데이터베이스에 데이터를 저장하는 로직 추가 가능
+    console.log('Data fetched from Google Sheets:', data);
+
+    // 데이터가 성공적으로 응답되었음을 클라이언트에 반환
+    res.status(200).json({ result: 'success', data });
+  } catch (error) {
+    console.error('Error fetching data from Google Sheets:', error);
+    res.status(500).json({ result: 'error', message: 'Failed to fetch data' });
+  }
+});
+
+// 1분마다 fetch-sheet-data 엔드포인트를 호출하여 업데이트
+setInterval(async () => {
+  try {
+    const response = await axios.get('http://localhost:3000/fetch-sheet-data');
+    console.log('Data fetched and updated:', response.data);
+  } catch (error) {
+    console.error('Error in scheduled data fetch:', error);
+  }
+}, 60 * 1000); // 1분 = 60 * 1000 밀리초
+
 
 
 
