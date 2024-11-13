@@ -943,7 +943,6 @@ async function updateJeongsiResults() {
     const response = await axios.get(googleAppsScriptUrl);
     const data = response.data;
 
-    // 데이터의 각 열을 가져오기 전에 값 확인 및 필드 수 일치
     data.forEach(row => {
       const query = `
         INSERT INTO \`25정시결과\` (
@@ -964,7 +963,8 @@ async function updateJeongsiResults() {
           다5_기록, 다5_점수, 다_실기종목6, 다6_기록, 다6_점수
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
-          지점 = VALUES(지점), 학교 = VALUES(학교), 학년 = VALUES(학년), 성별 = VALUES(성별), 이름 = VALUES(이름)
+          지점 = VALUES(지점), 학교 = VALUES(학교), 학년 = VALUES(학년), 성별 = VALUES(성별), 이름 = VALUES(이름), 국어과목 = VALUES(국어과목),
+          국어원점수 = VALUES(국어원점수), 국어표점 = VALUES(국어표점), 국어백분위 = VALUES(국어백분위), 국어등급 = VALUES(국어등급)
       `;
 
       // 각 row의 null 값이 없도록 기본값 지정
@@ -984,6 +984,7 @@ async function updateJeongsiResults() {
     console.error('Error fetching data from Google Sheets:', error);
   }
 }
+
 
 
 // 서버 시작 시 1분마다 updateJeongsiResults 함수 실행
