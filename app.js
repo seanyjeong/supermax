@@ -934,34 +934,57 @@ app.get('/getSchoolResult', (req, res) => {
 });
 
 
-// 25 정시 수합
-app.get('/fetch-sheet-data', async (req, res) => {
+// Google Apps Script 웹앱 URL
+const googleAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
+
+// Google Sheets 데이터를 가져와 MySQL에 저장하는 함수
+async function updateJeongsiResults() {
   try {
-    const response = await axios.get('https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec');
+    // Google Sheets 데이터 가져오기
+    const response = await axios.get(googleAppsScriptUrl);
     const data = response.data;
 
-    // 필요한 경우 MySQL 데이터베이스에 데이터를 저장하는 로직 추가 가능
-    console.log('Data fetched from Google Sheets:', data);
+    // MySQL에 데이터 삽입 또는 업데이트
+    data.forEach(row => {
+      const query = `
+        INSERT INTO \`25정시결과\` (
+          지점, 학교, 학년, 성별, 이름, 국어과목, 국어원점수, 국어표점, 국어백분위, 국어등급,
+          수학과목, 수학원점수, 수학표점, 수학백분위, 수학등급, 영어원점수, 영어등급,
+          탐1과목, 탐1원점수, 탐1표점, 탐1백분위, 탐1등급, 탐2과목, 탐2원점수, 탐2표점,
+          탐2백분위, 탐2등급, 한국사원점수, 한국사등급, 내신, 가_군, 가_대학명, 가_학과명,
+          가_수능, 가_내신, 가_실기, 가_총점, 가_최초결과, 가_최종결과, 가_실기종목1,
+          가1_기록, 가1_점수, 가_실기종목2, 가2_기록, 가2_점수, 가_실기종목3, 가3_기록,
+          가3_점수, 가_실기종목4, 가4_기록, 가4_점수, 가_실기종목5, 가5_기록, 가5_점수,
+          가_실기종목6, 가6_기록, 가6_점수, 나_군, 나_대학명, 나_학과명, 나_수능, 나_내신,
+          나_실기, 나_총점, 나_최초결과, 나_최종결과, 나_실기종목1, 나1_기록, 나1_점수,
+          나_실기종목2, 나2_기록, 나2_점수, 나_실기종목3, 나3_기록, 나3_점수, 나_실기종목4,
+          나4_기록, 나4_점수, 나_실기종목5, 나5_기록, 나5_점수, 나_실기종목6, 나6_기록, 나6_점수,
+          다_군, 다_대학명, 다_학과명, 다_수능, 다_내신, 다_실기, 다_총점, 다_최초결과,
+          다_최종결과, 다_실기종목1, 다1_기록, 다1_점수, 다_실기종목2, 다2_기록, 다2_점수,
+          다_실기종목3, 다3_기록, 다3_점수, 다_실기종목4, 다4_기록, 다4_점수, 다_실기종목5,
+          다5_기록, 다5_점수, 다_실기종목6, 다6_기록, 다6_점수
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          지점 = VALUES(지점), 학교 = VALUES(학교), 학년 = VALUES(학년), 성별 = VALUES(성별), 이름 = VALUES(이름)
+      `;
 
-    // 데이터가 성공적으로 응답되었음을 클라이언트에 반환
-    res.status(200).json({ result: 'success', data });
+      connection.query(query, row, (error, results) => {
+        if (error) {
+          console.error('Error inserting data:', error);
+        } else {
+          console.log('Data inserted/updated successfully');
+        }
+      });
+    });
+
+    console.log('Data update completed');
   } catch (error) {
     console.error('Error fetching data from Google Sheets:', error);
-    res.status(500).json({ result: 'error', message: 'Failed to fetch data' });
   }
-});
+}
 
-// 1분마다 fetch-sheet-data 엔드포인트를 호출하여 업데이트
-setInterval(async () => {
-  try {
-    const response = await axios.get('http://localhost:3000/fetch-sheet-data');
-    console.log('Data fetched and updated:', response.data);
-  } catch (error) {
-    console.error('Error in scheduled data fetch:', error);
-  }
-}, 60 * 1000); // 1분 = 60 * 1000 밀리초
-
-
+// 서버 시작 시 1분마다 updateJeongsiResults 함수 실행
+setInterval(updateJeongsiResults, 60 * 1000); // 1분 = 60 * 1000 밀리초
 
 
 
