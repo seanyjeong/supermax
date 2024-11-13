@@ -933,7 +933,6 @@ app.get('/getSchoolResult', (req, res) => {
   });
 });
 
-const axios = require('axios');
 
 // 25 정시 수합
 app.get('/fetch-sheet-data', async (req, res) => {
