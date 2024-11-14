@@ -936,7 +936,35 @@ app.get('/getSchoolResult', (req, res) => {
 
 
 
+// Google Apps Script 웹앱 URL
+const webAppUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
 
+async function fetchAndInsertData() {
+  try {
+    // Google Sheets 데이터 가져오기
+    const response = await axios.get(webAppUrl);
+    const data = response.data;
+
+    // MySQL 데이터베이스에 데이터 삽입
+    data.forEach(row => {
+      // `id` 컬럼을 제외하고 데이터 삽입
+      const rowData = { ...row };
+      delete rowData.id; // id 컬럼이 자동 증가하도록 설정한 경우
+      
+      const query = `INSERT INTO 25정시결과 SET ?`;
+      connection.query(query, rowData, (error, results) => {
+        if (error) throw error;
+        console.log(`Inserted row with ID: ${results.insertId}`);
+      });
+    });
+  } catch (error) {
+    console.error('Error fetching or inserting data:', error);
+  }
+}
+
+// 서버 실행 시 데이터 가져오기 및 주기적 실행
+fetchAndInsertData(); // 서버 시작 시 바로 실행
+setInterval(fetchAndInsertData, 60000); // 1분마다 실행
 
 
 
