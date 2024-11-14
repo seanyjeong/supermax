@@ -933,14 +933,32 @@ app.get('/getSchoolResult', (req, res) => {
   });
 });
 
-// Google Apps Script 웹앱에서 데이터를 가져와 MySQL에 저장하는 엔드포인트
-app.get('/update-25jeongsi-result', async (req, res) => {
+const axios = require('axios');
+const mysql = require('mysql');
+
+// MySQL 데이터베이스 연결 설정
+const connection = mysql.createConnection({
+  host: '211.37.174.218',
+  user: 'maxilsan',
+  password: 'q141171616!',
+  database: 'supermax',
+  charset: 'utf8mb4'
+});
+
+connection.connect(err => {
+  if (err) {
+    console.error('MySQL 연결 실패:', err);
+    return;
+  }
+  console.log('MySQL 연결 성공');
+});
+
+// 업데이트 함수 정의
+async function updateJeongsiResult() {
   try {
-    // Google Apps Script 웹앱에서 데이터를 가져옴
     const response = await axios.get('https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec');
     const data = response.data;
 
-    // 데이터를 MySQL 테이블에 삽입 또는 업데이트
     const query = `
       INSERT INTO \`25정시결과\` (
         지점, 학교, 학년, 성별, 이름, 국어과목, 국어원점수, 국어표점, 국어백분위, 국어등급, 
@@ -995,25 +1013,20 @@ app.get('/update-25jeongsi-result', async (req, res) => {
     connection.query(query, [values], (err, results) => {
       if (err) {
         console.error('Error updating 25정시결과:', err);
-        res.status(500).json({ message: 'Error updating 25정시결과', error: err });
-        return;
+      } else {
+        console.log('25정시결과 updated successfully');
       }
-      res.status(200).json({ message: '25정시결과 updated successfully' });
     });
   } catch (error) {
     console.error('Error fetching data from Google Apps Script:', error);
-    res.status(500).json({ message: 'Error fetching data from Google Apps Script', error });
   }
-});
-// 매분마다 update-25jeongsi-result 엔드포인트 호출
-setInterval(async () => {
-  try {
-    const response = await axios.get('http://supermax.kr/update-25jeongsi-result'); // 서버의 엔드포인트 URL을 사용
-    console.log('25정시결과 업데이트 성공:', response.data);
-  } catch (error) {
-    console.error('25정시결과 업데이트 실패:', error);
-  }
-}, 60 * 1000); // 60초(1분)마다 실행
+}
+
+// 서버 시작 시 즉시 실행
+updateJeongsiResult();
+
+// 이후 1분마다 실행
+setInterval(updateJeongsiResult, 60 * 1000); // 60초마다 실행
 
 
 
