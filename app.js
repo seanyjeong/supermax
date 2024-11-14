@@ -935,13 +935,12 @@ app.get('/getSchoolResult', (req, res) => {
 
 
 
-
 // Google Apps Script 웹앱 URL
 const webAppUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
 
-// MySQL 테이블과 일치하는 Google Sheets 헤더를 매핑
+// MySQL 테이블과 일치하는 Google Sheets 헤더 매핑
 const headersMapping = [
-  '지점', '학교', '학년', '성별', '이름', '국어과목', '국어원점수', '국어표점', '국어백분위', '국어등급', 
+ '지점', '학교', '학년', '성별', '이름', '국어과목', '국어원점수', '국어표점', '국어백분위', '국어등급', 
   '수학과목', '수학원점수', '수학표점', '수학백분위', '수학등급', '영어원점수', '영어등급', '탐1과목', '탐1원점수', 
   '탐1표점', '탐1백분위', '탐1등급', '탐2과목', '탐2원점수', '탐2표점', '탐2백분위', '탐2등급', '한국사원점수', 
   '한국사등급', '내신', '가_군', '가_대학명', '가_학과명', '가_수능', '가_내신', '가_실기', '가_총점', '가_최초결과', 
@@ -956,31 +955,50 @@ const headersMapping = [
   '다_실기종목5', '다5_기록', '다5_점수', '다_실기종목6', '다6_기록', '다6_점수'
 ];
 
-async function fetchAndInsertData() {
+async function fetchAndInsertOrUpdateData() {
   console.log("Fetching data from Google Sheets...");
   try {
-    // Google Sheets 데이터 가져오기
     const response = await axios.get(webAppUrl);
     const data = response.data;
     console.log("Data fetched successfully:", data);
 
-    // MySQL 데이터베이스에 데이터 삽입
     data.forEach((row, index) => {
-      // `headersMapping`과 매칭하여 row 데이터를 MySQL 형식으로 변환
       const rowData = {};
       headersMapping.forEach((header, i) => {
-        rowData[header] = row[i] || '';  // Google Sheets 데이터의 열을 매핑된 헤더로 맞춰 설정
+        rowData[header] = row[i] !== '' ? row[i] : null;
       });
 
-      console.log(`Inserting row ${index + 1}:`, rowData);
-      
-      const query = `INSERT INTO 25정시결과 SET ?`;
-      connection.query(query, rowData, (error, results) => {
+      const { 지점, 학교, 학년, 성별, 이름, ...updateData } = rowData;
+
+      // 기존 데이터 존재 여부 확인
+      const checkQuery = `SELECT COUNT(*) AS count FROM 25정시결과 WHERE 지점 = ? AND 학교 = ? AND 학년 = ? AND 성별 = ? AND 이름 = ?`;
+      connection.query(checkQuery, [지점, 학교, 학년, 성별, 이름], (error, results) => {
         if (error) {
-          console.error(`Error inserting row ${index + 1}:`, error);
+          console.error(`Error checking existence for row ${index + 1}:`, error);
           return;
         }
-        console.log(`Inserted row ${index + 1} with ID: ${results.insertId}`);
+
+        if (results[0].count > 0) {
+          // 데이터가 존재하면 업데이트
+          const updateQuery = `UPDATE 25정시결과 SET ? WHERE 지점 = ? AND 학교 = ? AND 학년 = ? AND 성별 = ? AND 이름 = ?`;
+          connection.query(updateQuery, [updateData, 지점, 학교, 학년, 성별, 이름], (error) => {
+            if (error) {
+              console.error(`Error updating row ${index + 1}:`, error);
+              return;
+            }
+            console.log(`Updated row ${index + 1}`);
+          });
+        } else {
+          // 데이터가 없으면 새로 삽입
+          const insertQuery = `INSERT INTO 25정시결과 SET ?`;
+          connection.query(insertQuery, rowData, (error, results) => {
+            if (error) {
+              console.error(`Error inserting row ${index + 1}:`, error);
+              return;
+            }
+            console.log(`Inserted row ${index + 1} with ID: ${results.insertId}`);
+          });
+        }
       });
     });
   } catch (error) {
@@ -988,10 +1006,9 @@ async function fetchAndInsertData() {
   }
 }
 
-// 서버 실행 시 데이터 가져오기 및 주기적 실행
-fetchAndInsertData(); // 서버 시작 시 바로 실행
-setInterval(fetchAndInsertData, 60000); // 1분마다 실행
-
+// 서버 시작 시 바로 실행하고 주기적 실행
+fetchAndInsertOrUpdateData();
+setInterval(fetchAndInsertOrUpdateData, 60000); // 1분마다 실행
 
 
 // 서버 시작
