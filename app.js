@@ -1008,7 +1008,7 @@ app.get('/update-25jeongsi-result', async (req, res) => {
 // 매분마다 update-25jeongsi-result 엔드포인트 호출
 setInterval(async () => {
   try {
-    const response = await axios.get('http://localhost:3000/update-25jeongsi-result'); // 서버의 엔드포인트 URL을 사용
+    const response = await axios.get('http://supermax.kr/update-25jeongsi-result'); // 서버의 엔드포인트 URL을 사용
     console.log('25정시결과 업데이트 성공:', response.data);
   } catch (error) {
     console.error('25정시결과 업데이트 실패:', error);
