@@ -933,25 +933,6 @@ app.get('/getSchoolResult', (req, res) => {
   });
 });
 
-const axios = require('axios');
-const mysql = require('mysql');
-
-// MySQL 데이터베이스 연결 설정
-const connection = mysql.createConnection({
-  host: '211.37.174.218',
-  user: 'maxilsan',
-  password: 'q141171616!',
-  database: 'supermax',
-  charset: 'utf8mb4'
-});
-
-connection.connect(err => {
-  if (err) {
-    console.error('MySQL 연결 실패:', err);
-    return;
-  }
-  console.log('MySQL 연결 성공');
-});
 
 // 업데이트 함수 정의
 async function updateJeongsiResult() {
