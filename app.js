@@ -940,25 +940,32 @@ app.get('/getSchoolResult', (req, res) => {
 const webAppUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
 
 async function fetchAndInsertData() {
+  console.log("Fetching data from Google Sheets...");
   try {
     // Google Sheets 데이터 가져오기
     const response = await axios.get(webAppUrl);
     const data = response.data;
+    console.log("Data fetched successfully:", data);
 
     // MySQL 데이터베이스에 데이터 삽입
-    data.forEach(row => {
+    data.forEach((row, index) => {
       // `id` 컬럼을 제외하고 데이터 삽입
       const rowData = { ...row };
       delete rowData.id; // id 컬럼이 자동 증가하도록 설정한 경우
+
+      console.log(`Inserting row ${index + 1}:`, rowData);
       
       const query = `INSERT INTO 25정시결과 SET ?`;
       connection.query(query, rowData, (error, results) => {
-        if (error) throw error;
-        console.log(`Inserted row with ID: ${results.insertId}`);
+        if (error) {
+          console.error(`Error inserting row ${index + 1}:`, error);
+          return;
+        }
+        console.log(`Inserted row ${index + 1} with ID: ${results.insertId}`);
       });
     });
   } catch (error) {
-    console.error('Error fetching or inserting data:', error);
+    console.error('Error fetching data or connecting to Google Sheets:', error);
   }
 }
 
