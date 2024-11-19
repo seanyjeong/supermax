@@ -933,7 +933,80 @@ app.get('/getSchoolResult', (req, res) => {
   });
 });
 
+// Google Apps Script 웹앱 URL (데이터 가져오기)
+const googleSheetsUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
 
+// Google Sheets 데이터를 MySQL로 동기화하는 함수
+async function updateJungsiData() {
+  try {
+    // Google Sheets 데이터 가져오기
+    const response = await axios.get(googleSheetsUrl);
+    const rows = response.data;
+
+    if (!rows || rows.length === 0) {
+      console.log('No data available from Google Sheets.');
+      return;
+    }
+
+    // 데이터 삽입 또는 업데이트
+    const query = `
+      INSERT INTO \`25정시결과\` (
+        지점, 학교, 학년, 성별, 이름, 국어과목, 국어원점수, 국어표점, 국어백분위, 국어등급,
+        수학과목, 수학원점수, 수학표점, 수학백분위, 수학등급, 영어원점수, 영어등급,
+        탐1과목, 탐1원점수, 탐1표점, 탐1백분위, 탐1등급, 탐2과목, 탐2원점수, 탐2표점,
+        탐2백분위, 탐2등급, 한국사원점수, 한국사등급, 내신,
+        가_군, 가_대학명, 가_학과명, 가_수능, 가_내신, 가_실기, 가_총점,
+        가_최초결과, 가_최종결과, 가_실기종목1, 가1_기록, 가1_점수,
+        가_실기종목2, 가2_기록, 가2_점수, 가_실기종목3, 가3_기록, 가3_점수,
+        가_실기종목4, 가4_기록, 가4_점수, 가_실기종목5, 가5_기록, 가5_점수,
+        가_실기종목6, 가6_기록, 가6_점수, 나_군, 나_대학명, 나_학과명,
+        나_수능, 나_내신, 나_실기, 나_총점, 나_최초결과, 나_최종결과,
+        나_실기종목1, 나1_기록, 나1_점수, 나_실기종목2, 나2_기록, 나2_점수,
+        나_실기종목3, 나3_기록, 나3_점수, 나_실기종목4, 나4_기록, 나4_점수,
+        나_실기종목5, 나5_기록, 나5_점수, 나_실기종목6, 나6_기록, 나6_점수,
+        다_군, 다_대학명, 다_학과명, 다_수능, 다_내신, 다_실기, 다_총점,
+        다_최초결과, 다_최종결과, 다_실기종목1, 다1_기록, 다1_점수, 다_실기종목2,
+        다2_기록, 다2_점수, 다_실기종목3, 다3_기록, 다3_점수, 다_실기종목4,
+        다4_기록, 다4_점수, 다_실기종목5, 다5_기록, 다5_점수, 다_실기종목6, 다6_기록, 다6_점수
+      ) VALUES ?
+      ON DUPLICATE KEY UPDATE
+        지점 = VALUES(지점), 학교 = VALUES(학교), 학년 = VALUES(학년), 성별 = VALUES(성별),
+        이름 = VALUES(이름), 국어과목 = VALUES(국어과목), 국어원점수 = VALUES(국어원점수),
+        국어표점 = VALUES(국어표점), 국어백분위 = VALUES(국어백분위), 국어등급 = VALUES(국어등급),
+        수학과목 = VALUES(수학과목), 수학원점수 = VALUES(수학원점수), 수학표점 = VALUES(수학표점),
+        수학백분위 = VALUES(수학백분위), 수학등급 = VALUES(수학등급), 영어원점수 = VALUES(영어원점수),
+        영어등급 = VALUES(영어등급), 탐1과목 = VALUES(탐1과목), 탐1원점수 = VALUES(탐1원점수),
+        탐1표점 = VALUES(탐1표점), 탐1백분위 = VALUES(탐1백분위), 탐1등급 = VALUES(탐1등급),
+        탐2과목 = VALUES(탐2과목), 탐2원점수 = VALUES(탐2원점수), 탐2표점 = VALUES(탐2표점),
+        탐2백분위 = VALUES(탐2백분위), 탐2등급 = VALUES(탐2등급), 한국사원점수 = VALUES(한국사원점수),
+        한국사등급 = VALUES(한국사등급), 내신 = VALUES(내신),
+        가_군 = VALUES(가_군), 가_대학명 = VALUES(가_대학명), 가_학과명 = VALUES(가_학과명),
+        가_수능 = VALUES(가_수능), 가_내신 = VALUES(가_내신), 가_실기 = VALUES(가_실기),
+        가_총점 = VALUES(가_총점), 가_최초결과 = VALUES(가_최초결과), 가_최종결과 = VALUES(가_최종결과),
+        나_군 = VALUES(나_군), 나_대학명 = VALUES(나_대학명), 나_학과명 = VALUES(나_학과명),
+        나_수능 = VALUES(나_수능), 나_내신 = VALUES(나_내신), 나_실기 = VALUES(나_실기),
+        나_총점 = VALUES(나_총점), 나_최초결과 = VALUES(나_최초결과), 나_최종결과 = VALUES(나_최종결과),
+        다_군 = VALUES(다_군), 다_대학명 = VALUES(다_대학명), 다_학과명 = VALUES(다_학과명),
+        다_수능 = VALUES(다_수능), 다_내신 = VALUES(다_내신), 다_실기 = VALUES(다_실기),
+        다_총점 = VALUES(다_총점), 다_최초결과 = VALUES(다_최초결과), 다_최종결과 = VALUES(다_최종결과)
+    `;
+
+    const values = rows.map(row => Object.values(row));
+
+    connection.query(query, [values], (err, results) => {
+      if (err) {
+        console.error('Error inserting/updating data:', err);
+      } else {
+        console.log('Data successfully synchronized:', results.affectedRows, 'rows affected');
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching data from Google Sheets:', error);
+  }
+}
+
+// 1분마다 `updateJungsiData` 실행
+setInterval(updateJungsiData, 60000);
 
 
 
