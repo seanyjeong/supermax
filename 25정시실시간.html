@@ -58,7 +58,7 @@
   </style>
 </head>
 <body>
-  <h1>군, 대학명, 학과별 데이터 조회</h1>
+  <h1 id="pageTitle">군, 대학명, 학과별 데이터 조회</h1>
   <div class="dropdown-container">
     <label for="군Dropdown">군:</label>
     <select id="군Dropdown">
@@ -81,8 +81,6 @@
         <th>지점</th>
         <th>이름</th>
         <th>학년</th>
-        <th>대학명</th>
-        <th>학과명</th>
         <th>수능</th>
         <th>내신</th>
         <th>실기</th>
@@ -161,9 +159,16 @@
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
       if (군 && 대학명 && 학과명) {
+        updateTitle(대학명, 학과명);
         fetchSchoolDetails();
         fetchSchoolResult();
       }
+    }
+
+    // 제목 업데이트
+    function updateTitle(대학명, 학과명) {
+      const title = document.getElementById('pageTitle');
+      title.textContent = `${대학명} - ${학과명} 데이터 조회`;
     }
 
     // 대학 정보 요청 및 표시
@@ -242,7 +247,7 @@
       tableBody.innerHTML = '';
 
       if (data.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="12">일치하는 데이터가 없습니다.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="10">일치하는 데이터가 없습니다.</td></tr>';
         return;
       }
 
@@ -252,8 +257,6 @@
           '지점',
           '이름',
           '학년',
-          `${selected군}_대학명`,
-          `${selected군}_학과명`,
           `${selected군}_수능`,
           `${selected군}_내신`,
           `${selected군}_실기`,
