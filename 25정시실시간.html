@@ -73,12 +73,11 @@
       <option value="">선택</option>
     </select>
   </div>
-  <button onclick="fetchSchoolDetails()">대학 정보 조회</button>
-  <button onclick="fetchSchoolResult()">결과 조회</button>
   <div id="schoolDetails"></div>
   <table id="resultTable">
     <thead>
       <tr>
+        <th>순위</th>
         <th>지점</th>
         <th>이름</th>
         <th>학년</th>
@@ -109,6 +108,7 @@
         populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
         document.getElementById('군Dropdown').addEventListener('change', () => filterUniversities(data));
         document.getElementById('대학명Dropdown').addEventListener('change', () => filterMajors(data));
+        document.getElementById('학과명Dropdown').addEventListener('change', fetchResultsAutomatically);
       } catch (error) {
         console.error('드롭다운 데이터를 불러오는 중 오류:', error);
       }
@@ -152,6 +152,18 @@
         data.filter(item => item.군 === 군 && item.대학명 === 대학명).map(item => item.학과명)
       );
       populateDropdown('학과명Dropdown', Array.from(학과명Set));
+    }
+
+    // 결과 자동 표시
+    async function fetchResultsAutomatically() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (군 && 대학명 && 학과명) {
+        fetchSchoolDetails();
+        fetchSchoolResult();
+      }
     }
 
     // 대학 정보 요청 및 표시
@@ -201,8 +213,6 @@
         } else {
           detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
         }
-      } else {
-        document.getElementById('schoolDetails').innerHTML = '<div>모든 항목을 선택해 주세요.</div>';
       }
     }
 
@@ -212,15 +222,15 @@
       const 대학명 = document.getElementById('대학명Dropdown').value;
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      if (!군 || !대학명 || !학과명) {
-        alert('모든 옵션을 선택해 주세요.');
-        return;
-      }
+      if (!군 || !대학명 || !학과명) return;
 
       try {
         const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
-        displayResults(data, 군);
+
+        // 순위를 총점 기준으로 계산
+        const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+        displayResults(sortedData, 군);
       } catch (error) {
         console.error('결과 데이터를 불러오는 중 오류:', error);
       }
@@ -232,11 +242,11 @@
       tableBody.innerHTML = '';
 
       if (data.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="11">일치하는 데이터가 없습니다.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="12">일치하는 데이터가 없습니다.</td></tr>';
         return;
       }
 
-      data.forEach(row => {
+      data.forEach((row, index) => {
         const tr = document.createElement('tr');
         const keys = [
           '지점',
@@ -251,6 +261,10 @@
           `${selected군}_최초결과`,
           `${selected군}_최종결과`
         ];
+
+        const rankCell = document.createElement('td');
+        rankCell.textContent = index + 1; // 순위 추가
+        tr.appendChild(rankCell);
 
         keys.forEach(key => {
           const td = document.createElement('td');
