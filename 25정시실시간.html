@@ -77,16 +77,20 @@
   <table id="resultTable">
     <thead id="resultTableHead">
       <tr>
-        <th>순위</th>
-        <th>지점</th>
-        <th>이름</th>
-        <th>학년</th>
-        <th>수능</th>
-        <th>내신</th>
-        <th>실기</th>
-        <th>총점</th>
-        <th>최초결과</th>
-        <th>최종결과</th>
+        <th rowspan="2">순위</th>
+        <th rowspan="2">지점</th>
+        <th rowspan="2">이름</th>
+        <th rowspan="2">학년</th>
+        <th rowspan="2">수능</th>
+        <th rowspan="2">내신</th>
+        <th rowspan="2">실기</th>
+        <th rowspan="2">총점</th>
+        <th rowspan="2">최초결과</th>
+        <th rowspan="2">최종결과</th>
+        <!-- 실기 헤더 동적 생성 -->
+      </tr>
+      <tr id="실기SubHeaderRow">
+        <!-- 실기 기록 및 점수 헤더 동적 추가 -->
       </tr>
     </thead>
     <tbody>
@@ -162,7 +166,7 @@
 
     function updateTitle(대학명, 학과명) {
       const title = document.getElementById('pageTitle');
-      title.textContent = `${대학명}    ${학과명} `;
+      title.textContent = `${대학명} - ${학과명} 데이터 조회`;
     }
 
     async function fetchSchoolDetails() {
@@ -213,7 +217,6 @@
         const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
 
-        // 실기종목 확인
         const 실기종목Headers = [];
         for (let i = 1; i <= 6; i++) {
           if (data[0] && data[0][`${군}_실기종목${i}`]) {
@@ -225,28 +228,26 @@
           }
         }
 
-        // 테이블 헤더 업데이트
         const tableHead = document.getElementById('resultTableHead');
+        const subHeaderRow = document.getElementById('실기SubHeaderRow');
+
         tableHead.innerHTML = `
           <tr>
-            <th>순위</th>
-            <th>지점</th>
-            <th>이름</th>
-            <th>학년</th>
-            <th>수능</th>
-            <th>내신</th>
-            <th>실기</th>
-            <th>총점</th>
-            <th>최초결과</th>
-            <th>최종결과</th>
+            <th rowspan="2">순위</th>
+            <th rowspan="2">지점</th>
+            <th rowspan="2">이름</th>
+            <th rowspan="2">학년</th>
+            <th rowspan="2">수능</th>
+            <th rowspan="2">내신</th>
+            <th rowspan="2">실기</th>
+            <th rowspan="2">총점</th>
+            <th rowspan="2">최초결과</th>
+            <th rowspan="2">최종결과</th>
             ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
           </tr>
-          <tr>
-            ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}
-          </tr>
         `;
+        subHeaderRow.innerHTML = `${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}`;
 
-        // 결과 데이터 표시
         const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
         displayResults(sortedData, 군, 실기종목Headers);
       } catch (error) {
@@ -287,7 +288,6 @@
           tr.appendChild(td);
         });
 
-        // 실기종목 기록 및 점수 추가
         실기종목Headers.forEach(header => {
           const recordTd = document.createElement('td');
           recordTd.textContent = row[header.recordKey] || '-';
