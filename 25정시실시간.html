@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>맥스체대입시25정시실시간</title>
+  <title>군, 대학명, 학과별 데이터 조회</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -65,7 +65,7 @@
   </style>
 </head>
 <body>
-  <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
+  <h1 id="pageTitle">군, 대학명, 학과별 데이터 조회</h1>
   <div class="dropdown-container">
     <label for="군Dropdown">군:</label>
     <select id="군Dropdown">
@@ -174,7 +174,8 @@
       if (군 && 대학명 && 학과명) {
         updateTitle(대학명, 학과명);
         showLoadingMessage(); // 조회 중 표시
-        fetchSchoolDetails();
+        clearTable(); // 이전 데이터 초기화
+        await fetchSchoolDetails();
         await fetchSchoolResult();
         hideLoadingMessage(); // 조회 중 숨기기
       }
@@ -193,6 +194,27 @@
     function hideLoadingMessage() {
       const loadingDiv = document.getElementById('loadingMessage');
       loadingDiv.textContent = '';
+    }
+
+    function clearTable() {
+      const tableBody = document.querySelector('#resultTable tbody');
+      const tableHead = document.getElementById('resultTableHead');
+      tableBody.innerHTML = '';
+      tableHead.innerHTML = `
+        <tr>
+          <th rowspan="2">순위</th>
+          <th rowspan="2">지점</th>
+          <th rowspan="2">이름</th>
+          <th rowspan="2">학년</th>
+          <th rowspan="2">수능</th>
+          <th rowspan="2">내신</th>
+          <th rowspan="2">실기</th>
+          <th rowspan="2">총점</th>
+          <th rowspan="2">최초결과</th>
+          <th rowspan="2">최종결과</th>
+        </tr>
+        <tr id="실기SubHeaderRow"></tr>
+      `;
     }
 
     async function fetchSchoolDetails() {
