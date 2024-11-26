@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>군, 대학명, 학과별 데이터 조회</title>
+  <title>맥스체대입시25정시실시간</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -65,7 +65,7 @@
   </style>
 </head>
 <body>
-  <h1 id="pageTitle">군, 대학명, 학과별 데이터 조회</h1>
+  <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
   <div class="dropdown-container">
     <label for="군Dropdown">군:</label>
     <select id="군Dropdown">
@@ -115,8 +115,14 @@
         const data = await response.json();
 
         populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
-        document.getElementById('군Dropdown').addEventListener('change', () => filterUniversities(data));
-        document.getElementById('대학명Dropdown').addEventListener('change', () => filterMajors(data));
+        document.getElementById('군Dropdown').addEventListener('change', () => {
+          filterUniversities(data);
+          fetchResultsAutomatically();
+        });
+        document.getElementById('대학명Dropdown').addEventListener('change', () => {
+          filterMajors(data);
+          fetchResultsAutomatically();
+        });
         document.getElementById('학과명Dropdown').addEventListener('change', fetchResultsAutomatically);
       } catch (error) {
         console.error('드롭다운 데이터를 불러오는 중 오류:', error);
