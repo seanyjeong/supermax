@@ -55,6 +55,13 @@
     .detail-item .value {
       font-size: 1.1em;
     }
+    #loadingMessage {
+      text-align: center;
+      font-size: 1.2em;
+      font-style: italic;
+      color: #555;
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
@@ -74,6 +81,7 @@
     </select>
   </div>
   <div id="schoolDetails"></div>
+  <div id="loadingMessage"></div>
   <table id="resultTable">
     <thead id="resultTableHead">
       <tr>
@@ -87,7 +95,7 @@
         <th rowspan="2">총점</th>
         <th rowspan="2">최초결과</th>
         <th rowspan="2">최종결과</th>
-        <!-- 실기 헤더 동적 생성 -->
+        <!-- 실기종목 헤더 동적 추가 -->
       </tr>
       <tr id="실기SubHeaderRow">
         <!-- 실기 기록 및 점수 헤더 동적 추가 -->
@@ -159,14 +167,26 @@
 
       if (군 && 대학명 && 학과명) {
         updateTitle(대학명, 학과명);
+        showLoadingMessage(); // 조회 중 표시
         fetchSchoolDetails();
-        fetchSchoolResult();
+        await fetchSchoolResult();
+        hideLoadingMessage(); // 조회 중 숨기기
       }
     }
 
     function updateTitle(대학명, 학과명) {
       const title = document.getElementById('pageTitle');
       title.textContent = `${대학명} - ${학과명} 데이터 조회`;
+    }
+
+    function showLoadingMessage() {
+      const loadingDiv = document.getElementById('loadingMessage');
+      loadingDiv.textContent = '조회 중...';
+    }
+
+    function hideLoadingMessage() {
+      const loadingDiv = document.getElementById('loadingMessage');
+      loadingDiv.textContent = '';
     }
 
     async function fetchSchoolDetails() {
@@ -197,6 +217,10 @@
             <div class="detail-item">
               <div class="header">24경쟁률</div>
               <div class="value">${data['24경쟁률'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">발표 일정</div>
+              <div class="value">${data.합격자발표일정 || '-'}</div>
             </div>
           `;
           detailsDiv.innerHTML = detailsHTML;
