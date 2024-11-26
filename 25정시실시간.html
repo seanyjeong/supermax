@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>대학 정보 조회</title>
+  <script>
+    const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec"; // Google Apps Script 웹앱 URL
+
+    // Google Sheets 데이터 가져오기
+    async function fetchData() {
+      const response = await fetch(webAppUrl);
+      const data = await response.json();
+      populate군Dropdown(data);
+    }
+
+    // 군 드롭다운 채우기
+    function populate군Dropdown(data) {
+      const 군Dropdown = document.getElementById("군");
+      const 군Set = new Set();
+
+      // 가군, 나군, 다군을 모두 추가
+      data.forEach(row => {
+        if (row["가_군"]) 군Set.add("가군");
+        if (row["나_군"]) 군Set.add("나군");
+        if (row["다_군"]) 군Set.add("다군");
+      });
+
+      군Set.forEach(군 => {
+        const option = document.createElement("option");
+        option.value = 군;
+        option.textContent = 군;
+        군Dropdown.appendChild(option);
+      });
+
+      // 군 선택 이벤트 처리
+      군Dropdown.addEventListener("change", () => populate대학Dropdown(data));
+    }
+
+    // 대학 드롭다운 채우기
+    function populate대학Dropdown(data) {
+      const 군 = document.getElementById("군").value;
+      const 대학Dropdown = document.getElementById("대학명");
+      대학Dropdown.innerHTML = "<option value=''>선택</option>"; // 초기화
+
+      const 대학Set = new Set();
+
+      data.forEach(row => {
+        if ((군 === "가군" && row["가_군"]) ||
+            (군 === "나군" && row["나_군"]) ||
+            (군 === "다군" && row["다_군"])) {
+          대학Set.add(군 === "가군" ? row["가_대학명"] :
+                      군 === "나군" ? row["나_대학명"] : row["다_대학명"]);
+        }
+      });
+
+      대학Set.forEach(대학 => {
+        const option = document.createElement("option");
+        option.value = 대학;
+        option.textContent = 대학;
+        대학Dropdown.appendChild(option);
+      });
+
+      대학Dropdown.addEventListener("change", () => populate학과Dropdown(data));
+    }
+
+    // 학과 드롭다운 채우기
+    function populate학과Dropdown(data) {
+      const 군 = document.getElementById("군").value;
+      const 대학명 = document.getElementById("대학명").value;
+      const 학과Dropdown = document.getElementById("학과명");
+      학과Dropdown.innerHTML = "<option value=''>선택</option>"; // 초기화
+
+      const 학과Set = new Set();
+
+      data.forEach(row => {
+        if ((군 === "가군" && row["가_군"] && row["가_대학명"] === 대학명) ||
+            (군 === "나군" && row["나_군"] && row["나_대학명"] === 대학명) ||
+            (군 === "다군" && row["다_군"] && row["다_대학명"] === 대학명)) {
+          학과Set.add(군 === "가군" ? row["가_학과명"] :
+                      군 === "나군" ? row["나_학과명"] : row["다_학과명"]);
+        }
+      });
+
+      학과Set.forEach(학과 => {
+        const option = document.createElement("option");
+        option.value = 학과;
+        option.textContent = 학과;
+        학과Dropdown.appendChild(option);
+      });
+    }
+
+    // 데이터 필터링 및 결과 표시
+    async function filterData() {
+      const 군 = document.getElementById("군").value;
+      const 대학명 = document.getElementById("대학명").value;
+      const 학과명 = document.getElementById("학과명").value;
+      const response = await fetch(webAppUrl);
+      const data = await response.json();
+
+      const filteredData = data.filter(row =>
+        (군 === "가군" && row["가_군"] && row["가_대학명"] === 대학명 && row["가_학과명"] === 학과명) ||
+        (군 === "나군" && row["나_군"] && row["나_대학명"] === 대학명 && row["나_학과명"] === 학과명) ||
+        (군 === "다군" && row["다_군"] && row["다_대학명"] === 대학명 && row["다_학과명"] === 학과명)
+      );
+
+      displayResults(filteredData, 군);
+    }
+
+    // 결과 표시
+    function displayResults(data, 군) {
+      const resultDiv = document.getElementById("results");
+      resultDiv.innerHTML = ""; // 초기화
+
+      data.forEach(row => {
+        // 기본 정보
+        const baseInfo = `
+          <div>
+            <p>지점: ${row["지점"]}, 학교: ${row["학교"]}, 학년: ${row["학년"]}, 성별: ${row["성별"]}</p>
+            <p>이름: ${row["이름"]}, 수능점수: ${row[`${군}_수능`]}, 내신점수: ${row[`${군}_내신`]}</p>
+            <p>총점: ${row[`${군}_총점`]}, 최초결과: ${row[`${군}_최초결과`]}, 최종결과: ${row[`${군}_최종결과`]}</p>
+          </div>
+        `;
+
+        // 실기 정보
+        let 실기Info = `<div><h4>실기 정보:</h4>`;
+        for (let i = 1; i <= 6; i++) {
+          const 종목 = row[`${군}_실기종목${i}`];
+          const 기록 = row[`${군}${i}_기록`];
+          const 점수 = row[`${군}${i}_점수`];
+          if (종목 && 기록 && 점수) {
+            실기Info += `
+              <p>실기종목${i}: ${종목}, 기록: ${기록}, 점수: ${점수}</p>
+            `;
+          }
+        }
+        실기Info += `</div>`;
+
+        // 결과 조합
+        const resultHTML = `<div>${baseInfo}${실기Info}</div><hr>`;
+        resultDiv.innerHTML += resultHTML;
+      });
+    }
+
+    // 초기 데이터 로드
+    window.onload = fetchData;
+  </script>
+</head>
+<body>
+  <h1>대학 정보 조회</h1>
+
+  <label for="군">군 선택:</label>
+  <select id="군">
+    <option value="">선택</option>
+  </select>
+
+  <label for="대학명">대학명 선택:</label>
+  <select id="대학명">
+    <option value="">선택</option>
+  </select>
+
+  <label for="학과명">학과명 선택:</label>
+  <select id="학과명">
+    <option value="">선택</option>
+  </select>
+
+  <button onclick="filterData()">검색</button>
+
+  <h2>검색 결과</h2>
+  <div id="results"></div>
+</body>
+</html>
