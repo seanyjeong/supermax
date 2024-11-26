@@ -117,6 +117,7 @@
   <script>
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
 
+    // 초기 데이터 로드
     async function loadDropdownData() {
       try {
         const response = await fetch('https://supermax.kr/getSelectionData');
@@ -137,6 +138,7 @@
       }
     }
 
+    // 드롭다운 채우기
     function populateDropdown(elementId, options) {
       const dropdown = document.getElementById(elementId);
       dropdown.innerHTML = '<option value="">선택</option>';
@@ -145,6 +147,7 @@
       });
     }
 
+    // 대학 필터링
     function filterUniversities(data) {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명Dropdown = document.getElementById('대학명Dropdown');
@@ -159,6 +162,7 @@
       populateDropdown('대학명Dropdown', Array.from(대학명Set));
     }
 
+    // 학과 필터링
     function filterMajors(data) {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
@@ -174,6 +178,7 @@
       populateDropdown('학과명Dropdown', Array.from(학과명Set));
     }
 
+    // 데이터 자동 갱신
     async function fetchResultsAutomatically() {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
@@ -189,135 +194,25 @@
       }
     }
 
+    // 타이틀 업데이트
     function updateTitle(대학명, 학과명) {
       const title = document.getElementById('pageTitle');
-      title.textContent = `${대학명}   ${학과명} `;
+      title.textContent = `${대학명} - ${학과명}`;
     }
 
+    // 조회 중 메시지 표시
     function showLoadingMessage() {
       const loadingDiv = document.getElementById('loadingMessage');
       loadingDiv.textContent = '조회 중...';
     }
 
+    // 조회 중 메시지 숨기기
     function hideLoadingMessage() {
       const loadingDiv = document.getElementById('loadingMessage');
       loadingDiv.textContent = '';
     }
 
-    function clearTable() {
-      const tableBody = document.querySelector('#resultTable tbody');
-      const tableHead = document.getElementById('resultTableHead');
-      tableBody.innerHTML = '';
-      tableHead.innerHTML = `
-        <tr>
-          <th rowspan="2">순위</th>
-          <th rowspan="2">지점</th>
-          <th rowspan="2">이름</th>
-          <th rowspan="2">학년</th>
-          <th rowspan="2">수능</th>
-          <th rowspan="2">내신</th>
-          <th rowspan="2">실기</th>
-          <th rowspan="2">총점</th>
-          <th rowspan="2">최초결과</th>
-          <th rowspan="2">최종결과</th>
-        </tr>
-        <tr id="실기SubHeaderRow"></tr>
-    </thead>
-    <tbody>
-      <!-- 결과 데이터가 여기에 동적으로 추가됩니다 -->
-    </tbody>
-  </table>
-
-  <script>
-    const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
-
-    async function loadDropdownData() {
-      try {
-        const response = await fetch('https://supermax.kr/getSelectionData');
-        const data = await response.json();
-
-        populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
-        document.getElementById('군Dropdown').addEventListener('change', () => {
-          filterUniversities(data);
-          fetchResultsAutomatically();
-        });
-        document.getElementById('대학명Dropdown').addEventListener('change', () => {
-          filterMajors(data);
-          fetchResultsAutomatically();
-        });
-        document.getElementById('학과명Dropdown').addEventListener('change', fetchResultsAutomatically);
-      } catch (error) {
-        console.error('드롭다운 데이터를 불러오는 중 오류:', error);
-      }
-    }
-
-    function populateDropdown(elementId, options) {
-      const dropdown = document.getElementById(elementId);
-      dropdown.innerHTML = '<option value="">선택</option>';
-      options.forEach(option => {
-        dropdown.innerHTML += `<option value="${option}">${option}</option>`;
-      });
-    }
-
-    function filterUniversities(data) {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명Dropdown = document.getElementById('대학명Dropdown');
-      const 학과명Dropdown = document.getElementById('학과명Dropdown');
-
-      대학명Dropdown.innerHTML = '<option value="">선택</option>';
-      학과명Dropdown.innerHTML = '<option value="">선택</option>';
-
-      if (!군) return;
-
-      const 대학명Set = new Set(data.filter(item => item.군 === 군).map(item => item.대학명));
-      populateDropdown('대학명Dropdown', Array.from(대학명Set));
-    }
-
-    function filterMajors(data) {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명Dropdown = document.getElementById('학과명Dropdown');
-
-      학과명Dropdown.innerHTML = '<option value="">선택</option>';
-
-      if (!군 || !대학명) return;
-
-      const 학과명Set = new Set(
-        data.filter(item => item.군 === 군 && item.대학명 === 대학명).map(item => item.학과명)
-      );
-      populateDropdown('학과명Dropdown', Array.from(학과명Set));
-    }
-
-    async function fetchResultsAutomatically() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
-
-      if (군 && 대학명 && 학과명) {
-        updateTitle(대학명, 학과명);
-        showLoadingMessage(); // 조회 중 표시
-        clearTable(); // 이전 데이터 초기화
-        await fetchSchoolDetails();
-        await fetchSchoolResult();
-        hideLoadingMessage(); // 조회 중 숨기기
-      }
-    }
-
-    function updateTitle(대학명, 학과명) {
-      const title = document.getElementById('pageTitle');
-      title.textContent = `${대학명}   ${학과명} `;
-    }
-
-    function showLoadingMessage() {
-      const loadingDiv = document.getElementById('loadingMessage');
-      loadingDiv.textContent = '조회 중...';
-    }
-
-    function hideLoadingMessage() {
-      const loadingDiv = document.getElementById('loadingMessage');
-      loadingDiv.textContent = '';
-    }
-
+    // 테이블 초기화
     function clearTable() {
       const tableBody = document.querySelector('#resultTable tbody');
       const tableHead = document.getElementById('resultTableHead');
