@@ -35,6 +35,15 @@
     #resultTable th {
       background-color: #f2f2f2;
     }
+    #schoolDetails {
+      margin-top: 20px;
+    }
+    #schoolDetails .detail-item {
+      margin-bottom: 10px;
+    }
+    #schoolDetails .header {
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -54,6 +63,7 @@
     </select>
   </div>
   <button onclick="fetchSchoolResult()">결과 조회</button>
+  <div id="schoolDetails"></div>
   <table id="resultTable">
     <thead>
       <tr>
@@ -68,8 +78,6 @@
         <th>총점</th>
         <th>최초결과</th>
         <th>최종결과</th>
-        <th>실기 기록</th>
-        <th>실기 점수</th>
       </tr>
     </thead>
     <tbody>
@@ -128,6 +136,43 @@
       populateDropdown('학과명Dropdown', Array.from(학과명Set));
     }
 
+    async function fetchSchoolDetails() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (!군 || !대학명 || !학과명) {
+        alert('모든 옵션을 선택해 주세요.');
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+        const data = await response.json();
+        displaySchoolDetails(data);
+      } catch (error) {
+        console.error('대학 세부 정보를 불러오는 중 오류:', error);
+      }
+    }
+
+    function displaySchoolDetails(data) {
+      const detailsDiv = document.getElementById('schoolDetails');
+      if (Object.keys(data).length === 0) {
+        detailsDiv.innerHTML = '<div>일치하는 대학 정보가 없습니다.</div>';
+        return;
+      }
+
+      detailsDiv.innerHTML = `
+        <div class="detail-item"><span class="header">모집인원:</span> ${data.모집인원 || '-'}</div>
+        <div class="detail-item"><span class="header">24모집인원:</span> ${data['24모집인원'] || '-'}</div>
+        <div class="detail-item"><span class="header">24지원인원:</span> ${data['24지원인원'] || '-'}</div>
+        <div class="detail-item"><span class="header">24경쟁률:</span> ${data['24경쟁률'] || '-'}</div>
+        <div class="detail-item"><span class="header">1단계 일정:</span> ${data['1단계및면접일정'] || '-'}</div>
+        <div class="detail-item"><span class="header">실기 일정:</span> ${data.실기일정 || '-'}</div>
+        <div class="detail-item"><span class="header">합격 발표:</span> ${data.합격자발표일정 || '-'}</div>
+      `;
+    }
+
     async function fetchSchoolResult() {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
@@ -139,53 +184,33 @@
       }
 
       try {
-        const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
-        const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+        const response = await fetch(`https://supermax.kr/getSchoolResult?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
-        displayResults(data, 군);
+        displayResults(data);
+        fetchSchoolDetails();
       } catch (error) {
         console.error('결과 데이터를 불러오는 중 오류:', error);
       }
     }
 
-    function displayResults(data, 군) {
+    function displayResults(data) {
       const tableBody = document.querySelector('#resultTable tbody');
       tableBody.innerHTML = '';
 
       if (data.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="12">일치하는 데이터가 없습니다.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="11">일치하는 데이터가 없습니다.</td></tr>';
         return;
       }
 
       data.forEach(row => {
         const tr = document.createElement('tr');
-        const keys = [
-          '지점', '이름', '학년', `${군}_대학명`, `${군}_학과명`,
-          `${군}_수능`, `${군}_내신`, `${군}_실기`, `${군}_총점`,
-          `${군}_최초결과`, `${군}_최종결과`
-        ];
+        const keys = ['지점', '이름', '학년', '가_대학명', '가_학과명', '가_수능', '가_내신', '가_실기', '가_총점', '가_최초결과', '가_최종결과'];
 
         keys.forEach(key => {
           const td = document.createElement('td');
           td.textContent = row[key] || '-';
           tr.appendChild(td);
         });
-
-        // 실기 데이터
-        for (let i = 1; i <= 6; i++) {
-          const 기록 = row[`${군}${i}_기록`] || '';
-          const 점수 = row[`${군}${i}_점수`] || '';
-
-          if (기록 || 점수) {
-            const 기록Td = document.createElement('td');
-            기록Td.textContent = 기록 || '-';
-            tr.appendChild(기록Td);
-
-            const 점수Td = document.createElement('td');
-            점수Td.textContent = 점수 || '-';
-            tr.appendChild(점수Td);
-          }
-        }
 
         tableBody.appendChild(tr);
       });
