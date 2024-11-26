@@ -946,6 +946,19 @@ const executeQuery = (query, values) => {
   });
 };
 
+// 데이터를 배치(batch)로 나눠서 처리
+const batchInsert = async (query, values, batchSize = 500) => {
+  for (let i = 0; i < values.length; i += batchSize) {
+    const batch = values.slice(i, i + batchSize);
+    try {
+      await executeQuery(query, [batch]);
+      console.log(`Batch ${Math.ceil(i / batchSize) + 1} inserted successfully`);
+    } catch (error) {
+      console.error(`Error inserting batch ${Math.ceil(i / batchSize) + 1}:`, error);
+    }
+  }
+};
+
 // 데이터를 가져와 각 테이블에 업데이트
 const updateJungsiData = async () => {
   try {
@@ -968,7 +981,7 @@ const updateJungsiData = async () => {
         ON DUPLICATE KEY UPDATE ${basicColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
       `;
       const basicValues = basicInfo.map(row => basicColumns.map(col => row[col] || null));
-      await executeQuery(basicQuery, [basicValues]);
+      await batchInsert(basicQuery, basicValues);
       console.log('25정시기본정보 업데이트 성공');
     }
 
@@ -987,7 +1000,7 @@ const updateJungsiData = async () => {
         ON DUPLICATE KEY UPDATE ${gColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
       `;
       const gValues = gInfo.map(row => gColumns.map(col => row[col] || null));
-      await executeQuery(gQuery, [gValues]);
+      await batchInsert(gQuery, gValues);
       console.log('25가군정보 업데이트 성공');
     }
 
@@ -1006,7 +1019,7 @@ const updateJungsiData = async () => {
         ON DUPLICATE KEY UPDATE ${nColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
       `;
       const nValues = nInfo.map(row => nColumns.map(col => row[col] || null));
-      await executeQuery(nQuery, [nValues]);
+      await batchInsert(nQuery, nValues);
       console.log('25나군정보 업데이트 성공');
     }
 
@@ -1025,7 +1038,7 @@ const updateJungsiData = async () => {
         ON DUPLICATE KEY UPDATE ${dColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
       `;
       const dValues = dInfo.map(row => dColumns.map(col => row[col] || null));
-      await executeQuery(dQuery, [dValues]);
+      await batchInsert(dQuery, dValues);
       console.log('25다군정보 업데이트 성공');
     }
 
@@ -1038,6 +1051,7 @@ const updateJungsiData = async () => {
 // 서버 시작 시와 1분마다 실행
 updateJungsiData();
 setInterval(updateJungsiData, 60 * 1000);
+
 
 
 // 서버 시작
