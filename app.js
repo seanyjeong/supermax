@@ -932,94 +932,112 @@ app.get('/getSchoolResult', (req, res) => {
     res.json(results);
   });
 });
+
 // Google Apps Script 웹앱 URL
 const googleSheetsUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
 
-async function updateJungsiData() {
-  try {
-    // Google Sheets 데이터 가져오기
-    const response = await axios.get(googleSheetsUrl);
-    const rows = response.data;
+// MySQL 쿼리 실행 함수
+const executeQuery = (query, values) => {
+  return new Promise((resolve, reject) => {
+    connection.query(query, values, (err, results) => {
+      if (err) return reject(err);
+      resolve(results);
+    });
+  });
+};
 
-    if (!rows || rows.length === 0) {
-      console.log('데이터가 없습니다.');
-      return;
+// 데이터를 가져와 각 테이블에 업데이트
+const updateJungsiData = async () => {
+  try {
+    // Google Apps Script 데이터 가져오기
+    const response = await axios.get(googleSheetsUrl);
+    const { basicInfo, gInfo, nInfo, dInfo } = response.data;
+
+    // 기본정보 업데이트
+    if (basicInfo && basicInfo.length > 0) {
+      const basicColumns = [
+        '지점', '학교', '학년', '성별', '이름', '국어과목', '국어원점수', '국어표점', '국어백분위', '국어등급',
+        '수학과목', '수학원점수', '수학표점', '수학백분위', '수학등급', '영어원점수', '영어등급',
+        '탐1과목', '탐1원점수', '탐1표점', '탐1백분위', '탐1등급', '탐2과목', '탐2원점수', '탐2표점',
+        '탐2백분위', '탐2등급', '한국사원점수', '한국사등급', '내신'
+      ];
+
+      const basicQuery = `
+        INSERT INTO \`25정시기본정보\` (${basicColumns.join(', ')})
+        VALUES ?
+        ON DUPLICATE KEY UPDATE ${basicColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
+      `;
+      const basicValues = basicInfo.map(row => basicColumns.map(col => row[col] || null));
+      await executeQuery(basicQuery, [basicValues]);
+      console.log('25정시기본정보 업데이트 성공');
     }
 
-    // 주요 필드
-    const primaryColumns = [
-      '지점', '학교', '학년', '성별', '이름',
-      '국어과목', '국어원점수', '국어표점', '국어백분위', '국어등급',
-      '수학과목', '수학원점수', '수학표점', '수학백분위', '수학등급',
-      '영어원점수', '영어등급', '탐1과목', '탐1원점수', '탐1표점',
-      '탐1백분위', '탐1등급', '탐2과목', '탐2원점수', '탐2표점',
-      '탐2백분위', '탐2등급', '한국사원점수', '한국사등급', '내신'
-    ];
+    // 가군정보 업데이트
+    if (gInfo && gInfo.length > 0) {
+      const gColumns = [
+        '지점', '학교', '학년', '성별', '이름', '가_군', '가_대학명', '가_학과명', '가_수능', '가_내신',
+        '가_실기', '가_총점', '가_최초결과', '가_최종결과', '가_실기종목1', '가1_기록', '가1_점수',
+        '가_실기종목2', '가2_기록', '가2_점수', '가_실기종목3', '가3_기록', '가3_점수',
+        '가_실기종목4', '가4_기록', '가4_점수', '가_실기종목5', '가5_기록', '가5_점수', '가_실기종목6', '가6_기록', '가6_점수'
+      ];
 
-    // 부가 필드
-    const secondaryColumns = [
-      '지점', '학교', '학년', '성별', '이름',
-      '가_군', '가_대학명', '가_학과명', '가_수능', '가_내신', '가_실기', '가_총점',
-      '가_최초결과', '가_최종결과', '가_실기종목1', '가1_기록', '가1_점수',
-      '가_실기종목2', '가2_기록', '가2_점수', '가_실기종목3', '가3_기록', '가3_점수',
-      '가_실기종목4', '가4_기록', '가4_점수', '가_실기종목5', '가5_기록', '가5_점수',
-      '가_실기종목6', '가6_기록', '가6_점수', '나_군', '나_대학명', '나_학과명',
-      '나_수능', '나_내신', '나_실기', '나_총점', '나_최초결과', '나_최종결과',
-      '나_실기종목1', '나1_기록', '나1_점수', '나_실기종목2', '나2_기록', '나2_점수',
-      '나_실기종목3', '나3_기록', '나3_점수', '나_실기종목4', '나4_기록', '나4_점수',
-      '나_실기종목5', '나5_기록', '나5_점수', '나_실기종목6', '나6_기록', '나6_점수',
-      '다_군', '다_대학명', '다_학과명', '다_수능', '다_내신', '다_실기', '다_총점',
-      '다_최초결과', '다_최종결과', '다_실기종목1', '다1_기록', '다1_점수', '다_실기종목2',
-      '다2_기록', '다2_점수', '다_실기종목3', '다3_기록', '다3_점수', '다_실기종목4',
-      '다4_기록', '다4_점수', '다_실기종목5', '다5_기록', '다5_점수', '다_실기종목6',
-      '다6_기록', '다6_점수'
-    ];
+      const gQuery = `
+        INSERT INTO \`25가군정보\` (${gColumns.join(', ')})
+        VALUES ?
+        ON DUPLICATE KEY UPDATE ${gColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
+      `;
+      const gValues = gInfo.map(row => gColumns.map(col => row[col] || null));
+      await executeQuery(gQuery, [gValues]);
+      console.log('25가군정보 업데이트 성공');
+    }
 
-    // 주요 필드 데이터 처리
-    const primaryQuery = `
-      INSERT INTO \`25정시결과\` (${primaryColumns.join(', ')})
-      VALUES ?
-      ON DUPLICATE KEY UPDATE ${primaryColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
-    `;
+    // 나군정보 업데이트
+    if (nInfo && nInfo.length > 0) {
+      const nColumns = [
+        '지점', '학교', '학년', '성별', '이름', '나_군', '나_대학명', '나_학과명', '나_수능', '나_내신',
+        '나_실기', '나_총점', '나_최초결과', '나_최종결과', '나_실기종목1', '나1_기록', '나1_점수',
+        '나_실기종목2', '나2_기록', '나2_점수', '나_실기종목3', '나3_기록', '나3_점수',
+        '나_실기종목4', '나4_기록', '나4_점수', '나_실기종목5', '나5_기록', '나5_점수', '나_실기종목6', '나6_기록', '나6_점수'
+      ];
 
-    const primaryValues = rows.map(row =>
-      primaryColumns.map(col => row[col] || null)
-    );
+      const nQuery = `
+        INSERT INTO \`25나군정보\` (${nColumns.join(', ')})
+        VALUES ?
+        ON DUPLICATE KEY UPDATE ${nColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
+      `;
+      const nValues = nInfo.map(row => nColumns.map(col => row[col] || null));
+      await executeQuery(nQuery, [nValues]);
+      console.log('25나군정보 업데이트 성공');
+    }
 
-    connection.query(primaryQuery, [primaryValues], (err, results) => {
-      if (err) {
-        console.error('Primary query error:', err);
-      } else {
-        console.log('Primary query success:', results.affectedRows);
-      }
-    });
+    // 다군정보 업데이트
+    if (dInfo && dInfo.length > 0) {
+      const dColumns = [
+        '지점', '학교', '학년', '성별', '이름', '다_군', '다_대학명', '다_학과명', '다_수능', '다_내신',
+        '다_실기', '다_총점', '다_최초결과', '다_최종결과', '다_실기종목1', '다1_기록', '다1_점수',
+        '다_실기종목2', '다2_기록', '다2_점수', '다_실기종목3', '다3_기록', '다3_점수',
+        '다_실기종목4', '다4_기록', '다4_점수', '다_실기종목5', '다5_기록', '다5_점수', '다_실기종목6', '다6_기록', '다6_점수'
+      ];
 
-    // 부가 필드 데이터 처리
-    const secondaryQuery = `
-      INSERT INTO \`25정시결과\` (${secondaryColumns.join(', ')})
-      VALUES ?
-      ON DUPLICATE KEY UPDATE ${secondaryColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
-    `;
+      const dQuery = `
+        INSERT INTO \`25다군정보\` (${dColumns.join(', ')})
+        VALUES ?
+        ON DUPLICATE KEY UPDATE ${dColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
+      `;
+      const dValues = dInfo.map(row => dColumns.map(col => row[col] || null));
+      await executeQuery(dQuery, [dValues]);
+      console.log('25다군정보 업데이트 성공');
+    }
 
-    const secondaryValues = rows.map(row =>
-      secondaryColumns.map(col => row[col] || null)
-    );
-
-    connection.query(secondaryQuery, [secondaryValues], (err, results) => {
-      if (err) {
-        console.error('Secondary query error:', err);
-      } else {
-        console.log('Secondary query success:', results.affectedRows);
-      }
-    });
+    console.log('모든 데이터 업데이트 완료!');
   } catch (error) {
-    console.error('Error fetching data:', error);
+    console.error('데이터 업데이트 중 오류:', error);
   }
-}
+};
 
-// 1분마다 실행
+// 서버 시작 시와 1분마다 실행
+updateJungsiData();
 setInterval(updateJungsiData, 60 * 1000);
-
 
 
 // 서버 시작
