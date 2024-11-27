@@ -15,32 +15,12 @@
       margin-bottom: 20px;
     }
 
-    .dropdown-container {
+    .info-container {
       display: flex;
-      gap: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
-      margin-bottom: 20px;
-    }
-
-    select, button {
-      padding: 10px;
-      font-size: 1em;
-      width: 150px;
-    }
-
-    #filterLabels {
-      display: flex;
-      gap: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
-      align-items: center;
-    }
-
-    #schoolDetails {
-      display: flex;
-      justify-content: flex-start; /* 왼쪽 정렬 */
       flex-wrap: wrap;
       gap: 20px;
-      margin-bottom: 20px;
+      justify-content: flex-start; /* 왼쪽 정렬 */
+      margin-bottom: 30px; /* 필터링 공간과 간격 띄우기 */
     }
 
     .detail-item {
@@ -64,8 +44,17 @@
       margin-bottom: 5px;
     }
 
-    .detail-item .value {
+    .dropdown-container {
+      display: flex;
+      gap: 20px;
+      justify-content: flex-start; /* 왼쪽 정렬 */
+      margin-bottom: 20px;
+    }
+
+    select, button {
+      padding: 10px;
       font-size: 1em;
+      width: 150px;
     }
 
     #loadingMessage {
@@ -104,7 +93,11 @@
 <body>
   <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
 
-  <div id="filterLabels">
+  <!-- 기본정보 섹션 -->
+  <div id="schoolDetails" class="info-container"></div>
+
+  <!-- 필터링 섹션 -->
+  <div class="dropdown-container">
     <div>
       <label for="군Dropdown">군:</label>
       <select id="군Dropdown">
@@ -125,9 +118,9 @@
     </div>
   </div>
 
-  <div id="schoolDetails"></div>
   <div id="loadingMessage"></div>
 
+  <!-- 결과 테이블 -->
   <table id="resultTable">
     <thead id="resultTableHead">
       <tr>
@@ -280,7 +273,11 @@
             </div>
             <div class="detail-item">
               <div class="header">25발표일정</div>
-              <div class="value">${data.발표일정 || '-'}</div>
+              <div class="value">${data.합격자발표일정 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">1단계일정</div>
+              <div class="value">${data['1단계및면접일정'] || '-'}</div>
             </div>
             <div class="detail-item">
               <div class="header">24모집인원</div>
