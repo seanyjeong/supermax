@@ -96,6 +96,8 @@
   <!-- 기본정보 섹션 -->
   <div id="schoolDetails" class="info-container"></div>
 
+  
+
   <!-- 필터링 섹션 -->
   <div class="dropdown-container">
     <div>
@@ -168,7 +170,7 @@
       const dropdown = document.getElementById(elementId);
       dropdown.innerHTML = '<option value="">선택</option>';
       options.forEach(option => {
-        dropdown.innerHTML += <option value="${option}">${option}</option>;
+        dropdown.innerHTML += `<option value="${option}">${option}</option>`;
       });
     }
 
@@ -220,7 +222,7 @@
 
     function updateTitle(대학명, 학과명) {
       const title = document.getElementById('pageTitle');
-      title.textContent = ${대학명} - ${학과명};
+      title.textContent = `${대학명} - ${학과명}`;
     }
 
     function showLoadingMessage() {
@@ -237,7 +239,7 @@
       const tableBody = document.querySelector('#resultTable tbody');
       const tableHead = document.getElementById('resultTableHead');
       tableBody.innerHTML = '';
-      tableHead.innerHTML = 
+      tableHead.innerHTML = `
         <tr>
           <th rowspan="2">순위</th>
           <th rowspan="2">지점</th>
@@ -251,8 +253,10 @@
           <th rowspan="2">최종결과</th>
         </tr>
         <tr id="실기SubHeaderRow"></tr>
-      ;
+      `;
     }
+
+
 
     async function fetchSchoolDetails() {
       const 군 = document.getElementById('군Dropdown').value;
@@ -260,13 +264,13 @@
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
       if (군 && 대학명 && 학과명) {
-        const url = https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명};
+        const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
         const response = await fetch(url);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
         if (data && Object.keys(data).length > 0) {
-          const detailsHTML = 
+          const detailsHTML = `
             <div class="detail-item">
               <div class="header">25모집인원</div>
               <div class="value">${data.모집인원 || '-'}</div>
@@ -291,7 +295,7 @@
               <div class="header">24경쟁률</div>
               <div class="value">${data['24경쟁률'] || '-'}</div>
             </div>
-          ;
+          `;
           detailsDiv.innerHTML = detailsHTML;
         } else {
           detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
@@ -307,16 +311,16 @@
       if (!군 || !대학명 || !학과명) return;
 
       try {
-        const response = await fetch(${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명});
+        const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
 
         const 실기종목Headers = [];
         for (let i = 1; i <= 6; i++) {
-          if (data[0] && data[0][${군}_실기종목${i}]) {
+          if (data[0] && data[0][`${군}_실기종목${i}`]) {
             실기종목Headers.push({
-              name: data[0][${군}_실기종목${i}],
-              recordKey: ${군}${i}_기록,
-              scoreKey: ${군}${i}_점수
+              name: data[0][`${군}_실기종목${i}`],
+              recordKey: `${군}${i}_기록`,
+              scoreKey: `${군}${i}_점수`
             });
           }
         }
@@ -324,7 +328,7 @@
         const tableHead = document.getElementById('resultTableHead');
         const subHeaderRow = document.getElementById('실기SubHeaderRow');
 
-        tableHead.innerHTML = 
+        tableHead.innerHTML = `
           <tr>
             <th rowspan="2">순위</th>
             <th rowspan="2">지점</th>
@@ -336,17 +340,19 @@
             <th rowspan="2">총점</th>
             <th rowspan="2">최초결과</th>
             <th rowspan="2">최종결과</th>
-            ${실기종목Headers.map(header => <th colspan="2">${header.name}</th>).join('')}
+            ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
           </tr>
-        ;
-        subHeaderRow.innerHTML = ${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')};
+        `;
+        subHeaderRow.innerHTML = `${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}`;
 
-        const sortedData = data.sort((a, b) => b[${군}_총점] - a[${군}_총점]);
+        const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
         displayResults(sortedData, 군, 실기종목Headers);
       } catch (error) {
         console.error('결과 데이터를 불러오는 중 오류:', error);
       }
     }
+
+    
 
     function displayResults(data, selected군, 실기종목Headers) {
       const tableBody = document.querySelector('#resultTable tbody');
@@ -363,12 +369,12 @@
           '지점',
           '이름',
           '학년',
-          ${selected군}_수능,
-          ${selected군}_내신,
-          ${selected군}_실기,
-          ${selected군}_총점,
-          ${selected군}_최초결과,
-          ${selected군}_최종결과
+          `${selected군}_수능`,
+          `${selected군}_내신`,
+          `${selected군}_실기`,
+          `${selected군}_총점`,
+          `${selected군}_최초결과`,
+          `${selected군}_최종결과`
         ];
 
         const rankCell = document.createElement('td');
