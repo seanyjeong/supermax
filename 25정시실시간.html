@@ -308,99 +308,111 @@
     }
 
     async function fetchSchoolResult() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
+  const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      if (!군 || !대학명 || !학과명) return;
+  if (!군 || !대학명 || !학과명) return;
 
-      try {
-        const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
-        const data = await response.json();
+  try {
+    const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+    const data = await response.json();
 
-        const 실기종목Headers = [];
-        for (let i = 1; i <= 6; i++) {
-          if (data[0] && data[0][`${군}_실기종목${i}`]) {
-            실기종목Headers.push({
-              name: data[0][`${군}_실기종목${i}`],
-              recordKey: `${군}${i}_기록`,
-              scoreKey: `${군}${i}_점수`
-            });
-          }
-        }
-
-        const tableHead = document.getElementById('resultTableHead');
-        const subHeaderRow = document.getElementById('실기SubHeaderRow');
-
-        tableHead.innerHTML = `
-          <tr>
-            <th rowspan="2">순위</th>
-            <th rowspan="2">지점</th>
-            <th rowspan="2">이름</th>
-            <th rowspan="2">학년</th>
-            <th rowspan="2">수능</th>
-            <th rowspan="2">내신</th>
-            <th rowspan="2">실기</th>
-            <th rowspan="2">총점</th>
-            <th rowspan="2">최초결과</th>
-            <th rowspan="2">최종결과</th>
-            ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
-          </tr>
-        `;
-        subHeaderRow.innerHTML = `${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}`;
-
-        const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
-        displayResults(sortedData, 군, 실기종목Headers);
-      } catch (error) {
-        console.error('결과 데이터를 불러오는 중 오류:', error);
+    const 실기종목Headers = [];
+    for (let i = 1; i <= 6; i++) {
+      if (data[0] && data[0][`${군}_실기종목${i}`]) {
+        실기종목Headers.push({
+          name: data[0][`${군}_실기종목${i}`],
+          recordKey: `${군}${i}_기록`,
+          scoreKey: `${군}${i}_점수`,
+        });
       }
     }
 
-    async function fetchTop3Other군Results(selected군) {
-      try {
-        const response = await fetch(`${webAppUrl}?군=${selected군}`);
-        const data = await response.json();
+    const tableHead = document.getElementById('resultTableHead');
+    const subHeaderRow = document.getElementById('실기SubHeaderRow');
 
-        // 다른 군 데이터 필터링
-        const other군Data = data.filter(item => item.군 !== selected군);
+    tableHead.innerHTML = `
+      <tr>
+        <th rowspan="2">순위</th>
+        <th rowspan="2">지점</th>
+        <th rowspan="2">이름</th>
+        <th rowspan="2">학년</th>
+        <th rowspan="2">수능</th>
+        <th rowspan="2">내신</th>
+        <th rowspan="2">실기</th>
+        <th rowspan="2">총점</th>
+        <th rowspan="2">최초결과</th>
+        <th rowspan="2">최종결과</th>
+        ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+      </tr>
+    `;
+    subHeaderRow.innerHTML = `${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}`;
 
-        // 각 대학, 학과별로 총점을 기준으로 상위 3개 추출
-        const sortedData = other군Data.sort((a, b) => b[`${selected군}_총점`] - a[`${selected군}_총점`]);
-        const top3Results = sortedData.slice(0, 3); // 상위 3개만 추출
+    const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
 
-        displayTop3Other군Results(top3Results);
-      } catch (error) {
-        console.error('다른 군의 결과를 불러오는 중 오류:', error);
-      }
-    }
+    // 기존 결과 표시
+    displayResults(sortedData, 군, 실기종목Headers);
 
-    function displayTop3Other군Results(top3Results) {
-      // 기본 정보 섹션의 오른쪽에 정렬될 컨테이너 생성
-      const infoContainer = document.getElementById('schoolDetails');
-      const top3Container = document.createElement('div');
-      top3Container.classList.add('info-container');
+    // 다른 군 상위 3개 결과 표시
+    fetchTop3Other군Results(data, 군); // 추가된 함수 호출
+  } catch (error) {
+    console.error('결과 데이터를 불러오는 중 오류:', error);
+  }
+}
 
-      // 데이터가 없을 때 처리
-      if (top3Results.length === 0) {
-        top3Container.innerHTML = '<div class="detail-item">데이터가 없습니다.</div>';
-        infoContainer.appendChild(top3Container);
-        return;
-      }
 
-      // 상위 3개 결과 추가
-      top3Results.forEach((item, index) => {
-        const detailDiv = document.createElement('div');
-        detailDiv.classList.add('detail-item');
-        detailDiv.innerHTML = `
-          <div class="header">상위 ${index + 1}</div>
-          <div class="value">${item.대학명} - ${item.학과명 || '-'}</div>
-        `;
-        top3Container.appendChild(detailDiv);
-      });
+async function fetchTop3Other군Results(data, selected군) {
+  const other군Data = data.filter(item => item.군 !== selected군);
 
-      // 컨테이너 추가
-      infoContainer.appendChild(top3Container);
-    }
+  const universityCounts = other군Data.reduce((counts, item) => {
+    const university = item.대학명 || '미정';
+    counts[university] = (counts[university] || 0) + 1;
+    return counts;
+  }, {});
+
+  const top3Universities = Object.entries(universityCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3)
+    .map(([university]) => university);
+
+  displayTop3Other군Results(top3Universities);
+}
+
+
+
+function displayTop3Other군Results(top3Universities) {
+  const detailsDiv = document.getElementById('schoolDetails');
+
+  // 기존 컨테이너 제거
+  const existingTop3 = document.getElementById('top3Container');
+  if (existingTop3) {
+    existingTop3.remove();
+  }
+
+  // 새로운 컨테이너 생성
+  const top3Container = document.createElement('div');
+  top3Container.id = 'top3Container';
+  top3Container.classList.add('info-container');
+
+  if (top3Universities.length === 0) {
+    top3Container.innerHTML = '<div class="detail-item">데이터가 없습니다.</div>';
+  } else {
+    top3Universities.forEach((university, index) => {
+      const detailDiv = document.createElement('div');
+      detailDiv.classList.add('detail-item');
+      detailDiv.innerHTML = `
+        <div class="header">상위 ${index + 1}</div>
+        <div class="value">${university}</div>
+      `;
+      top3Container.appendChild(detailDiv);
+    });
+  }
+
+  detailsDiv.appendChild(top3Container);
+}
+
+
 
     function displayResults(data, selected군, 실기종목Headers) {
       const tableBody = document.querySelector('#resultTable tbody');
