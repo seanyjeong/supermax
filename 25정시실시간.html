@@ -435,37 +435,50 @@
       });
     }
 
-    async function fetchTopSchools() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
+   async function fetchTopSchools() {
+  const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      if (!군 || !대학명 || !학과명) return;
+  if (!군 || !대학명 || !학과명) return;
 
-      try {
-        const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
-        const data = await response.json();
+  try {
+    const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+    const data = await response.json();
 
-        const 나군Counts = {};
-        const 다군Counts = {};
+    // 군별 상위 학교 객체 초기화
+    const 군Counts = {
+      '가': {},
+      '나': {},
+      '다': {}
+    };
 
-        data.forEach(row => {
-          if (군 !== '나' && row['나_대학명'] && row['나_학과명']) {
-            const 나군조합 = `${row['나_대학명']} - ${row['나_학과명']}`;
-            나군Counts[나군조합] = (나군Counts[나군조합] || 0) + 1;
-          }
-          if (군 !== '다' && row['다_대학명'] && row['다_학과명']) {
-            const 다군조합 = `${row['다_대학명']} - ${row['다_학과명']}`;
-            다군Counts[다군조합] = (다군Counts[다군조합] || 0) + 1;
-          }
-        });
+    // 데이터 순회하며 각 군별 학교 수 집계
+    data.forEach(row => {
+      ['가', '나', '다'].forEach(otherGroup => {
+        if (otherGroup !== 군 && row[`${otherGroup}_대학명`] && row[`${otherGroup}_학과명`]) {
+          const 군조합 = `${row[`${otherGroup}_대학명`]} - ${row[`${otherGroup}_학과명`]}`;
+          군Counts[otherGroup][군조합] = (군Counts[otherGroup][군조합] || 0) + 1;
+        }
+      });
+    });
 
-        updateTopSchools('top나군', 나군Counts);
-        updateTopSchools('top다군', 다군Counts);
-      } catch (error) {
-        console.error('상위 학교 데이터를 불러오는 중 오류:', error);
-      }
-    }
+    // 선택된 군에 따라 다른 두 군의 상위 학교 업데이트
+    const 상위군목록 = {
+      '가': ['나', '다'],
+      '나': ['가', '다'],
+      '다': ['가', '나']
+    };
+
+    상위군목록[군].forEach(otherGroup => {
+      updateTopSchools(`top${otherGroup}군`, 군Counts[otherGroup]);
+    });
+
+  } catch (error) {
+    console.error('상위 학교 데이터를 불러오는 중 오류:', error);
+  }
+}
+  
 
     function updateTopSchools(elementId, counts) {
       const container = document.getElementById(elementId).querySelector('ul');
