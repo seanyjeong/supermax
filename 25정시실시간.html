@@ -96,78 +96,7 @@
   <!-- 기본정보 섹션 -->
   <div id="schoolDetails" class="info-container"></div>
 
-  <!-- 아래 코드를 기존 코드의 <div id="schoolDetails" class="info-container"></div> 아래에 추가 -->
-<div id="other군Details" class="info-container"></div>
-
-<script>
-  async function fetchOther군Data(selected군, data) {
-    if (!selected군) {
-      document.getElementById("other군Details").innerHTML = "";
-      return;
-    }
-
-    // 선택한 군을 제외한 데이터 필터링
-    const other군Data = data.filter(item => item.군 !== selected군);
-
-    // 대학 및 학과명을 묶어 점수로 정렬
-    const aggregatedData = {};
-    other군Data.forEach(item => {
-      const key = `${item.대학명} - ${item.학과명}`;
-      if (!aggregatedData[key]) aggregatedData[key] = 0;
-      aggregatedData[key] += parseFloat(item.총점 || 0); // 총점이 없을 경우 0으로 처리
-    });
-
-    // 상위 3개 정렬
-    const top3 = Object.entries(aggregatedData)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
-
-    const other군HTML = top3
-      .map(
-        ([key, value]) => `
-      <div class="detail-item">
-        <div class="header">${key}</div>
-        <div class="value">총점: ${value.toFixed(2)}</div>
-      </div>
-    `
-      )
-      .join("");
-
-    const detailsDiv = document.getElementById("other군Details");
-    detailsDiv.innerHTML = `
-      <h3 style="width: 100%; text-align: center;">다른 군 대학 학과</h3>
-      ${other군HTML || "<div>다른 군 데이터가 없습니다.</div>"}
-    `;
-  }
-
-  // 기존 fetchResultsAutomatically 함수에서 fetchOther군Data 호출 추가
-  async function fetchResultsAutomatically() {
-    const 군 = document.getElementById("군Dropdown").value;
-    const 대학명 = document.getElementById("대학명Dropdown").value;
-    const 학과명 = document.getElementById("학과명Dropdown").value;
-
-    if (군 && 대학명 && 학과명) {
-      updateTitle(대학명, 학과명);
-      showLoadingMessage();
-      clearTable();
-      document.getElementById("resultTable").style.display = "none";
-
-      // Fetch 기본 정보
-      await fetchSchoolDetails();
-      // Fetch 결과 데이터
-      await fetchSchoolResult();
-
-      // Fetch 다른 군 데이터 (추가된 부분)
-      const response = await fetch("https://supermax.kr/getSelectionData");
-      const data = await response.json();
-      await fetchOther군Data(군, data);
-
-      hideLoadingMessage();
-      document.getElementById("resultTable").style.display = "table";
-    }
-  }
-</script>
-
+  
 
   <!-- 필터링 섹션 -->
   <div class="dropdown-container">
@@ -275,21 +204,25 @@
     }
 
     async function fetchResultsAutomatically() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
+  const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      if (군 && 대학명 && 학과명) {
-        updateTitle(대학명, 학과명);
-        showLoadingMessage();
-        clearTable();
-        document.getElementById('resultTable').style.display = 'none';
-        await fetchSchoolDetails();
-        await fetchSchoolResult();
-        hideLoadingMessage();
-        document.getElementById('resultTable').style.display = 'table';
-      }
-    }
+  if (군 && 대학명 && 학과명) {
+    updateTitle(대학명, 학과명);
+    showLoadingMessage();
+    clearTable();
+    document.getElementById('resultTable').style.display = 'none';
+
+    await fetchSchoolDetails(); // 기존 군의 학교 정보 불러오기
+    await fetchSchoolResult();  // 기존 군의 결과 불러오기
+    await fetchTop3Other군Results(군); // 새로운 함수 호출 (다른 군 결과 가져오기)
+
+    hideLoadingMessage();
+    document.getElementById('resultTable').style.display = 'table';
+  }
+}
+
 
     function updateTitle(대학명, 학과명) {
       const title = document.getElementById('pageTitle');
@@ -326,6 +259,8 @@
         <tr id="실기SubHeaderRow"></tr>
       `;
     }
+
+
 
     async function fetchSchoolDetails() {
       const 군 = document.getElementById('군Dropdown').value;
@@ -419,6 +354,52 @@
       } catch (error) {
         console.error('결과 데이터를 불러오는 중 오류:', error);
       }
+    }
+
+    async function fetchTop3Other군Results(selected군) {
+      try {
+        const response = await fetch(`${webAppUrl}?군=${selected군}`);
+        const data = await response.json();
+
+        // 다른 군 데이터 필터링
+        const other군Data = data.filter(item => item.군 !== selected군);
+
+        // 각 대학, 학과별로 총점을 기준으로 상위 3개 추출
+        const sortedData = other군Data.sort((a, b) => b[`${selected군}_총점`] - a[`${selected군}_총점`]);
+        const top3Results = sortedData.slice(0, 3); // 상위 3개만 추출
+
+        displayTop3Other군Results(top3Results);
+      } catch (error) {
+        console.error('다른 군의 결과를 불러오는 중 오류:', error);
+      }
+    }
+
+    function displayTop3Other군Results(top3Results) {
+      // 기본 정보 섹션의 오른쪽에 정렬될 컨테이너 생성
+      const infoContainer = document.getElementById('schoolDetails');
+      const top3Container = document.createElement('div');
+      top3Container.classList.add('info-container');
+
+      // 데이터가 없을 때 처리
+      if (top3Results.length === 0) {
+        top3Container.innerHTML = '<div class="detail-item">데이터가 없습니다.</div>';
+        infoContainer.appendChild(top3Container);
+        return;
+      }
+
+      // 상위 3개 결과 추가
+      top3Results.forEach((item, index) => {
+        const detailDiv = document.createElement('div');
+        detailDiv.classList.add('detail-item');
+        detailDiv.innerHTML = `
+          <div class="header">상위 ${index + 1}</div>
+          <div class="value">${item.대학명} - ${item.학과명 || '-'}</div>
+        `;
+        top3Container.appendChild(detailDiv);
+      });
+
+      // 컨테이너 추가
+      infoContainer.appendChild(top3Container);
     }
 
     function displayResults(data, selected군, 실기종목Headers) {
