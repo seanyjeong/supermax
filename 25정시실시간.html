@@ -139,14 +139,7 @@
 
   <!-- 상위 3개 대학 및 학과 -->
   <div id="topUniversities">
-    <div class="group" id="groupA">
-      <h2>가군 상위 3개 대학 및 학과</h2>
-      <ul id="topUniversitiesA"></ul>
-    </div>
-    <div class="group" id="groupB">
-      <h2>다군 상위 3개 대학 및 학과</h2>
-      <ul id="topUniversitiesB"></ul>
-    </div>
+    <!-- 유동적으로 군에 따라 생성 -->
   </div>
 
   <script>
@@ -159,6 +152,7 @@
 
         populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
         document.getElementById('군Dropdown').addEventListener('change', () => {
+          resetFilters();
           filterUniversities(data);
           fetchResultsAutomatically(data);
         });
@@ -172,6 +166,11 @@
       } catch (error) {
         console.error('드롭다운 데이터를 불러오는 중 오류:', error);
       }
+    }
+
+    function resetFilters() {
+      document.getElementById('대학명Dropdown').innerHTML = '<option value="">선택</option>';
+      document.getElementById('학과명Dropdown').innerHTML = '<option value="">선택</option>';
     }
 
     function populateDropdown(elementId, options) {
@@ -266,29 +265,6 @@
       }
     }
 
-    async function fetchTopUniversities(data, selected군) {
-      const 군Groups = ['가', '나', '다'].filter(군 => 군 !== selected군);
-
-      군Groups.forEach(군 => {
-        const groupData = data.filter(item => item.군 === 군);
-        const universityCounts = groupData.reduce((counts, item) => {
-          const key = `${item.대학명} - ${item.학과명}`;
-          counts[key] = (counts[key] || 0) + 1;
-          return counts;
-        }, {});
-
-        const sortedUniversities = Object.entries(universityCounts)
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 3);
-
-        const targetListId = 군 === '가' ? 'topUniversitiesA' : 'topUniversitiesB';
-        const topUniversitiesList = document.getElementById(targetListId);
-        topUniversitiesList.innerHTML = sortedUniversities
-          .map(([key, count]) => `<li>${key} (${count}명)</li>`)
-          .join('');
-      });
-    }
-
     async function fetchSchoolResult(군, 대학명, 학과명) {
       if (!군 || !대학명 || !학과명) return;
 
@@ -332,6 +308,35 @@
       } catch (error) {
         console.error('결과 데이터를 불러오는 중 오류:', error);
       }
+    }
+
+    async function fetchTopUniversities(data, selected군) {
+      const remaining군 = ['가', '나', '다'].filter(군 => 군 !== selected군);
+
+      const topUniversitiesDiv = document.getElementById('topUniversities');
+      topUniversitiesDiv.innerHTML = '';
+
+      remaining군.forEach(군 => {
+        const groupData = data.filter(item => item.군 === 군);
+        const universityCounts = groupData.reduce((counts, item) => {
+          const key = `${item.대학명} - ${item.학과명}`;
+          counts[key] = (counts[key] || 0) + 1;
+          return counts;
+        }, {});
+
+        const sortedUniversities = Object.entries(universityCounts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 3);
+
+        const groupDiv = document.createElement('div');
+        groupDiv.classList.add('group');
+        groupDiv.innerHTML = `
+          <h2>${군}군 상위 3개 대학 및 학과</h2>
+          <ul>${sortedUniversities.map(([key, count]) => `<li>${key} (${count}명)</li>`).join('')}</ul>
+        `;
+
+        topUniversitiesDiv.appendChild(groupDiv);
+      });
     }
 
     function displayResults(data, 군, 실기종목Headers) {
