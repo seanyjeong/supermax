@@ -19,8 +19,8 @@
       display: flex;
       flex-wrap: wrap;
       gap: 20px;
-      justify-content: flex-start;
-      margin-bottom: 30px;
+      justify-content: flex-start; /* 왼쪽 정렬 */
+      margin-bottom: 30px; /* 필터링 공간과 간격 띄우기 */
     }
 
     .detail-item {
@@ -28,19 +28,26 @@
       flex-direction: column;
       align-items: center;
       text-align: center;
-      width: 90px;
-      height: 90px;
+      width: 90px; /* 원의 크기 - 너비 */
+      height: 90px; /* 원의 크기 - 높이 */
       border: 1px solid #ddd;
       border-radius: 50%;
       justify-content: center;
-      font-size: 0.9em;
+      font-size: 0.9em; /* 폰트 크기 */
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 원 크기를 조정하려면 위의 width, height, font-size 값을 수정하세요 */
+
+    .detail-item .header {
+      font-weight: bold;
+      margin-bottom: 5px;
     }
 
     .dropdown-container {
       display: flex;
       gap: 20px;
-      justify-content: flex-start;
+      justify-content: flex-start; /* 왼쪽 정렬 */
       margin-bottom: 20px;
     }
 
@@ -69,7 +76,7 @@
       width: 100%;
       border-collapse: collapse;
       margin-top: 20px;
-      display: none;
+      display: none; /* 기본적으로 숨김 처리 */
     }
 
     #resultTable th, #resultTable td {
@@ -81,23 +88,6 @@
     #resultTable th {
       background-color: #f2f2f2;
     }
-
-    #topUniversities {
-      margin-top: 20px;
-    }
-
-    #topUniversities .group {
-      margin-bottom: 20px;
-    }
-
-    #topUniversities ul {
-      list-style-type: none;
-      padding: 0;
-    }
-
-    #topUniversities li {
-      margin-bottom: 5px;
-    }
   </style>
 </head>
 <body>
@@ -105,6 +95,8 @@
 
   <!-- 기본정보 섹션 -->
   <div id="schoolDetails" class="info-container"></div>
+
+  
 
   <!-- 필터링 섹션 -->
   <div class="dropdown-container">
@@ -151,11 +143,6 @@
     </tbody>
   </table>
 
-  <!-- 상위 3개 대학 및 학과 -->
-  <div id="topUniversities">
-    <!-- 동적으로 생성 -->
-  </div>
-
   <script>
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
 
@@ -166,25 +153,17 @@
 
         populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
         document.getElementById('군Dropdown').addEventListener('change', () => {
-          resetDropdowns();
           filterUniversities(data);
-          fetchResultsAutomatically(data);
+          fetchResultsAutomatically();
         });
         document.getElementById('대학명Dropdown').addEventListener('change', () => {
           filterMajors(data);
-          fetchResultsAutomatically(data);
+          fetchResultsAutomatically();
         });
-        document.getElementById('학과명Dropdown').addEventListener('change', () => {
-          fetchResultsAutomatically(data);
-        });
+        document.getElementById('학과명Dropdown').addEventListener('change', fetchResultsAutomatically);
       } catch (error) {
         console.error('드롭다운 데이터를 불러오는 중 오류:', error);
       }
-    }
-
-    function resetDropdowns() {
-      document.getElementById('대학명Dropdown').innerHTML = '<option value="">선택</option>';
-      document.getElementById('학과명Dropdown').innerHTML = '<option value="">선택</option>';
     }
 
     function populateDropdown(elementId, options) {
@@ -224,7 +203,7 @@
       populateDropdown('학과명Dropdown', Array.from(학과명Set));
     }
 
-    async function fetchResultsAutomatically(data) {
+    async function fetchResultsAutomatically() {
       const 군 = document.getElementById('군Dropdown').value;
       const 대학명 = document.getElementById('대학명Dropdown').value;
       const 학과명 = document.getElementById('학과명Dropdown').value;
@@ -232,58 +211,77 @@
       if (군 && 대학명 && 학과명) {
         updateTitle(대학명, 학과명);
         showLoadingMessage();
+        clearTable();
         document.getElementById('resultTable').style.display = 'none';
-        await fetchSchoolDetails(군, 대학명, 학과명);
-        await fetchSchoolResult(군, 대학명, 학과명);
-        await fetchTopUniversities(data, 군, 대학명, 학과명);
+        await fetchSchoolDetails();
+        await fetchSchoolResult();
         hideLoadingMessage();
         document.getElementById('resultTable').style.display = 'table';
       }
     }
 
-    async function fetchTopUniversities(data, selected군, 대학명, 학과명) {
-      const other군 = ['가', '나', '다'].filter(군 => 군 !== selected군);
-
-      const topUniversitiesDiv = document.getElementById('topUniversities');
-      topUniversitiesDiv.innerHTML = '';
-
-      other군.forEach(군 => {
-        const filteredData = data.filter(
-          item => item.군 === 군 && item.대학명 !== 대학명 && item.학과명 !== 학과명
-        );
-
-        const universityCounts = filteredData.reduce((counts, item) => {
-          const key = `${item.대학명} - ${item.학과명}`;
-          counts[key] = (counts[key] || 0) + 1;
-          return counts;
-        }, {});
-
-        const sortedUniversities = Object.entries(universityCounts)
-          .sort(([, a], [, b]) => b - a)
-          .slice(0, 3);
-
-        const groupDiv = document.createElement('div');
-        groupDiv.classList.add('group');
-        groupDiv.innerHTML = `
-          <h2>${군}군 상위 3개 대학 및 학과</h2>
-          <ul>${sortedUniversities.map(([key, count]) => `<li>${key} (${count}명)</li>`).join('')}</ul>
-        `;
-
-        topUniversitiesDiv.appendChild(groupDiv);
-      });
+    function updateTitle(대학명, 학과명) {
+      const title = document.getElementById('pageTitle');
+      title.textContent = `${대학명} - ${학과명}`;
     }
 
-    async function fetchSchoolDetails(군, 대학명, 학과명) {
-      try {
-        const response = await fetch(`https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+    function showLoadingMessage() {
+      const loadingDiv = document.getElementById('loadingMessage');
+      loadingDiv.textContent = '조회 중...';
+    }
+
+    function hideLoadingMessage() {
+      const loadingDiv = document.getElementById('loadingMessage');
+      loadingDiv.textContent = '';
+    }
+
+    function clearTable() {
+      const tableBody = document.querySelector('#resultTable tbody');
+      const tableHead = document.getElementById('resultTableHead');
+      tableBody.innerHTML = '';
+      tableHead.innerHTML = `
+        <tr>
+          <th rowspan="2">순위</th>
+          <th rowspan="2">지점</th>
+          <th rowspan="2">이름</th>
+          <th rowspan="2">학년</th>
+          <th rowspan="2">수능</th>
+          <th rowspan="2">내신</th>
+          <th rowspan="2">실기</th>
+          <th rowspan="2">총점</th>
+          <th rowspan="2">최초결과</th>
+          <th rowspan="2">최종결과</th>
+        </tr>
+        <tr id="실기SubHeaderRow"></tr>
+      `;
+    }
+
+
+
+    async function fetchSchoolDetails() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (군 && 대학명 && 학과명) {
+        const url = `https://supermax.kr/getSchoolDetails?군=${군}&대학명=${대학명}&학과명=${학과명}`;
+        const response = await fetch(url);
         const data = await response.json();
 
         const detailsDiv = document.getElementById('schoolDetails');
-        if (data) {
-          detailsDiv.innerHTML = `
+        if (data && Object.keys(data).length > 0) {
+          const detailsHTML = `
             <div class="detail-item">
               <div class="header">25모집인원</div>
               <div class="value">${data.모집인원 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">25발표일정</div>
+              <div class="value">${data.합격자발표일정 || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">1단계일정</div>
+              <div class="value">${data['1단계및면접일정'] || '-'}</div>
             </div>
             <div class="detail-item">
               <div class="header">24모집인원</div>
@@ -297,20 +295,21 @@
               <div class="header">24경쟁률</div>
               <div class="value">${data['24경쟁률'] || '-'}</div>
             </div>
-            <div class="detail-item">
-              <div class="header">25발표일정</div>
-              <div class="value">${data.합격자발표일정 || '-'}</div>
-            </div>
           `;
+          detailsDiv.innerHTML = detailsHTML;
         } else {
-          detailsDiv.innerHTML = '<div>정보 없음</div>';
+          detailsDiv.innerHTML = '<div>일치하는 정보가 없습니다.</div>';
         }
-      } catch (error) {
-        console.error('기본 정보를 불러오는 중 오류:', error);
       }
     }
 
-    async function fetchSchoolResult(군, 대학명, 학과명) {
+    async function fetchSchoolResult() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (!군 || !대학명 || !학과명) return;
+
       try {
         const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
@@ -353,10 +352,10 @@
       }
     }
 
-    function displayResults(data, 군, 실기종목Headers) {
-      const tableBody = document.querySelector('#resultTable tbody');
-      if (!tableBody) return;
+    
 
+    function displayResults(data, selected군, 실기종목Headers) {
+      const tableBody = document.querySelector('#resultTable tbody');
       tableBody.innerHTML = '';
 
       if (data.length === 0) {
@@ -370,16 +369,16 @@
           '지점',
           '이름',
           '학년',
-          `${군}_수능`,
-          `${군}_내신`,
-          `${군}_실기`,
-          `${군}_총점`,
-          `${군}_최초결과`,
-          `${군}_최종결과`
+          `${selected군}_수능`,
+          `${selected군}_내신`,
+          `${selected군}_실기`,
+          `${selected군}_총점`,
+          `${selected군}_최초결과`,
+          `${selected군}_최종결과`
         ];
 
         const rankCell = document.createElement('td');
-        rankCell.textContent = index + 1;
+        rankCell.textContent = index + 1; // 순위 추가
         tr.appendChild(rankCell);
 
         keys.forEach(key => {
@@ -400,18 +399,6 @@
 
         tableBody.appendChild(tr);
       });
-    }
-
-    function showLoadingMessage() {
-      document.getElementById('loadingMessage').textContent = '조회 중...';
-    }
-
-    function hideLoadingMessage() {
-      document.getElementById('loadingMessage').textContent = '';
-    }
-
-    function updateTitle(대학명, 학과명) {
-      document.getElementById('pageTitle').textContent = `${대학명} - ${학과명}`;
     }
 
     document.addEventListener('DOMContentLoaded', loadDropdownData);
