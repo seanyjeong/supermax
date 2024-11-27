@@ -25,8 +25,8 @@
       flex-direction: column;
       align-items: center;
       text-align: center;
-      width: 90px;
-      height: 90px;
+      width: 120px;
+      height: 120px;
       border: 1px solid #ddd;
       border-radius: 50%;
       justify-content: center;
@@ -74,8 +74,8 @@
     #topUniversities {
       margin-top: 20px;
     }
-    #topUniversities h2 {
-      margin-bottom: 10px;
+    #topUniversities .group {
+      margin-bottom: 20px;
     }
     #topUniversities ul {
       list-style-type: none;
@@ -139,8 +139,14 @@
 
   <!-- 상위 3개 대학 및 학과 -->
   <div id="topUniversities">
-    <h2>다른 군에서 상위 3개 대학 및 학과</h2>
-    <ul id="topUniversitiesList"></ul>
+    <div class="group" id="groupA">
+      <h2>가군 상위 3개 대학 및 학과</h2>
+      <ul id="topUniversitiesA"></ul>
+    </div>
+    <div class="group" id="groupB">
+      <h2>다군 상위 3개 대학 및 학과</h2>
+      <ul id="topUniversitiesB"></ul>
+    </div>
   </div>
 
   <script>
@@ -236,12 +242,20 @@
               <div class="value">${data.모집인원 || '-'}</div>
             </div>
             <div class="detail-item">
-              <div class="header">25발표일정</div>
-              <div class="value">${data.합격자발표일정 || '-'}</div>
+              <div class="header">24모집인원</div>
+              <div class="value">${data['24모집인원'] || '-'}</div>
             </div>
             <div class="detail-item">
-              <div class="header">1단계일정</div>
-              <div class="value">${data['1단계및면접일정'] || '-'}</div>
+              <div class="header">24지원인원</div>
+              <div class="value">${data['24지원인원'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">24경쟁률</div>
+              <div class="value">${data['24경쟁률'] || '-'}</div>
+            </div>
+            <div class="detail-item">
+              <div class="header">25발표일정</div>
+              <div class="value">${data.합격자발표일정 || '-'}</div>
             </div>
           `;
         } else {
@@ -250,6 +264,29 @@
       } catch (error) {
         console.error('기본 정보를 불러오는 중 오류:', error);
       }
+    }
+
+    async function fetchTopUniversities(data, selected군) {
+      const 군Groups = ['가', '나', '다'].filter(군 => 군 !== selected군);
+
+      군Groups.forEach(군 => {
+        const groupData = data.filter(item => item.군 === 군);
+        const universityCounts = groupData.reduce((counts, item) => {
+          const key = `${item.대학명} - ${item.학과명}`;
+          counts[key] = (counts[key] || 0) + 1;
+          return counts;
+        }, {});
+
+        const sortedUniversities = Object.entries(universityCounts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 3);
+
+        const targetListId = 군 === '가' ? 'topUniversitiesA' : 'topUniversitiesB';
+        const topUniversitiesList = document.getElementById(targetListId);
+        topUniversitiesList.innerHTML = sortedUniversities
+          .map(([key, count]) => `<li>${key} (${count}명)</li>`)
+          .join('');
+      });
     }
 
     async function fetchSchoolResult(군, 대학명, 학과명) {
@@ -295,25 +332,6 @@
       } catch (error) {
         console.error('결과 데이터를 불러오는 중 오류:', error);
       }
-    }
-
-    async function fetchTopUniversities(data, selected군) {
-      const other군Data = data.filter(item => item.군 !== selected군);
-
-      const universityCounts = other군Data.reduce((counts, item) => {
-        const key = `${item.대학명} - ${item.학과명}`;
-        counts[key] = (counts[key] || 0) + 1;
-        return counts;
-      }, {});
-
-      const sortedUniversities = Object.entries(universityCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 3);
-
-      const topUniversitiesList = document.getElementById('topUniversitiesList');
-      topUniversitiesList.innerHTML = sortedUniversities
-        .map(([key, count]) => `<li>${key} (${count}명)</li>`)
-        .join('');
     }
 
     function displayResults(data, 군, 실기종목Headers) {
