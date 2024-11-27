@@ -88,6 +88,33 @@
     #resultTable th {
       background-color: #f2f2f2;
     }
+
+    .top-schools-container {
+      margin-top: 20px;
+      display: flex;
+      gap: 30px;
+      justify-content: flex-end; /* 오른쪽 정렬 */
+    }
+
+    .school-group {
+      text-align: left;
+    }
+
+    .school-group h3 {
+      margin: 0;
+      font-size: 1.1em;
+    }
+
+    .school-group ul {
+      margin: 10px 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .school-group ul li {
+      font-size: 0.9em;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -140,6 +167,18 @@
     <tbody>
     </tbody>
   </table>
+
+  <!-- 상위 학교 섹션 -->
+  <div class="top-schools-container">
+    <div class="school-group" id="top나군">
+      <h3>나군 상위 3개:</h3>
+      <ul></ul>
+    </div>
+    <div class="school-group" id="top다군">
+      <h3>다군 상위 3개:</h3>
+      <ul></ul>
+    </div>
+  </div>
 
   <script>
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
@@ -213,6 +252,7 @@
         document.getElementById('resultTable').style.display = 'none';
         await fetchSchoolDetails();
         await fetchSchoolResult();
+        fetchTopSchools(); // 상위 학교 데이터 가져오기
         hideLoadingMessage();
         document.getElementById('resultTable').style.display = 'table';
       }
@@ -392,6 +432,53 @@
         });
 
         tableBody.appendChild(tr);
+      });
+    }
+
+    async function fetchTopSchools() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (!군 || !대학명 || !학과명) return;
+
+      try {
+        const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+        const data = await response.json();
+
+        const 나군Counts = {};
+        const 다군Counts = {};
+
+        data.forEach(row => {
+          if (군 !== '나' && row['나_대학명'] && row['나_학과명']) {
+            const 나군조합 = `${row['나_대학명']} - ${row['나_학과명']}`;
+            나군Counts[나군조합] = (나군Counts[나군조합] || 0) + 1;
+          }
+          if (군 !== '다' && row['다_대학명'] && row['다_학과명']) {
+            const 다군조합 = `${row['다_대학명']} - ${row['다_학과명']}`;
+            다군Counts[다군조합] = (다군Counts[다군조합] || 0) + 1;
+          }
+        });
+
+        updateTopSchools('top나군', 나군Counts);
+        updateTopSchools('top다군', 다군Counts);
+      } catch (error) {
+        console.error('상위 학교 데이터를 불러오는 중 오류:', error);
+      }
+    }
+
+    function updateTopSchools(elementId, counts) {
+      const container = document.getElementById(elementId).querySelector('ul');
+      container.innerHTML = '';
+
+      const sortedSchools = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+
+      sortedSchools.forEach(([school, count]) => {
+        const li = document.createElement('li');
+        li.textContent = `${school} (${count}명)`;
+        container.appendChild(li);
       });
     }
 
