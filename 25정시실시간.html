@@ -88,28 +88,6 @@
     #resultTable th {
       background-color: #f2f2f2;
     }
-
-    .other-groups-container {
-      margin-top: 20px;
-    }
-
-    .group-section {
-      margin-bottom: 20px;
-    }
-
-    .group-section h2 {
-      font-size: 1.2em;
-      margin-bottom: 10px;
-    }
-
-    .group-section ul {
-      list-style-type: none;
-      padding: 0;
-    }
-
-    .group-section li {
-      margin: 5px 0;
-    }
   </style>
 </head>
 <body>
@@ -156,29 +134,12 @@
         <th rowspan="2">총점</th>
         <th rowspan="2">최초결과</th>
         <th rowspan="2">최종결과</th>
-        <!-- 실기종목 동적 추가 -->
       </tr>
       <tr id="실기SubHeaderRow"></tr>
     </thead>
     <tbody>
     </tbody>
   </table>
-
-  <!-- 군별 상위 3순위 섹션 -->
-  <div id="otherGroups" class="other-groups-container">
-    <div class="group-section" id="가군-section">
-      <h2>가군 상위 3</h2>
-      <ul id="가군-list"></ul>
-    </div>
-    <div class="group-section" id="나군-section">
-      <h2>나군 상위 3</h2>
-      <ul id="나군-list"></ul>
-    </div>
-    <div class="group-section" id="다군-section">
-      <h2>다군 상위 3</h2>
-      <ul id="다군-list"></ul>
-    </div>
-  </div>
 
   <script>
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
@@ -246,17 +207,51 @@
       const 학과명 = document.getElementById('학과명Dropdown').value;
 
       if (군 && 대학명 && 학과명) {
-        clearTable();
+        updateTitle(대학명, 학과명);
         showLoadingMessage();
+        clearTable();
         document.getElementById('resultTable').style.display = 'none';
-
         await fetchSchoolDetails();
         await fetchSchoolResult();
-        await analyzeOtherGroups(군, 대학명, 학과명);
-
         hideLoadingMessage();
         document.getElementById('resultTable').style.display = 'table';
       }
+    }
+
+    function updateTitle(대학명, 학과명) {
+      const title = document.getElementById('pageTitle');
+      title.textContent = `${대학명} - ${학과명}`;
+    }
+
+    function showLoadingMessage() {
+      const loadingDiv = document.getElementById('loadingMessage');
+      loadingDiv.textContent = '조회 중...';
+    }
+
+    function hideLoadingMessage() {
+      const loadingDiv = document.getElementById('loadingMessage');
+      loadingDiv.textContent = '';
+    }
+
+    function clearTable() {
+      const tableBody = document.querySelector('#resultTable tbody');
+      const tableHead = document.getElementById('resultTableHead');
+      tableBody.innerHTML = '';
+      tableHead.innerHTML = `
+        <tr>
+          <th rowspan="2">순위</th>
+          <th rowspan="2">지점</th>
+          <th rowspan="2">이름</th>
+          <th rowspan="2">학년</th>
+          <th rowspan="2">수능</th>
+          <th rowspan="2">내신</th>
+          <th rowspan="2">실기</th>
+          <th rowspan="2">총점</th>
+          <th rowspan="2">최초결과</th>
+          <th rowspan="2">최종결과</th>
+        </tr>
+        <tr id="실기SubHeaderRow"></tr>
+      `;
     }
 
     async function fetchSchoolDetails() {
@@ -304,75 +299,100 @@
       }
     }
 
-    async function analyzeOtherGroups(selected군, 대학명, 학과명) {
+    async function fetchSchoolResult() {
+      const 군 = document.getElementById('군Dropdown').value;
+      const 대학명 = document.getElementById('대학명Dropdown').value;
+      const 학과명 = document.getElementById('학과명Dropdown').value;
+
+      if (!군 || !대학명 || !학과명) return;
+
       try {
-        const response = await fetch(`${webAppUrl}?군=${selected군}&대학명=${대학명}&학과명=${학과명}`);
+        const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
         const data = await response.json();
 
-        const counts = { 가군: {}, 나군: {}, 다군: {} };
+        const 실기종목Headers = [];
+        for (let i = 1; i <= 6; i++) {
+          if (data[0] && data[0][`${군}_실기종목${i}`]) {
+            실기종목Headers.push({
+              name: data[0][`${군}_실기종목${i}`],
+              recordKey: `${군}${i}_기록`,
+              scoreKey: `${군}${i}_점수`
+            });
+          }
+        }
 
-        data.forEach(row => {
-          ['가군', '나군', '다군'].forEach(군 => {
-            if (군 !== selected군) {
-              const 학교학과 = `${row[`${군}_대학명`]} - ${row[`${군}_학과명`]}`;
-              if (학교학과) {
-                counts[군][학교학과] = (counts[군][학교학과] || 0) + 1;
-              }
-            }
-          });
-        });
+        const tableHead = document.getElementById('resultTableHead');
+        const subHeaderRow = document.getElementById('실기SubHeaderRow');
 
-        displayGroupCounts(counts['가군'], '가군-list');
-        displayGroupCounts(counts['나군'], '나군-list');
-        displayGroupCounts(counts['다군'], '다군-list');
+        tableHead.innerHTML = `
+          <tr>
+            <th rowspan="2">순위</th>
+            <th rowspan="2">지점</th>
+            <th rowspan="2">이름</th>
+            <th rowspan="2">학년</th>
+            <th rowspan="2">수능</th>
+            <th rowspan="2">내신</th>
+            <th rowspan="2">실기</th>
+            <th rowspan="2">총점</th>
+            <th rowspan="2">최초결과</th>
+            <th rowspan="2">최종결과</th>
+            ${실기종목Headers.map(header => `<th colspan="2">${header.name}</th>`).join('')}
+          </tr>
+        `;
+        subHeaderRow.innerHTML = `${실기종목Headers.map(() => '<th>기록</th><th>점수</th>').join('')}`;
+
+        const sortedData = data.sort((a, b) => b[`${군}_총점`] - a[`${군}_총점`]);
+        displayResults(sortedData, 군, 실기종목Headers);
       } catch (error) {
-        console.error('군별 데이터 분석 중 오류:', error);
+        console.error('결과 데이터를 불러오는 중 오류:', error);
       }
     }
 
-    function displayGroupCounts(counts, listId) {
-      const sorted = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3);
-
-      const list = document.getElementById(listId);
-      list.innerHTML = '';
-      sorted.forEach(([학교학과, count]) => {
-        const li = document.createElement('li');
-        li.textContent = `${학교학과} (${count}명)`;
-        list.appendChild(li);
-      });
-    }
-
-    function clearTable() {
+    function displayResults(data, selected군, 실기종목Headers) {
       const tableBody = document.querySelector('#resultTable tbody');
-      const tableHead = document.getElementById('resultTableHead');
       tableBody.innerHTML = '';
-      tableHead.innerHTML = `
-        <tr>
-          <th rowspan="2">순위</th>
-          <th rowspan="2">지점</th>
-          <th rowspan="2">이름</th>
-          <th rowspan="2">학년</th>
-          <th rowspan="2">수능</th>
-          <th rowspan="2">내신</th>
-          <th rowspan="2">실기</th>
-          <th rowspan="2">총점</th>
-          <th rowspan="2">최초결과</th>
-          <th rowspan="2">최종결과</th>
-        </tr>
-        <tr id="실기SubHeaderRow"></tr>
-      `;
-    }
 
-    function showLoadingMessage() {
-      const loadingDiv = document.getElementById('loadingMessage');
-      loadingDiv.textContent = '조회 중...';
-    }
+      if (data.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="10">일치하는 데이터가 없습니다.</td></tr>';
+        return;
+      }
 
-    function hideLoadingMessage() {
-      const loadingDiv = document.getElementById('loadingMessage');
-      loadingDiv.textContent = '';
+      data.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        const keys = [
+          '지점',
+          '이름',
+          '학년',
+          `${selected군}_수능`,
+          `${selected군}_내신`,
+          `${selected군}_실기`,
+          `${selected군}_총점`,
+          `${selected군}_최초결과`,
+          `${selected군}_최종결과`
+        ];
+
+        const rankCell = document.createElement('td');
+        rankCell.textContent = index + 1; // 순위 추가
+        tr.appendChild(rankCell);
+
+        keys.forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = row[key] || '-';
+          tr.appendChild(td);
+        });
+
+        실기종목Headers.forEach(header => {
+          const recordTd = document.createElement('td');
+          recordTd.textContent = row[header.recordKey] || '-';
+          tr.appendChild(recordTd);
+
+          const scoreTd = document.createElement('td');
+          scoreTd.textContent = row[header.scoreKey] || '-';
+          tr.appendChild(scoreTd);
+        });
+
+        tableBody.appendChild(tr);
+      });
     }
 
     document.addEventListener('DOMContentLoaded', loadDropdownData);
