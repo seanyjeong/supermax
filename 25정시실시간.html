@@ -96,6 +96,79 @@
   <!-- 기본정보 섹션 -->
   <div id="schoolDetails" class="info-container"></div>
 
+  <!-- 아래 코드를 기존 코드의 <div id="schoolDetails" class="info-container"></div> 아래에 추가 -->
+<div id="other군Details" class="info-container"></div>
+
+<script>
+  async function fetchOther군Data(selected군, data) {
+    if (!selected군) {
+      document.getElementById("other군Details").innerHTML = "";
+      return;
+    }
+
+    // 선택한 군을 제외한 데이터 필터링
+    const other군Data = data.filter(item => item.군 !== selected군);
+
+    // 대학 및 학과명을 묶어 점수로 정렬
+    const aggregatedData = {};
+    other군Data.forEach(item => {
+      const key = `${item.대학명} - ${item.학과명}`;
+      if (!aggregatedData[key]) aggregatedData[key] = 0;
+      aggregatedData[key] += parseFloat(item.총점 || 0); // 총점이 없을 경우 0으로 처리
+    });
+
+    // 상위 3개 정렬
+    const top3 = Object.entries(aggregatedData)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    const other군HTML = top3
+      .map(
+        ([key, value]) => `
+      <div class="detail-item">
+        <div class="header">${key}</div>
+        <div class="value">총점: ${value.toFixed(2)}</div>
+      </div>
+    `
+      )
+      .join("");
+
+    const detailsDiv = document.getElementById("other군Details");
+    detailsDiv.innerHTML = `
+      <h3 style="width: 100%; text-align: center;">다른 군 대학 학과</h3>
+      ${other군HTML || "<div>다른 군 데이터가 없습니다.</div>"}
+    `;
+  }
+
+  // 기존 fetchResultsAutomatically 함수에서 fetchOther군Data 호출 추가
+  async function fetchResultsAutomatically() {
+    const 군 = document.getElementById("군Dropdown").value;
+    const 대학명 = document.getElementById("대학명Dropdown").value;
+    const 학과명 = document.getElementById("학과명Dropdown").value;
+
+    if (군 && 대학명 && 학과명) {
+      updateTitle(대학명, 학과명);
+      showLoadingMessage();
+      clearTable();
+      document.getElementById("resultTable").style.display = "none";
+
+      // Fetch 기본 정보
+      await fetchSchoolDetails();
+      // Fetch 결과 데이터
+      await fetchSchoolResult();
+
+      // Fetch 다른 군 데이터 (추가된 부분)
+      const response = await fetch("https://supermax.kr/getSelectionData");
+      const data = await response.json();
+      await fetchOther군Data(군, data);
+
+      hideLoadingMessage();
+      document.getElementById("resultTable").style.display = "table";
+    }
+  }
+</script>
+
+
   <!-- 필터링 섹션 -->
   <div class="dropdown-container">
     <div>
