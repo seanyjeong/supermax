@@ -188,7 +188,7 @@
   font-size: 0.9em;
   margin-bottom: 5px;
 }
-      #pageTitleContainer {
+      #pageTitle {
     text-align: center; /* 가운데 정렬 */
     margin-bottom: 20px; /* 아래 여백 */
   }
@@ -213,10 +213,11 @@
 </head>
 <body>
 
-<div id="pageTitleContainer">
+<div id="pageTitle">
   <img src="https://github.com/seanyjeong/supermax/blob/main/KakaoTalk_20241128_195837418.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
   <h1>맥스체대입시 25정시 실시간</h1>
 </div>
+
 
 
 
@@ -294,6 +295,17 @@
   </table>
 
   <script>
+
+    function updateTitle(대학명, 학과명) {
+  const titleElement = document.getElementById('pageTitle');
+  if (titleElement) {
+    titleElement.innerHTML = `
+      <img src="https://github.com/seanyjeong/supermax/blob/main/KakaoTalk_20241128_195837418.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
+      <h1>${대학명} - ${학과명}</h1>
+    `;
+  }
+}
+
 
 
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
