@@ -277,8 +277,10 @@
 
 function updateOtherData(data) {
   console.log('updateOtherData 시작');
-  console.log('전체 데이터 확인:', data); // 데이터 확인
+  console.log('전체 데이터 확인:', data); // 전체 데이터 확인
+
   const 군 = document.getElementById('군Dropdown').value;
+  console.log(`현재 선택된 군: ${군}`);
 
   const 다른군 = {
     가: ['나', '다'],
@@ -297,14 +299,14 @@ function updateOtherData(data) {
 
   selected군.forEach(target군 => {
     console.log(`필터링할 군: ${target군}`);
+
     const filteredData = data.filter(row => {
       const 군값 = (row[`${target군}_군`] || '').trim(); // 공백 제거
-      console.log(`row 데이터:`, row); // 행 데이터 확인
-      console.log(`필터링 조건: '${군값}' === '${target군}'`); // 조건 확인
+      console.log(`row[${target군}_군]:`, 군값, `필터링 조건: '${군값}' === '${target군}'`);
       return 군값 === target군;
     });
 
-    console.log(`${target군} 필터링 결과:`, filteredData); // 필터링 결과 출력
+    console.log(`${target군} 필터링 결과 (크기: ${filteredData.length}):`, filteredData);
 
     if (filteredData.length === 0) {
       otherDataDiv.innerHTML += `<div>${target군}군 데이터 없음</div>`;
@@ -313,7 +315,7 @@ function updateOtherData(data) {
 
     const countMap = {};
     filteredData.forEach(row => {
-      const key = `${row[`${target군}_대학명`].trim()} - ${row[`${target군}_학과명`].trim()}`; // 공백 제거
+      const key = `${row[`${target군}_대학명`].trim()} - ${row[`${target군}_학과명`].trim()}`;
       countMap[key] = (countMap[key] || 0) + 1;
     });
 
@@ -333,6 +335,7 @@ function updateOtherData(data) {
     otherDataDiv.appendChild(section);
   });
 }
+
 
 
 
