@@ -259,6 +259,9 @@
     console.log(`현재 선택된 학교: ${대학명}`);
     console.log(`현재 선택된 학과: ${학과명}`);
 
+    // 로딩 이미지 표시
+    showLoadingMessage();
+
     try {
       // 1. 필터링된 데이터 가져오기
       const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
@@ -273,12 +276,11 @@
 
       if (!Array.isArray(resultData) || resultData.length === 0) {
         console.error('필터링된 데이터가 비어 있습니다.');
-        // 테이블 초기화
-        fetchSchoolResult([]);
+        fetchSchoolResult([]); // 테이블 초기화
         return;
       }
 
-      // 2. 테이블 업데이트
+      // 2. 테이블 데이터 업데이트
       fetchSchoolResult(resultData);
 
       // 3. 다른 군 데이터 업데이트
@@ -286,10 +288,13 @@
     } catch (error) {
       console.error('필터링된 데이터를 가져오는 중 오류:', error);
       fetchSchoolResult([]); // 에러 시 테이블 초기화
+    } finally {
+      // 로딩 이미지 숨기기
+      hideLoadingMessage();
     }
   } else {
     console.log('필터링 조건이 완전하지 않습니다.');
-    fetchSchoolResult([]); // 조건이 완전하지 않을 때도 테이블 초기화
+    fetchSchoolResult([]); // 조건 미충족 시 테이블 초기화
   }
 }
 
