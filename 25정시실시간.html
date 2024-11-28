@@ -11,10 +11,28 @@
     margin: 0;
     padding: 20px;
   }
+  #fixedTitleImage {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%; /* 전체 너비 */
+    height: auto; /* 이미지 높이 자동 조정 */
+    z-index: -1; /* 배경으로 보이도록 뒤로 보내기 */
+    text-align: center; /* 중앙 정렬 */
+    opacity: 0.2; /* 약간 투명하게 설정 */
+  }
 
+  #fixedImage {
+    max-width: 100%; /* 화면 너비에 맞춤 */
+    height: auto; /* 비율 유지 */
+  }
+
+  /* h1은 위에 떠 있게 설정 */
   h1 {
     text-align: center;
-    margin-bottom: 20px;
+    margin-top: 150px; /* 고정 이미지와 간격 설정 */
+    z-index: 1; /* 고정 이미지보다 위로 */
+    position: relative;
   }
 
   .info-container {
@@ -192,7 +210,9 @@
   </style>
 </head>
 <body>
-
+  <div id="fixedTitleImage">
+    <img src="https://github.com/seanyjeong/supermax/blob/main/25max.png?raw=true" alt="고정 타이틀" id="fixedImage">
+  </div>
  
   <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
 
