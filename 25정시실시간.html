@@ -271,16 +271,17 @@
     console.log("첫 번째 필터링 완료, 두 번째 필터링 시작");
     updateOtherData(data); // 다른 군 데이터 업데이트
   }
-}
-
-
-
-function updateOtherData(data) {
+}function updateOtherData(data) {
   console.log('updateOtherData 시작');
   console.log('전체 데이터 확인 (크기):', data.length, data); // 전체 데이터 크기와 내용 확인
 
   const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
+
   console.log(`현재 선택된 군: ${군}`);
+  console.log(`현재 선택된 학교: ${대학명}`);
+  console.log(`현재 선택된 학과: ${학과명}`);
 
   // 선택된 군을 기준으로 제외할 다른 군 설정
   const 다른군 = {
@@ -305,13 +306,13 @@ function updateOtherData(data) {
     // 해당 군의 데이터 필터링
     const filteredData = data.filter(row => {
       const 군값 = (row[`${target군}_군`] || '').trim(); // 공백 제거
-      console.log(`row[${target군}_군]:`, 군값, `| 조건: '${군값}' === '${target군}'`); // 조건 확인
+      console.log(`row 데이터:`, row);
+      console.log(`row[${target군}_군]: '${군값}' | 조건: '${군값}' === '${target군}'`); // 조건 확인
       return 군값 === target군; // 필터링 조건
     });
 
     console.log(`${target군}군 필터링 결과 (크기: ${filteredData.length}):`, filteredData);
 
-    // 필터링 결과가 없을 경우 처리
     if (filteredData.length === 0) {
       console.log(`${target군}군 데이터가 없음`);
       otherDataDiv.innerHTML += `<div>${target군}군 데이터 없음</div>`;
@@ -332,7 +333,7 @@ function updateOtherData(data) {
     // 상위 3개 데이터 정렬 및 추출
     const sortedData = Object.entries(countMap)
       .sort((a, b) => b[1] - a[1]) // 내림차순 정렬
-      .slice(0, 3); // 상위 3개만 추출
+      .slice(0, 3); // 상위 3개만
 
     console.log(`${target군}군 상위 3개 데이터:`, sortedData);
 
@@ -351,6 +352,7 @@ function updateOtherData(data) {
 
   console.log('updateOtherData 종료');
 }
+
 
 
 
