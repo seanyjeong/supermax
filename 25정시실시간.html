@@ -255,58 +255,32 @@
   const 학과명 = document.getElementById('학과명Dropdown').value;
 
   if (군 && 대학명 && 학과명) {
-    console.log(`현재 선택된 군: ${군}`);
-    console.log(`현재 선택된 학교: ${대학명}`);
-    console.log(`현재 선택된 학과: ${학과명}`);
-
-    // 로딩 이미지 표시
+    updateTitle(대학명, 학과명);
     showLoadingMessage();
+    clearTable();
+    document.getElementById('resultTable').style.display = 'none';
 
-    try {
-      // 1. 필터링된 데이터 가져오기
-      const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
-      console.log('필터링된 데이터 요청 응답 상태 코드:', response.status);
+    // 첫 번째 필터링 작업 실행
+    await fetchSchoolDetails(); // 첫 번째 데이터 가져오기
+    await fetchSchoolResult(); // 테이블 업데이트
 
-      if (!response.ok) {
-        throw new Error(`데이터 요청 실패: ${response.status}`);
-      }
+    hideLoadingMessage();
+    document.getElementById('resultTable').style.display = 'table';
 
-      const resultData = await response.json();
-      console.log('웹앱에서 가져온 필터링된 데이터:', resultData);
-
-      if (!Array.isArray(resultData) || resultData.length === 0) {
-        console.error('필터링된 데이터가 비어 있습니다.');
-        fetchSchoolResult([]); // 테이블 초기화
-        return;
-      }
-
-      // 2. 테이블 데이터 업데이트
-      fetchSchoolResult(resultData);
-
-      // 3. 다른 군 데이터 업데이트
-      updateOtherData(resultData);
-    } catch (error) {
-      console.error('필터링된 데이터를 가져오는 중 오류:', error);
-      fetchSchoolResult([]); // 에러 시 테이블 초기화
-    } finally {
-      // 로딩 이미지 숨기기
-      hideLoadingMessage();
-    }
-  } else {
-    console.log('필터링 조건이 완전하지 않습니다.');
-    fetchSchoolResult([]); // 조건 미충족 시 테이블 초기화
+    // 첫 번째 작업 완료 후 두 번째 작업 실행
+    console.log('데이터 로드 전 data 확인:', data);
+    console.log("첫 번째 필터링 완료, 두 번째 필터링 시작");
+    updateOtherData(data); // 다른 군 데이터 업데이트
   }
 }
-
-
 
 function updateOtherData(data) {
   console.log('updateOtherData 시작');
   console.log('전체 데이터 확인 (크기):', data.length, data);
 
   const 군 = document.getElementById('군Dropdown').value;
-  const 대학명 = document.getElementById('대학명Dropdown').value || '';
-  const 학과명 = document.getElementById('학과명Dropdown').value || '';
+  const 대학명 = document.getElementById('대학명Dropdown').value || ''; // 선택된 대학명
+  const 학과명 = document.getElementById('학과명Dropdown').value || ''; // 선택된 학과명
 
   console.log(`현재 선택된 군: ${군}`);
   console.log(`현재 선택된 학교: ${대학명}`);
@@ -330,18 +304,30 @@ function updateOtherData(data) {
   selected군.forEach(target군 => {
     console.log(`=== ${target군}군 필터링 시작 ===`);
 
+    // 로그: 필터링 조건과 데이터 확인
+    console.log(`현재 ${target군}군에서 필터링할 데이터:`);
+    data.forEach(row => {
+      const 군값 = (row[`${target군}_군`] || '').trim(); // 공백 제거
+      const 대학값 = (row[`${target군}_대학명`] || '').trim();
+      const 학과값 = (row[`${target군}_학과명`] || '').trim();
+      console.log(`row[${target군}_군]: '${군값}', row[${target군}_대학명]: '${대학값}', row[${target군}_학과명]: '${학과값}'`);
+    });
+
+    // 필터링 조건 적용
     const filteredData = data.filter(row => {
       const 군값 = (row[`${target군}_군`] || '').trim();
-      return 군값 === target군;
+      return 군값 === target군; // 선택된 군과 매칭되는 데이터만
     });
 
     console.log(`${target군}군 필터링 결과 (크기: ${filteredData.length}):`, filteredData);
 
     if (filteredData.length === 0) {
+      console.log(`${target군}군 데이터가 없음`);
       otherDataDiv.innerHTML += `<div>${target군}군 데이터 없음</div>`;
       return;
     }
 
+    // 학교-학과별 선택 횟수 계산
     const countMap = {};
     filteredData.forEach(row => {
       const 대학명 = (row[`${target군}_대학명`] || '').trim();
@@ -350,12 +336,16 @@ function updateOtherData(data) {
       countMap[key] = (countMap[key] || 0) + 1;
     });
 
+    console.log(`${target군}군 학교-학과 선택 횟수 맵:`, countMap);
+
+    // 상위 3개 데이터 정렬 및 추출
     const sortedData = Object.entries(countMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3);
 
     console.log(`${target군}군 상위 3개 데이터:`, sortedData);
 
+    // 결과 표시
     const section = document.createElement('div');
     section.innerHTML = `
       <h4>${target군}군 상위 3개</h4>
@@ -370,8 +360,6 @@ function updateOtherData(data) {
 
   console.log('updateOtherData 종료');
 }
-
-
 
 
 
