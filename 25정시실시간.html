@@ -250,15 +250,15 @@
     }
 
 async function fetchResultsAutomatically() {
-  const 군 = document.getElementById("군Dropdown").value;
-  const 대학명 = document.getElementById("대학명Dropdown").value;
-  const 학과명 = document.getElementById("학과명Dropdown").value;
+  const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
 
   if (군 && 대학명 && 학과명) {
     updateTitle(대학명, 학과명);
-    showLoadingMessage();
+    showLoadingMessage(); // 로딩 메시지 표시
     clearTable();
-    document.getElementById("resultTable").style.display = "none";
+    document.getElementById('resultTable').style.display = 'none';
 
     try {
       // 첫 번째 데이터 가져오기
@@ -268,37 +268,35 @@ async function fetchResultsAutomatically() {
       const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
       const resultData = await response.json();
 
-      console.log("웹앱에서 가져온 데이터:", resultData);
+      console.log('웹앱에서 가져온 데이터:', resultData);
 
       if (!Array.isArray(resultData) || resultData.length === 0) {
-        console.warn("필터링된 데이터가 비어 있습니다.");
+        console.warn('필터링된 데이터가 비어 있습니다.');
         fetchSchoolResult([]); // 빈 테이블 초기화
-        updateOtherData([]); // 다른 군 데이터 초기화
-        hideLoadingMessage(); // 로딩 메시지 숨기기
+        hideLoadingMessage(); // 데이터가 없어도 로딩 메시지 숨김
         return;
       }
 
-      // 테이블 먼저 업데이트
+      // 테이블 업데이트
       fetchSchoolResult(resultData);
-      document.getElementById("resultTable").style.display = "table";
 
       // 상위 3개 데이터 업데이트
-      updateOtherData(resultData);
+      updateOtherData(resultData); // resultData를 직접 전달
     } catch (error) {
-      console.error("데이터를 가져오는 중 오류 발생:", error);
+      console.error('데이터를 가져오는 중 오류 발생:', error);
       fetchSchoolResult([]); // 에러 시 테이블 초기화
-      updateOtherData([]); // 다른 군 데이터 초기화
     } finally {
-      // 테이블 렌더링이 완료된 이후 로딩 메시지 숨기기
+      // 테이블과 상위 데이터가 모두 준비된 후 로딩 메시지 숨기기
+      document.getElementById('resultTable').style.display = 'table';
       hideLoadingMessage();
     }
   } else {
-    console.warn("필터링 조건이 완전하지 않습니다.");
+    console.warn('필터링 조건이 완전하지 않습니다.');
     fetchSchoolResult([]); // 필터링 조건이 없을 때 초기화
-    updateOtherData([]); // 다른 군 데이터 초기화
-    hideLoadingMessage(); // 로딩 메시지 숨기기
+    hideLoadingMessage(); // 조건 불충족 시도 로딩 메시지 숨김
   }
 }
+
 
 
 function updateOtherData(resultData) {
