@@ -4,9 +4,7 @@
   <meta charset="UTF-8">
   <title>맥스체대입시25정시실시간</title>
 
-  <div id="loadingMessage">
-    <img src="https://github.com/seanyjeong/supermax/blob/main/maxlogo.png?raw=true" alt="Loading" id="loadingImage">
-  </div>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -97,6 +95,10 @@
 </head>
 <body>
   <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
+
+  <div id="loadingMessage">
+    <img src="https://github.com/seanyjeong/supermax/blob/main/maxlogo.png?raw=true" alt="Loading" id="loadingImage">
+  </div>
 
   <!-- 기본정보 섹션 -->
   <div id="schoolDetails" class="info-container"></div>
@@ -231,14 +233,15 @@
     }
 
     function showLoadingMessage() {
-      const loadingDiv = document.getElementById('loadingMessage');
-      loadingDiv.textContent = '조회 중...';
-    }
+  const loadingDiv = document.getElementById('loadingMessage');
+  loadingDiv.style.display = 'block'; // 이미지를 보이게 설정
+}
 
-    function hideLoadingMessage() {
-      const loadingDiv = document.getElementById('loadingMessage');
-      loadingDiv.textContent = '';
-    }
+function hideLoadingMessage() {
+  const loadingDiv = document.getElementById('loadingMessage');
+  loadingDiv.style.display = 'none'; // 이미지를 숨기기
+}
+
 
     function clearTable() {
       const tableBody = document.querySelector('#resultTable tbody');
