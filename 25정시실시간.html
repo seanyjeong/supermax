@@ -97,33 +97,56 @@
   }
 
   /* 추가된 스타일 */
-  #schoolDetails {
-    flex: 1; /* 기본정보 영역을 왼쪽에 차지 */
-  }
+#schoolDetails {
+  flex: 1; /* 왼쪽 공간 차지 */
+  display: flex; /* 가로로 나열 */
+  flex-wrap: wrap; /* 필요하면 다음 줄로 넘기기 */
+  gap: 10px; /* 항목 간 간격 */
+}
 
-  #otherData {
-    flex: 1; /* 다른 군 데이터 박스를 오른쪽에 배치 */
-    border: 1px solid #ddd;
-    padding: 10px;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 120px; /* 기본정보 박스 너비 */
+  height: 120px; /* 기본정보 박스 높이 */
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  justify-content: center;
+  font-size: 0.9em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
-  #otherData h4 {
-    margin: 0 0 10px;
-    font-size: 1em;
-  }
+.detail-item .header {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
 
-  #otherData ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
+/* 다른 군 데이터 섹션 스타일 */
+#otherData {
+  flex: 1;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
-  #otherData ul li {
-    font-size: 0.9em;
-    margin-bottom: 5px;
-  }
+#otherData h4 {
+  margin: 0 0 10px;
+  font-size: 1em;
+}
+
+#otherData ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#otherData ul li {
+  font-size: 0.9em;
+  margin-bottom: 5px;
+}
 </style>
   </style>
 </head>
