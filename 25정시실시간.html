@@ -69,7 +69,7 @@
   }
 
   #loadingImage {
-    width: 100px; /* 이미지 크기 */
+    width: 500px; /* 이미지 크기 */
     animation: blink 1.2s infinite;
   }
 
@@ -105,24 +105,63 @@
 }
 
 .detail-item {
+  flex-shrink: 0; /* 크기 고정 */
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  width: 120px; /* 기본정보 박스 너비 */
-  height: 120px; /* 기본정보 박스 높이 */
+  width: 90px; /* 기본 너비 */
+  height: 90px; /* 기본 높이 */
   border: 1px solid #ddd;
-  border-radius: 10px;
+  border-radius: 50%;
   justify-content: center;
-  font-size: 0.9em;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.9em; /* 기본 폰트 크기 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .detail-item .header {
   font-weight: bold;
   margin-bottom: 5px;
+  font-size: 0.8em; /* 기본 헤더 폰트 */
 }
 
+.detail-item .value {
+  font-size: 0.8em; /* 기본 값 폰트 */
+}
+
+/* 화면 크기가 작아지면 크기 줄이기 */
+@media (max-width: 768px) {
+  .detail-item {
+    width: 70px; /* 축소된 너비 */
+    height: 70px; /* 축소된 높이 */
+    font-size: 0.8em; /* 축소된 폰트 크기 */
+  }
+
+  .detail-item .header {
+    font-size: 0.7em; /* 축소된 헤더 폰트 */
+  }
+
+  .detail-item .value {
+    font-size: 0.7em; /* 축소된 값 폰트 */
+  }
+}
+
+/* 더 작은 화면에서 더 축소 */
+@media (max-width: 480px) {
+  .detail-item {
+    width: 60px; /* 더 축소된 너비 */
+    height: 60px; /* 더 축소된 높이 */
+    font-size: 0.7em; /* 더 축소된 폰트 크기 */
+  }
+
+  .detail-item .header {
+    font-size: 0.6em; /* 더 축소된 헤더 폰트 */
+  }
+
+  .detail-item .value {
+    font-size: 0.6em; /* 더 축소된 값 폰트 */
+  }
+}
 /* 다른 군 데이터 섹션 스타일 */
 #otherData {
   flex: 1;
