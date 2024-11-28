@@ -249,6 +249,53 @@
       populateDropdown('학과명Dropdown', Array.from(학과명Set));
     }
 
+async function fetchResultsAutomatically() {
+  const 군 = document.getElementById("군Dropdown").value;
+  const 대학명 = document.getElementById("대학명Dropdown").value;
+  const 학과명 = document.getElementById("학과명Dropdown").value;
+
+  if (군 && 대학명 && 학과명) {
+    updateTitle(대학명, 학과명);
+    showLoadingMessage();
+    clearTable();
+    document.getElementById("resultTable").style.display = "none";
+
+    try {
+      // 데이터 가져오기
+      await fetchSchoolDetails();
+
+      const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
+      const resultData = await response.json();
+
+      console.log("웹앱에서 가져온 데이터:", resultData);
+
+      if (!Array.isArray(resultData) || resultData.length === 0) {
+        console.warn("필터링된 데이터가 비어 있습니다.");
+        fetchSchoolResult([]); // 빈 테이블 초기화
+        updateOtherData([]); // 다른 군 데이터 초기화
+        return;
+      }
+
+      // 테이블 먼저 업데이트
+      fetchSchoolResult(resultData);
+
+      // 테이블 업데이트 이후 상위 3개 데이터 업데이트
+      setTimeout(() => updateOtherData(resultData), 100); // 약간의 지연 시간 추가
+    } catch (error) {
+      console.error("데이터를 가져오는 중 오류 발생:", error);
+      fetchSchoolResult([]); // 에러 시 테이블 초기화
+      updateOtherData([]); // 다른 군 데이터 초기화
+    } finally {
+      hideLoadingMessage();
+      document.getElementById("resultTable").style.display = "table";
+    }
+  } else {
+    console.warn("필터링 조건이 완전하지 않습니다.");
+    fetchSchoolResult([]); // 필터링 조건이 없을 때 초기화
+    updateOtherData([]); // 다른 군 데이터 초기화
+  }
+}
+
 function updateOtherData(resultData) {
   console.log("updateOtherData 시작");
   console.log("전체 데이터 확인 (크기):", resultData.length, resultData);
@@ -270,17 +317,22 @@ function updateOtherData(resultData) {
   const otherDataDiv = document.getElementById("otherData");
   otherDataDiv.innerHTML = ""; // 초기화
 
-  // 각 군 데이터를 옆으로 정렬하는 컨테이너 생성
   const container = document.createElement("div");
-  container.style.display = "flex"; // 옆으로 정렬
-  container.style.gap = "20px"; // 간격 추가
+  container.style.display = "flex";
+  container.style.gap = "20px";
   otherDataDiv.appendChild(container);
 
   selected군.forEach((target군) => {
     console.log(`=== ${target군}군 필터링 시작 ===`);
 
     // resultData에서 다른 군 데이터 필터링
-    const filteredData = resultData.filter((row) => row[`${target군}_군`] === target군);
+    const filteredData = resultData.filter((row) => {
+      const 군값 = (row[`${target군}_군`] || "").trim();
+      const 대학값 = (row[`${target군}_대학명`] || "").trim();
+      const 학과값 = (row[`${target군}_학과명`] || "").trim();
+
+      return 군값 === target군 && 대학값 !== "" && 학과값 !== ""; // 비어있는 값 제외
+    });
 
     console.log(`${target군}군 필터링 결과 (크기: ${filteredData.length}):`, filteredData);
 
@@ -326,51 +378,6 @@ function updateOtherData(resultData) {
   console.log("updateOtherData 종료");
 }
 
-// fetchResultsAutomatically에서 호출 시 위치 조정
-async function fetchResultsAutomatically() {
-  const 군 = document.getElementById("군Dropdown").value;
-  const 대학명 = document.getElementById("대학명Dropdown").value;
-  const 학과명 = document.getElementById("학과명Dropdown").value;
-
-  if (군 && 대학명 && 학과명) {
-    updateTitle(대학명, 학과명);
-    showLoadingMessage();
-    clearTable();
-    document.getElementById("resultTable").style.display = "none";
-
-    try {
-      // 데이터 가져오기
-      await fetchSchoolDetails();
-
-      const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
-      const resultData = await response.json();
-
-      console.log("웹앱에서 가져온 데이터:", resultData);
-
-      if (!Array.isArray(resultData) || resultData.length === 0) {
-        console.warn("필터링된 데이터가 비어 있습니다.");
-        fetchSchoolResult([]); // 빈 테이블 초기화
-        updateOtherData([]); // 다른 군 데이터 초기화
-        return;
-      }
-
-      // 테이블 업데이트 및 다른 군 데이터 동시 처리
-      fetchSchoolResult(resultData); // 테이블 업데이트
-      updateOtherData(resultData); // 다른 군 데이터 업데이트
-    } catch (error) {
-      console.error("데이터를 가져오는 중 오류 발생:", error);
-      fetchSchoolResult([]); // 에러 시 테이블 초기화
-      updateOtherData([]); // 다른 군 데이터 초기화
-    } finally {
-      hideLoadingMessage();
-      document.getElementById("resultTable").style.display = "table";
-    }
-  } else {
-    console.warn("필터링 조건이 완전하지 않습니다.");
-    fetchSchoolResult([]); // 필터링 조건이 없을 때 초기화
-    updateOtherData([]); // 다른 군 데이터 초기화
-  }
-}
 
 
 
