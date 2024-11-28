@@ -188,6 +188,24 @@
   font-size: 0.9em;
   margin-bottom: 5px;
 }
+      #pageTitleContainer {
+    text-align: center; /* 가운데 정렬 */
+    margin-bottom: 20px; /* 아래 여백 */
+  }
+
+  /* 이미지 스타일 */
+  #pageTitleImage {
+    width: 400px; /* 가로 크기 고정 */
+    height: auto; /* 비율 유지 */
+    display: block;
+    margin: 0 auto; /* 가운데 정렬 */
+  }
+
+  /* 텍스트 스타일 */
+  #pageTitleContainer h1 {
+    margin-top: 10px; /* 이미지와 텍스트 간격 */
+    font-size: 1.2em; /* 텍스트 크기 */
+  }
 
 
 </style>
@@ -195,7 +213,11 @@
 </head>
 <body>
 
-    <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
+<div id="pageTitleContainer">
+  <img src="https://github.com/seanyjeong/supermax/blob/main/KakaoTalk_20241128_195837418.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
+  <h1>맥스체대입시 25정시 실시간</h1>
+</div>
+
 
 
 
