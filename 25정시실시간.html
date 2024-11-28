@@ -6,8 +6,6 @@
 
 
   <style>
-
-
    body {
     font-family: Arial, sans-serif;
     margin: 0;
@@ -71,7 +69,7 @@
   }
 
   #loadingImage {
-    width: 700px; /* 이미지 크기 */
+    width: 500px; /* 이미지 크기 */
     animation: blink 1.2s infinite;
   }
 
@@ -188,29 +186,6 @@
   font-size: 0.9em;
   margin-bottom: 5px;
 }
-    #pageTitle {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    #pageTitleImage {
-      width: 100%;
-      max-width: 700px;
-      height: auto;
-      display: block;
-      margin: 0 auto;
-    }
-
-    #titleText {
-      font-size: 2em; /* 텍스트 크기 고정 */
-      font-weight: bold;
-      margin-top: 10px;
-      display: inline-block; /* 크기를 고정하기 위해 inline-block 추가 */
-    }
-
-    #titleText.fixed {
-      white-space: nowrap; /* 텍스트 줄바꿈 방지 */
-    }
 
 
 </style>
@@ -218,15 +193,8 @@
 </head>
 <body>
 
-  <div id="pageTitle">
-    <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%A0%95%EC%8B%9C.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
-    <h1 id="titleText" class="fixed">맥스체대입시 25정시 실시간</h1>
-  </div>
-
-
-
-
-
+ 
+  <h1 id="pageTitle">맥스체대입시 25정시 실시간</h1>
 
 
 
@@ -271,7 +239,7 @@
     </div>
   
 
-
+  
 
  
 
@@ -301,16 +269,6 @@
   </table>
 
   <script>
-
-    function updateTitle(대학명, 학과명) {
-      const titleText = document.getElementById('titleText');
-      if (titleText) {
-        titleText.textContent = `${대학명} - ${학과명}`;
-      }
-    }
-
-
-
 
 
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
