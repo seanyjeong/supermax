@@ -215,8 +215,9 @@
 
 <div id="pageTitle">
   <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%A0%95%EC%8B%9C.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
-  <h1>맥스체대입시 25정시 실시간</h1>
+  <h1 id="titleText">맥스체대입시 25정시 실시간</h1>
 </div>
+
 
 
 
@@ -299,9 +300,10 @@
 function updateTitle(대학명, 학과명) {
   const titleText = document.getElementById('titleText'); // 텍스트 요소만 업데이트
   if (titleText) {
-    titleText.textContent = `${대학명} - ${학과명}`;
+    titleText.textContent = `${대학명} - ${학과명}`; // 이미지 유지, 텍스트만 변경
   }
 }
+
 
 
 
