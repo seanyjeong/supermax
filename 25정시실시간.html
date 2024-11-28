@@ -277,7 +277,7 @@
 
 function updateOtherData(data) {
   console.log('updateOtherData 시작');
-  console.log('전체 데이터 확인:', data); // 전체 데이터 확인
+  console.log('전체 데이터 확인:', data);
 
   const 군 = document.getElementById('군Dropdown').value;
   console.log(`현재 선택된 군: ${군}`);
@@ -300,10 +300,10 @@ function updateOtherData(data) {
   selected군.forEach(target군 => {
     console.log(`필터링할 군: ${target군}`);
 
+    // 다른 군의 모든 데이터를 필터링
     const filteredData = data.filter(row => {
       const 군값 = (row[`${target군}_군`] || '').trim(); // 공백 제거
-      console.log(`row[${target군}_군]:`, 군값, `필터링 조건: '${군값}' === '${target군}'`);
-      return 군값 === target군;
+      return 군값 === target군; // 선택된 군과 매칭되는 데이터만
     });
 
     console.log(`${target군} 필터링 결과 (크기: ${filteredData.length}):`, filteredData);
@@ -313,18 +313,21 @@ function updateOtherData(data) {
       return;
     }
 
+    // 학교-학과별 선택 횟수 계산
     const countMap = {};
     filteredData.forEach(row => {
       const key = `${row[`${target군}_대학명`].trim()} - ${row[`${target군}_학과명`].trim()}`;
-      countMap[key] = (countMap[key] || 0) + 1;
+      countMap[key] = (countMap[key] || 0) + 1; // 동일 학교-학과 조합 카운트
     });
 
+    // 상위 3개 데이터 추출
     const sortedData = Object.entries(countMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
+      .sort((a, b) => b[1] - a[1]) // 선택 횟수 기준 내림차순 정렬
+      .slice(0, 3); // 상위 3개만
 
     console.log(`${target군} 상위 3개 데이터:`, sortedData);
 
+    // 결과 표시
     const section = document.createElement('div');
     section.innerHTML = `
       <h4>${target군}군 상위 3개</h4>
