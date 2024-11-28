@@ -60,12 +60,17 @@
     }
 
     #loadingMessage {
-    text-align: center;
-    margin-top: 20px;
-  }
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: none; /* 기본적으로 숨김 */
+}
+
 
   #loadingImage {
-    width: 100px; /* 이미지 크기 조정 */
+    width: 800px; /* 이미지 크기 조정 */
     animation: blink 1.2s infinite;
   }
 
