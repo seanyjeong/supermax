@@ -263,34 +263,37 @@ async function fetchResultsAutomatically() {
     showLoadingMessage();
 
     try {
-      // 1. 필터링된 데이터 가져오기
+      // 첫 번째 데이터 가져오기
+      await fetchSchoolDetails();
+
+      // 두 번째 데이터로 테이블 업데이트
       const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
       const resultData = await response.json();
-      console.log('웹앱에서 가져온 필터링된 데이터:', resultData);
+
+      console.log('웹앱에서 가져온 데이터:', resultData);
 
       if (!Array.isArray(resultData) || resultData.length === 0) {
-        console.error('필터링된 데이터가 비어 있습니다.');
+        console.warn('필터링된 데이터가 비어 있습니다.');
         fetchSchoolResult([]); // 빈 테이블 초기화
         return;
       }
 
-      // 2. 테이블 데이터 표시
+      // 테이블 및 다른 군 데이터 갱신
       fetchSchoolResult(resultData);
-
-      // 3. 다른 군 데이터 업데이트
       updateOtherData(resultData);
     } catch (error) {
-      console.error('필터링된 데이터를 가져오는 중 오류:', error);
-      fetchSchoolResult([]); // 에러 시 빈 테이블 초기화
+      console.error('데이터를 가져오는 중 오류 발생:', error);
+      fetchSchoolResult([]); // 에러 시 테이블 초기화
     } finally {
       // 로딩 이미지 숨기기
       hideLoadingMessage();
     }
   } else {
-    console.log('필터링 조건이 완전하지 않습니다.');
-    fetchSchoolResult([]); // 조건 미충족 시 테이블 초기화
+    console.warn('필터링 조건이 완전하지 않습니다.');
+    fetchSchoolResult([]); // 필터링 조건이 없을 때 초기화
   }
 }
+
 
 function updateOtherData(data) {
   console.log('updateOtherData 시작');
