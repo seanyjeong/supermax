@@ -188,35 +188,41 @@
   font-size: 0.9em;
   margin-bottom: 5px;
 }
-  #pageTitle {
-    text-align: center; /* 가운데 정렬 */
-    margin-bottom: 20px; /* 아래 여백 */
-  }
+#pageTitleImageContainer {
+  text-align: center; /* 이미지 가운데 정렬 */
+  margin-bottom: 20px; /* 이미지 아래 간격 */
+}
 
-  #pageTitleImage {
-    width: 100%; /* 화면 가로 크기에 맞춤 */
-   max-width: 800px; /* 최대 너비 400px */
-    height: auto; /* 비율 유지 */
-    display: block;
-    margin: 0 auto; /* 가운데 정렬 */
-  }
+#pageTitleImage {
+  width: 100%; /* 화면 너비에 맞춤 */
+  max-width: 800px; /* 최대 너비 800px */
+  height: auto; /* 비율 유지 */
+  display: block;
+  margin: 0 auto; /* 가운데 정렬 */
+}
 
-  #titleText {
-    font-size: 2em; /* 글씨 크기 키움 */
-    font-weight: bold;
-    margin-top: 10px; /* 이미지와 간격 */
-  }
+#pageTitleTextContainer {
+  text-align: center; /* 텍스트 가운데 정렬 */
+}
 
+#titleText {
+  font-size: 2em; /* 글씨 크기 */
+  font-weight: bold; /* 굵은 글씨 */
+  margin-top: 10px; /* 간격 */
+}
 
 </style>
   </style>
 </head>
 <body>
 
-<div id="pageTitle">
-  <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%A0%95%EC%8B%9C.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
+<div id="pageTitleImageContainer">
+  <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%A0%95%EC%8B%9C.png?raw=true" id="pageTitleImage" alt="타이틀 이미지">
+</div>
+<div id="pageTitleTextContainer">
   <h1 id="titleText">맥스체대입시 25정시 실시간</h1>
 </div>
+
 
 
 
