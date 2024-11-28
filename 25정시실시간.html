@@ -250,21 +250,28 @@
     }
 
     async function fetchResultsAutomatically() {
-      const 군 = document.getElementById('군Dropdown').value;
-      const 대학명 = document.getElementById('대학명Dropdown').value;
-      const 학과명 = document.getElementById('학과명Dropdown').value;
+  const 군 = document.getElementById('군Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value;
+  const 학과명 = document.getElementById('학과명Dropdown').value;
 
-      if (군 && 대학명 && 학과명) {
-        updateTitle(대학명, 학과명);
-        showLoadingMessage();
-        clearTable();
-        document.getElementById('resultTable').style.display = 'none';
-        await fetchSchoolDetails();
-        await fetchSchoolResult();
-        hideLoadingMessage();
-        document.getElementById('resultTable').style.display = 'table';
-      }
-    }
+  if (군 && 대학명 && 학과명) {
+    updateTitle(대학명, 학과명);
+    showLoadingMessage();
+    clearTable();
+    document.getElementById('resultTable').style.display = 'none';
+
+    // 첫 번째 필터링 작업 실행
+    await fetchSchoolDetails(); // 첫 번째 데이터 가져오기
+    await fetchSchoolResult(); // 테이블 업데이트
+
+    hideLoadingMessage();
+    document.getElementById('resultTable').style.display = 'table';
+
+    // 첫 번째 작업 완료 후 두 번째 작업 실행
+    updateOtherData(data); // 다른 군 데이터 업데이트
+  }
+}
+
 
     function updateOtherData(data) {
   console.log('전체 데이터 확인:', data); // 데이터 확인
