@@ -71,7 +71,7 @@
   }
 
   #loadingImage {
-    width: 500px; /* 이미지 크기 */
+    width: 700px; /* 이미지 크기 */
     animation: blink 1.2s infinite;
   }
 
@@ -188,23 +188,23 @@
   font-size: 0.9em;
   margin-bottom: 5px;
 }
-      #pageTitle {
+  #pageTitle {
     text-align: center; /* 가운데 정렬 */
     margin-bottom: 20px; /* 아래 여백 */
   }
 
-  /* 이미지 스타일 */
   #pageTitleImage {
-    width: 400px; /* 가로 크기 고정 */
+    width: 100%; /* 화면 가로 크기에 맞춤 */
+    max-width: 400px; /* 최대 너비 400px */
     height: auto; /* 비율 유지 */
     display: block;
     margin: 0 auto; /* 가운데 정렬 */
   }
 
-  /* 텍스트 스타일 */
-  #pageTitleContainer h1 {
-    margin-top: 10px; /* 이미지와 텍스트 간격 */
-    font-size: 1.2em; /* 텍스트 크기 */
+  #titleText {
+    font-size: 2em; /* 글씨 크기 키움 */
+    font-weight: bold;
+    margin-top: 10px; /* 이미지와 간격 */
   }
 
 
@@ -296,13 +296,10 @@
 
   <script>
 
-    function updateTitle(대학명, 학과명) {
-  const titleElement = document.getElementById('pageTitle');
-  if (titleElement) {
-    titleElement.innerHTML = `
-      <img src="https://github.com/seanyjeong/supermax/blob/main/25%EC%A0%95%EC%8B%9C.png?raw=true" alt="맥스체대입시 로고" id="pageTitleImage">
-      <h1>${대학명} - ${학과명}</h1>
-    `;
+function updateTitle(대학명, 학과명) {
+  const titleText = document.getElementById('titleText'); // 텍스트 요소만 업데이트
+  if (titleText) {
+    titleText.textContent = `${대학명} - ${학과명}`;
   }
 }
 
