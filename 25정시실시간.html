@@ -259,38 +259,37 @@
     console.log(`현재 선택된 학교: ${대학명}`);
     console.log(`현재 선택된 학과: ${학과명}`);
 
-    // 1. 테이블 업데이트
     try {
+      // 1. 필터링된 데이터 가져오기
       const response = await fetch(`${webAppUrl}?군=${군}&대학명=${대학명}&학과명=${학과명}`);
-      console.log('테이블 데이터 요청 응답 상태 코드:', response.status);
+      console.log('필터링된 데이터 요청 응답 상태 코드:', response.status);
 
       if (!response.ok) {
-        throw new Error(`테이블 데이터 요청 실패: ${response.status}`);
+        throw new Error(`데이터 요청 실패: ${response.status}`);
       }
 
       const resultData = await response.json();
-      console.log('웹앱에서 가져온 테이블 데이터:', resultData);
+      console.log('웹앱에서 가져온 필터링된 데이터:', resultData);
 
       if (!Array.isArray(resultData) || resultData.length === 0) {
-        console.error('테이블 데이터가 비어 있습니다.');
+        console.error('필터링된 데이터가 비어 있습니다.');
+        // 테이블 초기화
+        fetchSchoolResult([]);
         return;
       }
 
-      // 전역 변수 data에 저장
-      data = resultData;
-      console.log('테이블 데이터로 전역 변수 data 업데이트:', data);
-
-      // 테이블 업데이트
+      // 2. 테이블 업데이트
       fetchSchoolResult(resultData);
-    } catch (error) {
-      console.error('테이블 데이터를 가져오는 중 오류:', error);
-      return;
-    }
 
-    // 2. 다른 군 데이터 업데이트
-    updateOtherData(data);
+      // 3. 다른 군 데이터 업데이트
+      updateOtherData(resultData);
+    } catch (error) {
+      console.error('필터링된 데이터를 가져오는 중 오류:', error);
+      fetchSchoolResult([]); // 에러 시 테이블 초기화
+    }
   } else {
     console.log('필터링 조건이 완전하지 않습니다.');
+    fetchSchoolResult([]); // 조건이 완전하지 않을 때도 테이블 초기화
   }
 }
 
@@ -321,14 +320,13 @@ function updateOtherData(data) {
   }
 
   const otherDataDiv = document.getElementById('otherData');
-  otherDataDiv.innerHTML = '';
+  otherDataDiv.innerHTML = ''; // 초기화
 
   selected군.forEach(target군 => {
     console.log(`=== ${target군}군 필터링 시작 ===`);
 
     const filteredData = data.filter(row => {
       const 군값 = (row[`${target군}_군`] || '').trim();
-      console.log(`row[${target군}_군]: '${군값}' | 조건: '${군값}' === '${target군}'`);
       return 군값 === target군;
     });
 
@@ -367,6 +365,7 @@ function updateOtherData(data) {
 
   console.log('updateOtherData 종료');
 }
+
 
 
 
