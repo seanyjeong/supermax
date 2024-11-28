@@ -271,19 +271,20 @@
     console.log("첫 번째 필터링 완료, 두 번째 필터링 시작");
     updateOtherData(data); // 다른 군 데이터 업데이트
   }
-}function updateOtherData(data) {
+}
+
+function updateOtherData(data) {
   console.log('updateOtherData 시작');
-  console.log('전체 데이터 확인 (크기):', data.length, data); // 전체 데이터 크기와 내용 확인
+  console.log('전체 데이터 확인 (크기):', data.length, data);
 
   const 군 = document.getElementById('군Dropdown').value;
-  const 대학명 = document.getElementById('대학명Dropdown').value;
-  const 학과명 = document.getElementById('학과명Dropdown').value;
+  const 대학명 = document.getElementById('대학명Dropdown').value || ''; // 선택된 대학명
+  const 학과명 = document.getElementById('학과명Dropdown').value || ''; // 선택된 학과명
 
   console.log(`현재 선택된 군: ${군}`);
   console.log(`현재 선택된 학교: ${대학명}`);
   console.log(`현재 선택된 학과: ${학과명}`);
 
-  // 선택된 군을 기준으로 제외할 다른 군 설정
   const 다른군 = {
     가: ['나', '다'],
     나: ['가', '다'],
@@ -299,16 +300,22 @@
   const otherDataDiv = document.getElementById('otherData');
   otherDataDiv.innerHTML = ''; // 초기화
 
-  // 다른 군 데이터를 필터링하고 상위 3개를 추출
   selected군.forEach(target군 => {
     console.log(`=== ${target군}군 필터링 시작 ===`);
 
-    // 해당 군의 데이터 필터링
-    const filteredData = data.filter(row => {
+    // 로그: 필터링 조건과 데이터 확인
+    console.log(`현재 ${target군}군에서 필터링할 데이터:`);
+    data.forEach(row => {
       const 군값 = (row[`${target군}_군`] || '').trim(); // 공백 제거
-      console.log(`row 데이터:`, row);
-      console.log(`row[${target군}_군]: '${군값}' | 조건: '${군값}' === '${target군}'`); // 조건 확인
-      return 군값 === target군; // 필터링 조건
+      const 대학값 = (row[`${target군}_대학명`] || '').trim();
+      const 학과값 = (row[`${target군}_학과명`] || '').trim();
+      console.log(`row[${target군}_군]: '${군값}', row[${target군}_대학명]: '${대학값}', row[${target군}_학과명]: '${학과값}'`);
+    });
+
+    // 필터링 조건 적용
+    const filteredData = data.filter(row => {
+      const 군값 = (row[`${target군}_군`] || '').trim();
+      return 군값 === target군; // 선택된 군과 매칭되는 데이터만
     });
 
     console.log(`${target군}군 필터링 결과 (크기: ${filteredData.length}):`, filteredData);
@@ -322,18 +329,18 @@
     // 학교-학과별 선택 횟수 계산
     const countMap = {};
     filteredData.forEach(row => {
-      const 대학명 = (row[`${target군}_대학명`] || '').trim(); // 공백 제거
-      const 학과명 = (row[`${target군}_학과명`] || '').trim(); // 공백 제거
+      const 대학명 = (row[`${target군}_대학명`] || '').trim();
+      const 학과명 = (row[`${target군}_학과명`] || '').trim();
       const key = `${대학명} - ${학과명}`;
-      countMap[key] = (countMap[key] || 0) + 1; // 선택 횟수 카운트
+      countMap[key] = (countMap[key] || 0) + 1;
     });
 
     console.log(`${target군}군 학교-학과 선택 횟수 맵:`, countMap);
 
     // 상위 3개 데이터 정렬 및 추출
     const sortedData = Object.entries(countMap)
-      .sort((a, b) => b[1] - a[1]) // 내림차순 정렬
-      .slice(0, 3); // 상위 3개만
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
 
     console.log(`${target군}군 상위 3개 데이터:`, sortedData);
 
