@@ -6,84 +6,70 @@
 
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-    }
+   body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+  }
 
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
+  h1 {
+    text-align: center;
+    margin-bottom: 20px;
+  }
 
-    .info-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
-      margin-bottom: 30px; /* 필터링 공간과 간격 띄우기 */
-    }
+  .info-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: space-between; /* 양쪽 정렬 */
+    align-items: flex-start; /* 상단 정렬 */
+    margin-bottom: 30px; /* 필터링 공간과 간격 띄우기 */
+  }
 
-    .detail-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      width: 90px; /* 원의 크기 - 너비 */
-      height: 90px; /* 원의 크기 - 높이 */
-      border: 1px solid #ddd;
-      border-radius: 50%;
-      justify-content: center;
-      font-size: 0.9em; /* 폰트 크기 */
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
+  .detail-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 90px; /* 원의 크기 - 너비 */
+    height: 90px; /* 원의 크기 - 높이 */
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    justify-content: center;
+    font-size: 0.9em; /* 폰트 크기 */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
 
-    /* 원 크기를 조정하려면 위의 width, height, font-size 값을 수정하세요 */
+  .detail-item .header {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
 
-    .detail-item .header {
-      font-weight: bold;
-      margin-bottom: 5px;
-    }
+  .dropdown-container {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-start; /* 왼쪽 정렬 */
+    margin-bottom: 20px;
+  }
 
-    .dropdown-container {
-      display: flex;
-      gap: 20px;
-      justify-content: flex-start; /* 왼쪽 정렬 */
-      margin-bottom: 20px;
-    }
+  select, button {
+    padding: 10px;
+    font-size: 1em;
+    width: 150px;
+  }
 
-    select, button {
-      padding: 10px;
-      font-size: 1em;
-      width: 150px;
-    }
-
-    #loadingMessage {
-  position: fixed; /* 화면 중앙에 고정 */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  display: none; /* 기본적으로 숨김 */
-  z-index: 1000; /* 다른 요소 위에 표시 */
-}
-
-#loadingImage {
-  width: 100px; /* 이미지 크기 */
-  animation: blink 1.2s infinite;
-}
-
-@keyframes blink {
-  0% { opacity: 1; }
-  50% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
-
+  #loadingMessage {
+    position: fixed; /* 화면 중앙에 고정 */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: none; /* 기본적으로 숨김 */
+    z-index: 1000; /* 다른 요소 위에 표시 */
+  }
 
   #loadingImage {
-    width: 800px; /* 이미지 크기 조정 */
+    width: 100px; /* 이미지 크기 */
     animation: blink 1.2s infinite;
   }
 
@@ -93,22 +79,52 @@
     100% { opacity: 1; }
   }
 
-    #resultTable {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      display: none; /* 기본적으로 숨김 처리 */
-    }
+  #resultTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    display: none; /* 기본적으로 숨김 처리 */
+  }
 
-    #resultTable th, #resultTable td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: center;
-    }
+  #resultTable th, #resultTable td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+  }
 
-    #resultTable th {
-      background-color: #f2f2f2;
-    }
+  #resultTable th {
+    background-color: #f2f2f2;
+  }
+
+  /* 추가된 스타일 */
+  #schoolDetails {
+    flex: 1; /* 기본정보 영역을 왼쪽에 차지 */
+  }
+
+  #otherData {
+    flex: 1; /* 다른 군 데이터 박스를 오른쪽에 배치 */
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  #otherData h4 {
+    margin: 0 0 10px;
+    font-size: 1em;
+  }
+
+  #otherData ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  #otherData ul li {
+    font-size: 0.9em;
+    margin-bottom: 5px;
+  }
+</style>
   </style>
 </head>
 <body>
@@ -116,8 +132,12 @@
 
 
 
-  <!-- 기본정보 섹션 -->
-  <div id="schoolDetails" class="info-container"></div>
+<!-- 기본정보 섹션 -->
+<div class="info-container">
+  <div id="schoolDetails"></div> <!-- 기본정보 -->
+  <div id="otherData"></div> <!-- 다른 군 상위 데이터 -->
+</div>
+
 
   
 
