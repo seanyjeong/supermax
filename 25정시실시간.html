@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>맥스체대입시25정시실시간</title>
+
+  <div id="loadingMessage">
+    <img src="https://github.com/seanyjeong/supermax/blob/main/maxlogo.png?raw=true" alt="Loading" id="loadingImage">
+  </div>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -58,19 +62,20 @@
     }
 
     #loadingMessage {
-      text-align: center;
-      font-size: 1.5em;
-      font-style: italic;
-      color: #555;
-      margin-top: 20px;
-      animation: blink 1.2s infinite;
-    }
+    text-align: center;
+    margin-top: 20px;
+  }
 
-    @keyframes blink {
-      0% { opacity: 1; }
-      50% { opacity: 0; }
-      100% { opacity: 1; }
-    }
+  #loadingImage {
+    width: 100px; /* 이미지 크기 조정 */
+    animation: blink 1.2s infinite;
+  }
+
+  @keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 1; }
+  }
 
     #resultTable {
       width: 100%;
