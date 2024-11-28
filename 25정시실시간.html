@@ -189,26 +189,23 @@
 
   <script>
     const webAppUrl = "https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec";
+    let data = []; // 모든 데이터를 저장할 전역 변수
+
 
     async function loadDropdownData() {
-      try {
-        const response = await fetch('https://supermax.kr/getSelectionData');
-        const data = await response.json();
+  try {
+    const response = await fetch('https://supermax.kr/getSelectionData');
+    const data = await response.json(); // 로컬 변수 data (이게 문제!)
 
-        populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
-        document.getElementById('군Dropdown').addEventListener('change', () => {
-          filterUniversities(data);
-          fetchResultsAutomatically();
-        });
-        document.getElementById('대학명Dropdown').addEventListener('change', () => {
-          filterMajors(data);
-          fetchResultsAutomatically();
-        });
-        document.getElementById('학과명Dropdown').addEventListener('change', fetchResultsAutomatically);
-      } catch (error) {
-        console.error('드롭다운 데이터를 불러오는 중 오류:', error);
-      }
-    }
+    populateDropdown('군Dropdown', Array.from(new Set(data.map(item => item.군))));
+    document.getElementById('군Dropdown').addEventListener('change', () => {
+      fetchResultsAutomatically();
+    });
+  } catch (error) {
+    console.error('드롭다운 데이터를 불러오는 중 오류:', error);
+  }
+}
+
 
     function populateDropdown(elementId, options) {
       const dropdown = document.getElementById(elementId);
