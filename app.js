@@ -936,13 +936,16 @@ app.get('/getSchoolResult', (req, res) => {
 const fetchAndUpdateData = async () => {
   console.log('fetchAndUpdateData function started');
   try {
-    // Google Apps Script URL
-    const response = await axios.get('https://script.google.com/macros/s/AKfycbzlaEJ3_8ewfYD30gGLeACnKMh2SFXLbXPMf4z94ioYRZG1fF1JYbMc7XTBo_Ked9u3/exec');
+    // Google Apps Script URL에서 데이터 가져오기
+    const response = await axios.get(
+      'https://script.google.com/macros/s/AKfycbzlaEJ3_8ewfYD30gGLeACnKMh2SFXLbXPMf4z94ioYRZG1fF1JYbMc7XTBo_Ked9u3/exec'
+    );
     const data = response.data;
 
     if (Array.isArray(data)) {
       console.log('Data fetched from Google Apps Script');
 
+      // MySQL INSERT 쿼리
       const query = `
         INSERT INTO 성적및대학 (
           이름, 성별, 군, 대학명, 학과명, 수능점수, 내신점수, 
@@ -964,33 +967,46 @@ const fetchAndUpdateData = async () => {
 
       const promises = [];
 
-      // 가군, 나군, 다군 데이터를 각각 처리
-      data.forEach(row => {
-        ['가군', '나군', '다군'].forEach(군 => {
+      // 데이터를 순회하여 가군, 나군, 다군 처리
+      data.forEach((row) => {
+        ['가군', '나군', '다군'].forEach((군) => {
           const 군데이터 = row[군];
-          if (군데이터 && 군데이터.대학명) { // 데이터가 존재하고 대학명이 있을 경우만 삽입
+          if (군데이터 && 군데이터.대학명) {
+            // 데이터가 존재하고 대학명이 있을 경우에만 삽입
             const values = [
-              row.이름, row.성별, 군데이터.군, 군데이터.대학명, 군데이터.학과명,
-              군데이터.수능점수, 군데이터.내신점수,
-              군데이터.실기종목1, 군데이터.실기종목2, 군데이터.실기종목3,
-              군데이터.실기종목4, 군데이터.실기종목5, 군데이터.실기종목6
+              row.이름,
+              row.성별,
+              군데이터.군,
+              군데이터.대학명,
+              군데이터.학과명,
+              군데이터.수능점수 || 0,
+              군데이터.내신점수 || 0,
+              군데이터.실기종목1 || '',
+              군데이터.실기종목2 || '',
+              군데이터.실기종목3 || '',
+              군데이터.실기종목4 || '',
+              군데이터.실기종목5 || '',
+              군데이터.실기종목6 || '',
             ];
 
-            promises.push(new Promise((resolve, reject) => {
-              connection.query(query, values, (err, result) => {
-                if (err) {
-                  console.error(`Error inserting/updating data for ${군}:`, err);
-                  reject(err);
-                } else {
-                  resolve(result);
-                }
-              });
-            }));
+            // MySQL 쿼리를 Promise로 처리
+            promises.push(
+              new Promise((resolve, reject) => {
+                connection.query(query, values, (err, result) => {
+                  if (err) {
+                    console.error(`Error inserting/updating data for ${군}:`, err);
+                    reject(err);
+                  } else {
+                    resolve(result);
+                  }
+                });
+              })
+            );
           }
         });
       });
 
-      // 모든 데이터 삽입 완료 대기
+      // 모든 삽입 및 업데이트 완료 대기
       await Promise.all(promises);
       console.log('Scores updated successfully');
     }
@@ -999,6 +1015,7 @@ const fetchAndUpdateData = async () => {
     throw error;
   }
 };
+
 
 // 서버 시작 시 데이터 가져오기
 fetchAndUpdateData();
