@@ -1011,24 +1011,31 @@ setInterval(fetchAndUpdateData, 60000);
 app.post('/25login', (req, res) => {
     const { name, code } = req.body;
 
+    // 입력값 검증
     if (!name || !code) {
-        return res.status(400).json({ success: false, message: 'Name and code are required' });
+        return res.status(400).json({ success: false, message: '이름과 코드가 필요합니다.' });
     }
 
-    const query = `SELECT 이름 FROM 식별코드 WHERE 이름 = ? AND 코드 = ?`;
+    // MySQL 쿼리
+    const query = `
+        SELECT 이름 FROM 식별코드 WHERE 이름 = ? AND 코드 = ?
+    `;
     connection.query(query, [name, code], (err, results) => {
         if (err) {
             console.error('Database error:', err);
-            return res.status(500).json({ success: false, message: 'Database error' });
+            return res.status(500).json({ success: false, message: 'Database error.' });
         }
 
         if (results.length === 0) {
-            return res.status(401).json({ success: false, message: 'Invalid name or code' });
+            // 이름과 코드가 일치하지 않는 경우
+            return res.status(401).json({ success: false, message: '이름 또는 코드가 올바르지 않습니다.' });
         }
 
+        // 로그인 성공
         return res.status(200).json({ success: true, name: results[0].이름 });
     });
 });
+
 
 
 app.post('/25getStudentScores', async (req, res) => {
