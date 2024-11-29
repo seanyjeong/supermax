@@ -1008,27 +1008,28 @@ setInterval(fetchAndUpdateData, 60000);
 
 ///////////////////일산맥스점수25
 
-app.post('/25login', async (req, res) => {
-    const { code } = req.body;
+app.post('/25login', (req, res) => {
+    const { name, code } = req.body;
 
+    // 이름과 코드로 사용자 확인
     const query = `
-        SELECT 이름 FROM 식별코드 WHERE 코드 = ?
+        SELECT 이름 FROM 식별코드 WHERE 이름 = ? AND 코드 = ?
     `;
-    connection.query(query, [code], (err, results) => {
+    connection.query(query, [name, code], (err, results) => {
         if (err) {
             console.error('Database error:', err);
             return res.status(500).json({ success: false, message: 'Database error' });
         }
 
         if (results.length === 0) {
-            return res.status(401).json({ success: false, message: 'Invalid code' });
+            return res.status(401).json({ success: false, message: 'Invalid name or code' });
         }
 
         // 로그인 성공
-        const name = results[0].이름;
-        return res.status(200).json({ success: true, name });
+        return res.status(200).json({ success: true, name: results[0].이름 });
     });
 });
+
 app.post('/25getStudentScores', async (req, res) => {
     const { name } = req.body;
 
