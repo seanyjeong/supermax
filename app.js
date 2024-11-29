@@ -941,11 +941,11 @@ const fetchAndUpdateData = async () => {
   console.log('updateScores function started');
   try {
     const response = await axios.get(googleAppsScriptUrl);
-    const data = response.data; // Google Apps Script의 JSON 데이터
+    const data = response.data;
 
     if (Array.isArray(data)) {
       console.log('Data fetched from Google Apps Script');
-      // 데이터 삽입 또는 업데이트
+      
       data.forEach(row => {
         const sql = `
           INSERT INTO 성적및대학 (이름, 성별, 군, 대학명, 학과명, 수능점수, 내신점수, 실기종목1, 실기종목2, 실기종목3, 실기종목4, 실기종목5, 실기종목6)
@@ -975,6 +975,7 @@ const fetchAndUpdateData = async () => {
           }
         });
       });
+
       console.log('Scores updated successfully');
     }
   } catch (error) {
