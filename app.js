@@ -933,55 +933,60 @@ app.get('/getSchoolResult', (req, res) => {
   });
 });
 
-// Google Apps Script 웹앱 URL
-const googleAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzlaEJ3_8ewfYD30gGLeACnKMh2SFXLbXPMf4z94ioYRZG1fF1JYbMc7XTBo_Ked9u3/exec';
-
-// 데이터 가져와 MySQL에 저장하는 함수
 const fetchAndUpdateData = async () => {
-  console.log('updateScores function started');
+  console.log('fetchAndUpdateData function started');
   try {
-    const response = await axios.get(googleAppsScriptUrl);
+    // Google Apps Script URL 직접 사용
+    const response = await axios.get('https://script.google.com/macros/s/AKfycbzlaEJ3_8ewfYD30gGLeACnKMh2SFXLbXPMf4z94ioYRZG1fF1JYbMc7XTBo_Ked9u3/exec');
     const data = response.data;
 
     if (Array.isArray(data)) {
       console.log('Data fetched from Google Apps Script');
-      
-      data.forEach(row => {
-        const sql = `
-          INSERT INTO 성적및대학 (이름, 성별, 군, 대학명, 학과명, 수능점수, 내신점수, 실기종목1, 실기종목2, 실기종목3, 실기종목4, 실기종목5, 실기종목6)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE
-            군 = VALUES(군),
-            대학명 = VALUES(대학명),
-            학과명 = VALUES(학과명),
-            수능점수 = VALUES(수능점수),
-            내신점수 = VALUES(내신점수),
-            실기종목1 = VALUES(실기종목1),
-            실기종목2 = VALUES(실기종목2),
-            실기종목3 = VALUES(실기종목3),
-            실기종목4 = VALUES(실기종목4),
-            실기종목5 = VALUES(실기종목5),
-            실기종목6 = VALUES(실기종목6)
-        `;
+
+      const query = `
+        INSERT INTO 성적및대학 (이름, 성별, 군, 대학명, 학과명, 수능점수, 내신점수, 실기종목1, 실기종목2, 실기종목3, 실기종목4, 실기종목5, 실기종목6)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          군 = VALUES(군),
+          대학명 = VALUES(대학명),
+          학과명 = VALUES(학과명),
+          수능점수 = VALUES(수능점수),
+          내신점수 = VALUES(내신점수),
+          실기종목1 = VALUES(실기종목1),
+          실기종목2 = VALUES(실기종목2),
+          실기종목3 = VALUES(실기종목3),
+          실기종목4 = VALUES(실기종목4),
+          실기종목5 = VALUES(실기종목5),
+          실기종목6 = VALUES(실기종목6)
+      `;
+
+      const promises = data.map(row => {
         const values = [
           row.이름, row.성별, row.군, row.대학명, row.학과명,
           row.수능점수, row.내신점수, row.실기종목1, row.실기종목2,
           row.실기종목3, row.실기종목4, row.실기종목5, row.실기종목6
         ];
-
-        db.query(sql, values, (err, result) => {
-          if (err) {
-            console.error('데이터 삽입/업데이트 오류:', err);
-          }
+        return new Promise((resolve, reject) => {
+          connection.query(query, values, (err, result) => {
+            if (err) {
+              console.error('Error inserting/updating data:', err);
+              reject(err);
+            } else {
+              resolve(result);
+            }
+          });
         });
       });
 
+      await Promise.all(promises);
       console.log('Scores updated successfully');
     }
   } catch (error) {
-    console.error('데이터 가져오기 오류:', error);
+    console.error('Error fetching or updating data:', error);
+    throw error; // Ensure the error is propagated to the calling function
   }
 };
+
 
 // 서버 시작 시 데이터 가져오기
 fetchAndUpdateData();
