@@ -1059,10 +1059,12 @@ app.post('/25getStudentScores', async (req, res) => {
     const { name } = req.body;
 
     const query = `
-        SELECT 군, 대학명, 학과명, 수능점수, 내신점수
+        SELECT 군, 대학명, 학과명, 수능점수, 내신점수, 
+               실기종목1, 실기종목2, 실기종목3, 실기종목4, 실기종목5, 실기종목6
         FROM 성적및대학
         WHERE 이름 = ?
     `;
+
     connection.query(query, [name], (err, results) => {
         if (err) {
             console.error('Database error:', err);
@@ -1072,6 +1074,7 @@ app.post('/25getStudentScores', async (req, res) => {
         return res.status(200).json({ success: true, data: results });
     });
 });
+
 
 
 
