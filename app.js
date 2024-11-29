@@ -934,124 +934,57 @@ app.get('/getSchoolResult', (req, res) => {
 });
 
 // Google Apps Script 웹앱 URL
-const googleSheetsUrl = 'https://script.google.com/macros/s/AKfycbywMU0RrAnT5SDr9wqgmuhOuO_TCPqQ28tE-wFmxFJgJP-tVqmSU-EKEWq0n5_IbaZE/exec';
+const googleAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzlaEJ3_8ewfYD30gGLeACnKMh2SFXLbXPMf4z94ioYRZG1fF1JYbMc7XTBo_Ked9u3/exec';
 
-// MySQL 쿼리 실행 함수
-const executeQuery = (query, values) => {
-  return new Promise((resolve, reject) => {
-    connection.query(query, values, (err, results) => {
-      if (err) return reject(err);
-      resolve(results);
-    });
-  });
-};
-
-// 데이터를 배치(batch)로 나눠서 처리
-const batchInsert = async (query, values, batchSize = 500) => {
-  for (let i = 0; i < values.length; i += batchSize) {
-    const batch = values.slice(i, i + batchSize);
-    try {
-      await executeQuery(query, [batch]);
-      console.log(`Batch ${Math.ceil(i / batchSize) + 1} inserted successfully`);
-    } catch (error) {
-      console.error(`Error inserting batch ${Math.ceil(i / batchSize) + 1}:`, error);
-    }
-  }
-};
-
-// 데이터를 가져와 각 테이블에 업데이트
-const updateJungsiData = async () => {
+// 데이터 가져와 MySQL에 저장하는 함수
+const fetchAndUpdateData = async () => {
   try {
-    // Google Apps Script 데이터 가져오기
-    const response = await axios.get(googleSheetsUrl);
-    const { basicInfo, gInfo, nInfo, dInfo } = response.data;
+    const response = await axios.get(googleAppsScriptUrl);
+    const data = response.data; // Google Apps Script의 JSON 데이터
 
-    // 기본정보 업데이트
-    if (basicInfo && basicInfo.length > 0) {
-      const basicColumns = [
-        '지점', '학교', '학년', '성별', '이름', '국어과목', '국어원점수', '국어표점', '국어백분위', '국어등급',
-        '수학과목', '수학원점수', '수학표점', '수학백분위', '수학등급', '영어원점수', '영어등급',
-        '탐1과목', '탐1원점수', '탐1표점', '탐1백분위', '탐1등급', '탐2과목', '탐2원점수', '탐2표점',
-        '탐2백분위', '탐2등급', '한국사원점수', '한국사등급', '내신'
-      ];
+    if (Array.isArray(data)) {
+      // 데이터 삽입 또는 업데이트
+      data.forEach(row => {
+        const sql = `
+          INSERT INTO 성적및대학 (이름, 성별, 군, 대학명, 학과명, 수능점수, 내신점수, 실기종목1, 실기종목2, 실기종목3, 실기종목4, 실기종목5, 실기종목6)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE
+            군 = VALUES(군),
+            대학명 = VALUES(대학명),
+            학과명 = VALUES(학과명),
+            수능점수 = VALUES(수능점수),
+            내신점수 = VALUES(내신점수),
+            실기종목1 = VALUES(실기종목1),
+            실기종목2 = VALUES(실기종목2),
+            실기종목3 = VALUES(실기종목3),
+            실기종목4 = VALUES(실기종목4),
+            실기종목5 = VALUES(실기종목5),
+            실기종목6 = VALUES(실기종목6)
+        `;
+        const values = [
+          row.이름, row.성별, row.군, row.대학명, row.학과명,
+          row.수능점수, row.내신점수, row.실기종목1, row.실기종목2,
+          row.실기종목3, row.실기종목4, row.실기종목5, row.실기종목6
+        ];
 
-      const basicQuery = `
-        INSERT INTO \`25정시기본정보\` (${basicColumns.join(', ')})
-        VALUES ?
-        ON DUPLICATE KEY UPDATE ${basicColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
-      `;
-      const basicValues = basicInfo.map(row => basicColumns.map(col => row[col] || null));
-      await batchInsert(basicQuery, basicValues);
-      console.log('25정시기본정보 업데이트 성공');
+        db.query(sql, values, (err, result) => {
+          if (err) {
+            console.error('데이터 삽입/업데이트 오류:', err);
+          }
+        });
+      });
+      console.log('데이터 업데이트 완료');
     }
-
-    // 가군정보 업데이트
-    if (gInfo && gInfo.length > 0) {
-      const gColumns = [
-        '지점', '학교', '학년', '성별', '이름', '가_군', '가_대학명', '가_학과명', '가_수능', '가_내신',
-        '가_실기', '가_총점', '가_최초결과', '가_최종결과', '가_실기종목1', '가1_기록', '가1_점수',
-        '가_실기종목2', '가2_기록', '가2_점수', '가_실기종목3', '가3_기록', '가3_점수',
-        '가_실기종목4', '가4_기록', '가4_점수', '가_실기종목5', '가5_기록', '가5_점수', '가_실기종목6', '가6_기록', '가6_점수'
-      ];
-
-      const gQuery = `
-        INSERT INTO \`25가군정보\` (${gColumns.join(', ')})
-        VALUES ?
-        ON DUPLICATE KEY UPDATE ${gColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
-      `;
-      const gValues = gInfo.map(row => gColumns.map(col => row[col] || null));
-      await batchInsert(gQuery, gValues);
-      console.log('25가군정보 업데이트 성공');
-    }
-
-    // 나군정보 업데이트
-    if (nInfo && nInfo.length > 0) {
-      const nColumns = [
-        '지점', '학교', '학년', '성별', '이름', '나_군', '나_대학명', '나_학과명', '나_수능', '나_내신',
-        '나_실기', '나_총점', '나_최초결과', '나_최종결과', '나_실기종목1', '나1_기록', '나1_점수',
-        '나_실기종목2', '나2_기록', '나2_점수', '나_실기종목3', '나3_기록', '나3_점수',
-        '나_실기종목4', '나4_기록', '나4_점수', '나_실기종목5', '나5_기록', '나5_점수', '나_실기종목6', '나6_기록', '나6_점수'
-      ];
-
-      const nQuery = `
-        INSERT INTO \`25나군정보\` (${nColumns.join(', ')})
-        VALUES ?
-        ON DUPLICATE KEY UPDATE ${nColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
-      `;
-      const nValues = nInfo.map(row => nColumns.map(col => row[col] || null));
-      await batchInsert(nQuery, nValues);
-      console.log('25나군정보 업데이트 성공');
-    }
-
-    // 다군정보 업데이트
-    if (dInfo && dInfo.length > 0) {
-      const dColumns = [
-        '지점', '학교', '학년', '성별', '이름', '다_군', '다_대학명', '다_학과명', '다_수능', '다_내신',
-        '다_실기', '다_총점', '다_최초결과', '다_최종결과', '다_실기종목1', '다1_기록', '다1_점수',
-        '다_실기종목2', '다2_기록', '다2_점수', '다_실기종목3', '다3_기록', '다3_점수',
-        '다_실기종목4', '다4_기록', '다4_점수', '다_실기종목5', '다5_기록', '다5_점수', '다_실기종목6', '다6_기록', '다6_점수'
-      ];
-
-      const dQuery = `
-        INSERT INTO \`25다군정보\` (${dColumns.join(', ')})
-        VALUES ?
-        ON DUPLICATE KEY UPDATE ${dColumns.map(col => `${col} = VALUES(${col})`).join(', ')};
-      `;
-      const dValues = dInfo.map(row => dColumns.map(col => row[col] || null));
-      await batchInsert(dQuery, dValues);
-      console.log('25다군정보 업데이트 성공');
-    }
-
-    console.log('모든 데이터 업데이트 완료!');
   } catch (error) {
-    console.error('데이터 업데이트 중 오류:', error);
+    console.error('데이터 가져오기 오류:', error);
   }
 };
 
-// 서버 시작 시와 1분마다 실행
-updateJungsiData();
-setInterval(updateJungsiData, 60 * 1000);
+// 서버 시작 시 데이터 가져오기
+fetchAndUpdateData();
 
+// 1분마다 데이터 업데이트
+setInterval(fetchAndUpdateData, 60000);
 
 
 // 서버 시작
