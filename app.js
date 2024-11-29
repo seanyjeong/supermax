@@ -938,11 +938,13 @@ const googleAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzlaEJ3_8ew
 
 // 데이터 가져와 MySQL에 저장하는 함수
 const fetchAndUpdateData = async () => {
+  console.log('updateScores function started');
   try {
     const response = await axios.get(googleAppsScriptUrl);
     const data = response.data; // Google Apps Script의 JSON 데이터
 
     if (Array.isArray(data)) {
+      console.log('Data fetched from Google Apps Script');
       // 데이터 삽입 또는 업데이트
       data.forEach(row => {
         const sql = `
@@ -973,7 +975,7 @@ const fetchAndUpdateData = async () => {
           }
         });
       });
-      console.log('데이터 업데이트 완료');
+      console.log('Scores updated successfully');
     }
   } catch (error) {
     console.error('데이터 가져오기 오류:', error);
