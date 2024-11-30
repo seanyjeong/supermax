@@ -1059,7 +1059,7 @@ app.post('/25getStudentScores', async (req, res) => {
     const { name } = req.body;
 
     const query = `
-        SELECT 군, 대학명, 학과명, 수능점수, 내신점수, 
+        SELECT 성별, 군, 대학명, 학과명, 수능점수, 내신점수, 
                실기종목1, 실기종목2, 실기종목3, 실기종목4, 실기종목5, 실기종목6
         FROM 성적및대학
         WHERE 이름 = ?
@@ -1071,7 +1071,13 @@ app.post('/25getStudentScores', async (req, res) => {
             return res.status(500).json({ success: false, message: 'Database error' });
         }
 
-        return res.status(200).json({ success: true, data: results });
+        if (results.length === 0) {
+            return res.status(404).json({ success: false, message: 'Student not found' });
+        }
+
+        // 성별과 점수 데이터를 포함하여 반환
+        const gender = results[0].성별; // 첫 번째 결과의 성별
+        return res.status(200).json({ success: true, gender, data: results });
     });
 });
 
@@ -1079,7 +1085,8 @@ app.post('/25getStudentScores', async (req, res) => {
 app.post('/25calculatePracticalScores', async (req, res) => {
     const { universityName, majorName, gender, records } = req.body;
 
-    if (!universityName || !majorName || !gender || !Array.isArray(records)) {
+    // 요청 데이터 검증
+    if (!universityName || !majorName || !gender || !Array.isArray(records) || records.length === 0) {
         return res.status(400).json({ success: false, message: 'Invalid input data' });
     }
 
@@ -1101,7 +1108,7 @@ app.post('/25calculatePracticalScores', async (req, res) => {
 
         // Step 2: 25실기배점 데이터 가져오기
         const practicalPointsQuery = `
-            SELECT 학교번호, 배점, ${Array.from({ length: 36 }, (_, i) => `배점_[${i}]`).join(', ')}
+            SELECT 배점, ${Array.from({ length: 36 }, (_, i) => `배점_[${i}]`).join(', ')}
             FROM 25실기배점
             WHERE 학교번호 = ?
         `;
@@ -1115,27 +1122,21 @@ app.post('/25calculatePracticalScores', async (req, res) => {
 
         console.log(`실기 배점 데이터:`, practicalPoints);
 
-        // Step 3: 실기 종목별 점수 계산
-        const scores = [];
-        for (let i = 0; i < records.length; i++) {
-            const record = records[i]; // 사용자 입력 기록
-            const startIndex = i * 3; // 종목별 데이터 시작 인덱스
-
-            // 종목별 데이터 추출
+        // Step 3: 점수 계산
+        const scores = records.map((record, index) => {
+            // 종목별 데이터 가져오기
+            const startIndex = index * 3;
             const 남자기록 = extractRange(practicalPoints[startIndex], '배점');
             const 배점 = extractRange(practicalPoints[startIndex + 1], '배점');
             const 여자기록 = extractRange(practicalPoints[startIndex + 2], '배점');
 
-            // Lookup 함수로 점수 계산
-            let score = 0;
             if (gender === '남') {
-                score = lookup(record, 남자기록, 배점);
+                return lookup(record, 남자기록, 배점);
             } else if (gender === '여') {
-                score = lookup(record, 여자기록, 배점);
+                return lookup(record, 여자기록, 배점);
             }
-
-            scores.push(score);
-        }
+            return 0; // 잘못된 성별 입력 시 기본값
+        });
 
         console.log(`계산된 점수: ${scores}`);
         return res.status(200).json({ success: true, scores });
