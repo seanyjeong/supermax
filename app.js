@@ -1074,6 +1074,85 @@ app.post('/25getStudentScores', async (req, res) => {
         return res.status(200).json({ success: true, data: results });
     });
 });
+app.post('/25calculatePracticalScores', async (req, res) => {
+    const { universityName, majorName, gender, records } = req.body;
+
+    if (!universityName || !majorName || !gender || !Array.isArray(records)) {
+        return res.status(400).json({ success: false, message: 'Invalid input data' });
+    }
+
+    try {
+        // Step 1: 학교번호 찾기
+        const schoolNumberQuery = `
+            SELECT 학교번호 FROM 학교번호
+            WHERE 대학명 = ? AND 학과명 = ?
+        `;
+        const schoolNumberResult = await new Promise((resolve, reject) => {
+            connection.query(schoolNumberQuery, [universityName, majorName], (err, results) => {
+                if (err) return reject(err);
+                if (results.length === 0) return reject('학교번호를 찾을 수 없습니다.');
+                resolve(results[0].학교번호);
+            });
+        });
+
+        console.log(`학교번호: ${schoolNumberResult}`);
+
+        // Step 2: 25실기배점 데이터 가져오기
+        const practicalPointsQuery = `
+            SELECT * FROM 25실기배점
+            WHERE 학교번호 = ?
+        `;
+        const practicalPoints = await new Promise((resolve, reject) => {
+            connection.query(practicalPointsQuery, [schoolNumberResult], (err, results) => {
+                if (err) return reject(err);
+                if (results.length === 0) return reject('실기 배점을 찾을 수 없습니다.');
+                resolve(results);
+            });
+        });
+
+        console.log(`실기 배점 데이터:`, practicalPoints);
+
+        // Step 3: 실기 종목별 점수 계산
+        const scores = [];
+        for (let i = 0; i < records.length; i++) {
+            const record = records[i]; // 사용자 입력 기록
+            const startIndex = i * 3; // 종목별 데이터 시작 인덱스
+
+            // 종목별 데이터 추출
+            const 남자기록 = practicalPoints[startIndex]?.배점 || [];
+            const 배점 = practicalPoints[startIndex + 1]?.배점 || [];
+            const 여자기록 = practicalPoints[startIndex + 2]?.배점 || [];
+
+            // Lookup 함수로 점수 계산
+            let score = 0;
+            if (gender === '남') {
+                score = lookup(record, 남자기록, 배점);
+            } else if (gender === '여') {
+                score = lookup(record, 여자기록, 배점);
+            }
+
+            scores.push(score);
+        }
+
+        console.log(`계산된 점수: ${scores}`);
+        return res.status(200).json({ success: true, scores });
+
+    } catch (error) {
+        console.error('점수 계산 오류:', error);
+        return res.status(500).json({ success: false, message: '점수 계산에 실패했습니다.', error });
+    }
+});
+
+// Lookup 함수 구현
+function lookup(value, range, resultRange) {
+    for (let i = range.length - 1; i >= 0; i--) {
+        if (value >= range[i]) {
+            return resultRange[i] || 0; // 값이 범위에 속하면 결과값 반환
+        }
+    }
+    return 0; // 범위에 해당하지 않는 경우 0 반환
+}
+
 
 
 
