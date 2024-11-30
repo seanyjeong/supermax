@@ -1085,7 +1085,6 @@ app.post('/25getStudentScores', async (req, res) => {
 app.post('/25calculatePracticalScores', async (req, res) => {
     const { universityName, majorName, gender, records } = req.body;
 
-    // 요청 데이터 검증
     if (!universityName || !majorName || !gender || !Array.isArray(records) || records.length === 0) {
         return res.status(400).json({ success: false, message: 'Invalid input data' });
     }
@@ -1093,38 +1092,47 @@ app.post('/25calculatePracticalScores', async (req, res) => {
     try {
         // Step 1: 학교번호 찾기
         const schoolNumberQuery = `
-            SELECT 학교번호 FROM 학교번호
+            SELECT 학교번호 
+            FROM 학교번호
             WHERE 대학명 = ? AND 학과명 = ?
         `;
         const schoolNumberResult = await new Promise((resolve, reject) => {
             connection.query(schoolNumberQuery, [universityName, majorName], (err, results) => {
-                if (err) return reject(err);
-                if (results.length === 0) return reject('학교번호를 찾을 수 없습니다.');
+                if (err) {
+                    console.error('SQL Query Error (학교번호):', err);
+                    return reject(err);
+                }
+                if (results.length === 0) {
+                    console.error(`학교번호를 찾을 수 없습니다: 대학명=${universityName}, 학과명=${majorName}`);
+                    return reject('학교번호를 찾을 수 없습니다.');
+                }
                 resolve(results[0].학교번호);
             });
         });
 
-        console.log(`학교번호: ${schoolNumberResult}`);
-
         // Step 2: 25실기배점 데이터 가져오기
         const practicalPointsQuery = `
-            SELECT 배점, ${Array.from({ length: 36 }, (_, i) => `배점_[${i}]`).join(', ')}
+            SELECT \`배점\`, ${Array.from({ length: 36 }, (_, i) => `\`배점_[${i}]\``).join(', ')}
             FROM 25실기배점
             WHERE 학교번호 = ?
         `;
         const practicalPoints = await new Promise((resolve, reject) => {
             connection.query(practicalPointsQuery, [schoolNumberResult], (err, results) => {
-                if (err) return reject(err);
-                if (results.length === 0) return reject('실기 배점을 찾을 수 없습니다.');
+                if (err) {
+                    console.error('SQL Query Error (실기 배점):', err);
+                    return reject(err);
+                }
+                if (results.length === 0) {
+                    console.error(`실기 배점을 찾을 수 없습니다: 학교번호=${schoolNumberResult}`);
+                    return reject('실기 배점을 찾을 수 없습니다.');
+                }
+                console.log('Fetched practical points:', results);
                 resolve(results);
             });
         });
 
-        console.log(`실기 배점 데이터:`, practicalPoints);
-
         // Step 3: 점수 계산
         const scores = records.map((record, index) => {
-            // 종목별 데이터 가져오기
             const startIndex = index * 3;
             const 남자기록 = extractRange(practicalPoints[startIndex], '배점');
             const 배점 = extractRange(practicalPoints[startIndex + 1], '배점');
@@ -1135,17 +1143,17 @@ app.post('/25calculatePracticalScores', async (req, res) => {
             } else if (gender === '여') {
                 return lookup(record, 여자기록, 배점);
             }
-            return 0; // 잘못된 성별 입력 시 기본값
+            return 0;
         });
 
-        console.log(`계산된 점수: ${scores}`);
+        // Step 4: 결과 반환
         return res.status(200).json({ success: true, scores });
-
     } catch (error) {
         console.error('점수 계산 오류:', error);
         return res.status(500).json({ success: false, message: '점수 계산에 실패했습니다.', error });
     }
 });
+
 
 // Lookup 함수 구현
 function lookup(value, range, resultRange) {
