@@ -1132,7 +1132,7 @@ app.post('/25calculatePracticalScores', async (req, res) => {
 
         // Step 3: 점수 계산
 const scores = records.map((record, index) => {
-    const startIndex = index * 3; // 종목별 시작 행 계산
+    const startIndex = index * 3 + (req.body.index || 0) * 9; // 종목별, 실기 종목별 시작 행 계산
     const 남자기록 = practicalPoints[startIndex] ? extractRange(practicalPoints[startIndex], '배점') : [];
     const 배점 = practicalPoints[startIndex + 1] ? extractRange(practicalPoints[startIndex + 1], '배점') : [];
     const 여자기록 = practicalPoints[startIndex + 2] ? extractRange(practicalPoints[startIndex + 2], '배점') : [];
