@@ -1131,19 +1131,20 @@ app.post('/25calculatePracticalScores', async (req, res) => {
         });
 
         // Step 3: 점수 계산
-        const scores = records.map((record, index) => {
-            const startIndex = index * 3;
-            const 남자기록 = extractRange(practicalPoints[startIndex], '배점');
-            const 배점 = extractRange(practicalPoints[startIndex + 1], '배점');
-            const 여자기록 = extractRange(practicalPoints[startIndex + 2], '배점');
+const scores = records.map((record, index) => {
+    const startIndex = index * 3; // 종목별 시작 행 계산
+    const 남자기록 = practicalPoints[startIndex] ? extractRange(practicalPoints[startIndex], '배점') : [];
+    const 배점 = practicalPoints[startIndex + 1] ? extractRange(practicalPoints[startIndex + 1], '배점') : [];
+    const 여자기록 = practicalPoints[startIndex + 2] ? extractRange(practicalPoints[startIndex + 2], '배점') : [];
 
-            if (gender === '남') {
-                return lookup(record, 남자기록, 배점);
-            } else if (gender === '여') {
-                return lookup(record, 여자기록, 배점);
-            }
-            return 0; // 잘못된 성별의 경우 기본값 반환
-        });
+    if (gender === '남') {
+        return 남자기록.length && 배점.length ? lookup(record, 남자기록, 배점) : 0;
+    } else if (gender === '여') {
+        return 여자기록.length && 배점.length ? lookup(record, 여자기록, 배점) : 0;
+    }
+    return 0; // 잘못된 성별일 경우 기본값 반환
+});
+
 
         // Step 4: 디버깅용 데이터 추가 반환
         return res.status(200).json({ 
