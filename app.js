@@ -1158,9 +1158,12 @@ app.post('/25calculatePracticalScores', async (req, res) => {
     }
 });
 
-
 // Lookup 함수
 function lookup(value, range, resultRange) {
+    value = parseFloat(value);
+
+    if (isNaN(value)) return 0; // 입력값이 유효하지 않으면 0점 반환
+
     for (let i = range.length - 1; i >= 0; i--) {
         if (value >= range[i]) {
             return resultRange[i] || 0; // 범위 내 점수 반환
@@ -1176,6 +1179,7 @@ function extractRange(row, prefix) {
         .map(key => parseFloat(row[key]))
         .filter(value => !isNaN(value)); // 숫자만 반환
 }
+
 
 
 
