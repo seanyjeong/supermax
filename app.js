@@ -1132,7 +1132,9 @@ app.post('/25calculatePracticalScores', async (req, res) => {
 
         // Step 3: 점수 계산
 const scores = records.map((record, recordIndex) => {
-    const startIndex = (recordIndex + (req.body.index || 0)) * 3; // 각 record별로 정확한 시작 위치 계산
+    const 실기종목번호 = req.body.index || 0; // 프론트엔드에서 전달된 실기종목 번호
+    const startIndex = 실기종목번호 * 3 + recordIndex * 3; // 실기종목별로 정확한 시작 위치 계산
+
     const 남자기록 = practicalPoints[startIndex] ? extractRange(practicalPoints[startIndex], '배점') : [];
     const 배점 = practicalPoints[startIndex + 1] ? extractRange(practicalPoints[startIndex + 1], '배점') : [];
     const 여자기록 = practicalPoints[startIndex + 2] ? extractRange(practicalPoints[startIndex + 2], '배점') : [];
@@ -1144,6 +1146,7 @@ const scores = records.map((record, recordIndex) => {
     }
     return 0; // 잘못된 성별일 경우 기본값 반환
 });
+
 
 
 
