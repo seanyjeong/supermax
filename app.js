@@ -1145,13 +1145,19 @@ app.post('/25calculatePracticalScores', async (req, res) => {
             return 0; // 잘못된 성별의 경우 기본값 반환
         });
 
-        // Step 4: 결과 반환
-        return res.status(200).json({ success: true, scores });
+        // Step 4: 디버깅용 데이터 추가 반환
+        return res.status(200).json({ 
+            success: true, 
+            scores,
+            practicalPoints, // 기록 및 배점 데이터 반환
+            schoolNumber // 학교번호 반환
+        });
     } catch (error) {
         console.error('점수 계산 오류:', error);
         return res.status(500).json({ success: false, message: '점수 계산에 실패했습니다.', error });
     }
 });
+
 
 // Lookup 함수
 function lookup(value, range, resultRange) {
