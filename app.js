@@ -1074,6 +1074,8 @@ app.post('/25getStudentScores', async (req, res) => {
         return res.status(200).json({ success: true, data: results });
     });
 });
+
+////계산로직
 app.post('/25calculatePracticalScores', async (req, res) => {
     const { universityName, majorName, gender, records } = req.body;
 
@@ -1099,7 +1101,8 @@ app.post('/25calculatePracticalScores', async (req, res) => {
 
         // Step 2: 25실기배점 데이터 가져오기
         const practicalPointsQuery = `
-            SELECT * FROM 25실기배점
+            SELECT 학교번호, 배점, ${Array.from({ length: 36 }, (_, i) => `배점_[${i}]`).join(', ')}
+            FROM 25실기배점
             WHERE 학교번호 = ?
         `;
         const practicalPoints = await new Promise((resolve, reject) => {
@@ -1119,9 +1122,9 @@ app.post('/25calculatePracticalScores', async (req, res) => {
             const startIndex = i * 3; // 종목별 데이터 시작 인덱스
 
             // 종목별 데이터 추출
-            const 남자기록 = practicalPoints[startIndex]?.배점 || [];
-            const 배점 = practicalPoints[startIndex + 1]?.배점 || [];
-            const 여자기록 = practicalPoints[startIndex + 2]?.배점 || [];
+            const 남자기록 = extractRange(practicalPoints[startIndex], '배점');
+            const 배점 = extractRange(practicalPoints[startIndex + 1], '배점');
+            const 여자기록 = extractRange(practicalPoints[startIndex + 2], '배점');
 
             // Lookup 함수로 점수 계산
             let score = 0;
@@ -1151,6 +1154,14 @@ function lookup(value, range, resultRange) {
         }
     }
     return 0; // 범위에 해당하지 않는 경우 0 반환
+}
+
+// 필요한 배점 데이터만 동적으로 추출하는 함수
+function extractRange(row, prefix) {
+    const keys = Object.keys(row).filter(key => key.startsWith(prefix)); // "배점"으로 시작하는 키 추출
+    return keys
+        .map(key => parseFloat(row[key]))
+        .filter(value => !isNaN(value)); // 값이 존재하고 숫자인 경우만 반환
 }
 
 
