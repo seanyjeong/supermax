@@ -1131,8 +1131,8 @@ app.post('/25calculatePracticalScores', async (req, res) => {
         });
 
         // Step 3: 점수 계산
-const scores = records.map((record, index) => {
-    const startIndex = index * 3 + (req.body.index || 0) * 9; // 종목별, 실기 종목별 시작 행 계산
+const scores = records.map((record, recordIndex) => {
+    const startIndex = (recordIndex + (req.body.index || 0)) * 3; // 각 record별로 정확한 시작 위치 계산
     const 남자기록 = practicalPoints[startIndex] ? extractRange(practicalPoints[startIndex], '배점') : [];
     const 배점 = practicalPoints[startIndex + 1] ? extractRange(practicalPoints[startIndex + 1], '배점') : [];
     const 여자기록 = practicalPoints[startIndex + 2] ? extractRange(practicalPoints[startIndex + 2], '배점') : [];
@@ -1144,6 +1144,7 @@ const scores = records.map((record, index) => {
     }
     return 0; // 잘못된 성별일 경우 기본값 반환
 });
+
 
 
         // Step 4: 디버깅용 데이터 추가 반환
