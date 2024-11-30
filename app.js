@@ -1096,7 +1096,7 @@ app.post('/25calculatePracticalScores', async (req, res) => {
             FROM 학교번호
             WHERE 대학명 = ? AND 학과명 = ?
         `;
-        const schoolNumberResult = await new Promise((resolve, reject) => {
+        const schoolNumber = await new Promise((resolve, reject) => {
             connection.query(schoolNumberQuery, [universityName, majorName], (err, results) => {
                 if (err) {
                     console.error('SQL Query Error (학교번호):', err);
@@ -1117,16 +1117,15 @@ app.post('/25calculatePracticalScores', async (req, res) => {
             WHERE 학교번호 = ?
         `;
         const practicalPoints = await new Promise((resolve, reject) => {
-            connection.query(practicalPointsQuery, [schoolNumberResult], (err, results) => {
+            connection.query(practicalPointsQuery, [schoolNumber], (err, results) => {
                 if (err) {
                     console.error('SQL Query Error (실기 배점):', err);
                     return reject(err);
                 }
                 if (results.length === 0) {
-                    console.error(`실기 배점을 찾을 수 없습니다: 학교번호=${schoolNumberResult}`);
+                    console.error(`실기 배점을 찾을 수 없습니다: 학교번호=${schoolNumber}`);
                     return reject('실기 배점을 찾을 수 없습니다.');
                 }
-                console.log('Fetched practical points:', results);
                 resolve(results);
             });
         });
@@ -1143,7 +1142,7 @@ app.post('/25calculatePracticalScores', async (req, res) => {
             } else if (gender === '여') {
                 return lookup(record, 여자기록, 배점);
             }
-            return 0;
+            return 0; // 잘못된 성별의 경우 기본값 반환
         });
 
         // Step 4: 결과 반환
@@ -1154,23 +1153,22 @@ app.post('/25calculatePracticalScores', async (req, res) => {
     }
 });
 
-
-// Lookup 함수 구현
+// Lookup 함수
 function lookup(value, range, resultRange) {
     for (let i = range.length - 1; i >= 0; i--) {
         if (value >= range[i]) {
-            return resultRange[i] || 0; // 값이 범위에 속하면 결과값 반환
+            return resultRange[i] || 0; // 범위 내 점수 반환
         }
     }
-    return 0; // 범위에 해당하지 않는 경우 0 반환
+    return 0; // 범위에 미달하면 0점
 }
 
-// 필요한 배점 데이터만 동적으로 추출하는 함수
+// 필요한 배점 데이터만 추출
 function extractRange(row, prefix) {
-    const keys = Object.keys(row).filter(key => key.startsWith(prefix)); // "배점"으로 시작하는 키 추출
+    const keys = Object.keys(row).filter(key => key.startsWith(prefix)); // 배점 키 추출
     return keys
         .map(key => parseFloat(row[key]))
-        .filter(value => !isNaN(value)); // 값이 존재하고 숫자인 경우만 반환
+        .filter(value => !isNaN(value)); // 숫자만 반환
 }
 
 
