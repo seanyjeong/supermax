@@ -1183,7 +1183,111 @@ function extractRange(row, prefix) {
         .map(key => parseFloat(row[key]))
         .filter(value => !isNaN(value)); // 숫자만 반환
 }
+////////////25.21.11 추가분
 
+// ✅ 학생 정보 추가
+app.post('/admin/student', authenticateToken, (req, res) => {
+    const { 이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일 } = req.body;
+    
+    const query = `INSERT INTO 25학생관리 (이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    
+    connection.query(query, [이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일], (err, result) => {
+        if (err) {
+            console.error('학생 추가 오류:', err);
+            return res.status(500).json({ message: '학생 추가 실패', error: err });
+        }
+        res.status(201).json({ message: '학생 추가 성공', studentId: result.insertId });
+    });
+});
+
+// ✅ 학생 정보 수정
+app.put('/admin/student/:id', authenticateToken, (req, res) => {
+    const { 이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일 } = req.body;
+    const studentId = req.params.id;
+
+    const query = `UPDATE 25학생관리 SET 이름 = ?, 학교 = ?, 학년 = ?, 성별 = ?, 연락처 = ?, 출석_월 = ?, 출석_화 = ?, 출석_수 = ?, 출석_목 = ?, 출석_금 = ?, 출석_토 = ?, 출석_일 = ? WHERE id = ?`;
+
+    connection.query(query, [이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일, studentId], (err, result) => {
+        if (err) {
+            console.error('학생 수정 오류:', err);
+            return res.status(500).json({ message: '학생 수정 실패', error: err });
+        }
+        res.status(200).json({ message: '학생 수정 성공' });
+    });
+});
+
+// ✅ 학생 정보 삭제
+app.delete('/admin/student/:id', authenticateToken, (req, res) => {
+    const studentId = req.params.id;
+
+    const query = `DELETE FROM 25학생관리 WHERE id = ?`;
+    connection.query(query, [studentId], (err, result) => {
+        if (err) {
+            console.error('학생 삭제 오류:', err);
+            return res.status(500).json({ message: '학생 삭제 실패', error: err });
+        }
+        res.status(200).json({ message: '학생 삭제 성공' });
+    });
+});
+
+// ✅ 모든 학생 정보 조회
+app.get('/admin/students', authenticateToken, (req, res) => {
+    const query = `SELECT * FROM 25학생관리`;
+    connection.query(query, (err, results) => {
+        if (err) {
+            console.error('학생 목록 조회 오류:', err);
+            return res.status(500).json({ message: '학생 목록 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 오늘 출석해야 할 학생 조회
+app.get('/attendance/today', authenticateToken, (req, res) => {
+    const query = `
+        SELECT s.id, s.이름, s.학교, s.학년, s.성별, a.출석상태, a.사유
+        FROM 25학생관리 s
+        LEFT JOIN 25출석기록 a 
+        ON s.id = a.학생_id AND a.출석일 = CURDATE()
+        WHERE 
+            (CASE 
+                WHEN DAYOFWEEK(CURDATE()) = 2 THEN s.출석_월
+                WHEN DAYOFWEEK(CURDATE()) = 3 THEN s.출석_화
+                WHEN DAYOFWEEK(CURDATE()) = 4 THEN s.출석_수
+                WHEN DAYOFWEEK(CURDATE()) = 5 THEN s.출석_목
+                WHEN DAYOFWEEK(CURDATE()) = 6 THEN s.출석_금
+                WHEN DAYOFWEEK(CURDATE()) = 7 THEN s.출석_토
+                WHEN DAYOFWEEK(CURDATE()) = 1 THEN s.출석_일
+            END) = TRUE;
+    `;
+
+    connection.query(query, (err, results) => {
+        if (err) {
+            console.error('출석 목록 조회 오류:', err);
+            return res.status(500).json({ message: '출석 목록 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 출석 체크 업데이트
+app.post('/attendance/record', authenticateToken, (req, res) => {
+    const { 학생_id, 출석상태, 사유 } = req.body;
+
+    const query = `
+        INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
+        VALUES (?, CURDATE(), ?, ?)
+        ON DUPLICATE KEY UPDATE 출석상태 = VALUES(출석상태), 사유 = VALUES(사유);
+    `;
+
+    connection.query(query, [학생_id, 출석상태, 사유], (err, result) => {
+        if (err) {
+            console.error('출석 체크 오류:', err);
+            return res.status(500).json({ message: '출석 체크 실패', error: err });
+        }
+        res.status(200).json({ message: '출석 체크 완료' });
+    });
+});
 
 
 
