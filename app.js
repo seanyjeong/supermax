@@ -1287,9 +1287,19 @@ app.get('/attendancetoday', (req, res) => {
     });
 });
 
-// ✅ 출석 체크 업데이트
-app.post('/attendancerecord', (req, res) => {
-    const { 학생_id, 출석상태, 사유 } = req.body;
+// ✅ 출석 체크 저장 엔드포인트
+app.post('/attendancerecord', async (req, res) => {
+    const { 학생_id, attendance, late, absent, reason } = req.body;
+
+    // 출석 상태 변환 (Boolean → ENUM 값)
+    let 출석상태 = null;
+    if (attendance) 출석상태 = "출석";
+    if (late) 출석상태 = "지각";
+    if (absent) 출석상태 = "결석";
+
+    if (!출석상태) {
+        return res.status(400).json({ message: "출석 상태가 올바르지 않습니다." });
+    }
 
     const query = `
         INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
@@ -1297,14 +1307,15 @@ app.post('/attendancerecord', (req, res) => {
         ON DUPLICATE KEY UPDATE 출석상태 = VALUES(출석상태), 사유 = VALUES(사유);
     `;
 
-    connection.query(query, [학생_id, 출석상태, 사유], (err, result) => {
+    connection.query(query, [학생_id, 출석상태, reason], (err, result) => {
         if (err) {
-            console.error('출석 체크 오류:', err);
-            return res.status(500).json({ message: '출석 체크 실패', error: err });
+            console.error('출석 체크 저장 오류:', err);
+            return res.status(500).json({ message: '출석 체크 저장 실패', error: err });
         }
-        res.status(200).json({ message: '출석 체크 완료' });
+        res.status(200).json({ message: '출석 체크 저장 완료' });
     });
 });
+
 
 
 
