@@ -1186,7 +1186,7 @@ function extractRange(row, prefix) {
 ////////////25.21.11 추가분
 
 // ✅ 학생 정보 추가
-app.post('/admin/student', authenticateToken, (req, res) => {
+app.post('/admin/student', (req, res) => {
     const { 이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일 } = req.body;
     
     const query = `INSERT INTO 25학생관리 (이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
@@ -1201,7 +1201,7 @@ app.post('/admin/student', authenticateToken, (req, res) => {
 });
 
 // ✅ 학생 정보 수정
-app.put('/admin/student/:id', authenticateToken, (req, res) => {
+app.put('/admin/student/:id', (req, res) => {
     const { 이름, 학교, 학년, 성별, 연락처, 출석_월, 출석_화, 출석_수, 출석_목, 출석_금, 출석_토, 출석_일 } = req.body;
     const studentId = req.params.id;
 
@@ -1217,7 +1217,7 @@ app.put('/admin/student/:id', authenticateToken, (req, res) => {
 });
 
 // ✅ 학생 정보 삭제
-app.delete('/admin/student/:id', authenticateToken, (req, res) => {
+app.delete('/admin/student/:id', (req, res) => {
     const studentId = req.params.id;
 
     const query = `DELETE FROM 25학생관리 WHERE id = ?`;
@@ -1231,7 +1231,7 @@ app.delete('/admin/student/:id', authenticateToken, (req, res) => {
 });
 
 // ✅ 모든 학생 정보 조회
-app.get('/admin/students', authenticateToken, (req, res) => {
+app.get('/admin/students', (req, res) => {
     const query = `SELECT * FROM 25학생관리`;
     connection.query(query, (err, results) => {
         if (err) {
@@ -1243,7 +1243,7 @@ app.get('/admin/students', authenticateToken, (req, res) => {
 });
 
 // ✅ 오늘 출석해야 할 학생 조회
-app.get('/attendance/today', authenticateToken, (req, res) => {
+app.get('/attendance/today', (req, res) => {
     const query = `
         SELECT s.id, s.이름, s.학교, s.학년, s.성별, a.출석상태, a.사유
         FROM 25학생관리 s
@@ -1271,7 +1271,7 @@ app.get('/attendance/today', authenticateToken, (req, res) => {
 });
 
 // ✅ 출석 체크 업데이트
-app.post('/attendance/record', authenticateToken, (req, res) => {
+app.post('/attendance/record', (req, res) => {
     const { 학생_id, 출석상태, 사유 } = req.body;
 
     const query = `
