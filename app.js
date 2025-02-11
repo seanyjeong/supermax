@@ -1302,7 +1302,20 @@ app.post('/attendancerecord', async (req, res) => {
         if (!학생_id || !출석상태) continue;
 
         try {
-            // 🚀 `학생_id`가 존재하는지 확인
+            // 🚀 `학생_id`가 `25학생관리`에 존재하는지 확인
+            const [student] = await connection.promise().query(
+                `SELECT id FROM 25학생관리 WHERE id = ?`, [학생_id]
+            );
+
+            if (student.length === 0) {
+                console.log(`🚀 학생 ID ${학생_id} 없음 → 자동 추가`);
+                await connection.promise().query(
+                    `INSERT INTO 25학생관리 (id, 이름, 학교, 학년, 성별) VALUES (?, '미등록', '미등록', 0, '미상')`,
+                    [학생_id]
+                );
+            }
+
+            // ✅ 출석 기록이 있는지 확인
             const [existing] = await connection.promise().query(
                 `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = CURDATE()`,
                 [학생_id]
@@ -1317,7 +1330,8 @@ app.post('/attendancerecord', async (req, res) => {
             } else {
                 // ✅ 기존 출석 기록이 없으면 INSERT
                 await connection.promise().query(
-                    `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) VALUES (?, CURDATE(), ?, ?)`,
+                    `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
+                     VALUES (?, CURDATE(), ?, ?)`,
                     [학생_id, 출석상태, 사유 || null]
                 );
             }
