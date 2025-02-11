@@ -1289,39 +1289,46 @@ app.get('/attendancetoday', (req, res) => {
 
 // ✅ 출석 체크 저장 엔드포인트
 app.post('/attendancerecord', async (req, res) => {
-    const attendanceData = req.body; // 요청 데이터 (배열)
+    const attendanceData = req.body;
 
     if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
         return res.status(400).json({ message: "출석 데이터가 비어있습니다." });
     }
 
-    const query = `
-        INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
-        VALUES ? 
-        ON DUPLICATE KEY UPDATE 출석상태 = VALUES(출석상태), 사유 = VALUES(사유);
-    `;
+    let successCount = 0;
 
-    // ✅ Boolean 값 → ENUM 값으로 변환
-    const values = attendanceData.map(({ 학생_id, attendance, late, absent, reason }) => {
-        let 출석상태 = null;
-        if (attendance === true) 출석상태 = "출석";
-        if (late === true) 출석상태 = "지각";
-        if (absent === true) 출석상태 = "결석";
+    for (const record of attendanceData) {
+        const { 학생_id, 출석상태, 사유 } = record;
+        if (!학생_id || !출석상태) continue;
 
-        if (!출석상태) {
-            return res.status(400).json({ message: `학생 ID ${학생_id}: 출석 상태가 올바르지 않습니다.` });
+        try {
+            // 기존 데이터 확인
+            const [existing] = await connection.promise().query(
+                `SELECT COUNT(*) AS count FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = CURDATE()`,
+                [학생_id]
+            );
+
+            if (existing[0].count > 0) {
+                // 기존 데이터가 있으면 UPDATE
+                await connection.promise().query(
+                    `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = CURDATE()`,
+                    [출석상태, 사유 || null, 학생_id]
+                );
+            } else {
+                // 기존 데이터가 없으면 INSERT
+                await connection.promise().query(
+                    `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) VALUES (?, CURDATE(), ?, ?)`,
+                    [학생_id, 출석상태, 사유 || null]
+                );
+            }
+
+            successCount++;
+        } catch (error) {
+            console.error(`출석 저장 오류 (학생 ID: ${학생_id}):`, error);
         }
+    }
 
-        return [학생_id, new Date(), 출석상태, reason];
-    });
-
-    connection.query(query, [values], (err, result) => {
-        if (err) {
-            console.error('출석 체크 저장 오류:', err);
-            return res.status(500).json({ message: '출석 체크 저장 실패', error: err });
-        }
-        res.status(200).json({ message: '출석 체크 저장 완료' });
-    });
+    res.status(200).json({ message: `${successCount}명의 출석 체크 완료` });
 });
 
 
