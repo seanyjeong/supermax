@@ -1298,11 +1298,15 @@ app.post('/attendancerecord', async (req, res) => {
     let successCount = 0;
 
     for (const record of attendanceData) {
-        const { 학생_id, 출석상태, 사유 } = record;
-        if (!학생_id || !출석상태) continue;
+        const { 학생_id, 출석일, 출석상태, 사유 } = record;
+
+        if (!학생_id || !출석상태 || !출석일) {
+            console.error(`❌ 데이터 오류: 학생 ID ${학생_id}, 출석일 ${출석일}`);
+            continue;
+        }
 
         try {
-            // 🚀 `학생_id`가 `25학생관리`에 존재하는지 확인
+            // 🚀 학생이 `25학생관리`에 존재하는지 확인
             const [student] = await connection.promise().query(
                 `SELECT id FROM 25학생관리 WHERE id = ?`, [학생_id]
             );
@@ -1317,28 +1321,28 @@ app.post('/attendancerecord', async (req, res) => {
 
             // ✅ 출석 기록이 있는지 확인
             const [existing] = await connection.promise().query(
-                `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = CURDATE()`,
-                [학생_id]
+                `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = ?`,
+                [학생_id, 출석일]
             );
 
             if (existing.length > 0) {
                 // ✅ 기존 출석 기록이 있으면 UPDATE
                 await connection.promise().query(
-                    `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = CURDATE()`,
-                    [출석상태, 사유 || null, 학생_id]
+                    `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = ?`,
+                    [출석상태, 사유 || null, 학생_id, 출석일]
                 );
             } else {
                 // ✅ 기존 출석 기록이 없으면 INSERT
                 await connection.promise().query(
                     `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
-                     VALUES (?, CURDATE(), ?, ?)`,
-                    [학생_id, 출석상태, 사유 || null]
+                     VALUES (?, ?, ?, ?)`,
+                    [학생_id, 출석일, 출석상태, 사유 || null]
                 );
             }
 
             successCount++;
         } catch (error) {
-            console.error(`출석 저장 오류 (학생 ID: ${학생_id}):`, error);
+            console.error(`❌ 출석 저장 오류 (학생 ID: ${학생_id}):`, error);
         }
     }
 
