@@ -1304,9 +1304,9 @@ app.post('/attendancerecord', async (req, res) => {
     // ✅ Boolean 값 → ENUM 값으로 변환
     const values = attendanceData.map(({ 학생_id, attendance, late, absent, reason }) => {
         let 출석상태 = null;
-        if (attendance) 출석상태 = "출석";
-        if (late) 출석상태 = "지각";
-        if (absent) 출석상태 = "결석";
+        if (attendance === true) 출석상태 = "출석";
+        if (late === true) 출석상태 = "지각";
+        if (absent === true) 출석상태 = "결석";
 
         if (!출석상태) {
             return res.status(400).json({ message: `학생 ID ${학생_id}: 출석 상태가 올바르지 않습니다.` });
