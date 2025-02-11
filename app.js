@@ -1289,25 +1289,33 @@ app.get('/attendancetoday', (req, res) => {
 
 // ✅ 출석 체크 저장 엔드포인트
 app.post('/attendancerecord', async (req, res) => {
-    const { 학생_id, attendance, late, absent, reason } = req.body;
+    const attendanceData = req.body; // 요청 데이터 (배열)
 
-    // 출석 상태 변환 (Boolean → ENUM 값)
-    let 출석상태 = null;
-    if (attendance) 출석상태 = "출석";
-    if (late) 출석상태 = "지각";
-    if (absent) 출석상태 = "결석";
-
-    if (!출석상태) {
-        return res.status(400).json({ message: "출석 상태가 올바르지 않습니다." });
+    if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
+        return res.status(400).json({ message: "출석 데이터가 비어있습니다." });
     }
 
     const query = `
         INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
-        VALUES (?, CURDATE(), ?, ?)
+        VALUES ? 
         ON DUPLICATE KEY UPDATE 출석상태 = VALUES(출석상태), 사유 = VALUES(사유);
     `;
 
-    connection.query(query, [학생_id, 출석상태, reason], (err, result) => {
+    // ✅ Boolean 값 → ENUM 값으로 변환
+    const values = attendanceData.map(({ 학생_id, attendance, late, absent, reason }) => {
+        let 출석상태 = null;
+        if (attendance) 출석상태 = "출석";
+        if (late) 출석상태 = "지각";
+        if (absent) 출석상태 = "결석";
+
+        if (!출석상태) {
+            return res.status(400).json({ message: `학생 ID ${학생_id}: 출석 상태가 올바르지 않습니다.` });
+        }
+
+        return [학생_id, new Date(), 출석상태, reason];
+    });
+
+    connection.query(query, [values], (err, result) => {
         if (err) {
             console.error('출석 체크 저장 오류:', err);
             return res.status(500).json({ message: '출석 체크 저장 실패', error: err });
@@ -1315,7 +1323,6 @@ app.post('/attendancerecord', async (req, res) => {
         res.status(200).json({ message: '출석 체크 저장 완료' });
     });
 });
-
 
 
 
