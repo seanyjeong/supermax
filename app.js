@@ -1302,20 +1302,20 @@ app.post('/attendancerecord', async (req, res) => {
         if (!학생_id || !출석상태) continue;
 
         try {
-            // 기존 데이터 확인
+            // 출석 기록이 있는지 확인
             const [existing] = await connection.promise().query(
-                `SELECT COUNT(*) AS count FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = CURDATE()`,
+                `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = CURDATE()`,
                 [학생_id]
             );
 
-            if (existing[0].count > 0) {
-                // 기존 데이터가 있으면 UPDATE
+            if (existing.length > 0) {
+                // 기존 출석 기록이 있으면 UPDATE
                 await connection.promise().query(
                     `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = CURDATE()`,
                     [출석상태, 사유 || null, 학생_id]
                 );
             } else {
-                // 기존 데이터가 없으면 INSERT
+                // 기존 출석 기록이 없으면 INSERT
                 await connection.promise().query(
                     `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) VALUES (?, CURDATE(), ?, ?)`,
                     [학생_id, 출석상태, 사유 || null]
