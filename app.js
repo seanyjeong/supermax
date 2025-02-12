@@ -1363,6 +1363,61 @@ app.post('/attendancerecord', (req, res) => {
     }, 500);
 });
 
+// ✅ 특정 월의 출석 통계 조회 (예: /attendancemonth?year=2025&month=02)
+app.get('/attendancemonth', (req, res) => {
+    const { year, month } = req.query; // YYYY, MM 형식
+
+    if (!year || !month) {
+        return res.status(400).json({ message: "연도와 월을 입력하세요 (예: ?year=2025&month=02)" });
+    }
+
+    const yearMonth = `${year}-${month.padStart(2, '0')}`; // YYYY-MM 형식으로 변환
+
+    const query = `
+        SELECT 출석일, 
+               SUM(CASE WHEN 출석상태 = '출석' THEN 1 ELSE 0 END) AS 출석,
+               SUM(CASE WHEN 출석상태 = '지각' THEN 1 ELSE 0 END) AS 지각,
+               SUM(CASE WHEN 출석상태 = '결석' THEN 1 ELSE 0 END) AS 결석
+        FROM 25출석기록
+        WHERE 출석일 LIKE ?
+        GROUP BY 출석일
+        ORDER BY 출석일 ASC;
+    `;
+
+    connection.query(query, [`${yearMonth}%`], (err, results) => {
+        if (err) {
+            console.error('❌ 월별 출석 통계 조회 오류:', err);
+            return res.status(500).json({ message: '월별 출석 데이터 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 특정 날짜의 출석 상세 조회 (예: /attendanceday?date=2025-02-12)
+app.get('/attendanceday', (req, res) => {
+    const { date } = req.query; // YYYY-MM-DD 형식
+
+    if (!date) {
+        return res.status(400).json({ message: "날짜를 입력하세요 (예: ?date=2025-02-12)" });
+    }
+
+    const query = `
+        SELECT s.이름, s.학교, s.학년, s.성별, a.출석상태, a.사유
+        FROM 25학생관리 s
+        LEFT JOIN 25출석기록 a 
+        ON s.id = a.학생_id AND a.출석일 = ?
+        ORDER BY s.이름 ASC;
+    `;
+
+    connection.query(query, [date], (err, results) => {
+        if (err) {
+            console.error('❌ 특정 날짜 출석 조회 오류:', err);
+            return res.status(500).json({ message: '출석 데이터 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
 
 
 
