@@ -1292,38 +1292,23 @@ app.post('/attendancerecord', async (req, res) => {
     const attendanceData = req.body;
 
     if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
-        console.error("❌ 요청 데이터가 비어 있음.");
         return res.status(400).json({ message: "출석 데이터가 비어있습니다." });
     }
+
+    console.log("📌 서버에서 받은 출석 데이터:", attendanceData);
 
     let successCount = 0;
 
     for (const record of attendanceData) {
         const { 학생_id, 출석일, 출석상태, 사유 } = record;
 
-        // 🚨 요청 데이터가 제대로 넘어왔는지 확인
-        console.log(`📌 요청 데이터: 학생 ID=${학생_id}, 출석일=${출석일}, 출석상태=${출석상태}, 사유=${사유}`);
-
-        if (!학생_id || !출석상태 || !출석일) {
+        if (!학생_id || !출석일 || !출석상태) {
             console.error(`❌ 데이터 오류: 학생 ID ${학생_id}, 출석일 ${출석일}`);
             continue;
         }
 
         try {
-            // 🚀 1. `25학생관리` 테이블에서 학생 존재 여부 확인
-            const [student] = await connection.promise().query(
-                `SELECT id FROM 25학생관리 WHERE id = ?`, [학생_id]
-            );
-
-            if (student.length === 0) {
-                console.log(`🚀 학생 ID ${학생_id} 없음 → 자동 추가 시도`);
-                await connection.promise().query(
-                    `INSERT INTO 25학생관리 (id, 이름, 학교, 학년, 성별) VALUES (?, '미등록', '미등록', 0, '미상')`,
-                    [학생_id]
-                );
-            }
-
-            // 🚀 2. `25출석기록`에 기존 출석 데이터가 있는지 확인
+            // 🚀 기존 출석 데이터 확인
             const [existing] = await connection.promise().query(
                 `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = ?`,
                 [학생_id, 출석일]
@@ -1333,23 +1318,19 @@ app.post('/attendancerecord', async (req, res) => {
                 console.log(`🔄 기존 출석 기록 존재 → UPDATE 실행: 학생 ID=${학생_id}`);
                 
                 // ✅ 기존 데이터가 있으면 UPDATE
-                const [updateResult] = await connection.promise().query(
+                await connection.promise().query(
                     `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = ?`,
                     [출석상태, 사유 || null, 학생_id, 출석일]
                 );
-
-                console.log("✅ UPDATE 성공! 결과:", updateResult);
             } else {
                 console.log(`🆕 출석 기록 없음 → INSERT 실행: 학생 ID=${학생_id}`);
                 
                 // ✅ 기존 출석 기록이 없으면 INSERT
-                const [insertResult] = await connection.promise().query(
+                await connection.promise().query(
                     `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
                      VALUES (?, ?, ?, ?)`,
                     [학생_id, 출석일, 출석상태, 사유 || null]
                 );
-
-                console.log("✅ INSERT 성공! 결과:", insertResult);
             }
 
             successCount++;
@@ -1358,9 +1339,9 @@ app.post('/attendancerecord', async (req, res) => {
         }
     }
 
-    console.log(`✅ 총 ${successCount}명의 출석 체크 완료`);
     res.status(200).json({ message: `${successCount}명의 출석 체크 완료` });
 });
+
 
 
 
