@@ -1417,7 +1417,12 @@ app.get('/attendanceday', (req, res) => {
             console.error('❌ 특정 날짜 출석 조회 오류:', err);
             return res.status(500).json({ message: '출석 데이터 조회 실패', error: err });
         }
-        res.status(200).json(results);
+
+        // ✅ 응답 데이터에 총 출석 대상자 수 추가
+        res.status(200).json({
+            totalStudents: results.length, // 전체 학생 수 (출석 기록 포함)
+            students: results
+        });
     });
 });
 
