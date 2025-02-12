@@ -1394,6 +1394,7 @@ app.get('/attendancemonth', (req, res) => {
 });
 
 // ✅ 특정 날짜의 출석 상세 조회 (예: /attendanceday?date=2025-02-12)
+// ✅ 특정 날짜의 출석 상세 조회 (해당 요일 출석 대상 포함)
 app.get('/attendanceday', (req, res) => {
     const { date } = req.query; // YYYY-MM-DD 형식
 
@@ -1402,7 +1403,9 @@ app.get('/attendanceday', (req, res) => {
     }
 
     const query = `
-        SELECT s.이름, s.학교, s.학년, s.성별, a.출석상태, a.사유
+        SELECT s.id, s.이름, s.학교, s.학년, s.성별, 
+               s.출석_월, s.출석_화, s.출석_수, s.출석_목, s.출석_금, s.출석_토, s.출석_일, 
+               a.출석상태, a.사유
         FROM 25학생관리 s
         LEFT JOIN 25출석기록 a 
         ON s.id = a.학생_id AND a.출석일 = ?
