@@ -1288,7 +1288,7 @@ app.get('/attendancetoday', (req, res) => {
 });
 
 // ✅ 출석 체크 저장 엔드포인트
-app.post('/attendancerecord', async (req, res) => {
+app.post('/attendancerecord', (req, res) => {
     const attendanceData = req.body;
 
     if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
@@ -1298,48 +1298,69 @@ app.post('/attendancerecord', async (req, res) => {
     console.log("📌 서버에서 받은 출석 데이터:", attendanceData);
 
     let successCount = 0;
+    let errorCount = 0;
 
-    for (const record of attendanceData) {
+    attendanceData.forEach(record => {
         const { 학생_id, 출석일, 출석상태, 사유 } = record;
 
         if (!학생_id || !출석일 || !출석상태) {
-            console.error(`❌ 데이터 오류: 학생 ID ${학생_id}, 출석일 ${출석일}`);
-            continue;
+            console.error(`❌ 데이터 오류: 학생 ID=${학생_id}, 출석일=${출석일}`);
+            errorCount++;
+            return;
         }
 
-        try {
-            // 🚀 기존 출석 데이터 확인
-            const [existing] = await connection.promise().query(
-                `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = ?`,
-                [학생_id, 출석일]
-            );
+        // 기존 출석 데이터가 있는지 확인
+        connection.query(
+            `SELECT * FROM 25출석기록 WHERE 학생_id = ? AND 출석일 = ?`,
+            [학생_id, 출석일],
+            (err, existing) => {
+                if (err) {
+                    console.error(`❌ SQL SELECT 오류 (학생 ID: ${학생_id}):`, err);
+                    errorCount++;
+                    return;
+                }
 
-            if (existing.length > 0) {
-                console.log(`🔄 기존 출석 기록 존재 → UPDATE 실행: 학생 ID=${학생_id}`);
-                
-                // ✅ 기존 데이터가 있으면 UPDATE
-                await connection.promise().query(
-                    `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = ?`,
-                    [출석상태, 사유 || null, 학생_id, 출석일]
-                );
-            } else {
-                console.log(`🆕 출석 기록 없음 → INSERT 실행: 학생 ID=${학생_id}`);
-                
-                // ✅ 기존 출석 기록이 없으면 INSERT
-                await connection.promise().query(
-                    `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) 
-                     VALUES (?, ?, ?, ?)`,
-                    [학생_id, 출석일, 출석상태, 사유 || null]
-                );
+                if (existing.length > 0) {
+                    console.log(`🔄 기존 출석 기록 존재 → UPDATE 실행: 학생 ID=${학생_id}`);
+
+                    // ✅ 기존 데이터가 있으면 UPDATE
+                    connection.query(
+                        `UPDATE 25출석기록 SET 출석상태 = ?, 사유 = ? WHERE 학생_id = ? AND 출석일 = ?`,
+                        [출석상태, 사유 || null, 학생_id, 출석일],
+                        (updateErr) => {
+                            if (updateErr) {
+                                console.error(`❌ SQL UPDATE 오류 (학생 ID: ${학생_id}):`, updateErr);
+                                errorCount++;
+                            } else {
+                                successCount++;
+                            }
+                        }
+                    );
+                } else {
+                    console.log(`🆕 출석 기록 없음 → INSERT 실행: 학생 ID=${학생_id}`);
+
+                    // ✅ 기존 출석 기록이 없으면 INSERT
+                    connection.query(
+                        `INSERT INTO 25출석기록 (학생_id, 출석일, 출석상태, 사유) VALUES (?, ?, ?, ?)`,
+                        [학생_id, 출석일, 출석상태, 사유 || null],
+                        (insertErr) => {
+                            if (insertErr) {
+                                console.error(`❌ SQL INSERT 오류 (학생 ID: ${학생_id}):`, insertErr);
+                                errorCount++;
+                            } else {
+                                successCount++;
+                            }
+                        }
+                    );
+                }
             }
+        );
+    });
 
-            successCount++;
-        } catch (error) {
-            console.error(`❌ SQL 실행 오류 (학생 ID: ${학생_id}):`, error);
-        }
-    }
-
-    res.status(200).json({ message: `${successCount}명의 출석 체크 완료` });
+    // 응답을 비동기로 처리해야 하므로 setTimeout으로 약간의 딜레이 후 응답
+    setTimeout(() => {
+        res.status(200).json({ message: `${successCount}명의 출석 체크 완료, 오류 ${errorCount}건` });
+    }, 500);
 });
 
 
