@@ -1420,6 +1420,30 @@ app.get('/attendanceday', (req, res) => {
         res.status(200).json(results);
     });
 });
+//학생별 월 출석 통계
+app.get('/attendancemonthstudent', (req, res) => {
+    const { year, month, studentId } = req.query;
+
+    if (!year || !month || !studentId) {
+        return res.status(400).json({ message: '연도, 월, 학생 ID를 입력해주세요.' });
+    }
+
+    const query = `
+        SELECT 출석일, 출석상태, 사유
+        FROM 25출석기록
+        WHERE 학생_id = ? AND YEAR(출석일) = ? AND MONTH(출석일) = ?
+        ORDER BY 출석일;
+    `;
+
+    connection.query(query, [studentId, year, month], (err, results) => {
+        if (err) {
+            console.error('학생 월별 출결 조회 오류:', err);
+            return res.status(500).json({ message: '학생 월별 출결 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
 
 
 
