@@ -1365,16 +1365,16 @@ app.post('/attendancerecord', (req, res) => {
 
 // ✅ 특정 월의 출석 통계 조회 (예: /attendancemonth?year=2025&month=02)
 app.get('/attendancemonth', (req, res) => {
-    const { year, month } = req.query; // YYYY, MM 형식
+    const { year, month } = req.query;
 
     if (!year || !month) {
         return res.status(400).json({ message: "연도와 월을 입력하세요 (예: ?year=2025&month=02)" });
     }
 
-    const yearMonth = `${year}-${month.padStart(2, '0')}`; // YYYY-MM 형식으로 변환
+    const yearMonth = `${year}-${month.padStart(2, '0')}`;
 
     const query = `
-        SELECT 출석일, 
+        SELECT DATE_FORMAT(출석일, '%Y-%m-%d') AS 출석일, 
                SUM(CASE WHEN 출석상태 = '출석' THEN 1 ELSE 0 END) AS 출석,
                SUM(CASE WHEN 출석상태 = '지각' THEN 1 ELSE 0 END) AS 지각,
                SUM(CASE WHEN 출석상태 = '결석' THEN 1 ELSE 0 END) AS 결석
@@ -1396,7 +1396,7 @@ app.get('/attendancemonth', (req, res) => {
 // ✅ 특정 날짜의 출석 상세 조회 (예: /attendanceday?date=2025-02-12)
 // ✅ 특정 날짜의 출석 상세 조회 (해당 요일 출석 대상 포함)
 app.get('/attendanceday', (req, res) => {
-    const { date } = req.query; // YYYY-MM-DD 형식
+    const { date } = req.query;
 
     if (!date) {
         return res.status(400).json({ message: "날짜를 입력하세요 (예: ?date=2025-02-12)" });
@@ -1405,7 +1405,8 @@ app.get('/attendanceday', (req, res) => {
     const query = `
         SELECT s.id, s.이름, s.학교, s.학년, s.성별, 
                s.출석_월, s.출석_화, s.출석_수, s.출석_목, s.출석_금, s.출석_토, s.출석_일, 
-               a.출석상태, a.사유
+               a.출석상태, a.사유,
+               DATE_FORMAT(a.출석일, '%Y-%m-%d') AS 출석일
         FROM 25학생관리 s
         LEFT JOIN 25출석기록 a 
         ON s.id = a.학생_id AND a.출석일 = ?
@@ -1420,6 +1421,7 @@ app.get('/attendanceday', (req, res) => {
         res.status(200).json(results);
     });
 });
+
 //학생별 월 출석 통계
 app.get('/attendancemonthstudent', (req, res) => {
     const { year, month, studentId } = req.query;
@@ -1429,7 +1431,7 @@ app.get('/attendancemonthstudent', (req, res) => {
     }
 
     const query = `
-        SELECT 출석일, 출석상태, 사유
+        SELECT DATE_FORMAT(출석일, '%Y-%m-%d') AS 출석일, 출석상태, 사유
         FROM 25출석기록
         WHERE 학생_id = ? AND YEAR(출석일) = ? AND MONTH(출석일) = ?
         ORDER BY 출석일;
