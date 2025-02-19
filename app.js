@@ -1542,6 +1542,39 @@ app.get('/attendance/teacher/:id', (req, res) => {
     });
 });
 
+app.post('/attendancecheck', (req, res) => {
+    const attendanceData = req.body;
+
+    if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
+        return res.status(400).json({ message: '출근 데이터가 비어있습니다.' });
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    attendanceData.forEach(({ 강사_id, 출근일, 상태 }) => {
+        const query = `
+            INSERT INTO 25출근기록 (강사_id, 출근일, ${상태}) 
+            VALUES (?, ?, TRUE)
+            ON DUPLICATE KEY UPDATE ${상태} = TRUE
+        `;
+
+        connection.query(query, [강사_id, 출근일], (err) => {
+            if (err) {
+                console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
+                errorCount++;
+            } else {
+                successCount++;
+            }
+        });
+    });
+
+    setTimeout(() => {
+        res.status(200).json({ message: `${successCount}명 출근 기록 저장 완료, 오류 ${errorCount}건` });
+    }, 500); // 비동기 처리 때문에 약간의 지연시간 줌
+});
+
+
 
 
 
