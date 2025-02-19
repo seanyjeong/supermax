@@ -1446,6 +1446,103 @@ app.get('/attendancemonthstudent', (req, res) => {
     });
 });
 
+////20250219 추가 강사 출근
+// ✅ 강사 등록
+app.post('/teacher', (req, res) => {
+    const { 이름, 직급, 전화번호 } = req.body;
+    const query = `INSERT INTO \`25강사관리\` (이름, 직급, 전화번호) VALUES (?, ?, ?)`;
+
+    connection.query(query, [이름, 직급, 전화번호], (err, result) => {
+        if (err) {
+            console.error('강사 등록 실패:', err);
+            return res.status(500).json({ message: '강사 등록 실패', error: err });
+        }
+        res.status(201).json({ message: '강사 등록 성공', id: result.insertId });
+    });
+});
+
+// ✅ 강사 목록 조회
+app.get('/teachers', (req, res) => {
+    connection.query(`SELECT * FROM \`25강사관리\``, (err, results) => {
+        if (err) {
+            console.error('강사 목록 조회 실패:', err);
+            return res.status(500).json({ message: '강사 목록 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 출근부 작성 (출근 요일 설정)
+app.post('/attendance/schedule', (req, res) => {
+    const { 강사_id, 출근일, 월, 화, 수, 목, 금, 토, 일 } = req.body;
+
+    const query = `
+        INSERT INTO \`25출근기록\` (강사_id, 출근일, 월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            월요일 = VALUES(월요일),
+            화요일 = VALUES(화요일),
+            수요일 = VALUES(수요일),
+            목요일 = VALUES(목요일),
+            금요일 = VALUES(금요일),
+            토요일 = VALUES(토요일),
+            일요일 = VALUES(일요일)
+    `;
+
+    const values = [강사_id, 출근일, 월, 화, 수, 목, 금, 토, 일];
+
+    connection.query(query, values, (err, result) => {
+        if (err) {
+            console.error('출근부 작성 실패:', err);
+            return res.status(500).json({ message: '출근부 작성 실패', error: err });
+        }
+        res.status(201).json({ message: '출근부 작성 성공' });
+    });
+});
+
+// ✅ 특정 월 출근부 조회
+app.get('/attendance/month', (req, res) => {
+    const { year, month } = req.query;
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-31`;
+
+    const query = `
+        SELECT a.*, t.이름, t.직급, t.전화번호
+        FROM \`25출근기록\` a
+        JOIN \`25강사관리\` t ON a.강사_id = t.id
+        WHERE 출근일 BETWEEN ? AND ?
+        ORDER BY 출근일, t.이름
+    `;
+
+    connection.query(query, [startDate, endDate], (err, results) => {
+        if (err) {
+            console.error('월 출근부 조회 실패:', err);
+            return res.status(500).json({ message: '월 출근부 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 특정 강사의 출근부 조회
+app.get('/attendance/teacher/:id', (req, res) => {
+    const { id } = req.params;
+
+    const query = `
+        SELECT * FROM \`25출근기록\`
+        WHERE 강사_id = ?
+        ORDER BY 출근일 DESC
+    `;
+
+    connection.query(query, [id], (err, results) => {
+        if (err) {
+            console.error('강사 출근부 조회 실패:', err);
+            return res.status(500).json({ message: '강사 출근부 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+
 
 
 
