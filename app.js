@@ -1526,29 +1526,26 @@ app.get('/attendance/month', (req, res) => {
 // ✅ 특정 강사의 출근부 조회
 app.get('/attendanceteacher', (req, res) => {
     const { id, year, month } = req.query;
-
     const startDate = `${year}-${month}-01`;
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // 마지막 날
+    const endDate = `${year}-${month}-31`;
 
     const query = `
-        SELECT 강사_id, 출근일, 월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일
+        SELECT 강사_id, 출근일, 출근, 지각, 휴무
         FROM \`25출근기록\`
         WHERE 강사_id = ? AND 출근일 BETWEEN ? AND ?
         ORDER BY 출근일
     `;
-
-    console.log(`🟡 실행할 쿼리: ${query}`);
-    console.log(`🟡 강사 ID: ${id}, 시작일: ${startDate}, 종료일: ${endDate}`);
 
     connection.query(query, [id, startDate, endDate], (err, results) => {
         if (err) {
             console.error('출근부 조회 실패:', err);
             return res.status(500).json({ message: '출근부 조회 실패', error: err });
         }
-        console.log(`🟢 출근부 조회 데이터 (강사 ID: ${id}, ${year}-${month}):`, JSON.stringify(results, null, 2));
+
         res.status(200).json(results);
     });
 });
+
 
 
 
