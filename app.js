@@ -1526,7 +1526,7 @@ app.get('/attendance/month', (req, res) => {
 // ✅ 특정 강사의 출근부 조회
 app.get('/attendanceteacher', (req, res) => {
     const { id, year, month } = req.query;
-    const monthNumber = month.padStart(2, '0'); // 여기 안전하게 추가
+    const monthNumber = month.padStart(2, '0');
     const startDate = `${year}-${monthNumber}-01`;
     const endDate = `${year}-${monthNumber}-31`;
 
@@ -1541,7 +1541,9 @@ app.get('/attendanceteacher', (req, res) => {
             console.error('강사 출근부 조회 실패:', err);
             return res.status(500).json({ message: '강사 출근부 조회 실패', error: err });
         }
-        console.log('조회된 데이터:', results); // 서버 콘솔 찍기
+
+        console.log(`🟢 출근부 조회 데이터 (강사 ID: ${id}, ${year}-${month}):`, results); // <<<<<<<< 추가
+
         res.status(200).json(results);
     });
 });
