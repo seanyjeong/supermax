@@ -1565,36 +1565,30 @@ app.post('/attendancecheck', (req, res) => {
     let successCount = 0;
     let errorCount = 0;
 
-    const queries = attendanceData.map(({ 강사_id, 출근일, 상태 }) => {
-        const 날짜 = 출근일.split(' ')[0]; // 날짜만 남기기
-        const dayOfWeek = new Date(날짜).getDay();
-        const 요일칼럼 = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][dayOfWeek];
-
-        const 상태숫자 = 상태 === '출근' ? 1 : 상태 === '지각' ? 2 : 0;
+    attendanceData.forEach(({ 강사_id, 출근일, 상태 }) => {
+        const 출근 = 상태 === '출근' ? 1 : 0;
+        const 지각 = 상태 === '지각' ? 1 : 0;
+        const 휴무 = 상태 === '휴무' ? 1 : 0;
 
         const query = `
-            INSERT INTO 25출근기록 (강사_id, 출근일, ${요일칼럼})
-            VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE ${요일칼럼} = VALUES(${요일칼럼}), 출근체크날짜 = NOW()
+            INSERT INTO \`25출근기록\` (강사_id, 출근일, 출근, 지각, 휴무)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 출근 = VALUES(출근), 지각 = VALUES(지각), 휴무 = VALUES(휴무)
         `;
 
-        return new Promise((resolve, reject) => {
-            connection.query(query, [강사_id, 날짜, 상태숫자], (err) => {
-                if (err) {
-                    console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
-                    errorCount++;
-                    reject(err);
-                } else {
-                    successCount++;
-                    resolve();
-                }
-            });
+        connection.query(query, [강사_id, 출근일, 출근, 지각, 휴무], (err) => {
+            if (err) {
+                console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
+                errorCount++;
+            } else {
+                successCount++;
+            }
         });
     });
 
-    Promise.allSettled(queries).then(() => {
+    setTimeout(() => {
         res.status(200).json({ message: `${successCount}명 출근 기록 저장 완료, 오류 ${errorCount}건` });
-    });
+    }, 500);
 });
 
 
