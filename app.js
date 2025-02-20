@@ -1537,6 +1537,9 @@ app.get('/attendanceteacher', (req, res) => {
         ORDER BY 출근일
     `;
 
+    console.log(`🟡 실행할 쿼리: ${query}`);
+    console.log(`🟡 강사 ID: ${id}, 시작일: ${startDate}, 종료일: ${endDate}`);
+
     connection.query(query, [id, startDate, endDate], (err, results) => {
         if (err) {
             console.error('출근부 조회 실패:', err);
@@ -1546,6 +1549,7 @@ app.get('/attendanceteacher', (req, res) => {
         res.status(200).json(results);
     });
 });
+
 
 
 
