@@ -1563,17 +1563,21 @@ app.post('/attendancecheck', (req, res) => {
     let errorCount = 0;
 
     attendanceData.forEach(({ 강사_id, 출근일, 상태 }) => {
+        const 출근요일 = new Date(출근일).getDay();
+        const 요일컬럼 = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][출근요일];
+        const 상태값 = 상태 === '출근' ? 1 : 상태 === '지각' ? 2 : 0;
+
+        const query = `
+            INSERT INTO \`25출근기록\` (강사_id, 출근일, ${요일컬럼}, 출근체크날짜, 출근, 지각, 휴무) 
+            VALUES (?, ?, ?, NOW(), ?, ?, ?)
+            ON DUPLICATE KEY UPDATE ${요일컬럼} = VALUES(${요일컬럼}), 출근 = VALUES(출근), 지각 = VALUES(지각), 휴무 = VALUES(휴무)
+        `;
+
         const 출근 = 상태 === '출근' ? 1 : 0;
         const 지각 = 상태 === '지각' ? 1 : 0;
         const 휴무 = 상태 === '휴무' ? 1 : 0;
 
-        const query = `
-            INSERT INTO \`25출근기록\` (강사_id, 출근일, 출근, 지각, 휴무)
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 출근 = VALUES(출근), 지각 = VALUES(지각), 휴무 = VALUES(휴무)
-        `;
-
-        connection.query(query, [강사_id, 출근일, 출근, 지각, 휴무], (err) => {
+        connection.query(query, [강사_id, 출근일, 상태값, 출근, 지각, 휴무], (err) => {
             if (err) {
                 console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
                 errorCount++;
