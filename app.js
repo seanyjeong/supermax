@@ -1562,7 +1562,8 @@ app.post('/attendancecheck', (req, res) => {
     let errorCount = 0;
 
     const queries = attendanceData.map(({ 강사_id, 출근일, 상태 }) => {
-        const dayOfWeek = new Date(출근일).getDay(); // 0:일 ~ 6:토
+        const 날짜 = 출근일.split(' ')[0]; // 날짜만 남기기
+        const dayOfWeek = new Date(날짜).getDay();
         const 요일칼럼 = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][dayOfWeek];
 
         const 상태숫자 = 상태 === '출근' ? 1 : 상태 === '지각' ? 2 : 0;
@@ -1574,7 +1575,7 @@ app.post('/attendancecheck', (req, res) => {
         `;
 
         return new Promise((resolve, reject) => {
-            connection.query(query, [강사_id, 출근일, 상태숫자], (err) => {
+            connection.query(query, [강사_id, 날짜, 상태숫자], (err) => {
                 if (err) {
                     console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
                     errorCount++;
