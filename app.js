@@ -1528,7 +1528,7 @@ app.get('/attendanceteacher', (req, res) => {
     const { id, year, month } = req.query;
 
     const startDate = `${year}-${month}-01`;
-    const endDate = `${year}-${month}-31`;
+    const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // 마지막 날
 
     const query = `
         SELECT 강사_id, 출근일, 월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일
@@ -1545,10 +1545,11 @@ app.get('/attendanceteacher', (req, res) => {
             console.error('출근부 조회 실패:', err);
             return res.status(500).json({ message: '출근부 조회 실패', error: err });
         }
-        console.log(`🟢 출근부 조회 데이터 (강사 ID: ${id}, ${year}-${month}):`, results);
+        console.log(`🟢 출근부 조회 데이터 (강사 ID: ${id}, ${year}-${month}):`, JSON.stringify(results, null, 2));
         res.status(200).json(results);
     });
 });
+
 
 
 
