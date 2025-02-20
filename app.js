@@ -1541,7 +1541,6 @@ app.get('/attendance/teacher/:id', (req, res) => {
         res.status(200).json(results);
     });
 });
-
 app.post('/attendancecheck', (req, res) => {
     const attendanceData = req.body;
 
@@ -1552,28 +1551,35 @@ app.post('/attendancecheck', (req, res) => {
     let successCount = 0;
     let errorCount = 0;
 
-    attendanceData.forEach(({ 강사_id, 출근일, 상태 }) => {
+    const queries = attendanceData.map(({ 강사_id, 출근일, 상태 }) => {
         const query = `
-            INSERT INTO 25출근기록 (강사_id, 출근일, ${상태}) 
-            VALUES (?, ?, TRUE)
-            ON DUPLICATE KEY UPDATE ${상태} = TRUE
+            INSERT INTO 25출근기록 (강사_id, 출근일, 출근, 지각, 휴무)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 출근 = VALUES(출근), 지각 = VALUES(지각), 휴무 = VALUES(휴무), 출근체크날짜 = NOW()
         `;
 
-        connection.query(query, [강사_id, 출근일], (err) => {
-            if (err) {
-                console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
-                errorCount++;
-            } else {
-                successCount++;
-            }
+        const 출근 = 상태 === '출근' ? 1 : 0;
+        const 지각 = 상태 === '지각' ? 1 : 0;
+        const 휴무 = 상태 === '휴무' ? 1 : 0;
+
+        return new Promise((resolve, reject) => {
+            connection.query(query, [강사_id, 출근일, 출근, 지각, 휴무], (err) => {
+                if (err) {
+                    console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
+                    errorCount++;
+                    reject(err);
+                } else {
+                    successCount++;
+                    resolve();
+                }
+            });
         });
     });
 
-    setTimeout(() => {
+    Promise.allSettled(queries).then(() => {
         res.status(200).json({ message: `${successCount}명 출근 기록 저장 완료, 오류 ${errorCount}건` });
-    }, 500); // 비동기 처리 때문에 약간의 지연시간 줌
+    });
 });
-
 
 
 
