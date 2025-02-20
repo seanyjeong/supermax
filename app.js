@@ -1524,16 +1524,24 @@ app.get('/attendance/month', (req, res) => {
 });
 
 // ✅ 특정 강사의 출근부 조회
-app.get('/attendance/teacher/:id', (req, res) => {
-    const { id } = req.params;
+app.get('/attendanceteacher', (req, res) => {
+    const { id, year, month } = req.query;
+
+    if (!id || !year || !month) {
+        return res.status(400).json({ message: '강사 ID, 연도, 월이 필요합니다.' });
+    }
+
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-31`;
 
     const query = `
-        SELECT * FROM \`25출근기록\`
-        WHERE 강사_id = ?
-        ORDER BY 출근일 DESC
+        SELECT 강사_id, 출근일, 월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일
+        FROM \`25출근기록\`
+        WHERE 강사_id = ? AND 출근일 BETWEEN ? AND ?
+        ORDER BY 출근일
     `;
 
-    connection.query(query, [id], (err, results) => {
+    connection.query(query, [id, startDate, endDate], (err, results) => {
         if (err) {
             console.error('강사 출근부 조회 실패:', err);
             return res.status(500).json({ message: '강사 출근부 조회 실패', error: err });
@@ -1541,6 +1549,8 @@ app.get('/attendance/teacher/:id', (req, res) => {
         res.status(200).json(results);
     });
 });
+
+
 app.post('/attendancecheck', (req, res) => {
     const attendanceData = req.body;
 
@@ -1552,18 +1562,19 @@ app.post('/attendancecheck', (req, res) => {
     let errorCount = 0;
 
     const queries = attendanceData.map(({ 강사_id, 출근일, 상태 }) => {
+        const dayOfWeek = new Date(출근일).getDay(); // 0:일 ~ 6:토
+        const 요일칼럼 = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][dayOfWeek];
+
+        const 상태숫자 = 상태 === '출근' ? 1 : 상태 === '지각' ? 2 : 0;
+
         const query = `
-            INSERT INTO 25출근기록 (강사_id, 출근일, 출근, 지각, 휴무)
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 출근 = VALUES(출근), 지각 = VALUES(지각), 휴무 = VALUES(휴무), 출근체크날짜 = NOW()
+            INSERT INTO 25출근기록 (강사_id, 출근일, ${요일칼럼})
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE ${요일칼럼} = VALUES(${요일칼럼}), 출근체크날짜 = NOW()
         `;
 
-        const 출근 = 상태 === '출근' ? 1 : 0;
-        const 지각 = 상태 === '지각' ? 1 : 0;
-        const 휴무 = 상태 === '휴무' ? 1 : 0;
-
         return new Promise((resolve, reject) => {
-            connection.query(query, [강사_id, 출근일, 출근, 지각, 휴무], (err) => {
+            connection.query(query, [강사_id, 출근일, 상태숫자], (err) => {
                 if (err) {
                     console.error(`출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
                     errorCount++;
