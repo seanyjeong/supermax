@@ -1449,10 +1449,18 @@ app.get('/attendancemonthstudent', (req, res) => {
 ////20250219 추가 강사 출근
 // ✅ 강사 등록
 app.post('/teacher', (req, res) => {
-    const { 이름, 직급, 전화번호 } = req.body;
-    const query = `INSERT INTO \`25강사관리\` (이름, 직급, 전화번호) VALUES (?, ?, ?)`;
+    const { 이름, 직급, 전화번호, 주민번호, 계좌번호 } = req.body;
+    
+    if (!이름 || !주민번호 || !계좌번호) {
+        return res.status(400).json({ message: "이름, 주민번호, 계좌번호는 필수 입력값입니다." });
+    }
 
-    connection.query(query, [이름, 직급, 전화번호], (err, result) => {
+    const query = `
+        INSERT INTO \`25강사관리\` (이름, 직급, 전화번호, 주민번호, 계좌번호) 
+        VALUES (?, ?, ?, ?, ?)
+    `;
+
+    connection.query(query, [이름, 직급, 전화번호, 주민번호, 계좌번호], (err, result) => {
         if (err) {
             console.error('강사 등록 실패:', err);
             return res.status(500).json({ message: '강사 등록 실패', error: err });
@@ -1460,6 +1468,7 @@ app.post('/teacher', (req, res) => {
         res.status(201).json({ message: '강사 등록 성공', id: result.insertId });
     });
 });
+
 
 // ✅ 강사 목록 조회
 app.get('/teachers', (req, res) => {
