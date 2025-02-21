@@ -1697,6 +1697,28 @@ app.post('/confirmSalary', (req, res) => {
     });
 });
 
+app.get('/getSalaryList', (req, res) => {
+    const { year, month } = req.query;
+
+    if (!year || !month) {
+        return res.status(400).json({ message: "년과 월을 입력해야 합니다." });
+    }
+
+    const query = `
+        SELECT 강사이름, 실지급액 
+        FROM 급여내역 
+        WHERE 년도 = ? AND 월 = ?
+    `;
+
+    connection.query(query, [year, month], (err, results) => {
+        if (err) {
+            console.error("❌ 급여 조회 실패:", err);
+            return res.status(500).json({ message: "급여 조회 실패", error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
 
 
 
