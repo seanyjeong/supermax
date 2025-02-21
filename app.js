@@ -1526,8 +1526,12 @@ app.get('/attendance/month', (req, res) => {
 // ✅ 특정 강사의 출근부 조회
 app.get('/attendanceteacher', (req, res) => {
     const { id, year, month } = req.query;
+    
+    // 🟢 월의 마지막 날짜 계산 (윤년 고려)
+    const lastDay = new Date(year, month, 0).getDate();  // 현재 월의 마지막 날짜 가져오기
+
     const startDate = `${year}-${month}-01`;
-    const endDate = `${year}-${month}-31`;
+    const endDate = `${year}-${month}-${lastDay}`;  // 동적으로 마지막 날짜 설정
 
     const query = `
         SELECT 강사_id, DATE_FORMAT(출근일, '%Y-%m-%d') AS 출근일, 
@@ -1547,9 +1551,15 @@ app.get('/attendanceteacher', (req, res) => {
         }
 
         console.log(`✅ 조회된 출근 기록:`, results);
+
+        if (results.length === 0) {
+            console.warn(`⚠️ 조회된 출근 기록 없음: 강사ID=${id}, 년=${year}, 월=${month}`);
+        }
+
         res.status(200).json(results);
     });
 });
+
 
 
 
