@@ -1647,6 +1647,35 @@ app.get('/attendancehistory', (req, res) => {
     });
 });
 
+// ✅ 특정 월의 출근 기록 조회 (폴더 없이 한 줄 엔드포인트)
+app.get('/attendancehistory_monthly', (req, res) => {
+    const { year, month } = req.query;
+    
+    if (!year || !month) {
+        return res.status(400).json({ message: "연도(year)와 월(month) 파라미터가 필요합니다." });
+    }
+
+    console.log(`🔍 월간 출근 기록 조회 요청: ${year}-${month}`);
+
+    const query = `
+        SELECT 출근일, 강사_id, 출근, 지각, 휴무
+        FROM \`25출근기록\`
+        WHERE 출근일 LIKE ?
+    `;
+
+    const monthPattern = `${year}-${month.padStart(2, '0')}%`;
+
+    connection.query(query, [monthPattern], (err, results) => {
+        if (err) {
+            console.error('❌ 월간 출근 기록 조회 실패:', err);
+            return res.status(500).json({ message: '월간 출근 기록 조회 실패', error: err });
+        }
+
+        console.log(`✅ 조회된 월간 출근 기록:`, results);
+        res.status(200).json(results);
+    });
+});
+
 
 
 
