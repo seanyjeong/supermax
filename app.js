@@ -1675,6 +1675,28 @@ app.get('/attendancehistory_monthly', (req, res) => {
         res.status(200).json(results);
     });
 });
+//급여지급
+app.post('/confirmSalary', (req, res) => {
+    const { year, month, teacherId, teacherName, salaryAmount } = req.body;
+
+    if (!year || !month || !teacherId || !teacherName || !salaryAmount) {
+        return res.status(400).json({ message: "모든 필드를 입력해야 합니다." });
+    }
+
+    const query = `
+        INSERT INTO 급여내역 (년도, 월, 강사_id, 강사이름, 실지급액) 
+        VALUES (?, ?, ?, ?, ?)
+    `;
+
+    connection.query(query, [year, month, teacherId, teacherName, salaryAmount], (err, result) => {
+        if (err) {
+            console.error("❌ 급여 저장 실패:", err);
+            return res.status(500).json({ message: "급여 저장 실패", error: err });
+        }
+        res.status(200).json({ message: "급여 확정 완료", insertedId: result.insertId });
+    });
+});
+
 
 
 
