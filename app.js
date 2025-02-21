@@ -1530,7 +1530,8 @@ app.get('/attendanceteacher', (req, res) => {
     const endDate = `${year}-${month}-31`;
 
     const query = `
-        SELECT 강사_id, 출근일, 월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일, 출근, 지각, 휴무
+        SELECT 강사_id, DATE_FORMAT(출근일, '%Y-%m-%d') AS 출근일, 
+               월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일, 출근, 지각, 휴무
         FROM \`25출근기록\`
         WHERE 강사_id = ? AND 출근일 BETWEEN ? AND ?
         ORDER BY 출근일
@@ -1549,6 +1550,7 @@ app.get('/attendanceteacher', (req, res) => {
         res.status(200).json(results);
     });
 });
+
 
 
 
