@@ -1616,6 +1616,37 @@ app.post('/attendancecheck', (req, res) => {
     }, 500);
 });
 
+// 25.21.2
+// ✅ 특정 날짜 출근 기록 조회 (새로운 엔드포인트)
+app.get('/attendancehistory', (req, res) => {
+    const { date } = req.query;
+
+    if (!date) {
+        return res.status(400).json({ message: "날짜 파라미터가 필요합니다." });
+    }
+
+    console.log(`🔍 출근 기록 조회 요청: 날짜=${date}`);
+
+    const query = `
+        SELECT 강사_id, 출근일, 출근, 지각, 휴무
+        FROM \`25출근기록\`
+        WHERE 출근일 = ?
+    `;
+
+    console.log(`🟡 실행할 SQL: ${query}`);
+    console.log(`🟡 조회 날짜:`, date);
+
+    connection.query(query, [date], (err, results) => {
+        if (err) {
+            console.error('❌ 출근 기록 조회 실패:', err);
+            return res.status(500).json({ message: '출근 기록 조회 실패', error: err });
+        }
+
+        console.log(`✅ 조회된 출근 기록:`, results);
+        res.status(200).json(results);
+    });
+});
+
 
 
 
