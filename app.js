@@ -1899,18 +1899,18 @@ app.get('/anattendancehistory_monthly', (req, res) => {
 
 // ✅ 급여 지급
 app.post('/anconfirmSalary', async (req, res) => {
-    const { 
+    let { 
         year, month, teacherId, teacherName, salaryAmount, 
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage 
     } = req.body;
 
-    console.log('서버로 받은 급여 정보:', req.body); // 디버깅 로그
+    console.log("📥 서버에서 받은 데이터:", req.body); // ✅ 디버깅용 로그
 
-    if (!year || !month || !teacherId || !salaryAmount || !salaryType) {
+    if (!year || !month || !teacherId || !salaryAmount || !salaryType || !teacherName) {
         return res.status(400).json({ message: '필수 정보가 부족합니다.' });
     }
 
-    // `null` 값 방어 처리: 기본값 0으로 설정
+    // ✅ null 값 방어 처리 (undefined 방지)
     totalHours = totalHours || 0;
     totalDays = totalDays || 0;
     hourlyWage = hourlyWage || 0;
@@ -1941,6 +1941,7 @@ app.post('/anconfirmSalary', async (req, res) => {
         res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
     });
 });
+
 
 
 
