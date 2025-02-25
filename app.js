@@ -1904,9 +1904,18 @@ app.post('/anconfirmSalary', async (req, res) => {
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage 
     } = req.body;
 
+    console.log('서버로 받은 급여 정보:', req.body); // 디버깅 로그
+
     if (!year || !month || !teacherId || !salaryAmount || !salaryType) {
         return res.status(400).json({ message: '필수 정보가 부족합니다.' });
     }
+
+    // `null` 값 방어 처리: 기본값 0으로 설정
+    totalHours = totalHours || 0;
+    totalDays = totalDays || 0;
+    hourlyWage = hourlyWage || 0;
+    dailyWage = dailyWage || 0;
+    monthlyWage = monthlyWage || 0;
 
     const query = `
         INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급)
@@ -1932,6 +1941,7 @@ app.post('/anconfirmSalary', async (req, res) => {
         res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
     });
 });
+
 
 
 // ✅ 급여 목록 조회
