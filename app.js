@@ -1817,18 +1817,10 @@ app.post('/anattendancecheck', async (req, res) => {
 
     try {
         const queries = attendanceData.map(({ 강사_id, 출근일, 상태, 근무시간 }) => {
-            const 출근요일 = new Date(출근일).getDay(); 
-            const 요일컬럼 = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][출근요일];
-
-            const 출근값 = 상태 === '출근' ? 1 : 0;
-            const 지각값 = 상태 === '지각' ? 1 : 0;
-            const 휴무값 = 상태 === '휴무' ? 1 : 0;
-
             const query = `
-                INSERT INTO \`an출근기록\` (강사_id, 출근일, ${요일컬럼}, 출근체크날짜, 출근, 지각, 휴무, 근무시간) 
-                VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)
+                INSERT INTO an출근기록 (강사_id, 출근일, 출근, 지각, 휴무, 근무시간) 
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE 
-                    ${요일컬럼} = VALUES(${요일컬럼}),
                     출근 = VALUES(출근),
                     지각 = VALUES(지각),
                     휴무 = VALUES(휴무),
@@ -1836,18 +1828,14 @@ app.post('/anattendancecheck', async (req, res) => {
             `;
 
             return new Promise((resolve, reject) => {
-                connection.query(query, [강사_id, 출근일, 출근값, 출근값, 지각값, 휴무값, 근무시간 ?? null], (err) => {
-                    if (err) {
-                        console.error(`❌ 출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
+                connection.query(query, [강사_id, 출근일, 상태 === '출근' ? 1 : 0, 상태 === '지각' ? 1 : 0, 상태 === '휴무' ? 1 : 0, 근무시간], (err) => {
+                    if (err) reject(err);
+                    else resolve();
                 });
             });
         });
 
-        await Promise.all(queries); // 🔥 모든 쿼리를 병렬 실행하여 속도 개선
+        await Promise.all(queries); // 병렬 실행하여 성능 향상
 
         res.status(200).json({ message: `✅ 출근 기록 저장 완료` });
 
@@ -1855,6 +1843,7 @@ app.post('/anattendancecheck', async (req, res) => {
         res.status(500).json({ message: "❌ 출근 기록 저장 중 오류 발생", error });
     }
 });
+
 
 // ✅ 특정 날짜 출근 기록 조회
 app.get('/anattendancehistory', (req, res) => {
