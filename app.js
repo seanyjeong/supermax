@@ -1747,6 +1747,201 @@ app.get('/getTeacherAccount', (req, res) => {
 });
 
 
+//안양 출근부 25.02.25
+// ✅ 강사 등록
+app.post('/anteacher', (req, res) => {
+    const { 이름, 직급, 전화번호, 주민번호, 은행명, 계좌번호 } = req.body;
+
+    if (!이름 || !주민번호 || !은행명 || !계좌번호) {
+        return res.status(400).json({ message: "이름, 주민번호, 은행명, 계좌번호는 필수 입력값입니다." });
+    }
+
+    const query = `
+        INSERT INTO \`an강사관리\` (이름, 직급, 전화번호, 주민번호, 은행명, 계좌번호) 
+        VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    connection.query(query, [이름, 직급, 전화번호, 주민번호, 은행명, 계좌번호], (err, result) => {
+        if (err) {
+            console.error("❌ 강사 등록 실패:", err);
+            return res.status(500).json({ message: "강사 등록 실패", error: err });
+        }
+        res.status(201).json({ message: "강사 등록 성공", id: result.insertId });
+    });
+});
+
+// ✅ 강사 목록 조회
+app.get('/anteachers', (req, res) => {
+    connection.query(`SELECT * FROM \`an강사관리\``, (err, results) => {
+        if (err) {
+            console.error('강사 목록 조회 실패:', err);
+            return res.status(500).json({ message: '강사 목록 조회 실패', error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 특정 강사의 출근부 조회
+app.get('/anattendanceteacher', (req, res) => {
+    const { id, year, month } = req.query;
+    
+    const lastDay = new Date(year, month, 0).getDate();
+    const startDate = `${year}-${month}-01`;
+    const endDate = `${year}-${month}-${lastDay}`;
+
+    const query = `
+        SELECT 강사_id, DATE_FORMAT(출근일, '%Y-%m-%d') AS 출근일, 
+               월요일, 화요일, 수요일, 목요일, 금요일, 토요일, 일요일, 출근, 지각, 휴무
+        FROM \`an출근기록\`
+        WHERE 강사_id = ? AND 출근일 BETWEEN ? AND ?
+        ORDER BY 출근일
+    `;
+
+    connection.query(query, [id, startDate, endDate], (err, results) => {
+        if (err) {
+            console.error('❌ 출근부 조회 실패:', err);
+            return res.status(500).json({ message: '출근부 조회 실패', error: err });
+        }
+
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 출근 체크 등록 및 수정
+app.post('/anattendancecheck', (req, res) => {
+    const attendanceData = req.body;
+
+    if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
+        return res.status(400).json({ message: '출근 데이터가 비어있습니다.' });
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    attendanceData.forEach(({ 강사_id, 출근일, 상태 }) => {
+        const 출근요일 = new Date(출근일).getDay();
+        const 요일컬럼 = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][출근요일];
+
+        const 출근값 = 상태 === '출근' ? 1 : 0;
+        const 지각값 = 상태 === '지각' ? 1 : 0;
+        const 휴무값 = 상태 === '휴무' ? 1 : 0;
+
+        const query = `
+            INSERT INTO \`an출근기록\` (강사_id, 출근일, ${요일컬럼}, 출근체크날짜, 출근, 지각, 휴무) 
+            VALUES (?, ?, ?, NOW(), ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                ${요일컬럼} = VALUES(${요일컬럼}),
+                출근 = VALUES(출근),
+                지각 = VALUES(지각),
+                휴무 = VALUES(휴무)
+        `;
+
+        connection.query(query, [강사_id, 출근일, 출근값, 출근값, 지각값, 휴무값], (err) => {
+            if (err) {
+                console.error(`❌ 출근 데이터 저장 실패 (강사_id: ${강사_id}, 상태: ${상태}):`, err);
+                errorCount++;
+            } else {
+                successCount++;
+            }
+        });
+    });
+
+    setTimeout(() => {
+        res.status(200).json({ message: `✅ ${successCount}명 출근 기록 저장 완료, 오류 ${errorCount}건` });
+    }, 500);
+});
+
+// ✅ 특정 날짜 출근 기록 조회
+app.get('/anattendancehistory', (req, res) => {
+    const { date } = req.query;
+
+    if (!date) {
+        return res.status(400).json({ message: "날짜 파라미터가 필요합니다." });
+    }
+
+    const query = `
+        SELECT 강사_id, 출근일, 출근, 지각, 휴무
+        FROM \`an출근기록\`
+        WHERE 출근일 = ?
+    `;
+
+    connection.query(query, [date], (err, results) => {
+        if (err) {
+            console.error('❌ 출근 기록 조회 실패:', err);
+            return res.status(500).json({ message: '출근 기록 조회 실패', error: err });
+        }
+
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 특정 월의 출근 기록 조회
+app.get('/anattendancehistory_monthly', (req, res) => {
+    const { year, month } = req.query;
+    
+    if (!year || !month) {
+        return res.status(400).json({ message: "연도(year)와 월(month) 파라미터가 필요합니다." });
+    }
+
+    const query = `
+        SELECT 출근일, 강사_id, 출근, 지각, 휴무
+        FROM \`an출근기록\`
+        WHERE 출근일 LIKE ?
+    `;
+
+    const monthPattern = `${year}-${month.padStart(2, '0')}%`;
+
+    connection.query(query, [monthPattern], (err, results) => {
+        if (err) {
+            console.error('❌ 월간 출근 기록 조회 실패:', err);
+            return res.status(500).json({ message: '월간 출근 기록 조회 실패', error: err });
+        }
+
+        res.status(200).json(results);
+    });
+});
+
+// ✅ 급여 지급
+app.post('/anconfirmSalary', (req, res) => {
+    const { year, month, teacherId, teacherName, salaryAmount } = req.body;
+
+    if (!year || !month || !teacherId || !teacherName || !salaryAmount) {
+        return res.status(400).json({ message: "모든 필드를 입력해야 합니다." });
+    }
+
+    const query = `
+        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액) 
+        VALUES (?, ?, ?, ?, ?)
+    `;
+
+    connection.query(query, [year, month, teacherId, teacherName, salaryAmount], (err, result) => {
+        if (err) {
+            console.error("❌ 급여 저장 실패:", err);
+            return res.status(500).json({ message: "급여 저장 실패", error: err });
+        }
+        res.status(200).json({ message: "급여 확정 완료", insertedId: result.insertId });
+    });
+});
+
+// ✅ 급여 목록 조회
+app.get('/angetSalaryList', (req, res) => {
+    const { year, month } = req.query;
+
+    const query = `
+        SELECT 강사이름, 실지급액 
+        FROM an급여내역 
+        WHERE 년도 = ? AND 월 = ?
+    `;
+
+    connection.query(query, [year, month], (err, results) => {
+        if (err) {
+            return res.status(500).json({ message: "급여 조회 실패", error: err });
+        }
+        res.status(200).json(results);
+    });
+});
+
+
 
 
 
