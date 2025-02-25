@@ -1898,26 +1898,41 @@ app.get('/anattendancehistory_monthly', (req, res) => {
 });
 
 // ✅ 급여 지급
-app.post('/anconfirmSalary', (req, res) => {
-    const { year, month, teacherId, teacherName, salaryAmount } = req.body;
+app.post('/anconfirmSalary', async (req, res) => {
+    const { 
+        year, month, teacherId, teacherName, salaryAmount, 
+        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage 
+    } = req.body;
 
-    if (!year || !month || !teacherId || !teacherName || !salaryAmount) {
-        return res.status(400).json({ message: "모든 필드를 입력해야 합니다." });
+    if (!year || !month || !teacherId || !salaryAmount || !salaryType) {
+        return res.status(400).json({ message: '필수 정보가 부족합니다.' });
     }
 
     const query = `
-        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액) 
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        실지급액 = VALUES(실지급액),
+        급여방식 = VALUES(급여방식),
+        총근무시간 = VALUES(총근무시간),
+        총출근일수 = VALUES(총출근일수),
+        시급 = VALUES(시급),
+        일급 = VALUES(일급),
+        월급 = VALUES(월급);
     `;
 
-    connection.query(query, [year, month, teacherId, teacherName, salaryAmount], (err, result) => {
+    connection.query(query, [
+        year, month, teacherId, teacherName, salaryAmount, 
+        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage
+    ], (err) => {
         if (err) {
-            console.error("❌ 급여 저장 실패:", err);
-            return res.status(500).json({ message: "급여 저장 실패", error: err });
+            console.error('❌ 급여 저장 오류:', err);
+            return res.status(500).json({ message: '급여 저장 실패', error: err });
         }
-        res.status(200).json({ message: "급여 확정 완료", insertedId: result.insertId });
+        res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
     });
 });
+
 
 // ✅ 급여 목록 조회
 app.get('/angetSalaryList', (req, res) => {
@@ -1936,6 +1951,32 @@ app.get('/angetSalaryList', (req, res) => {
         res.status(200).json(results);
     });
 });
+// ✅ 급여 내역 조회
+app.get('/angetSalary', async (req, res) => {
+    const { year, month, teacherId } = req.query;
+
+    if (!year || !month || !teacherId) {
+        return res.status(400).json({ message: '필수 정보가 부족합니다.' });
+    }
+
+    const query = `
+        SELECT 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급
+        FROM an급여내역
+        WHERE 년도 = ? AND 월 = ? AND 강사_id = ?
+    `;
+
+    connection.query(query, [year, month, teacherId], (err, results) => {
+        if (err) {
+            console.error('❌ 급여 조회 오류:', err);
+            return res.status(500).json({ message: '급여 조회 실패', error: err });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ message: '급여 정보 없음' });
+        }
+        res.status(200).json(results[0]);
+    });
+});
+
 
 
 
