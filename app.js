@@ -1854,7 +1854,7 @@ app.get('/anattendancehistory', (req, res) => {
     }
 
     const query = `
-        SELECT 강사_id, 출근일, 출근, 지각, 휴무, 근무시간
+        SELECT 강사_id, 출근일, 출근, 지각, 휴무, COALESCE(근무시간, 0.00) AS 근무시간
         FROM \`an출근기록\`
         WHERE 출근일 = ?
     `;
@@ -1865,9 +1865,11 @@ app.get('/anattendancehistory', (req, res) => {
             return res.status(500).json({ message: '출근 기록 조회 실패', error: err });
         }
 
+        console.log("✅ 조회된 출근 기록:", results); // 디버깅용 로그 추가
         res.status(200).json(results);
     });
 });
+
 
 // ✅ 특정 월의 출근 기록 조회
 app.get('/anattendancehistory_monthly', (req, res) => {
