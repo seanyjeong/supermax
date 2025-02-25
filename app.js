@@ -1880,7 +1880,7 @@ app.get('/anattendancehistory_monthly', (req, res) => {
     }
 
     const query = `
-        SELECT 출근일, 강사_id, 출근, 지각, 휴무
+        SELECT 출근일, 강사_id, 출근, 지각, 휴무, 근무시간
         FROM \`an출근기록\`
         WHERE 출근일 LIKE ?
     `;
