@@ -1854,7 +1854,7 @@ app.get('/anattendancehistory', (req, res) => {
     }
 
     const query = `
-        SELECT 강사_id, 출근일, 출근, 지각, 휴무
+        SELECT 강사_id, 출근일, 출근, 지각, 휴무, 근무시간
         FROM \`an출근기록\`
         WHERE 출근일 = ?
     `;
