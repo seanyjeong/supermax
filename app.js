@@ -1770,6 +1770,57 @@ app.post('/anteacher', (req, res) => {
     });
 });
 
+// 특정 강사 정보 조회
+app.get('/anteachers/:id', (req, res) => {
+    const teacherId = req.params.id;
+    connection.query('SELECT * FROM `an강사관리` WHERE id = ?', [teacherId], (err, results) => {
+        if (err) {
+            console.error('강사 정보 조회 실패:', err);
+            return res.status(500).json({ message: '강사 정보 조회 실패', error: err });
+        }
+        if (results.length === 0) {
+            return res.status(404).json({ message: '강사를 찾을 수 없습니다.' });
+        }
+        res.status(200).json(results[0]);
+    });
+});
+
+// 강사 정보 수정
+app.put('/anteacher/:id', (req, res) => {
+    const teacherId = req.params.id;
+    const { 이름, 직급, 전화번호, 주민번호, 은행명, 계좌번호 } = req.body;
+
+    if (!이름 || !주민번호 || !은행명 || !계좌번호) {
+        return res.status(400).json({ message: "이름, 주민번호, 은행명, 계좌번호는 필수 입력값입니다." });
+    }
+
+    const query = `
+        UPDATE \`an강사관리\` 
+        SET 이름 = ?, 직급 = ?, 전화번호 = ?, 주민번호 = ?, 은행명 = ?, 계좌번호 = ?
+        WHERE id = ?
+    `;
+
+    connection.query(query, [이름, 직급, 전화번호, 주민번호, 은행명, 계좌번호, teacherId], (err, result) => {
+        if (err) {
+            console.error("강사 정보 수정 실패:", err);
+            return res.status(500).json({ message: "강사 정보 수정 실패", error: err });
+        }
+        res.status(200).json({ message: "강사 정보 수정 성공" });
+    });
+});
+
+// 강사 삭제
+app.delete('/anteacher/:id', (req, res) => {
+    const teacherId = req.params.id;
+    connection.query('DELETE FROM `an강사관리` WHERE id = ?', [teacherId], (err, result) => {
+        if (err) {
+            console.error('강사 삭제 실패:', err);
+            return res.status(500).json({ message: '강사 삭제 실패', error: err });
+        }
+        res.status(200).json({ message: '강사 삭제 성공' });
+    });
+});
+
 // ✅ 강사 목록 조회
 app.get('/anteachers', (req, res) => {
     connection.query(`SELECT * FROM \`an강사관리\``, (err, results) => {
