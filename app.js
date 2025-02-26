@@ -1901,13 +1901,13 @@ app.get('/anattendancehistory_monthly', (req, res) => {
 // ✅ 급여 확정 저장
 app.post('/anconfirmSalary', async (req, res) => {
     let { 
-        year, month, teacherId, teacherName, salaryAmount, taxAmount,
+        year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax 
     } = req.body;
 
     console.log("📥 서버에서 받은 데이터:", req.body); // ✅ 디버깅용 로그
 
-    if (!year || !month || !teacherId || !salaryAmount || !salaryType || !teacherName) {
+    if (!year || !month || !teacherId || !salaryAmount || !totalSalary || !salaryType || !teacherName) {
         return res.status(400).json({ message: '필수 정보가 부족합니다.' });
     }
 
@@ -1917,15 +1917,17 @@ app.post('/anconfirmSalary', async (req, res) => {
     hourlyWage = hourlyWage || 0;
     dailyWage = dailyWage || 0;
     monthlyWage = monthlyWage || 0;
-    taxAmount = taxAmount || 0;  // ✅ 세금 금액 추가
+    totalSalary = totalSalary || 0;
+    taxAmount = taxAmount || 0;
     applyTax = applyTax ? 1 : 0; // ✅ MySQL BOOLEAN 값 변환 (1: true, 0: false)
 
     const query = `
-        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 세금금액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 총급여, 세금금액, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
-        실지급액 = VALUES(실지급액),
+        총급여 = VALUES(총급여),
         세금금액 = VALUES(세금금액),
+        실지급액 = VALUES(실지급액),
         급여방식 = VALUES(급여방식),
         총근무시간 = VALUES(총근무시간),
         총출근일수 = VALUES(총출근일수),
@@ -1936,7 +1938,7 @@ app.post('/anconfirmSalary', async (req, res) => {
     `;
 
     connection.query(query, [
-        year, month, teacherId, teacherName, salaryAmount, taxAmount,
+        year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax
     ], (err) => {
         if (err) {
@@ -1946,6 +1948,7 @@ app.post('/anconfirmSalary', async (req, res) => {
         res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
     });
 });
+
 
 
 
