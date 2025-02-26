@@ -1954,13 +1954,14 @@ app.post('/anconfirmSalary', async (req, res) => {
 
 
 
-// ✅ 급여 목록 조회
+
+// ✅ 급여 목록 조회 (총급여, 세금금액, 실지급액 포함)
 app.get('/angetSalaryList', (req, res) => {
     const { year, month } = req.query;
 
     const query = `
-        SELECT 강사이름, 실지급액 
-        FROM an급여내역 
+        SELECT 강사이름, 총급여, 세금금액, 실지급액
+        FROM an급여내역
         WHERE 년도 = ? AND 월 = ?
     `;
 
@@ -1971,6 +1972,7 @@ app.get('/angetSalaryList', (req, res) => {
         res.status(200).json(results);
     });
 });
+
 // ✅ 급여 내역 조회
 app.get('/angetSalary', async (req, res) => {
     const { year, month, teacherId } = req.query;
