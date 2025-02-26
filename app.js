@@ -1901,7 +1901,7 @@ app.get('/anattendancehistory_monthly', (req, res) => {
 app.post('/anconfirmSalary', async (req, res) => {
     let { 
         year, month, teacherId, teacherName, salaryAmount, 
-        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage 
+        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax 
     } = req.body;
 
     console.log("📥 서버에서 받은 데이터:", req.body); // ✅ 디버깅용 로그
@@ -1916,10 +1916,11 @@ app.post('/anconfirmSalary', async (req, res) => {
     hourlyWage = hourlyWage || 0;
     dailyWage = dailyWage || 0;
     monthlyWage = monthlyWage || 0;
+    applyTax = applyTax ? 1 : 0; // ✅ MySQL의 BOOLEAN 값 처리를 위해 1(true), 0(false)로 변환
 
     const query = `
-        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
         실지급액 = VALUES(실지급액),
         급여방식 = VALUES(급여방식),
@@ -1927,12 +1928,13 @@ app.post('/anconfirmSalary', async (req, res) => {
         총출근일수 = VALUES(총출근일수),
         시급 = VALUES(시급),
         일급 = VALUES(일급),
-        월급 = VALUES(월급);
+        월급 = VALUES(월급),
+        applyTax = VALUES(applyTax);
     `;
 
     connection.query(query, [
         year, month, teacherId, teacherName, salaryAmount, 
-        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage
+        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax
     ], (err) => {
         if (err) {
             console.error('❌ 급여 저장 오류:', err);
@@ -1972,7 +1974,7 @@ app.get('/angetSalary', async (req, res) => {
     }
 
     const query = `
-        SELECT 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급
+        SELECT 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax
         FROM an급여내역
         WHERE 년도 = ? AND 월 = ? AND 강사_id = ?
     `;
@@ -1985,6 +1987,7 @@ app.get('/angetSalary', async (req, res) => {
         if (results.length === 0) {
             return res.status(404).json({ message: '급여 정보 없음' });
         }
+
         res.status(200).json(results[0]);
     });
 });
