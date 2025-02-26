@@ -1898,9 +1898,10 @@ app.get('/anattendancehistory_monthly', (req, res) => {
 });
 
 // ✅ 급여 지급
+// ✅ 급여 확정 저장
 app.post('/anconfirmSalary', async (req, res) => {
     let { 
-        year, month, teacherId, teacherName, salaryAmount, 
+        year, month, teacherId, teacherName, salaryAmount, taxAmount,
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax 
     } = req.body;
 
@@ -1910,19 +1911,21 @@ app.post('/anconfirmSalary', async (req, res) => {
         return res.status(400).json({ message: '필수 정보가 부족합니다.' });
     }
 
-    // ✅ null 값 방어 처리 (undefined 방지)
+    // ✅ null 값 방어 처리
     totalHours = totalHours || 0;
     totalDays = totalDays || 0;
     hourlyWage = hourlyWage || 0;
     dailyWage = dailyWage || 0;
     monthlyWage = monthlyWage || 0;
-    applyTax = applyTax ? 1 : 0; // ✅ MySQL의 BOOLEAN 값 처리를 위해 1(true), 0(false)로 변환
+    taxAmount = taxAmount || 0;  // ✅ 세금 금액 추가
+    applyTax = applyTax ? 1 : 0; // ✅ MySQL BOOLEAN 값 변환 (1: true, 0: false)
 
     const query = `
-        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO an급여내역 (년도, 월, 강사_id, 강사이름, 실지급액, 세금금액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
         실지급액 = VALUES(실지급액),
+        세금금액 = VALUES(세금금액),
         급여방식 = VALUES(급여방식),
         총근무시간 = VALUES(총근무시간),
         총출근일수 = VALUES(총출근일수),
@@ -1933,7 +1936,7 @@ app.post('/anconfirmSalary', async (req, res) => {
     `;
 
     connection.query(query, [
-        year, month, teacherId, teacherName, salaryAmount, 
+        year, month, teacherId, teacherName, salaryAmount, taxAmount,
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax
     ], (err) => {
         if (err) {
