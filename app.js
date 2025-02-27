@@ -1648,62 +1648,6 @@ app.get('/attendancehistory_monthly', (req, res) => {
     });
 });
 
-// ✅ 급여 지급
-// ✅ 급여 확정 저장
-app.post('/confirmSalary', async (req, res) => {
-    let { 
-        year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
-        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax 
-    } = req.body;
-
-    console.log("📥 서버에서 받은 데이터:", req.body); // ✅ 디버깅용 로그
-
-    if (!year || !month || !teacherId || !salaryAmount || !totalSalary || !salaryType || !teacherName) {
-        return res.status(400).json({ message: '필수 정보가 부족합니다.' });
-    }
-
-    // ✅ null 값 방어 처리
-    totalHours = totalHours || 0;
-    totalDays = totalDays || 0;
-    hourlyWage = hourlyWage || 0;
-    dailyWage = dailyWage || 0;
-    monthlyWage = monthlyWage || 0;
-    totalSalary = totalSalary || 0;
-    taxAmount = taxAmount || 0;
-    applyTax = applyTax ? 1 : 0; // ✅ MySQL BOOLEAN 값 변환 (1: true, 0: false)
-
-    const query = `
-        INSERT INTO 급여내역 (년도, 월, 강사_id, 강사이름, 총급여, 세금금액, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-        총급여 = VALUES(총급여),
-        세금금액 = VALUES(세금금액),
-        실지급액 = VALUES(실지급액),
-        급여방식 = VALUES(급여방식),
-        총근무시간 = VALUES(총근무시간),
-        총출근일수 = VALUES(총출근일수),
-        시급 = VALUES(시급),
-        일급 = VALUES(일급),
-        월급 = VALUES(월급),
-        applyTax = VALUES(applyTax);
-    `;
-
-    connection.query(query, [
-        year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
-        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax
-    ], (err) => {
-        if (err) {
-            console.error('❌ 급여 저장 오류:', err);
-            return res.status(500).json({ message: '급여 저장 실패', error: err });
-        }
-        res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
-    });
-});
-
-
-
-
-
 
 
 // ✅ 급여 목록 조회 (총급여, 세금금액, 실지급액 포함)
@@ -1724,7 +1668,63 @@ app.get('/getSalaryList', (req, res) => {
     });
 });
 
-// ✅ 급여 내역 조회
+// ✅ 급여 확정 (인센티브 추가)
+app.post('/confirmSalary', async (req, res) => {
+    let { 
+        year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
+        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax,
+        incentive1, incentive2 // ✅ 인센티브 추가
+    } = req.body;
+
+    console.log("📥 서버에서 받은 데이터:", req.body); // ✅ 디버깅용 로그
+
+    if (!year || !month || !teacherId || !salaryAmount || !totalSalary || !salaryType || !teacherName) {
+        return res.status(400).json({ message: '필수 정보가 부족합니다.' });
+    }
+
+    // ✅ null 값 방어 처리
+    totalHours = totalHours || 0;
+    totalDays = totalDays || 0;
+    hourlyWage = hourlyWage || 0;
+    dailyWage = dailyWage || 0;
+    monthlyWage = monthlyWage || 0;
+    totalSalary = totalSalary || 0;
+    taxAmount = taxAmount || 0;
+    applyTax = applyTax ? 1 : 0; // ✅ MySQL BOOLEAN 값 변환 (1: true, 0: false)
+    incentive1 = incentive1 || 0;
+    incentive2 = incentive2 || 0;
+
+    const query = `
+        INSERT INTO 급여내역 (년도, 월, 강사_id, 강사이름, 총급여, 세금금액, 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax, 인센티브1, 인센티브2)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+        총급여 = VALUES(총급여),
+        세금금액 = VALUES(세금금액),
+        실지급액 = VALUES(실지급액),
+        급여방식 = VALUES(급여방식),
+        총근무시간 = VALUES(총근무시간),
+        총출근일수 = VALUES(총출근일수),
+        시급 = VALUES(시급),
+        일급 = VALUES(일급),
+        월급 = VALUES(월급),
+        applyTax = VALUES(applyTax),
+        인센티브1 = VALUES(인센티브1),
+        인센티브2 = VALUES(인센티브2);
+    `;
+
+    connection.query(query, [
+        year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
+        salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax, incentive1, incentive2
+    ], (err) => {
+        if (err) {
+            console.error('❌ 급여 저장 오류:', err);
+            return res.status(500).json({ message: '급여 저장 실패', error: err });
+        }
+        res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
+    });
+});
+
+// ✅ 급여 조회 (인센티브 포함)
 app.get('/getSalary', async (req, res) => {
     const { year, month, teacherId } = req.query;
 
@@ -1733,7 +1733,7 @@ app.get('/getSalary', async (req, res) => {
     }
 
     const query = `
-        SELECT 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax
+        SELECT 실지급액, 급여방식, 총근무시간, 총출근일수, 시급, 일급, 월급, applyTax, 인센티브1, 인센티브2
         FROM 급여내역
         WHERE 년도 = ? AND 월 = ? AND 강사_id = ?
     `;
@@ -1750,6 +1750,7 @@ app.get('/getSalary', async (req, res) => {
         res.status(200).json(results[0]);
     });
 });
+
 
 //안양 출근부 25.02.25
 // ✅ 강사 등록
