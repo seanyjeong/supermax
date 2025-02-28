@@ -1655,7 +1655,7 @@ app.get('/getSalaryList', (req, res) => {
     const { year, month } = req.query;
 
     const query = `
-        SELECT 강사이름, 총급여, 세금금액, 실지급액
+        SELECT 강사이름, 총급여, 세금금액, 실지급액, 인센티브1, 인센티브2
         FROM 급여내역
         WHERE 년도 = ? AND 월 = ?
     `;
