@@ -16,7 +16,14 @@ const PORT = 5000;
 const JWT_SECRET = "your_secret_key";
 
 app.use(express.json());
-app.use(cors());
+// ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
+app.use(cors({
+  origin: ['https://score.ilsanmax.com'], // 네 프론트엔드 도메인
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 
 // ✅ MySQL 데이터베이스 연결
 const db = mysql.createConnection({
