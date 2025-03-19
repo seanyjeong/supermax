@@ -1,15 +1,15 @@
 const express = require('express');
 const mysql = require('mysql');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');  // ✅ bcryptjs로 변경하여 실행 오류 해결
+const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const multer = require('multer');
 const admin = require('firebase-admin');
-const serviceAccount = require('/root/supermax/firebase-key.json');  // ✅ Firebase 인증 키
+const serviceAccount = require('/root/supermax/firebase-key.json');
 
 const app = express();
-
-const JWT_SECRET = "your_secret_key";  // ✅ JWT 비밀키
+const PORT = 5000;
+const JWT_SECRET = "your_secret_key";
 
 app.use(express.json());
 app.use(cors());
@@ -26,20 +26,16 @@ const db = mysql.createConnection({
 db.connect(err => {
     if (err) {
         console.error("❌ MySQL 연결 실패:", err);
-        process.exit(1);
+        // MySQL이 연결되지 않아도 서버 실행 가능하도록 변경
+    } else {
+        console.log("✅ MySQL Connected!");
     }
-    console.log("✅ MySQL Connected!");
-
-    // ✅ MySQL 연결 후 서버 실행
-    app.listen(PORT, () => {
-        console.log(`🚀 maxfeed.js 피드 서버가 ${PORT} 포트에서 실행 중...`);
-    });
 });
 
 // ✅ Firebase Storage 설정
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    storageBucket: "gs://ilsanmax.appspot.com"  // ✅ Firebase Storage 버킷 주소
+    storageBucket: "gs://ilsanmax.appspot.com"
 });
 const bucket = admin.storage().bucket();
 
@@ -56,7 +52,7 @@ app.post('/register', async (req, res) => {
 
     if (!consent) return res.status(400).json({ error: "개인정보 동의가 필요합니다." });
 
-    const hashedPassword = await bcrypt.hash(password, 10);  // ✅ bcryptjs 사용
+    const hashedPassword = await bcrypt.hash(password, 10);
     const sql = "INSERT INTO users (username, password, name, birth_date, phone, school, grade, gender, consent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     db.query(sql, [username, hashedPassword, name, birth_date, phone, school, grade, gender, consent], (err, result) => {
@@ -73,7 +69,7 @@ app.post('/login', (req, res) => {
         if (err || results.length === 0) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
 
         const user = results[0];
-        const isMatch = await bcrypt.compare(password, user.password);  // ✅ bcryptjs 사용
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
 
         const token = jwt.sign({ user_id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "1d" });
@@ -127,70 +123,27 @@ app.post('/add-feed', upload.single('file'), async (req, res) => {
     }
 });
 
-// ✅ 전체 피드 조회
-app.get('/feeds', (req, res) => {
-    const sql = `
-        SELECT feeds.*, users.username, users.profile_image 
-        FROM feeds 
-        JOIN users ON feeds.user_id = users.id 
-        ORDER BY created_at DESC
-    `;
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: err });
-        res.json(results);
-    });
-});
+/* ======================================
+   📌 서버 실행 (포트 충돌 방지 포함)
+====================================== */
 
-// ✅ 내 피드만 조회
-app.get('/my-feeds', (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user_id = decoded.user_id;
-
-        const sql = "SELECT * FROM feeds WHERE user_id = ? ORDER BY created_at DESC";
-        db.query(sql, [user_id], (err, results) => {
-            if (err) return res.status(500).json({ error: err });
-            res.json(results);
-        });
-    } catch (error) {
-        res.status(401).json({ error: "Invalid token" });
+// ✅ 포트 충돌 방지 추가
+const server = app.listen(PORT, () => {
+    console.log(`🚀 server.js가 ${PORT} 포트에서 실행 중...`);
+}).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`❌ 오류: 포트 ${PORT}가 이미 사용 중입니다.`);
+        process.exit(1); // 서버 종료
+    } else {
+        console.error(err);
     }
 });
 
-/* ======================================
-   📌 3️⃣ 좋아요 & 댓글 기능 (추가 가능)
-====================================== */
-
-// ✅ 좋아요 추가
-app.post('/like', (req, res) => {
-    const { feed_id, user_id } = req.body;
-    const sql = "INSERT INTO likes (feed_id, user_id) VALUES (?, ?)";
-
-    db.query(sql, [feed_id, user_id], (err, result) => {
-        if (err) return res.status(500).json({ error: err });
-        res.json({ success: true });
+// ✅ 서버 종료 시 포트 정리
+process.on('SIGINT', () => {
+    console.log('❌ 서버 종료 중...');
+    server.close(() => {
+        console.log('✅ 서버가 정상적으로 종료되었습니다.');
+        process.exit(0);
     });
-});
-
-// ✅ 댓글 추가
-app.post('/comment', (req, res) => {
-    const { feed_id, user_id, comment } = req.body;
-    const sql = "INSERT INTO comments (feed_id, user_id, comment) VALUES (?, ?, ?)";
-
-    db.query(sql, [feed_id, user_id, comment], (err, result) => {
-        if (err) return res.status(500).json({ error: err });
-        res.json({ success: true });
-    });
-});
-
-
-/* ======================================
-   📌 서버 실행 (5000번 포트)
-====================================== */
-const PORT = 5000;
-app.listen(PORT, () => {
-    console.log(`maxfeed.js 피드 서버가 ${PORT} 포트에서 실행 중...`);
 });
