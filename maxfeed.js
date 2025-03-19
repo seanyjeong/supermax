@@ -35,7 +35,8 @@ db.connect(err => {
 // ✅ Firebase Storage 설정
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    storageBucket: "gs://ilsanmax.appspot.com"
+storageBucket: "ilsanmax.firebasestorage.app"
+
 });
 const bucket = admin.storage().bucket();
 
