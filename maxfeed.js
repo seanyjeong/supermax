@@ -8,6 +8,10 @@ const admin = require('firebase-admin');
 const serviceAccount = require('/root/supermax/firebase-key.json');
 
 const app = express();
+// 이 코드 위치: const app = express(); 선언 바로 아래에 추가
+app.use(express.json({ limit: '100mb' }));    // JSON 요청 용량 확대
+app.use(express.urlencoded({ limit: '100mb', extended: true }));  // URL 인코딩 요청 용량 확대
+
 const PORT = 5000;
 const JWT_SECRET = "your_secret_key";
 
