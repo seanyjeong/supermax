@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');  // ✅ bcryptjs로 변경하여 실행 오�
 const cors = require('cors');
 const multer = require('multer');
 const admin = require('firebase-admin');
-const serviceAccount = require('./firebase-key.json');  // ✅ Firebase 인증 키
+const serviceAccount = require('/root/supermax/firebase-key.json');  // ✅ Firebase 인증 키
 
 const app = express();
 const PORT = 5000;
