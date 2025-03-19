@@ -8,7 +8,7 @@ const admin = require('firebase-admin');
 const serviceAccount = require('/root/supermax/firebase-key.json');  // ✅ Firebase 인증 키
 
 const app = express();
-const PORT = 5000;
+
 const JWT_SECRET = "your_secret_key";  // ✅ JWT 비밀키
 
 app.use(express.json());
@@ -190,6 +190,7 @@ app.post('/comment', (req, res) => {
 /* ======================================
    📌 서버 실행 (5000번 포트)
 ====================================== */
+const PORT = 5000;
 app.listen(PORT, () => {
     console.log(`maxfeed.js 피드 서버가 ${PORT} 포트에서 실행 중...`);
 });
