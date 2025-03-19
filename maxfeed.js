@@ -47,7 +47,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 ====================================== */
 
 // ✅ 회원가입
-app.post('/register', async (req, res) => {
+app.post('/feed/register', async (req, res) => {
     const { username, password, name, birth_date, phone, school, grade, gender, consent } = req.body;
 
     if (!consent) return res.status(400).json({ error: "개인정보 동의가 필요합니다." });
@@ -62,7 +62,7 @@ app.post('/register', async (req, res) => {
 });
 
 // ✅ 로그인 (JWT 발급)
-app.post('/login', (req, res) => {
+app.post('/feed/login', (req, res) => {
     const { username, password } = req.body;
 
     db.query("SELECT * FROM users WHERE username = ?", [username], async (err, results) => {
@@ -78,7 +78,7 @@ app.post('/login', (req, res) => {
 });
 
 // ✅ 로그아웃 (클라이언트에서 토큰 삭제)
-app.post('/logout', (req, res) => {
+app.post('/feed/logout', (req, res) => {
     res.json({ success: true, message: "로그아웃 성공" });
 });
 
@@ -99,7 +99,7 @@ async function uploadToFirebase(file) {
 }
 
 // ✅ 피드 작성 (사진/동영상 업로드 포함)
-app.post('/add-feed', upload.single('file'), async (req, res) => {
+app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
