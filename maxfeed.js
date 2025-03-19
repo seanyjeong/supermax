@@ -96,8 +96,13 @@ async function uploadToFirebase(file) {
         metadata: { contentType: file.mimetype }
     });
 
+    // ✅ 이 부분 추가 → 파일 공개 설정
+    await fileUpload.makePublic();
+
+    // ✅ 공개 URL로 리턴
     return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
 }
+
 
 // ✅ 피드 작성 (사진/동영상 업로드 포함)
 app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
