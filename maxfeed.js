@@ -1,7 +1,7 @@
 const express = require('express');
 const mysql = require('mysql');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const multer = require('multer'); // 파일 업로드
 const admin = require('firebase-admin'); // Firebase Storage
