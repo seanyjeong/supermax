@@ -101,10 +101,13 @@ async function uploadToFirebase(file) {
 // ✅ 피드 작성 (사진/동영상 업로드 포함)
 app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    console.log('🔍 클라이언트가 전송한 토큰:', token); // ✅ 확인 필수
+
+    if (!token) return res.status(401).json({ error: "Unauthorized: 토큰 없음" });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        console.log('🔍 JWT decoded 결과:', decoded); // ✅ 여기 중요!
         const { content } = req.body;
         const user_id = decoded.user_id;
 
@@ -115,13 +118,18 @@ app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
 
         const sql = "INSERT INTO feeds (user_id, content, media_url) VALUES (?, ?, ?)";
         db.query(sql, [user_id, content, media_url], (err, result) => {
-            if (err) return res.status(500).json({ error: err });
+            if (err) {
+                console.error('❌ DB 쿼리 에러:', err);
+                return res.status(500).json({ error: err });
+            }
             res.json({ success: true, feed_id: result.insertId });
         });
     } catch (error) {
-        res.status(401).json({ error: "Invalid token" });
+        console.error('❌ JWT 검증 에러:', error); // ✅ 이 부분 중요!
+        res.status(401).json({ error: "Invalid token", details: error.message });
     }
 });
+
 
 /* ======================================
    📌 서버 실행 (포트 충돌 방지 포함)
