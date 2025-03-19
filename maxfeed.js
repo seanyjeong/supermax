@@ -131,6 +131,53 @@ app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
     }
 });
 
+// 전체 피드 조회
+app.get('/feed/feeds', (req, res) => {
+    const sql = `
+        SELECT feeds.*, users.username, users.profile_image 
+        FROM feeds 
+        JOIN users ON feeds.user_id = users.id 
+        ORDER BY feeds.created_at DESC
+    `;
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error('❌ 전체 피드 조회 오류:', err);
+            return res.status(500).json({ error: '피드 조회 실패' });
+        }
+        res.json(results);
+    });
+});
+
+// 내 피드만 조회 (로그인 사용자 전용)
+app.get('/feed/my-feeds', (req, res) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Unauthorized: 토큰 없음" });
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user_id = decoded.user_id;
+
+        const sql = `
+            SELECT feeds.*, users.username, users.profile_image
+            FROM feeds
+            JOIN users ON feeds.user_id = users.id
+            WHERE feeds.user_id = ?
+            ORDER BY feeds.created_at DESC
+        `;
+        db.query(sql, [user_id], (err, results) => {
+            if (err) {
+                console.error('❌ 내 피드 조회 오류:', err);
+                return res.status(500).json({ error: '내 피드 조회 실패' });
+            }
+            res.json(results);
+        });
+    } catch (error) {
+        console.error('❌ JWT 오류:', error);
+        res.status(401).json({ error: "Invalid token", details: error.message });
+    }
+});
+
+
 
 /* ======================================
    📌 서버 실행 (포트 충돌 방지 포함)
