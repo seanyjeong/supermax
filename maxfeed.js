@@ -220,7 +220,80 @@ app.get('/feed/my-feeds', (req, res) => {
         res.status(401).json({ error: "Invalid token", details: error.message });
     }
 });
+// ✅ 내정보 수정관련 (이름 표시)
+app.post('/feed/update-profile', upload.single('profile_image'), async (req, res) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
 
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const { current_password, new_password, confirm_password, phone, birth_date } = req.body;
+
+        console.log("✅ [내정보 수정 요청] user_id:", decoded.user_id);
+
+        // 🔥 1. 기존 비밀번호 확인
+        if (current_password) {
+            db.query("SELECT password FROM users WHERE id = ?", [decoded.user_id], async (err, result) => {
+                if (err) {
+                    console.error("❌ MySQL 조회 오류:", err);
+                    return res.status(500).json({ error: "DB 조회 실패" });
+                }
+                if (result.length === 0) {
+                    return res.status(400).json({ error: "유효하지 않은 사용자입니다." });
+                }
+
+                const isMatch = await bcrypt.compare(current_password, result[0].password);
+                if (!isMatch) {
+                    return res.status(400).json({ error: "기존 비밀번호가 틀렸습니다." });
+                }
+
+                // 🔥 2. 새 비밀번호 검증 (두 번 입력 체크)
+                if (new_password && new_password !== confirm_password) {
+                    return res.status(400).json({ error: "새 비밀번호가 일치하지 않습니다." });
+                }
+
+                // 🔥 3. 새 비밀번호 해싱 후 저장
+                const hashedPassword = new_password ? await bcrypt.hash(new_password, 10) : result[0].password;
+                updateUserProfile(decoded.user_id, hashedPassword);
+            });
+        } else {
+            // 비밀번호 변경 없이 프로필 정보만 수정
+            updateUserProfile(decoded.user_id, null);
+        }
+
+        // ✅ 프로필 업데이트 함수
+        function updateUserProfile(user_id, newPassword) {
+            let profile_url = null;
+
+            if (req.file) {
+                profile_url = `https://storage.googleapis.com/${bucket.name}/profiles/${Date.now()}_${req.file.originalname}`;
+                bucket.file(`profiles/${Date.now()}_${req.file.originalname}`).save(req.file.buffer);
+            }
+
+            const sql = `
+                UPDATE users SET 
+                password = COALESCE(?, password), 
+                phone = COALESCE(?, phone),
+                birth_date = COALESCE(?, birth_date),
+                profile_image = COALESCE(?, profile_image)
+                WHERE id = ?
+            `;
+
+            db.query(sql, [newPassword, phone, birth_date, profile_url, user_id], (err, result) => {
+                if (err) {
+                    console.error("🔥 MySQL 업데이트 오류:", err);
+                    return res.status(500).json({ error: "프로필 수정 실패" });
+                }
+                console.log("✅ 프로필 수정 완료:", result);
+                res.json({ success: true });
+            });
+        }
+
+    } catch (error) {
+        console.error("🔥 서버 오류 발생:", error);
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
+    }
+});
 
 
 /* ======================================
