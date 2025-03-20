@@ -420,22 +420,23 @@ app.get('/feed/comments/:feedId', (req, res) => {
     const { feedId } = req.params;
 
     const sql = `
-        SELECT comments.*, users.name, comments.parent_id
+        SELECT comments.*, users.name
         FROM comments
         JOIN users ON comments.user_id = users.id
         WHERE comments.feed_id = ?
-        ORDER BY comments.parent_id IS NULL DESC, comments.created_at ASC
+        ORDER BY COALESCE(comments.parent_id, comments.id), comments.created_at ASC
     `;
 
     db.query(sql, [feedId], (err, results) => {
         if (err) {
-            console.error("🔥 댓글 불러오기 오류:", err);
+            console.error("🔥 [댓글] 불러오기 오류:", err);
             return res.status(500).json({ error: "댓글을 불러올 수 없습니다." });
         }
 
         res.json(results);
     });
 });
+
 
 
 // ✅ 댓글 추가 API (POST /feed/add-comment)
