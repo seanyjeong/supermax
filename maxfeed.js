@@ -471,6 +471,7 @@ app.post('/feed/add-comment', (req, res) => {
 });
 
 
+// ✅ 좋아요 API (모든 경우에서 `res.json()` 호출 보장)
 app.post('/feed/like', (req, res) => {
     const { feed_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
@@ -480,7 +481,6 @@ app.post('/feed/like', (req, res) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // ✅ 좋아요 여부 확인
         db.query("SELECT * FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err, results) => {
             if (err) {
                 console.error("🔥 좋아요 확인 오류:", err);
@@ -543,7 +543,6 @@ app.post('/feed/like', (req, res) => {
         res.status(401).json({ error: "Invalid token" });
     }
 });
-
 
 
 
