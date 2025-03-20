@@ -11,6 +11,7 @@ const axios = require('axios');
 const serviceAccount = require('/root/supermax/firebase-key.json');
 
 const app = express();
+const app = express();
 // 이 코드 위치: const app = express(); 선언 바로 아래에 추가
 app.use(express.json({ limit: '100mb' }));    // JSON 요청 용량 확대
 app.use(express.urlencoded({ limit: '100mb', extended: true }));  // URL 인코딩 요청 용량 확대
@@ -20,23 +21,24 @@ const JWT_SECRET = "your_secret_key";
 
 app.use(express.json());
 // ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
-const cors = require('cors');
-
 app.use(cors({
-  origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'], // ✅ 정확한 도메인 허용
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true  // ✅ 중요: 인증 정보 포함 가능하도록 설정
-}));
-
-// ✅ CORS 설정 (정확한 origin 허용)
-app.use(cors({
-  origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'],
+  origin: ['https://score.ilsanmax.com','https://seanyjeong.github.io'], // 네 프론트엔드 도메인
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
+app.use(bodyParser.json());
+
+const verificationCodes = {}; // 🔥 인증번호 저장 객체
+
+const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB';
+const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
+const SERVICE_ID = 'ncp:sms:kr:284240549231:sean';
+const FROM_PHONE = '01021446765';
+function generateCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
 
 // ✅ 1. 랜덤 인증번호 생성 함수
 function generateCode() {
