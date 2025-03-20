@@ -20,12 +20,15 @@ const JWT_SECRET = "your_secret_key";
 
 app.use(express.json());
 // ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
-app.use(cors({
-  origin: ['https://score.ilsanmax.com','https://seanyjeong.github.io'], // 네 프론트엔드 도메인
+const corsOptions = {
+  origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'],
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+  credentials: true  // ✅ 중요! credentials 사용 가능하도록 설정
+};
+
+app.use(cors(corsOptions));
+
 
 app.use(bodyParser.json());
 
@@ -470,8 +473,7 @@ app.post('/feed/add-comment', (req, res) => {
 });
 
 
-app.post('/feed/like', cors(), (req, res) => {
-
+app.post('/feed/like', (req, res) => {
     const { feed_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
@@ -491,7 +493,7 @@ app.post('/feed/like', cors(), (req, res) => {
                 db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], () => {
                     db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], () => {
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
-                            res.setHeader("Access-Control-Allow-Origin", "*");  // ✅ CORS 헤더 강제 추가
+                            if (err) return res.status(500).json({ error: "좋아요 카운트 업데이트 실패" });
                             res.json({ liked: false, like_count: result[0].like_count || 0 });
                         });
                     });
@@ -501,7 +503,7 @@ app.post('/feed/like', cors(), (req, res) => {
                 db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], () => {
                     db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], () => {
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
-                            res.setHeader("Access-Control-Allow-Origin", "*");  // ✅ CORS 헤더 강제 추가
+                            if (err) return res.status(500).json({ error: "좋아요 카운트 업데이트 실패" });
                             res.json({ liked: true, like_count: result[0].like_count || 0 });
                         });
                     });
@@ -514,6 +516,7 @@ app.post('/feed/like', cors(), (req, res) => {
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
 
 
 
