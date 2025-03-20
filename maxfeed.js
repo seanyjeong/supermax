@@ -111,20 +111,36 @@ app.post('/feed/logout', (req, res) => {
 ====================================== */
 
 // ✅ Firebase Storage에 파일 업로드 & URL 반환
-async function uploadToFirebase(file) {
-    const fileName = `uploads/${Date.now()}_${file.originalname}`;
-    const fileUpload = bucket.file(fileName);
+async function uploadToFirebase(file, folder = "uploads") {
+    try {
+        console.log(`🚀 Firebase 업로드 시작: ${file.originalname}`);
 
-    await fileUpload.save(file.buffer, {
-        metadata: { contentType: file.mimetype }
-    });
+        if (!file) throw new Error("파일이 없습니다!");
 
-    // ✅ 이 부분 추가 → 파일 공개 설정
-    await fileUpload.makePublic();
+        // 🔥 `folder` 매개변수 추가 → 프로필 이미지는 "profiles/", 일반 파일은 "uploads/"
+        const fileName = `${folder}/${Date.now()}_${file.originalname}`;
+        const fileUpload = bucket.file(fileName);
 
-    // ✅ 공개 URL로 리턴
-    return `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        await fileUpload.save(file.buffer, {
+            metadata: { contentType: file.mimetype }
+        });
+
+        console.log(`✅ 파일 업로드 성공: ${fileName}`);
+
+        // 🔥 **파일을 공개로 설정 (`makePublic()`)**
+        await fileUpload.makePublic();
+
+        // ✅ **공개 URL 반환**
+        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        console.log(`🌍 공개 URL: ${publicUrl}`);
+
+        return publicUrl;
+    } catch (error) {
+        console.error("🔥 Firebase 업로드 오류:", error);
+        throw new Error("파일 업로드 실패: " + error.message);
+    }
 }
+
 
 
 // ✅ 피드 작성 (이름 포함)
