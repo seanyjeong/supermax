@@ -105,8 +105,11 @@ app.get('/feed/user-info', (req, res) => {
                 return res.status(400).json({ error: "유효하지 않은 사용자" });
             }
 
-            const { name, profile_image } = results[0]; // ✅ name과 profile_image 가져오기
-            res.json({ success: true, name, profile_image });
+            // ✅ 기본 프로필 이미지 설정
+            const { name, profile_image } = results[0];
+            const profileImgUrl = profile_image || "https://placehold.co/40x40";
+
+            res.json({ success: true, name, profile_image: profileImgUrl });
         });
 
     } catch (error) {
@@ -211,12 +214,23 @@ app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
 
 // ✅ 피드 목록 (이름 표시)
 app.get('/feed/feeds', (req, res) => {
-    const sql = `SELECT feeds.*, users.name FROM feeds JOIN users ON feeds.user_id = users.id ORDER BY feeds.created_at DESC`;
+    const sql = `
+        SELECT feeds.*, users.name, 
+               COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
+        FROM feeds 
+        JOIN users ON feeds.user_id = users.id 
+        ORDER BY feeds.created_at DESC
+    `;
+
     db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: '피드 조회 실패' });
+        if (err) {
+            console.error("❌ 전체 피드 조회 오류:", err);
+            return res.status(500).json({ error: "피드 조회 실패" });
+        }
         res.json(results);
     });
 });
+
 
 // 내 피드만 조회 (로그인 사용자 전용)
 app.get('/feed/my-feeds', (req, res) => {
