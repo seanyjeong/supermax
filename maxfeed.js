@@ -475,9 +475,10 @@ app.post('/feed/add-comment', (req, res) => {
 });
 
 
-app.post('/feed/like', cors(), (req, res) => {
+app.post('/feed/like', (req, res) => {
     const { feed_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
+
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
@@ -487,25 +488,53 @@ app.post('/feed/like', cors(), (req, res) => {
         db.query("SELECT * FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err, results) => {
             if (err) {
                 console.error("🔥 좋아요 확인 오류:", err);
-                return res.status(500).json({ error: "좋아요 실패" });
+                return res.status(500).json({ error: "좋아요 확인 실패" });
             }
 
             if (results.length > 0) {
                 // ✅ 좋아요 취소
-                db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], () => {
-                    db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], () => {
+                db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err) => {
+                    if (err) {
+                        console.error("🔥 좋아요 취소 오류:", err);
+                        return res.status(500).json({ error: "좋아요 취소 실패" });
+                    }
+
+                    db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], (err) => {
+                        if (err) {
+                            console.error("🔥 좋아요 개수 업데이트 오류:", err);
+                            return res.status(500).json({ error: "좋아요 개수 업데이트 실패" });
+                        }
+
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
-                            res.setHeader("Access-Control-Allow-Origin", "*");  // ✅ CORS 헤더 강제 추가
+                            if (err || result.length === 0) {
+                                console.error("🔥 좋아요 개수 조회 오류:", err);
+                                return res.status(500).json({ error: "좋아요 개수 조회 실패" });
+                            }
+
                             res.json({ liked: false, like_count: result[0].like_count || 0 });
                         });
                     });
                 });
             } else {
                 // ✅ 좋아요 추가
-                db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], () => {
-                    db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], () => {
+                db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], (err) => {
+                    if (err) {
+                        console.error("🔥 좋아요 추가 오류:", err);
+                        return res.status(500).json({ error: "좋아요 추가 실패" });
+                    }
+
+                    db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], (err) => {
+                        if (err) {
+                            console.error("🔥 좋아요 개수 업데이트 오류:", err);
+                            return res.status(500).json({ error: "좋아요 개수 업데이트 실패" });
+                        }
+
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
-                            res.setHeader("Access-Control-Allow-Origin", "*");  // ✅ CORS 헤더 강제 추가
+                            if (err || result.length === 0) {
+                                console.error("🔥 좋아요 개수 조회 오류:", err);
+                                return res.status(500).json({ error: "좋아요 개수 조회 실패" });
+                            }
+
                             res.json({ liked: true, like_count: result[0].like_count || 0 });
                         });
                     });
