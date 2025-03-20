@@ -450,10 +450,17 @@ app.post('/feed/add-comment', (req, res) => {
                 return res.status(500).json({ error: "댓글 추가 실패" });
             }
 
-            // ✅ 댓글 개수 증가
-            db.query("UPDATE feeds SET comment_count = comment_count + 1 WHERE id = ?", [feed_id]);
+            // ✅ 댓글 개수 증가 후 업데이트된 값 반환
+            db.query("UPDATE feeds SET comment_count = comment_count + 1 WHERE id = ?", [feed_id], () => {
+                db.query("SELECT comment_count FROM feeds WHERE id = ?", [feed_id], (err, countResult) => {
+                    if (err) {
+                        console.error("🔥 댓글 카운트 업데이트 오류:", err);
+                        return res.status(500).json({ error: "댓글 카운트 업데이트 실패" });
+                    }
 
-            res.json({ success: true, comment_id: result.insertId });
+                    res.json({ success: true, comment_id: result.insertId, comment_count: countResult[0].comment_count });
+                });
+            });
         });
 
     } catch (error) {
@@ -461,6 +468,7 @@ app.post('/feed/add-comment', (req, res) => {
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
 
 // ✅ 좋아요 API (POST /feed/like)
 app.post('/feed/like', (req, res) => {
@@ -471,7 +479,7 @@ app.post('/feed/like', (req, res) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // ✅ 이미 좋아요 눌렀는지 확인
+        // ✅ 좋아요 여부 확인
         db.query("SELECT * FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err, results) => {
             if (err) {
                 console.error("🔥 좋아요 확인 오류:", err);
