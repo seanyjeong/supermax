@@ -203,15 +203,16 @@ app.post('/feed/login', (req, res) => {
 });
 
 
-// ✅ 현재 로그인한 사용자 정보 조회
+// ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함)
 app.get('/feed/user-info', (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        const userId = decoded.user_id;  // 🔥 토큰에서 user_id 추출
 
-        db.query("SELECT name, profile_image FROM users WHERE id = ?", [decoded.user_id], (err, results) => {
+        db.query("SELECT name, profile_image FROM users WHERE id = ?", [userId], (err, results) => {
             if (err) {
                 console.error("🔥 MySQL 조회 오류:", err);
                 return res.status(500).json({ error: "DB 조회 실패" });
@@ -224,7 +225,12 @@ app.get('/feed/user-info', (req, res) => {
             const { name, profile_image } = results[0];
             const profileImgUrl = profile_image || "https://placehold.co/40x40";
 
-            res.json({ success: true, name, profile_image: profileImgUrl });
+            res.json({ 
+                success: true, 
+                user_id: userId,  // 🔥 user_id 추가
+                name, 
+                profile_image: profileImgUrl 
+            });
         });
 
     } catch (error) {
@@ -232,6 +238,7 @@ app.get('/feed/user-info', (req, res) => {
         res.status(401).json({ error: "Invalid token", details: error.message });
     }
 });
+
 
 
 /* ======================================
