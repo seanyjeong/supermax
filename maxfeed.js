@@ -474,7 +474,44 @@ app.post('/feed/add-comment', (req, res) => {
     }
 });
 
+app.post('/feed/delete-comment', (req, res) => {
+    const { comment_id } = req.body;
+    const token = req.headers.authorization?.split(" ")[1];
 
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        console.log("✅ [댓글 삭제] 요청 수신:", { comment_id, user_id: decoded.user_id });
+
+        // ✅ 내 댓글인지 확인
+        db.query("SELECT * FROM comments WHERE id = ?", [comment_id], (err, results) => {
+            if (err || results.length === 0) return res.status(400).json({ error: "댓글이 존재하지 않음" });
+
+            const comment = results[0];
+            if (comment.user_id !== decoded.user_id) {
+                return res.status(403).json({ error: "삭제 권한 없음" });
+            }
+
+            // ✅ 댓글 삭제
+            db.query("DELETE FROM comments WHERE id = ?", [comment_id], (err) => {
+                if (err) return res.status(500).json({ error: "댓글 삭제 실패" });
+
+                // ✅ 댓글 개수 업데이트
+                db.query("UPDATE feeds SET comment_count = (SELECT COUNT(*) FROM comments WHERE feed_id = ?) WHERE id = ?", [comment.feed_id, comment.feed_id], () => {
+                    res.json({ success: true });
+                });
+            });
+        });
+
+    } catch (error) {
+        console.error("🔥 [댓글 삭제] JWT 인증 오류:", error);
+        res.status(401).json({ error: "Invalid token" });
+    }
+});
+
+
+// ✅ 좋아요 API
 app.post('/feed/like', (req, res) => {
     console.log("🔥 [like] 요청 수신:", req.body);
     const { feed_id } = req.body;
@@ -547,6 +584,8 @@ app.post('/feed/like', (req, res) => {
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
+
 
 
 
