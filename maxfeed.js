@@ -175,22 +175,30 @@ app.post('/feed/login', (req, res) => {
     const { username, password } = req.body;
 
     db.query("SELECT * FROM users WHERE username = ?", [username], async (err, results) => {
-        if (err || results.length === 0) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+        if (err || results.length === 0) {
+            console.error("❌ 로그인 실패: 아이디 또는 비밀번호가 틀림");
+            return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+        }
 
         const user = results[0];
-        console.log("🛠 로그인된 유저 정보:", user); // ✅ 로그 추가해서 user.id 확인
+        console.log("🛠 로그인된 유저 정보:", user); // ✅ 유저 정보 출력
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+        if (!isMatch) {
+            console.error("❌ 로그인 실패: 비밀번호 불일치");
+            return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+        }
 
         const token = jwt.sign({ user_id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "1d" });
 
-        res.json({ 
-            success: true, 
-            token, 
-            user_id: user.id,  // ✅ 여기서 `user.id`가 잘 오는지 확인!
-            username: user.username 
-        });
+        console.log("✅ 로그인 성공! 응답 데이터:", JSON.stringify({
+            success: true,
+            token,
+            user_id: user.id,
+            username: user.username
+        }, null, 2)); // ✅ JSON.stringify() 사용해서 더 명확하게 출력
+
+        res.json({ success: true, token, user_id: user.id, username: user.username });
     });
 });
 
