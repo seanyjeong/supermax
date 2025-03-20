@@ -420,11 +420,11 @@ app.get('/feed/comments/:feedId', (req, res) => {
     const { feedId } = req.params;
 
     const sql = `
-        SELECT comments.*, users.name 
+        SELECT comments.*, users.name, comments.parent_id
         FROM comments
         JOIN users ON comments.user_id = users.id
         WHERE comments.feed_id = ?
-        ORDER BY comments.created_at ASC
+        ORDER BY comments.parent_id IS NULL DESC, comments.created_at ASC
     `;
 
     db.query(sql, [feedId], (err, results) => {
@@ -436,6 +436,7 @@ app.get('/feed/comments/:feedId', (req, res) => {
         res.json(results);
     });
 });
+
 
 // ✅ 댓글 추가 API (POST /feed/add-comment)
 app.post('/feed/add-comment', (req, res) => {
