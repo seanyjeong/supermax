@@ -182,9 +182,12 @@ app.post('/feed/login', (req, res) => {
         if (!isMatch) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
 
         const token = jwt.sign({ user_id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "1d" });
-        res.json({ success: true, token, user });
+
+        // ✅ `user_id`를 명확하게 반환하도록 수정
+        res.json({ success: true, token, user_id: user.id, username: user.username });
     });
 });
+
 // ✅ 현재 로그인한 사용자 정보 조회
 app.get('/feed/user-info', (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
