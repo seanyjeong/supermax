@@ -44,13 +44,14 @@ function generateCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
 }
 
-// ✅ 2. 인증번호 발송 API (🔥 `/auth/`로 변경)
-app.post('/auth/send-verification', async (req, res) => {
+
+// ✅ 인증번호 발송 API
+app.post('/feed/auth/send-verification', async (req, res) => { // 🔥 변경
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: "전화번호가 필요합니다." });
 
     const code = generateCode();
-    verificationCodes[phone] = code; // 🔥 인증번호 저장
+    verificationCodes[phone] = code;
 
     const message = `[MaxFeed] 인증번호: ${code}`;
 
@@ -63,8 +64,9 @@ app.post('/auth/send-verification', async (req, res) => {
     }
 });
 
-// ✅ 3. 인증번호 검증 API (🔥 `/auth/`로 변경)
-app.post('/auth/verify-code', (req, res) => {
+
+// ✅ 인증번호 검증 API
+app.post('/feed/auth/verify-code', (req, res) => { // 🔥 변경
     const { phone, code } = req.body;
     if (!phone || !code) return res.status(400).json({ error: "전화번호와 인증번호가 필요합니다." });
 
@@ -75,6 +77,7 @@ app.post('/auth/verify-code', (req, res) => {
         res.status(400).json({ error: "인증번호 불일치" });
     }
 });
+
 
 // ✅ 4. 네이버 클라우드 SMS 발송 함수
 async function sendSMS(recipient, content) {
