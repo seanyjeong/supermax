@@ -95,16 +95,26 @@ app.get('/feed/user-info', (req, res) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        res.json({ success: true, name: decoded.name });
-    } catch {
-        res.status(401).json({ error: "Invalid token" });
+        
+        db.query("SELECT name, profile_image FROM users WHERE id = ?", [decoded.user_id], (err, results) => {
+            if (err) {
+                console.error("🔥 MySQL 조회 오류:", err);
+                return res.status(500).json({ error: "DB 조회 실패" });
+            }
+            if (results.length === 0) {
+                return res.status(400).json({ error: "유효하지 않은 사용자" });
+            }
+
+            const { name, profile_image } = results[0]; // ✅ name과 profile_image 가져오기
+            res.json({ success: true, name, profile_image });
+        });
+
+    } catch (error) {
+        console.error("🔥 JWT 오류:", error);
+        res.status(401).json({ error: "Invalid token", details: error.message });
     }
 });
 
-// ✅ 로그아웃 (클라이언트에서 토큰 삭제)
-app.post('/feed/logout', (req, res) => {
-    res.json({ success: true, message: "로그아웃 성공" });
-});
 
 /* ======================================
    📌 2️⃣ 피드 기능 (파일 업로드 포함)
