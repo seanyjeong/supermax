@@ -18,7 +18,7 @@ const JWT_SECRET = "your_secret_key";
 app.use(express.json());
 // ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
 app.use(cors({
-  origin: ['https://score.ilsanmax.com'], // 네 프론트엔드 도메인
+  origin: ['https://score.ilsanmax.com','https://seanyjeong.github.io'], // 네 프론트엔드 도메인
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -88,6 +88,18 @@ app.post('/feed/login', (req, res) => {
         res.json({ success: true, token, user });
     });
 });
+// ✅ 현재 로그인한 사용자 정보 조회
+app.get('/feed/user-info', (req, res) => {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        res.json({ success: true, name: decoded.name });
+    } catch {
+        res.status(401).json({ error: "Invalid token" });
+    }
+});
 
 // ✅ 로그아웃 (클라이언트에서 토큰 삭제)
 app.post('/feed/logout', (req, res) => {
@@ -115,51 +127,39 @@ async function uploadToFirebase(file) {
 }
 
 
-// ✅ 피드 작성 (사진/동영상 업로드 포함)
+// ✅ 피드 작성 (이름 포함)
 app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
-    console.log('🔍 클라이언트가 전송한 토큰:', token); // ✅ 확인 필수
-
-    if (!token) return res.status(401).json({ error: "Unauthorized: 토큰 없음" });
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        console.log('🔍 JWT decoded 결과:', decoded); // ✅ 여기 중요!
         const { content } = req.body;
-        const user_id = decoded.user_id;
-
         let media_url = null;
+
         if (req.file) {
-            media_url = await uploadToFirebase(req.file);
+            const fileName = `uploads/${Date.now()}_${req.file.originalname}`;
+            const fileUpload = bucket.file(fileName);
+            await fileUpload.save(req.file.buffer, { metadata: { contentType: req.file.mimetype } });
+            await fileUpload.makePublic();
+            media_url = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
         }
 
-        const sql = "INSERT INTO feeds (user_id, content, media_url) VALUES (?, ?, ?)";
-        db.query(sql, [user_id, content, media_url], (err, result) => {
-            if (err) {
-                console.error('❌ DB 쿼리 에러:', err);
-                return res.status(500).json({ error: err });
-            }
-            res.json({ success: true, feed_id: result.insertId });
+        const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
+        db.query(sql, [decoded.user_id, decoded.name, content, media_url], (err, result) => {
+            if (err) return res.status(500).json({ error: err });
+            res.json({ success: true });
         });
-    } catch (error) {
-        console.error('❌ JWT 검증 에러:', error); // ✅ 이 부분 중요!
-        res.status(401).json({ error: "Invalid token", details: error.message });
+    } catch {
+        res.status(401).json({ error: "Invalid token" });
     }
 });
 
-// 전체 피드 조회
+// ✅ 피드 목록 (이름 표시)
 app.get('/feed/feeds', (req, res) => {
-    const sql = `
-        SELECT feeds.*, users.username, users.profile_image 
-        FROM feeds 
-        JOIN users ON feeds.user_id = users.id 
-        ORDER BY feeds.created_at DESC
-    `;
+    const sql = `SELECT feeds.*, users.name FROM feeds JOIN users ON feeds.user_id = users.id ORDER BY feeds.created_at DESC`;
     db.query(sql, (err, results) => {
-        if (err) {
-            console.error('❌ 전체 피드 조회 오류:', err);
-            return res.status(500).json({ error: '피드 조회 실패' });
-        }
+        if (err) return res.status(500).json({ error: '피드 조회 실패' });
         res.json(results);
     });
 });
