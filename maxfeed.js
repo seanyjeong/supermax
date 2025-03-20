@@ -29,20 +29,18 @@ app.use(cors({
   credentials: true  // ✅ 중요: 인증 정보 포함 가능하도록 설정
 }));
 
-// ✅ 특정 엔드포인트에서 CORS 문제 해결
-app.options('*', cors()); // 모든 요청 OPTIONS 허용
+// ✅ CORS 설정 (정확한 origin 허용)
+app.use(cors({
+  origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(bodyParser.json());
 
-const verificationCodes = {}; // 🔥 인증번호 저장 객체
-
-const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB';
-const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
-const SERVICE_ID = 'ncp:sms:kr:284240549231:sean';
-const FROM_PHONE = '01021446765';
-function generateCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
 
 // ✅ 1. 랜덤 인증번호 생성 함수
 function generateCode() {
