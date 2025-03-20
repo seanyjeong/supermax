@@ -474,36 +474,69 @@ app.post('/feed/add-comment', (req, res) => {
 
 
 app.post('/feed/like', (req, res) => {
+    console.log("🔥 [like] 요청 수신:", req.body);
+
     const { feed_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+    if (!token) {
+        console.error("❌ [like] 인증 실패: 토큰 없음");
+        return res.status(401).json({ error: "Unauthorized" });
+    }
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        console.log("✅ [like] JWT 해독 성공:", decoded);
 
         // ✅ 좋아요 여부 확인
         db.query("SELECT * FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err, results) => {
             if (err) {
-                console.error("🔥 좋아요 확인 오류:", err);
+                console.error("🔥 [like] MySQL 조회 오류:", err);
                 return res.status(500).json({ error: "좋아요 실패" });
             }
 
+            console.log(`✅ [like] 현재 좋아요 여부: ${results.length > 0 ? '이미 좋아요' : '좋아요 없음'}`);
+
             if (results.length > 0) {
                 // ✅ 좋아요 취소
-                db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], () => {
-                    db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], () => {
+                db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err) => {
+                    if (err) {
+                        console.error("🔥 [like] 좋아요 삭제 오류:", err);
+                        return res.status(500).json({ error: "좋아요 취소 실패" });
+                    }
+                    db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], (err) => {
+                        if (err) {
+                            console.error("🔥 [like] 좋아요 카운트 감소 오류:", err);
+                            return res.status(500).json({ error: "좋아요 카운트 업데이트 실패" });
+                        }
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
-                            if (err) return res.status(500).json({ error: "좋아요 카운트 업데이트 실패" });
+                            if (err) {
+                                console.error("🔥 [like] 최종 좋아요 카운트 조회 실패:", err);
+                                return res.status(500).json({ error: "좋아요 조회 실패" });
+                            }
+                            console.log("✅ [like] 좋아요 취소 완료:", result[0]);
                             res.json({ liked: false, like_count: result[0].like_count || 0 });
                         });
                     });
                 });
             } else {
                 // ✅ 좋아요 추가
-                db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], () => {
-                    db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], () => {
+                db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], (err) => {
+                    if (err) {
+                        console.error("🔥 [like] 좋아요 추가 오류:", err);
+                        return res.status(500).json({ error: "좋아요 추가 실패" });
+                    }
+                    db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], (err) => {
+                        if (err) {
+                            console.error("🔥 [like] 좋아요 카운트 증가 오류:", err);
+                            return res.status(500).json({ error: "좋아요 카운트 업데이트 실패" });
+                        }
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
-                            if (err) return res.status(500).json({ error: "좋아요 카운트 업데이트 실패" });
+                            if (err) {
+                                console.error("🔥 [like] 최종 좋아요 카운트 조회 실패:", err);
+                                return res.status(500).json({ error: "좋아요 조회 실패" });
+                            }
+                            console.log("✅ [like] 좋아요 추가 완료:", result[0]);
                             res.json({ liked: true, like_count: result[0].like_count || 0 });
                         });
                     });
@@ -512,10 +545,11 @@ app.post('/feed/like', (req, res) => {
         });
 
     } catch (error) {
-        console.error("🔥 JWT 오류:", error);
+        console.error("🔥 [like] JWT 인증 오류:", error);
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
 
 
 
