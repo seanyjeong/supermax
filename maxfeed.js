@@ -412,81 +412,99 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
         res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 });
-// ✅ 댓글 및 대댓글 저장 API
+// ✅ 댓글 조회 API (GET /feed/comments/:feedId)
+app.get('/feed/comments/:feedId', (req, res) => {
+    const { feedId } = req.params;
+
+    const sql = `
+        SELECT comments.*, users.name 
+        FROM comments
+        JOIN users ON comments.user_id = users.id
+        WHERE comments.feed_id = ?
+        ORDER BY comments.created_at ASC
+    `;
+
+    db.query(sql, [feedId], (err, results) => {
+        if (err) {
+            console.error("🔥 댓글 불러오기 오류:", err);
+            return res.status(500).json({ error: "댓글을 불러올 수 없습니다." });
+        }
+
+        res.json(results);
+    });
+});
+
+// ✅ 댓글 추가 API (POST /feed/add-comment)
 app.post('/feed/add-comment', (req, res) => {
+    const { feed_id, content, parent_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    const { feed_id, content, parent_id = null } = req.body; // ✅ parent_id가 null이면 일반 댓글, 아니면 대댓글
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
 
         const sql = "INSERT INTO comments (feed_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)";
         db.query(sql, [feed_id, decoded.user_id, content, parent_id], (err, result) => {
-            if (err) return res.status(500).json({ error: "DB 삽입 실패" });
+            if (err) {
+                console.error("🔥 댓글 추가 오류:", err);
+                return res.status(500).json({ error: "댓글 추가 실패" });
+            }
+
+            // ✅ 댓글 개수 증가
+            db.query("UPDATE feeds SET comment_count = comment_count + 1 WHERE id = ?", [feed_id]);
+
             res.json({ success: true, comment_id: result.insertId });
         });
 
     } catch (error) {
-        res.status(401).json({ error: "Invalid token" });
-    }
-});
-// ✅ 댓글 및 대댓글 저장 API
-app.post('/feed/add-comment', (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    const { feed_id, content, parent_id = null } = req.body; // ✅ parent_id가 null이면 일반 댓글, 아니면 대댓글
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-
-        const sql = "INSERT INTO comments (feed_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)";
-        db.query(sql, [feed_id, decoded.user_id, content, parent_id], (err, result) => {
-            if (err) return res.status(500).json({ error: "DB 삽입 실패" });
-            res.json({ success: true, comment_id: result.insertId });
-        });
-
-    } catch (error) {
+        console.error("🔥 JWT 오류:", error);
         res.status(401).json({ error: "Invalid token" });
     }
 });
 
-// ✅ 좋아요 기능 API
+// ✅ 좋아요 API (POST /feed/like)
 app.post('/feed/like', (req, res) => {
+    const { feed_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    const { feed_id } = req.body;
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // ✅ 좋아요 확인 (이미 눌렀는지 체크)
-        const checkSql = "SELECT * FROM likes WHERE feed_id = ? AND user_id = ?";
-        db.query(checkSql, [feed_id, decoded.user_id], (err, results) => {
-            if (err) return res.status(500).json({ error: "DB 조회 실패" });
+        // ✅ 이미 좋아요 눌렀는지 확인
+        db.query("SELECT * FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], (err, results) => {
+            if (err) {
+                console.error("🔥 좋아요 확인 오류:", err);
+                return res.status(500).json({ error: "좋아요 실패" });
+            }
 
             if (results.length > 0) {
-                // ✅ 이미 좋아요 누른 경우 → 삭제 (좋아요 취소)
-                const deleteSql = "DELETE FROM likes WHERE feed_id = ? AND user_id = ?";
-                db.query(deleteSql, [feed_id, decoded.user_id], () => {
-                    res.json({ success: true, liked: false });
+                // ✅ 좋아요 취소
+                db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], () => {
+                    db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], () => {
+                        db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
+                            res.json({ liked: false, like_count: result[0].like_count || 0 });
+                        });
+                    });
                 });
             } else {
                 // ✅ 좋아요 추가
-                const insertSql = "INSERT INTO likes (feed_id, user_id) VALUES (?, ?)";
-                db.query(insertSql, [feed_id, decoded.user_id], () => {
-                    res.json({ success: true, liked: true });
+                db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], () => {
+                    db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], () => {
+                        db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
+                            res.json({ liked: true, like_count: result[0].like_count || 0 });
+                        });
+                    });
                 });
             }
         });
 
     } catch (error) {
+        console.error("🔥 JWT 오류:", error);
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
 
 
 
