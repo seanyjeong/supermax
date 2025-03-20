@@ -5,6 +5,9 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const multer = require('multer');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
+const bodyParser = require('body-parser');
+const axios = require('axios');
 const serviceAccount = require('/root/supermax/firebase-key.json');
 
 const app = express();
@@ -23,6 +26,82 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+app.use(bodyParser.json());
+
+const verificationCodes = {}; // 🔥 인증번호 저장 객체
+
+const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB';
+const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
+const SERVICE_ID = 'ncp:sms:kr:284240549231:sean';
+const FROM_PHONE = '01021446765';
+function generateCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+// ✅ 1. 랜덤 인증번호 생성 함수
+function generateCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+// ✅ 2. 인증번호 발송 API (🔥 `/auth/`로 변경)
+app.post('/auth/send-verification', async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: "전화번호가 필요합니다." });
+
+    const code = generateCode();
+    verificationCodes[phone] = code; // 🔥 인증번호 저장
+
+    const message = `[MaxFeed] 인증번호: ${code}`;
+
+    try {
+        await sendSMS(phone, message);
+        res.json({ success: true });
+    } catch (err) {
+        console.error("🔥 SMS 전송 실패:", err);
+        res.status(500).json({ error: "SMS 전송 실패" });
+    }
+});
+
+// ✅ 3. 인증번호 검증 API (🔥 `/auth/`로 변경)
+app.post('/auth/verify-code', (req, res) => {
+    const { phone, code } = req.body;
+    if (!phone || !code) return res.status(400).json({ error: "전화번호와 인증번호가 필요합니다." });
+
+    if (verificationCodes[phone] === code) {
+        delete verificationCodes[phone]; // 인증 완료 후 삭제
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: "인증번호 불일치" });
+    }
+});
+
+// ✅ 4. 네이버 클라우드 SMS 발송 함수
+async function sendSMS(recipient, content) {
+    const timestamp = Date.now().toString();
+    const url = `/sms/v2/services/${SERVICE_ID}/messages`;
+
+    const signature = crypto.createHmac('sha256', NAVER_SECRET_KEY)
+        .update(`POST ${url}\n${timestamp}\n${NAVER_ACCESS_KEY}`)
+        .digest('base64');
+
+    await axios.post(`https://sens.apigw.ntruss.com${url}`, {
+        type: "SMS",
+        contentType: "COMM",
+        countryCode: "82",
+        from: FROM_PHONE,
+        content,
+        messages: [{ to: recipient }]
+    }, {
+        headers: {
+            "x-ncp-apigw-timestamp": timestamp,
+            "x-ncp-iam-access-key": NAVER_ACCESS_KEY,
+            "x-ncp-apigw-signature-v2": signature,
+            "Content-Type": "application/json"
+        }
+    });
+}
+
 
 
 // ✅ MySQL 데이터베이스 연결
