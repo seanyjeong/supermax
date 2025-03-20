@@ -470,8 +470,7 @@ app.post('/feed/add-comment', (req, res) => {
 });
 
 
-// ✅ 좋아요 API (POST /feed/like)
-app.post('/feed/like', (req, res) => {
+app.post('/feed/like', cors(), (req, res) => {
     const { feed_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
@@ -491,6 +490,7 @@ app.post('/feed/like', (req, res) => {
                 db.query("DELETE FROM likes WHERE feed_id = ? AND user_id = ?", [feed_id, decoded.user_id], () => {
                     db.query("UPDATE feeds SET like_count = like_count - 1 WHERE id = ?", [feed_id], () => {
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
+                            res.setHeader("Access-Control-Allow-Origin", "*");  // ✅ CORS 헤더 강제 추가
                             res.json({ liked: false, like_count: result[0].like_count || 0 });
                         });
                     });
@@ -500,6 +500,7 @@ app.post('/feed/like', (req, res) => {
                 db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], () => {
                     db.query("UPDATE feeds SET like_count = like_count + 1 WHERE id = ?", [feed_id], () => {
                         db.query("SELECT like_count FROM feeds WHERE id = ?", [feed_id], (err, result) => {
+                            res.setHeader("Access-Control-Allow-Origin", "*");  // ✅ CORS 헤더 강제 추가
                             res.json({ liked: true, like_count: result[0].like_count || 0 });
                         });
                     });
