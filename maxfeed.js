@@ -140,20 +140,32 @@ const upload = multer({ storage: multer.memoryStorage() });
    📌 1️⃣ 회원가입 & 로그인 & 로그아웃
 ====================================== */
 
-// ✅ 회원가입
+// ✅ 회원가입 API
 app.post('/feed/register', async (req, res) => {
     const { username, password, name, birth_date, phone, school, grade, gender, consent } = req.body;
 
-    if (!consent) return res.status(400).json({ error: "개인정보 동의가 필요합니다." });
+    if (!consent) return res.status(400).json({ error: "개인정보 제공 동의가 필요합니다." });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const sql = "INSERT INTO users (username, password, name, birth_date, phone, school, grade, gender, consent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    // 🔥 ✅ 중복 검사: 아이디(username), 전화번호(phone), 이름(name)
+    const checkSql = "SELECT id FROM users WHERE username = ? OR (name = ? AND phone = ?)";
+    db.query(checkSql, [username, name, phone], async (err, results) => {
+        if (err) return res.status(500).json({ error: "DB 조회 오류" });
 
-    db.query(sql, [username, hashedPassword, name, birth_date, phone, school, grade, gender, consent], (err, result) => {
-        if (err) return res.status(500).json({ error: err });
-        res.json({ success: true, user_id: result.insertId });
+        if (results.length > 0) {
+            return res.status(400).json({ error: "이미 존재하는 아이디 또는 전화번호입니다." });
+        }
+
+        // ✅ 중복이 없으면 회원가입 진행
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const sql = "INSERT INTO users (username, password, name, birth_date, phone, school, grade, gender, consent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        db.query(sql, [username, hashedPassword, name, birth_date, phone, school, grade, gender, consent], (err, result) => {
+            if (err) return res.status(500).json({ error: err });
+            res.json({ success: true, user_id: result.insertId });
+        });
     });
 });
+
 
 // ✅ 로그인 (JWT 발급)
 app.post('/feed/login', (req, res) => {
