@@ -178,15 +178,22 @@ app.post('/feed/login', (req, res) => {
         if (err || results.length === 0) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
 
         const user = results[0];
+        console.log("🛠 로그인된 유저 정보:", user); // ✅ 로그 추가해서 user.id 확인
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
 
         const token = jwt.sign({ user_id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "1d" });
 
-        // ✅ `user_id`를 명확하게 반환하도록 수정
-        res.json({ success: true, token, user_id: user.id, username: user.username });
+        res.json({ 
+            success: true, 
+            token, 
+            user_id: user.id,  // ✅ 여기서 `user.id`가 잘 오는지 확인!
+            username: user.username 
+        });
     });
 });
+
 
 // ✅ 현재 로그인한 사용자 정보 조회
 app.get('/feed/user-info', (req, res) => {
