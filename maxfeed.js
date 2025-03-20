@@ -134,26 +134,36 @@ app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        console.log("✅ [add-feed] 요청 수신:", req.body);
+        console.log("📂 [파일 정보]:", req.file);
+
         const { content } = req.body;
         let media_url = null;
 
-        if (req.file) {
-            const fileName = `uploads/${Date.now()}_${req.file.originalname}`;
-            const fileUpload = bucket.file(fileName);
-            await fileUpload.save(req.file.buffer, { metadata: { contentType: req.file.mimetype } });
-            await fileUpload.makePublic();
-            media_url = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        if (!req.file) {
+            console.error("❌ 파일 없음! 업로드 중단.");
+            return res.status(400).json({ error: "파일이 없습니다!" });
         }
+
+        console.log("🚀 Firebase 업로드 시작...");
+        media_url = await uploadToFirebase(req.file);
+        console.log("✅ Firebase 업로드 완료:", media_url);
 
         const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
         db.query(sql, [decoded.user_id, decoded.name, content, media_url], (err, result) => {
-            if (err) return res.status(500).json({ error: err });
+            if (err) {
+                console.error("🔥 MySQL 삽입 오류:", err);
+                return res.status(500).json({ error: err });
+            }
+            console.log("✅ 피드 저장 완료!", result);
             res.json({ success: true });
         });
-    } catch {
-        res.status(401).json({ error: "Invalid token" });
+    } catch (error) {
+        console.error("🔥 서버 오류 발생:", error);
+        res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 });
+
 
 // ✅ 피드 목록 (이름 표시)
 app.get('/feed/feeds', (req, res) => {
