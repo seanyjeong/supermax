@@ -149,20 +149,38 @@ app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
         media_url = await uploadToFirebase(req.file);
         console.log("✅ Firebase 업로드 완료:", media_url);
 
-        const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
-        db.query(sql, [decoded.user_id, decoded.name, content, media_url], (err, result) => {
+        // 🔥 `user_id`로 `name` 조회 후 저장
+        db.query("SELECT name FROM users WHERE id = ?", [decoded.user_id], (err, result) => {
             if (err) {
-                console.error("🔥 MySQL 삽입 오류:", err);
-                return res.status(500).json({ error: err });
+                console.error("❌ MySQL 조회 오류:", err);
+                return res.status(500).json({ error: "DB 조회 실패" });
             }
-            console.log("✅ 피드 저장 완료!", result);
-            res.json({ success: true });
+            if (result.length === 0) {
+                console.error("❌ 유저 없음: user_id =", decoded.user_id);
+                return res.status(400).json({ error: "유효하지 않은 사용자입니다." });
+            }
+
+            const userName = result[0].name;  // ✅ 조회한 name 값 저장
+            console.log("✅ DB에서 가져온 name:", userName);
+
+            // 🔥 MySQL에 피드 저장
+            const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
+            db.query(sql, [decoded.user_id, userName, content, media_url], (err, result) => {
+                if (err) {
+                    console.error("🔥 MySQL 삽입 오류:", err);
+                    return res.status(500).json({ error: err });
+                }
+                console.log("✅ 피드 저장 완료!", result);
+                res.json({ success: true });
+            });
         });
+
     } catch (error) {
         console.error("🔥 서버 오류 발생:", error);
         res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 });
+
 
 
 // ✅ 피드 목록 (이름 표시)
