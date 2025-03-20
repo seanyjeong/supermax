@@ -420,7 +420,8 @@ app.get('/feed/comments/:feedId', (req, res) => {
     const { feedId } = req.params;
 
     const sql = `
-        SELECT comments.*, users.name
+        SELECT comments.id, comments.feed_id, comments.user_id, comments.content, comments.parent_id, comments.created_at, 
+               users.name
         FROM comments
         JOIN users ON comments.user_id = users.id
         WHERE comments.feed_id = ?
