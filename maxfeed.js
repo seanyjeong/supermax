@@ -436,6 +436,29 @@ app.post('/feed/delete-feed', (req, res) => {
   }
 });
 
+// ✅ 특정 사용자의 피드 조회
+app.get('/feed/user-feeds/:userId', (req, res) => {
+  const userId = req.params.userId;
+
+  const sql = `
+    SELECT feeds.*, users.name, 
+           COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
+    FROM feeds
+    JOIN users ON feeds.user_id = users.id
+    WHERE feeds.user_id = ?
+    ORDER BY feeds.created_at DESC
+  `;
+
+  db.query(sql, [userId], (err, results) => {
+    if (err) {
+      console.error("🔥 [유저 피드] 조회 오류:", err);
+      return res.status(500).json({ error: "유저 피드 조회 실패" });
+    }
+
+    res.json(results);
+  });
+});
+
 
 // ✅ 내정보 수정관련 (이름 표시)
 app.post('/feed/update-profile', upload.single('profile_image'), async (req, res) => {
