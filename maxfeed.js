@@ -500,7 +500,8 @@ app.get('/feed/comments/:feedId', (req, res) => {
     const { feedId } = req.params;
 
     const sql = `
-        SELECT comments.id, comments.feed_id, comments.user_id, comments.content, comments.parent_id, comments.created_at, 
+        SELECT comments.id, comments.feed_id, comments.user_id, comments.content, comments.parent_id,
+               comments.created_at, comments.media_url,  -- 🔥 media_url 포함
                users.name
         FROM comments
         JOIN users ON comments.user_id = users.id
@@ -520,8 +521,8 @@ app.get('/feed/comments/:feedId', (req, res) => {
 
 
 
-// ✅ 댓글 추가 API (POST /feed/add-comment)
-app.post('/feed/add-comment', (req, res) => {
+// ✅ multer 사용
+app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
     const { feed_id, content, parent_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
@@ -529,22 +530,32 @@ app.post('/feed/add-comment', (req, res) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        const sql = "INSERT INTO comments (feed_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)";
-        db.query(sql, [feed_id, decoded.user_id, content, parent_id], (err, result) => {
+        let media_url = null;
+        if (req.file) {
+            media_url = await uploadToFirebase(req.file, "comments");
+        }
+
+        const sql = `
+            INSERT INTO comments (feed_id, user_id, content, parent_id, media_url)
+            VALUES (?, ?, ?, ?, ?)
+        `;
+        db.query(sql, [feed_id, decoded.user_id, content, parent_id || null, media_url], (err, result) => {
             if (err) {
                 console.error("🔥 댓글 추가 오류:", err);
                 return res.status(500).json({ error: "댓글 추가 실패" });
             }
 
-            // ✅ 댓글 개수 증가 후 업데이트된 값 반환
             db.query("UPDATE feeds SET comment_count = comment_count + 1 WHERE id = ?", [feed_id], () => {
                 db.query("SELECT comment_count FROM feeds WHERE id = ?", [feed_id], (err, countResult) => {
                     if (err) {
-                        console.error("🔥 댓글 카운트 업데이트 오류:", err);
                         return res.status(500).json({ error: "댓글 카운트 업데이트 실패" });
                     }
 
-                    res.json({ success: true, comment_id: result.insertId, comment_count: countResult[0].comment_count });
+                    res.json({
+                        success: true,
+                        comment_id: result.insertId,
+                        comment_count: countResult[0].comment_count
+                    });
                 });
             });
         });
@@ -554,6 +565,7 @@ app.post('/feed/add-comment', (req, res) => {
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
 
 app.post('/feed/delete-comment', (req, res) => {
     const { comment_id } = req.body;
