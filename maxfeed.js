@@ -568,46 +568,47 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
 
 
 // 댓글 삭제 API
+// 댓글 삭제 API
 app.post('/feed/delete-comment', async (req, res) => {
-    const { comment_id } = req.body;
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const { comment_id } = req.body;
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
 
-        // 1. 댓글 정보 조회 (media_url 포함)
-        const [rows] = await db.promise().query(
-            `SELECT feed_id, media_url FROM comments WHERE id = ? AND user_id = ?`,
-            [comment_id, decoded.user_id]
-        );
+    // 🔥 1. 댓글 정보 조회
+    const [rows] = await db.promise().query(
+      `SELECT feed_id, media_url FROM comments WHERE id = ? AND user_id = ?`,
+      [comment_id, decoded.user_id]
+    );
 
-        if (rows.length === 0) return res.status(404).json({ error: "댓글을 찾을 수 없음" });
-
-        const { feed_id, media_url } = rows[0];
-
-        // 2. 댓글 DB 삭제
-        await db.promise().query(`DELETE FROM comments WHERE id = ?`, [comment_id]);
-
-        // 3. 댓글 카운트 감소
-        await db.promise().query(`UPDATE feeds SET comment_count = comment_count - 1 WHERE id = ?`, [feed_id]);
-
-        // 4. 스토리지에서 media_url 삭제 (있는 경우만)
-        if (media_url) {
-            const bucket = getStorage().bucket(); // 기본 버킷 사용
-            const path = decodeURIComponent(new URL(media_url).pathname.split("/o/")[1].split("?")[0]); // 경로 추출
-
-            await bucket.file(path).delete().catch(err => {
-                console.warn("⚠️ Storage 파일 삭제 실패 (무시됨):", err.message);
-            });
-        }
-
-        res.json({ success: true });
-
-    } catch (err) {
-        console.error("🔥 댓글 삭제 실패:", err);
-        res.status(500).json({ error: "댓글 삭제 실패" });
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "댓글을 찾을 수 없음" });  // ✅ 여기서 실패
     }
+
+    const { feed_id, media_url } = rows[0];
+
+    // 🔥 2. 댓글 삭제
+    await db.promise().query(`DELETE FROM comments WHERE id = ?`, [comment_id]);
+
+    // 🔥 3. 댓글 카운트 감소
+    await db.promise().query(`UPDATE feeds SET comment_count = comment_count - 1 WHERE id = ?`, [feed_id]);
+
+    // 🔥 4. Firebase 삭제
+    if (media_url) {
+      const path = decodeURIComponent(new URL(media_url).pathname.split("/o/")[1].split("?")[0]);
+      await bucket.file(path).delete().catch(err => {
+        console.warn("⚠️ Storage 파일 삭제 실패 (무시됨):", err.message);
+      });
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("🔥 댓글 삭제 실패:", err);
+    res.status(500).json({ error: "댓글 삭제 실패" });  // ✅ 또는 여기
+  }
 });
 
 // ✅ 좋아요 API
