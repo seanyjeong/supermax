@@ -604,22 +604,25 @@ app.post('/feed/delete-comment', (req, res) => {
                         if (err) console.warn("⚠️ 댓글 카운트 업데이트 실패 (무시):", err);
 
                         // 4. Firebase 스토리지 삭제
-                        if (media_url) {
-                            try {
-                                // 🔥 URL에서 파일 경로 추출 (도메인 호환 처리)
-                                const filePath = media_url.includes("/o/")
-                                    ? decodeURIComponent(media_url.split("/o/")[1].split("?")[0])
-                                    : decodeURIComponent(media_url.replace(/^https?:\/\/[^\/]+\/+/, ""));
+if (media_url) {
+  try {
+    let filePath;
 
-                                bucket.file(filePath).delete().then(() => {
-                                    console.log("✅ Firebase 댓글 파일 삭제 완료:", filePath);
-                                }).catch(err => {
-                                    console.warn("⚠️ Firebase 댓글 파일 삭제 실패 (무시됨):", err.message);
-                                });
-                            } catch (e) {
-                                console.warn("⚠️ Firebase 경로 파싱 실패:", e.message);
-                            }
-                        }
+    if (media_url.includes("firebasestorage.googleapis.com")) {
+      filePath = decodeURIComponent(media_url.split("/o/")[1].split("?")[0]);
+    } else {
+      filePath = decodeURIComponent(media_url.replace(`https://storage.googleapis.com/${bucket.name}/`, ""));
+    }
+
+    bucket.file(filePath).delete().then(() => {
+      console.log("✅ Firebase 댓글 파일 삭제 완료:", filePath);
+    }).catch(err => {
+      console.warn("⚠️ Firebase 댓글 파일 삭제 실패 (무시됨):", err.message);
+    });
+  } catch (e) {
+    console.warn("⚠️ Firebase 경로 파싱 실패:", e.message);
+  }
+}
 
                         // 5. 성공 응답
                         res.json({ success: true });
