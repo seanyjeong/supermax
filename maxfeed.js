@@ -19,16 +19,24 @@ const PORT = 5000;
 const JWT_SECRET = "your_secret_key";
 
 app.use(express.json());
-// ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
-const corsOptions = {
-  origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'],
+// // ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
+// const corsOptions = {
+//   origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'],
+//   methods: ['GET', 'POST', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+//   credentials: true  // ✅ 중요! credentials 사용 가능하도록 설정
+// };
+
+// app.use(cors(corsOptions));
+
+// 개발 중에는 CORS origin을 '*'로 열어줍니다.
+app.use(cors()); // 또는 아래처럼
+
+app.use(cors({
+  origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true  // ✅ 중요! credentials 사용 가능하도록 설정
-};
-
-app.use(cors(corsOptions));
-
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(bodyParser.json());
 
