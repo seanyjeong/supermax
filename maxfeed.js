@@ -212,15 +212,16 @@ app.post('/feed/login', (req, res) => {
 
 
 // ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함)
+// ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함, 전화번호, 생년월일 추가!)
 app.get('/feed/user-info', (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.user_id;  // 🔥 토큰에서 user_id 추출
+        const userId = decoded.user_id;
 
-        db.query("SELECT name, profile_image FROM users WHERE id = ?", [userId], (err, results) => {
+        db.query("SELECT name, profile_image, phone, birth_date FROM users WHERE id = ?", [userId], (err, results) => {
             if (err) {
                 console.error("🔥 MySQL 조회 오류:", err);
                 return res.status(500).json({ error: "DB 조회 실패" });
@@ -229,15 +230,16 @@ app.get('/feed/user-info', (req, res) => {
                 return res.status(400).json({ error: "유효하지 않은 사용자" });
             }
 
-            // ✅ 기본 프로필 이미지 설정
-            const { name, profile_image } = results[0];
-            const profileImgUrl = profile_image || "https://placehold.co/40x40";
+            const { name, profile_image, phone, birth_date } = results[0];
+            const profileImgUrl = profile_image || "https://placehold.co/100x100";
 
             res.json({ 
                 success: true, 
-                user_id: userId,  // 🔥 user_id 추가
+                user_id: userId,
                 name, 
-                profile_image: profileImgUrl 
+                profile_image: profileImgUrl,
+                phone,          // 추가 ✅
+                birth_date      // 추가 ✅
             });
         });
 
@@ -246,6 +248,7 @@ app.get('/feed/user-info', (req, res) => {
         res.status(401).json({ error: "Invalid token", details: error.message });
     }
 });
+
 
 
 
