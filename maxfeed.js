@@ -287,49 +287,39 @@ async function uploadToFirebase(file, folder = "uploads") {
 
 
 // ✅ 피드 작성 (이름 포함)
-app.post('/feed/add-feed', upload.single('file'), async (req, res) => {
+app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        console.log("✅ [add-feed] 요청 수신:", req.body);
-        console.log("📂 [파일 정보]:", req.file);
-
         const { content } = req.body;
-        let media_url = null;
+        const files = req.files;
 
-        if (!req.file) {
-            console.error("❌ 파일 없음! 업로드 중단.");
+        if (!files || files.length === 0) {
             return res.status(400).json({ error: "파일이 없습니다!" });
         }
 
-        console.log("🚀 Firebase 업로드 시작...");
-        media_url = await uploadToFirebase(req.file);
-        console.log("✅ Firebase 업로드 완료:", media_url);
+        // ✅ 여러 파일 업로드 → URL 배열 만들기
+        const mediaUrls = [];
 
-        // 🔥 `user_id`로 `name` 조회 후 저장
+        for (const file of files) {
+            const url = await uploadToFirebase(file); // 기존 함수 재사용
+            mediaUrls.push(url);
+        }
+
+        // ✅ 사용자 이름 조회
         db.query("SELECT name FROM users WHERE id = ?", [decoded.user_id], (err, result) => {
-            if (err) {
-                console.error("❌ MySQL 조회 오류:", err);
-                return res.status(500).json({ error: "DB 조회 실패" });
-            }
-            if (result.length === 0) {
-                console.error("❌ 유저 없음: user_id =", decoded.user_id);
-                return res.status(400).json({ error: "유효하지 않은 사용자입니다." });
+            if (err || result.length === 0) {
+                return res.status(500).json({ error: "유효하지 않은 사용자입니다." });
             }
 
-            const userName = result[0].name;  // ✅ 조회한 name 값 저장
-            console.log("✅ DB에서 가져온 name:", userName);
+            const userName = result[0].name;
 
-            // 🔥 MySQL에 피드 저장
+            // ✅ 피드 저장 (media_url을 JSON 배열로 저장하거나 별도 테이블 구성 가능)
             const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
-            db.query(sql, [decoded.user_id, userName, content, media_url], (err, result) => {
-                if (err) {
-                    console.error("🔥 MySQL 삽입 오류:", err);
-                    return res.status(500).json({ error: err });
-                }
-                console.log("✅ 피드 저장 완료!", result);
+            db.query(sql, [decoded.user_id, userName, content, JSON.stringify(mediaUrls)], (err, result) => {
+                if (err) return res.status(500).json({ error: err });
                 res.json({ success: true });
             });
         });
