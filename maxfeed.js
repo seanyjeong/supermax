@@ -318,8 +318,29 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
 
             // ✅ 피드 저장 (media_url을 JSON 배열로 저장하거나 별도 테이블 구성 가능)
             const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
-            db.query(sql, [decoded.user_id, userName, content, JSON.stringify(mediaUrls)], (err, result) => {
+            db.query(sql, [decoded.user_id, userName, content, JSON.stringify(mediaUrls)], async (err, result) => {
                 if (err) return res.status(500).json({ error: err });
+
+                // 🔥🔥 피드 저장 성공 후, 이 위치에 문자 발송 추가
+                const smsMessage = `[일맥스타그램] ${userName}님의 피드가 생성되었습니다.`;
+
+                // 🔥 원하는 전화번호를 여기에 추가해
+                const phoneNumbers = [
+                  '01021446765', 
+                  // '010xxxxOOOO', '010xxxxOOOO', 추가 번호들 여기에 주석처리 제거하고 넣어!
+                ];
+
+                // 문자 발송 반복 처리
+                for (const number of phoneNumbers) {
+                    try {
+                        await sendSMS(number, smsMessage);
+                        console.log(`✅ 문자 발송 성공 → ${number}`);
+                    } catch (e) {
+                        console.error(`🔥 문자 발송 실패 → ${number}`, e);
+                    }
+                }
+
+                // 최종 응답
                 res.json({ success: true });
             });
         });
@@ -329,6 +350,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
         res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 });
+
 
 
 
