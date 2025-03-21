@@ -381,36 +381,61 @@ app.get('/feed/my-feeds', (req, res) => {
     }
 });
 
+// ✅ Firebase 파일 삭제 함수
+function deleteFromFirebaseByUrl(url) {
+  try {
+    const filePath = decodeURIComponent(url.split(`/${bucket.name}/`)[1]);
+    return bucket.file(filePath).delete();
+  } catch (err) {
+    console.error("❌ Firebase 경로 추출 실패:", err);
+    return Promise.resolve(); // 실패해도 서버 죽지 않게
+  }
+}
 
-// ✅ 피드 삭제 API
+// ✅ 피드 삭제 API (Firebase 포함)
 app.post('/feed/delete-feed', (req, res) => {
-    const { feed_id } = req.body;
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const { feed_id } = req.body;
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        console.log("✅ [피드 삭제 요청] feed_id:", feed_id, "by user_id:", decoded.user_id);
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    console.log("✅ [피드 삭제 요청] feed_id:", feed_id, "by user_id:", decoded.user_id);
 
-        // 피드 소유자 확인
-        const checkSql = "SELECT * FROM feeds WHERE id = ? AND user_id = ?";
-        db.query(checkSql, [feed_id, decoded.user_id], (err, results) => {
-            if (err || results.length === 0) {
-                return res.status(403).json({ error: "삭제 권한 없음 또는 피드 없음" });
-            }
+    // ✅ 피드 정보 조회
+    const checkSql = "SELECT * FROM feeds WHERE id = ? AND user_id = ?";
+    db.query(checkSql, [feed_id, decoded.user_id], async (err, results) => {
+      if (err || results.length === 0) {
+        return res.status(403).json({ error: "삭제 권한 없음 또는 피드 없음" });
+      }
 
-            // 삭제 실행
-            db.query("DELETE FROM feeds WHERE id = ?", [feed_id], (err) => {
-                if (err) return res.status(500).json({ error: "피드 삭제 실패" });
+      const feed = results[0];
+      const mediaUrls = JSON.parse(feed.media_url || '[]');
 
-                res.json({ success: true, message: "피드가 삭제되었습니다." });
-            });
-        });
-    } catch (error) {
-        console.error("❌ JWT 오류:", error);
-        res.status(401).json({ error: "Invalid token" });
-    }
+      // ✅ Firebase 파일 삭제
+      for (const url of mediaUrls) {
+        try {
+          await deleteFromFirebaseByUrl(url);
+          console.log("🗑️ Firebase 파일 삭제 완료:", url);
+        } catch (e) {
+          console.warn("⚠️ Firebase 삭제 실패 (무시):", url);
+        }
+      }
+
+      // ✅ DB에서 피드 삭제
+      db.query("DELETE FROM feeds WHERE id = ?", [feed_id], (err) => {
+        if (err) return res.status(500).json({ error: "피드 삭제 실패" });
+
+        res.json({ success: true, message: "피드와 Firebase 파일이 삭제되었습니다." });
+      });
+    });
+
+  } catch (error) {
+    console.error("❌ JWT 오류:", error);
+    res.status(401).json({ error: "Invalid token" });
+  }
 });
+
 
 // ✅ 내정보 수정관련 (이름 표시)
 app.post('/feed/update-profile', upload.single('profile_image'), async (req, res) => {
