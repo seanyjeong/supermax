@@ -567,42 +567,48 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
 });
 
 
-app.post('/feed/delete-comment', (req, res) => {
+// 댓글 삭제 API
+app.post('/feed/delete-comment', async (req, res) => {
     const { comment_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
-
     if (!token) return res.status(401).json({ error: "Unauthorized" });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        console.log("✅ [댓글 삭제] 요청 수신:", { comment_id, user_id: decoded.user_id });
 
-        // ✅ 내 댓글인지 확인
-        db.query("SELECT * FROM comments WHERE id = ?", [comment_id], (err, results) => {
-            if (err || results.length === 0) return res.status(400).json({ error: "댓글이 존재하지 않음" });
+        // 1. 댓글 정보 조회 (media_url 포함)
+        const [rows] = await db.promise().query(
+            `SELECT feed_id, media_url FROM comments WHERE id = ? AND user_id = ?`,
+            [comment_id, decoded.user_id]
+        );
 
-            const comment = results[0];
-            if (comment.user_id !== decoded.user_id) {
-                return res.status(403).json({ error: "삭제 권한 없음" });
-            }
+        if (rows.length === 0) return res.status(404).json({ error: "댓글을 찾을 수 없음" });
 
-            // ✅ 댓글 삭제
-            db.query("DELETE FROM comments WHERE id = ?", [comment_id], (err) => {
-                if (err) return res.status(500).json({ error: "댓글 삭제 실패" });
+        const { feed_id, media_url } = rows[0];
 
-                // ✅ 댓글 개수 업데이트
-                db.query("UPDATE feeds SET comment_count = (SELECT COUNT(*) FROM comments WHERE feed_id = ?) WHERE id = ?", [comment.feed_id, comment.feed_id], () => {
-                    res.json({ success: true });
-                });
+        // 2. 댓글 DB 삭제
+        await db.promise().query(`DELETE FROM comments WHERE id = ?`, [comment_id]);
+
+        // 3. 댓글 카운트 감소
+        await db.promise().query(`UPDATE feeds SET comment_count = comment_count - 1 WHERE id = ?`, [feed_id]);
+
+        // 4. 스토리지에서 media_url 삭제 (있는 경우만)
+        if (media_url) {
+            const bucket = getStorage().bucket(); // 기본 버킷 사용
+            const path = decodeURIComponent(new URL(media_url).pathname.split("/o/")[1].split("?")[0]); // 경로 추출
+
+            await bucket.file(path).delete().catch(err => {
+                console.warn("⚠️ Storage 파일 삭제 실패 (무시됨):", err.message);
             });
-        });
+        }
 
-    } catch (error) {
-        console.error("🔥 [댓글 삭제] JWT 인증 오류:", error);
-        res.status(401).json({ error: "Invalid token" });
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error("🔥 댓글 삭제 실패:", err);
+        res.status(500).json({ error: "댓글 삭제 실패" });
     }
 });
-
 
 // ✅ 좋아요 API
 app.post('/feed/like', (req, res) => {
