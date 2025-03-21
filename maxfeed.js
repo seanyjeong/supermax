@@ -566,7 +566,7 @@ app.get('/feed/comments/:feedId', (req, res) => {
 
 
 
-// ✅ multer 사용
+// ✅ 댓글 추가 API (문자 알림 기능 추가!)
 app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
     const { feed_id, content, parent_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
@@ -590,16 +590,48 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
                 return res.status(500).json({ error: "댓글 추가 실패" });
             }
 
+            // 댓글 카운트 업데이트
             db.query("UPDATE feeds SET comment_count = comment_count + 1 WHERE id = ?", [feed_id], () => {
-                db.query("SELECT comment_count FROM feeds WHERE id = ?", [feed_id], (err, countResult) => {
+                db.query("SELECT comment_count FROM feeds WHERE id = ?", [feed_id], async (err, countResult) => {
                     if (err) {
                         return res.status(500).json({ error: "댓글 카운트 업데이트 실패" });
                     }
 
-                    res.json({
-                        success: true,
-                        comment_id: result.insertId,
-                        comment_count: countResult[0].comment_count
+                    // 🔥 댓글 작성자의 user_id와 피드 주인의 user_id 비교
+                    const feedOwnerSql = `
+                        SELECT feeds.user_id, users.phone
+                        FROM feeds
+                        JOIN users ON feeds.user_id = users.id
+                        WHERE feeds.id = ?
+                    `;
+
+                    db.query(feedOwnerSql, [feed_id], async (err, feedOwnerResult) => {
+                        if (err || feedOwnerResult.length === 0) {
+                            console.error("🔥 피드 주인 조회 오류:", err);
+                        } else {
+                            const feedOwnerId = feedOwnerResult[0].user_id;
+                            const feedOwnerPhone = feedOwnerResult[0].phone;
+
+                            // 댓글 작성자가 피드 주인이 아니라면 문자 발송
+                            if (decoded.user_id !== feedOwnerId) {
+                                const smsMessage = `[일맥스타그램] 회원님의 피드에 댓글이 생성되었습니다.`;
+                                try {
+                                    await sendSMS(feedOwnerPhone, smsMessage);
+                                    console.log(`✅ 댓글 알림 문자 발송 완료 → ${feedOwnerPhone}`);
+                                } catch (smsErr) {
+                                    console.error(`🔥 댓글 알림 문자 발송 실패 → ${feedOwnerPhone}`, smsErr);
+                                }
+                            } else {
+                                console.log("🟡 본인의 댓글이라 문자 발송 없음");
+                            }
+                        }
+
+                        // ✅ 최종 응답 반환
+                        res.json({
+                            success: true,
+                            comment_id: result.insertId,
+                            comment_count: countResult[0].comment_count
+                        });
                     });
                 });
             });
@@ -610,6 +642,7 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
         res.status(401).json({ error: "Invalid token" });
     }
 });
+
 
 
 // 댓글 삭제 API
