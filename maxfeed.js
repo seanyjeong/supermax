@@ -64,7 +64,7 @@ app.post('/feed/auth/send-verification', async (req, res) => { // 🔥 변경
     const code = generateCode();
     verificationCodes[phone] = code;
 
-    const message = `[MaxFeed] 인증번호: ${code}`;
+    const message = `[MaxLounge] 인증번호: ${code}`;
 
     try {
         await sendSMS(phone, message);
@@ -357,19 +357,24 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
 
 
 
-// ✅ 피드 목록 (이름 표시)
+// ✅ 피드 목록 (페이지네이션 추가!)
 app.get('/feed/feeds', (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 5;
+    const offset = (page - 1) * limit;
+
     const sql = `
         SELECT feeds.*, users.name, 
                COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
         FROM feeds 
         JOIN users ON feeds.user_id = users.id 
         ORDER BY feeds.created_at DESC
+        LIMIT ? OFFSET ?
     `;
 
-    db.query(sql, (err, results) => {
+    db.query(sql, [limit, offset], (err, results) => {
         if (err) {
-            console.error("❌ 전체 피드 조회 오류:", err);
+            console.error("❌ 피드 조회 오류:", err);
             return res.status(500).json({ error: "피드 조회 실패" });
         }
         res.json(results);
