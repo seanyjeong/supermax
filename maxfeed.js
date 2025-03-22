@@ -653,7 +653,7 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
 
 
 
-// 댓글 삭제 API
+// ✅ 댓글 삭제 API (수정됨)
 app.post('/feed/delete-comment', (req, res) => {
     const { comment_id } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
@@ -678,42 +678,64 @@ app.post('/feed/delete-comment', (req, res) => {
 
                 const { feed_id, media_url } = results[0];
 
-                // 2. 댓글 삭제
-                db.query(`DELETE FROM comments WHERE id = ?`, [comment_id], (err) => {
-                    if (err) {
-                        console.error("🔥 댓글 삭제 실패:", err);
-                        return res.status(500).json({ error: "댓글 삭제 실패" });
+                // 2. 대댓글 존재 여부 확인
+                db.query(
+                    `SELECT COUNT(*) AS cnt FROM comments WHERE parent_id = ?`,
+                    [comment_id],
+                    (err, countResult) => {
+                        if (err) {
+                            console.error("🔥 대댓글 조회 오류:", err);
+                            return res.status(500).json({ error: "대댓글 조회 실패" });
+                        }
+
+                        const hasReplies = countResult[0].cnt > 0;
+
+                        if (hasReplies) {
+                            // 🔁 대댓글이 있으면 → soft delete 처리
+                            db.query(
+                                `UPDATE comments SET content = '', deleted = 1 WHERE id = ?`,
+                                [comment_id],
+                                (err) => {
+                                    if (err) return res.status(500).json({ error: "댓글 삭제 실패 (soft)" });
+
+                                    res.json({ success: true, softDeleted: true });
+                                }
+                            );
+                        } else {
+                            // ❌ 대댓글이 없으면 → 실제 삭제
+                            db.query(`DELETE FROM comments WHERE id = ?`, [comment_id], (err) => {
+                                if (err) return res.status(500).json({ error: "댓글 삭제 실패" });
+
+                                // 🔥 Firebase 스토리지 삭제
+                                if (media_url) {
+                                    try {
+                                        let filePath;
+                                        if (media_url.includes("firebasestorage.googleapis.com")) {
+                                            filePath = decodeURIComponent(media_url.split("/o/")[1].split("?")[0]);
+                                        } else {
+                                            filePath = decodeURIComponent(media_url.replace(`https://storage.googleapis.com/${bucket.name}/`, ""));
+                                        }
+
+                                        bucket.file(filePath).delete().then(() => {
+                                            console.log("✅ Firebase 댓글 파일 삭제 완료:", filePath);
+                                        }).catch(err => {
+                                            console.warn("⚠️ Firebase 댓글 파일 삭제 실패 (무시됨):", err.message);
+                                        });
+                                    } catch (e) {
+                                        console.warn("⚠️ Firebase 경로 파싱 실패:", e.message);
+                                    }
+                                }
+
+                                // 🔄 댓글 카운트 감소
+                                db.query(`UPDATE feeds SET comment_count = comment_count - 1 WHERE id = ?`, [feed_id], (err) => {
+                                    if (err) console.warn("⚠️ 댓글 카운트 업데이트 실패 (무시):", err);
+
+                                    res.json({ success: true, deleted: true });
+                                });
+                            });
+                        }
                     }
-
-                    // 3. 댓글 카운트 감소
-                    db.query(`UPDATE feeds SET comment_count = comment_count - 1 WHERE id = ?`, [feed_id], (err) => {
-                        if (err) console.warn("⚠️ 댓글 카운트 업데이트 실패 (무시):", err);
-
-                        // 4. Firebase 스토리지 삭제
-if (media_url) {
-  try {
-    let filePath;
-
-    if (media_url.includes("firebasestorage.googleapis.com")) {
-      filePath = decodeURIComponent(media_url.split("/o/")[1].split("?")[0]);
-    } else {
-      filePath = decodeURIComponent(media_url.replace(`https://storage.googleapis.com/${bucket.name}/`, ""));
-    }
-
-    bucket.file(filePath).delete().then(() => {
-      console.log("✅ Firebase 댓글 파일 삭제 완료:", filePath);
-    }).catch(err => {
-      console.warn("⚠️ Firebase 댓글 파일 삭제 실패 (무시됨):", err.message);
-    });
-  } catch (e) {
-    console.warn("⚠️ Firebase 경로 파싱 실패:", e.message);
-  }
-}
-
-                        // 5. 성공 응답
-                        res.json({ success: true });
-                    });
-                });
+                );
             }
         );
     } catch (err) {
@@ -721,6 +743,7 @@ if (media_url) {
         res.status(500).json({ error: "댓글 삭제 실패" });
     }
 });
+
 
 
 
