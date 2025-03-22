@@ -549,6 +549,57 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
         res.status(500).json({ error: "Internal Server Error", details: error.message });
     }
 });
+
+// 댓글 좋아요 토글 API
+app.post('/feed/like-comment', (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.user_id;
+    const { comment_id } = req.body;
+
+    if (!comment_id) return res.status(400).json({ error: "댓글 ID 누락" });
+
+    // 먼저 현재 좋아요 여부 확인
+    const checkSql = 'SELECT * FROM comment_likes WHERE user_id = ? AND comment_id = ?';
+    db.query(checkSql, [userId, comment_id], (err, rows) => {
+      if (err) return res.status(500).json({ error: "DB 오류 (조회)" });
+
+      if (rows.length > 0) {
+        // 이미 좋아요 눌렀으면 → 삭제
+        const delSql = 'DELETE FROM comment_likes WHERE user_id = ? AND comment_id = ?';
+        db.query(delSql, [userId, comment_id], (err) => {
+          if (err) return res.status(500).json({ error: "DB 오류 (삭제)" });
+
+          // 개수 다시 계산
+          const countSql = 'SELECT COUNT(*) AS count FROM comment_likes WHERE comment_id = ?';
+          db.query(countSql, [comment_id], (err, countRes) => {
+            if (err) return res.status(500).json({ error: "DB 오류 (카운트)" });
+            res.json({ liked: false, like_count: countRes[0].count });
+          });
+        });
+      } else {
+        // 좋아요 등록
+        const insSql = 'INSERT INTO comment_likes (user_id, comment_id) VALUES (?, ?)';
+        db.query(insSql, [userId, comment_id], (err) => {
+          if (err) return res.status(500).json({ error: "DB 오류 (삽입)" });
+
+          const countSql = 'SELECT COUNT(*) AS count FROM comment_likes WHERE comment_id = ?';
+          db.query(countSql, [comment_id], (err, countRes) => {
+            if (err) return res.status(500).json({ error: "DB 오류 (카운트)" });
+            res.json({ liked: true, like_count: countRes[0].count });
+          });
+        });
+      }
+    });
+
+  } catch (e) {
+    return res.status(401).json({ error: "토큰 인증 실패" });
+  }
+});
+
 // ✅ 댓글 조회 API (GET /feed/comments/:feedId)
 // ✅ /feed/comments/:feedId
 app.get('/feed/comments/:feedId', (req, res) => {
