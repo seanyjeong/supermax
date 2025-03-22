@@ -552,70 +552,44 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
 // ✅ 댓글 조회 API (GET /feed/comments/:feedId)
 // ✅ /feed/comments/:feedId
 app.get('/feed/comments/:feedId', (req, res) => {
-  const { feedId } = req.params;
-
-  const sql = `
-    SELECT comments.id, comments.feed_id, comments.user_id, comments.content,
-           comments.parent_id, comments.created_at, comments.media_url, 
-           comments.deleted,     -- ✅ 반드시 포함!
-           users.name
-    FROM comments
-    JOIN users ON comments.user_id = users.id
-    WHERE comments.feed_id = ?
-    ORDER BY COALESCE(comments.parent_id, comments.id), comments.created_at ASC
-  `;
-
-  db.query(sql, [feedId], (err, results) => {
-    if (err) {
-      console.error("🔥 [댓글] 불러오기 오류:", err);
-      return res.status(500).json({ error: "댓글을 불러올 수 없습니다." });
-    }
-
-    res.json(results);
-  });
-});
-
-app.post('/feed/comment-like', (req, res) => {
+  const feedId = req.params.feedId;
   const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  let user_id = null;
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-    const { comment_id } = req.body;
-
-    const checkSql = `SELECT * FROM comment_likes WHERE comment_id = ? AND user_id = ?`;
-    db.query(checkSql, [comment_id, user_id], (err, rows) => {
-      if (err) return res.status(500).json({ error: "DB 오류" });
-
-      if (rows.length > 0) {
-        // 이미 좋아요 눌렀으면 → 취소
-        const deleteSql = `DELETE FROM comment_likes WHERE comment_id = ? AND user_id = ?`;
-        db.query(deleteSql, [comment_id, user_id], (err) => {
-          if (err) return res.status(500).json({ error: "좋아요 취소 실패" });
-
-          db.query(`SELECT COUNT(*) AS like_count FROM comment_likes WHERE comment_id = ?`, [comment_id], (err, result) => {
-            if (err) return res.status(500).json({ error: "카운트 실패" });
-            return res.json({ liked: false, like_count: result[0].like_count });
-          });
-        });
-      } else {
-        // 좋아요 추가
-        const insertSql = `INSERT INTO comment_likes (comment_id, user_id) VALUES (?, ?)`;
-        db.query(insertSql, [comment_id, user_id], (err) => {
-          if (err) return res.status(500).json({ error: "좋아요 실패" });
-
-          db.query(`SELECT COUNT(*) AS like_count FROM comment_likes WHERE comment_id = ?`, [comment_id], (err, result) => {
-            if (err) return res.status(500).json({ error: "카운트 실패" });
-            return res.json({ liked: true, like_count: result[0].like_count });
-          });
-        });
-      }
-    });
-
+    if (token) {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      user_id = decoded.user_id;
+    }
   } catch (err) {
-    return res.status(401).json({ error: "Invalid token" });
+    console.log("❌ 토큰 오류 - 좋아요 상태 미적용");
   }
+
+  const sql = `
+    SELECT c.*, u.name,
+      (SELECT COUNT(*) FROM comment_likes WHERE comment_id = c.id) AS like_count,
+      (SELECT COUNT(*) FROM comment_likes WHERE comment_id = c.id AND user_id = ?) AS liked
+    FROM comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.feed_id = ?
+    ORDER BY c.created_at ASC
+  `;
+
+  db.query(sql, [user_id, feedId], (err, results) => {
+    if (err) {
+      console.error("🔥 댓글 조회 오류:", err);
+      return res.status(500).json({ error: "댓글 불러오기 실패" });
+    }
+
+    // liked는 0 또는 1 → true/false로 변환
+    const mapped = results.map(r => ({
+      ...r,
+      liked: r.liked > 0,
+      like_count: r.like_count || 0
+    }));
+
+    res.json(mapped);
+  });
 });
 
 
