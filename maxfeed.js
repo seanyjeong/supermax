@@ -549,28 +549,31 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
     }
 });
 // ✅ 댓글 조회 API (GET /feed/comments/:feedId)
+// ✅ /feed/comments/:feedId
 app.get('/feed/comments/:feedId', (req, res) => {
-    const { feedId } = req.params;
+  const { feedId } = req.params;
 
-    const sql = `
-        SELECT comments.id, comments.feed_id, comments.user_id, comments.content, comments.parent_id,
-               comments.created_at, comments.media_url,  -- 🔥 media_url 포함
-               users.name
-        FROM comments
-        JOIN users ON comments.user_id = users.id
-        WHERE comments.feed_id = ?
-        ORDER BY COALESCE(comments.parent_id, comments.id), comments.created_at ASC
-    `;
+  const sql = `
+    SELECT comments.id, comments.feed_id, comments.user_id, comments.content,
+           comments.parent_id, comments.created_at, comments.media_url, 
+           comments.deleted,     -- ✅ 반드시 포함!
+           users.name
+    FROM comments
+    JOIN users ON comments.user_id = users.id
+    WHERE comments.feed_id = ?
+    ORDER BY COALESCE(comments.parent_id, comments.id), comments.created_at ASC
+  `;
 
-    db.query(sql, [feedId], (err, results) => {
-        if (err) {
-            console.error("🔥 [댓글] 불러오기 오류:", err);
-            return res.status(500).json({ error: "댓글을 불러올 수 없습니다." });
-        }
+  db.query(sql, [feedId], (err, results) => {
+    if (err) {
+      console.error("🔥 [댓글] 불러오기 오류:", err);
+      return res.status(500).json({ error: "댓글을 불러올 수 없습니다." });
+    }
 
-        res.json(results);
-    });
+    res.json(results);
+  });
 });
+
 
 
 
