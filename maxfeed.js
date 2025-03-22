@@ -411,6 +411,7 @@ app.get('/feed/my-feeds', (req, res) => {
     }
 });
 
+
 // ✅ Firebase 파일 삭제 함수
 function deleteFromFirebaseByUrl(url) {
   try {
@@ -474,7 +475,7 @@ app.get('/feed/user-feeds/:userId', (req, res) => {
     SELECT feeds.*, users.name, 
            COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
     FROM feeds
-    JOIN users ON feeds.user_id = users.id
+    JOIN users ON feeds.user_id = users.id 
     WHERE feeds.user_id = ?
     ORDER BY feeds.created_at DESC
   `;
@@ -573,6 +574,50 @@ app.get('/feed/comments/:feedId', (req, res) => {
     res.json(results);
   });
 });
+
+app.post('/feed/comment-like', (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+    const { comment_id } = req.body;
+
+    const checkSql = `SELECT * FROM comment_likes WHERE comment_id = ? AND user_id = ?`;
+    db.query(checkSql, [comment_id, user_id], (err, rows) => {
+      if (err) return res.status(500).json({ error: "DB 오류" });
+
+      if (rows.length > 0) {
+        // 이미 좋아요 눌렀으면 → 취소
+        const deleteSql = `DELETE FROM comment_likes WHERE comment_id = ? AND user_id = ?`;
+        db.query(deleteSql, [comment_id, user_id], (err) => {
+          if (err) return res.status(500).json({ error: "좋아요 취소 실패" });
+
+          db.query(`SELECT COUNT(*) AS like_count FROM comment_likes WHERE comment_id = ?`, [comment_id], (err, result) => {
+            if (err) return res.status(500).json({ error: "카운트 실패" });
+            return res.json({ liked: false, like_count: result[0].like_count });
+          });
+        });
+      } else {
+        // 좋아요 추가
+        const insertSql = `INSERT INTO comment_likes (comment_id, user_id) VALUES (?, ?)`;
+        db.query(insertSql, [comment_id, user_id], (err) => {
+          if (err) return res.status(500).json({ error: "좋아요 실패" });
+
+          db.query(`SELECT COUNT(*) AS like_count FROM comment_likes WHERE comment_id = ?`, [comment_id], (err, result) => {
+            if (err) return res.status(500).json({ error: "카운트 실패" });
+            return res.json({ liked: true, like_count: result[0].like_count });
+          });
+        });
+      }
+    });
+
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
 
 
 
