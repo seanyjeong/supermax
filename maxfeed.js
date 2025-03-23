@@ -555,13 +555,19 @@ app.get('/feed/feeds/:id', (req, res) => {
   const feedId = req.params.id;
 
   const sql = `
-SELECT 
-  feeds.*, users.name, users.profile_image,
-  (SELECT COUNT(*) FROM feed_likes WHERE feed_id = feeds.id) AS like_count,
-  (SELECT COUNT(*) FROM comments WHERE feed_id = feeds.id) AS comment_count
-FROM feeds
-JOIN users ON feeds.user_id = users.id
-WHERE feeds.id = ?
+  SELECT 
+    feeds.id,
+    feeds.user_id,
+    feeds.content,
+    feeds.media_url,
+    feeds.created_at,
+    users.name AS user_name,
+    users.profile_image,
+    (SELECT COUNT(*) FROM feed_likes WHERE feed_id = feeds.id) AS like_count,
+    (SELECT COUNT(*) FROM comments WHERE feed_id = feeds.id) AS comment_count
+  FROM feeds
+  LEFT JOIN users ON feeds.user_id = users.id
+  WHERE feeds.id = ?
 
   `;
   db.query(sql, [feedId], (err, result) => {
