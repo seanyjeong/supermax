@@ -213,21 +213,23 @@ app.post('/feed/login', (req, res) => {
 
 // ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함)
 // ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함, 전화번호, 생년월일 추가!)
-app.get('/feed/user-info', (req, res) => {
+// ✅ 특정 유저 정보 조회 (user_id 파라미터로 받음)
+app.post('/feed/user-info', (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+    const { user_id } = req.body;
+
+    if (!token || !user_id) return res.status(400).json({ error: "토큰 또는 user_id 누락" });
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.user_id;
+        jwt.verify(token, JWT_SECRET); // 유효성만 체크 (user_id는 직접 받음)
 
-        db.query("SELECT name, profile_image, phone, birth_date FROM users WHERE id = ?", [userId], (err, results) => {
+        db.query("SELECT name, profile_image, phone, birth_date FROM users WHERE id = ?", [user_id], (err, results) => {
             if (err) {
                 console.error("🔥 MySQL 조회 오류:", err);
                 return res.status(500).json({ error: "DB 조회 실패" });
             }
             if (results.length === 0) {
-                return res.status(400).json({ error: "유효하지 않은 사용자" });
+                return res.status(404).json({ error: "사용자를 찾을 수 없음" });
             }
 
             const { name, profile_image, phone, birth_date } = results[0];
@@ -235,19 +237,19 @@ app.get('/feed/user-info', (req, res) => {
 
             res.json({ 
                 success: true, 
-                user_id: userId,
+                user_id,
                 name, 
                 profile_image: profileImgUrl,
-                phone,          // 추가 ✅
-                birth_date      // 추가 ✅
+                phone,
+                birth_date
             });
         });
-
     } catch (error) {
         console.error("🔥 JWT 오류:", error);
         res.status(401).json({ error: "Invalid token", details: error.message });
     }
 });
+
 
 
 
