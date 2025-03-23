@@ -550,33 +550,38 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
     }
 });
 
-// ✅ 단일 피드 조회
+// ✅ 단일 피드 조회 (JOIN 없이 바로 feeds 테이블에서만)
 app.get('/feed/feeds/:id', (req, res) => {
-  const feedId = req.params.id;
+  const feedId = parseInt(req.params.id, 10);
+  if (isNaN(feedId)) return res.status(400).json({ error: '잘못된 피드 ID' });
 
   const sql = `
-  SELECT 
-    feeds.id,
-    feeds.user_id,
-    feeds.content,
-    feeds.media_url,
-    feeds.created_at,
-    users.name AS user_name,
-    users.profile_image,
-    (SELECT COUNT(*) FROM feed_likes WHERE feed_id = feeds.id) AS like_count,
-    (SELECT COUNT(*) FROM comments WHERE feed_id = feeds.id) AS comment_count
-  FROM feeds
-  LEFT JOIN users ON feeds.user_id = users.id
-  WHERE feeds.id = ?
-
+    SELECT 
+      id,
+      user_id,
+      name,
+      content,
+      media_url,
+      created_at,
+      like_count,
+      comment_count
+    FROM feeds
+    WHERE id = ?
   `;
+
   db.query(sql, [feedId], (err, result) => {
-    if (err) return res.status(500).json({ error: "피드 조회 실패" });
-    if (result.length === 0) return res.status(404).json({ error: "피드 없음" });
+    if (err) {
+      console.error('🔥 DB 오류:', err);
+      return res.status(500).json({ error: "피드 조회 실패" });
+    }
+    if (result.length === 0) {
+      return res.status(404).json({ error: "피드 없음" });
+    }
 
     res.json(result[0]);
   });
 });
+
 
 
 // 댓글 좋아요 토글 API
