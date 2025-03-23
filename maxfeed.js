@@ -555,10 +555,14 @@ app.get('/feed/feeds/:id', (req, res) => {
   const feedId = req.params.id;
 
   const sql = `
-    SELECT feeds.*, users.name, users.profile_image
-    FROM feeds
-    JOIN users ON feeds.user_id = users.id
-    WHERE feeds.id = ?
+SELECT 
+  feeds.*, users.name, users.profile_image,
+  (SELECT COUNT(*) FROM feed_likes WHERE feed_id = feeds.id) AS like_count,
+  (SELECT COUNT(*) FROM comments WHERE feed_id = feeds.id) AS comment_count
+FROM feeds
+JOIN users ON feeds.user_id = users.id
+WHERE feeds.id = ?
+
   `;
   db.query(sql, [feedId], (err, result) => {
     if (err) return res.status(500).json({ error: "피드 조회 실패" });
