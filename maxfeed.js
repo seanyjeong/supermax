@@ -550,6 +550,25 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
     }
 });
 
+// ✅ 단일 피드 조회
+app.get('/feed/feeds/:id', (req, res) => {
+  const feedId = req.params.id;
+
+  const sql = `
+    SELECT feeds.*, users.name, users.profile_image
+    FROM feeds
+    JOIN users ON feeds.user_id = users.id
+    WHERE feeds.id = ?
+  `;
+  db.query(sql, [feedId], (err, result) => {
+    if (err) return res.status(500).json({ error: "피드 조회 실패" });
+    if (result.length === 0) return res.status(404).json({ error: "피드 없음" });
+
+    res.json(result[0]);
+  });
+});
+
+
 // 댓글 좋아요 토글 API
 app.post('/feed/like-comment', (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
