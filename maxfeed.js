@@ -336,27 +336,37 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
 
 
 // ✅ 피드 목록 (페이지네이션 추가!)
+// 기존 /feed/feeds API 확장
 app.get('/feed/feeds', (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
-    const offset = (page - 1) * limit;
+  const tag = req.query.tag;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 5;
+  const offset = (page - 1) * limit;
 
-    const sql = `
-        SELECT feeds.*, users.name, 
-               COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
-        FROM feeds 
-        JOIN users ON feeds.user_id = users.id 
-        ORDER BY feeds.created_at DESC
-        LIMIT ? OFFSET ?
-    `;
+  let sql = `
+    SELECT feeds.*, users.name,
+           COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
+    FROM feeds
+    JOIN users ON feeds.user_id = users.id
+  `;
+  const params = [];
 
-    db.query(sql, [limit, offset], (err, results) => {
-        if (err) {
-            console.error("❌ 피드 조회 오류:", err);
-            return res.status(500).json({ error: "피드 조회 실패" });
-        }
-        res.json(results);
-    });
+  // ✅ tag가 있는 경우에만 필터링
+  if (tag) {
+    sql += ` WHERE content LIKE ? `;
+    params.push(`%#${tag}%`);
+  }
+
+  sql += ` ORDER BY feeds.created_at DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error("🔥 피드 조회 오류:", err);
+      return res.status(500).json({ error: "피드 조회 실패" });
+    }
+    res.json(results);
+  });
 });
 
 
