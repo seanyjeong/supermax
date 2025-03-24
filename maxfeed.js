@@ -352,10 +352,11 @@ app.get('/feed/feeds', (req, res) => {
   const params = [];
 
   // ✅ tag가 있는 경우에만 필터링
-  if (tag) {
-    sql += ` WHERE content LIKE ? `;
-    params.push(`%#${tag}%`);
-  }
+if (tag) {
+  sql += ` WHERE content LIKE ? OR event LIKE ? `;
+  params.push(`%#${tag}%`, `%${tag}%`);
+}
+
 
   sql += ` ORDER BY feeds.created_at DESC LIMIT ? OFFSET ?`;
   params.push(limit, offset);
