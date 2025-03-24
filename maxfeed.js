@@ -242,7 +242,7 @@ app.post('/feed/user-info', (req, res) => {
                 profile_image: profileImgUrl,
                 phone,
                 birth_date,
-                intro
+               
             });
         });
     } catch (error) {
