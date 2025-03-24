@@ -551,7 +551,6 @@ app.get('/feed/feeds/:id', (req, res) => {
     SELECT 
       id,
       user_id,
-      name,
       content,
       media_url,
       created_at,
