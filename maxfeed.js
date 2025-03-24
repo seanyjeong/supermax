@@ -552,6 +552,51 @@ app.post('/feed/update-profile', upload.single('profile_image'), async (req, res
   }
 });
 
+app.patch('/feed/update-feed', upload.array('files'), async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const { feed_id, content, event, record, existing_media } = req.body;
+
+    // ✅ 유저가 본인 피드 수정하는지 확인
+    db.query("SELECT * FROM feeds WHERE id = ? AND user_id = ?", [feed_id, decoded.user_id], async (err, results) => {
+      if (err || results.length === 0) {
+        return res.status(403).json({ error: "수정 권한 없음 또는 피드 없음" });
+      }
+
+      let mediaArray = [];
+      try {
+        mediaArray = JSON.parse(existing_media || '[]');
+      } catch (e) {
+        return res.status(400).json({ error: "기존 미디어 파싱 오류" });
+      }
+
+      // ✅ 새 파일 업로드 시 Firebase에 추가
+      if (req.files && req.files.length > 0) {
+        for (let file of req.files) {
+          const url = await uploadToFirebase(file, "feeds");
+          mediaArray.push(url);
+        }
+      }
+
+      const sql = `
+        UPDATE feeds SET content = ?, event = ?, record = ?, media_url = ?
+        WHERE id = ? AND user_id = ?
+      `;
+
+      db.query(sql, [content, event, record, JSON.stringify(mediaArray), feed_id, decoded.user_id], (err) => {
+        if (err) return res.status(500).json({ error: "피드 수정 실패" });
+        res.json({ success: true, updated: true });
+      });
+    });
+  } catch (error) {
+    res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+
 
 // ✅ 단일 피드 조회 (JOIN 없이 바로 feeds 테이블에서만)
 app.get('/feed/feeds/:id', (req, res) => {
