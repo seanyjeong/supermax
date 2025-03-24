@@ -555,11 +555,12 @@ app.get('/feed/feeds/:id', (req, res) => {
       media_url,
       created_at,
       like_count,
-      comment_count
+      comment_count,
+      event,
+      record
     FROM feeds
     WHERE id = ?
   `;
-
   db.query(sql, [feedId], (err, result) => {
     if (err) {
       console.error('🔥 DB 오류:', err);
