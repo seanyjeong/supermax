@@ -292,70 +292,45 @@ async function uploadToFirebase(file, folder = "uploads") {
 
 
 
-// ✅ 피드 작성 (이름 포함)
 app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const { content } = req.body;
-        const files = req.files;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
 
-        if (!files || files.length === 0) {
-            return res.status(400).json({ error: "파일이 없습니다!" });
-        }
+    const { event, record, content } = req.body;
+    let media_urls = [];
 
-        // ✅ 여러 파일 업로드 → URL 배열 만들기
-        const mediaUrls = [];
-
-        for (const file of files) {
-            const url = await uploadToFirebase(file); // 기존 함수 재사용
-            mediaUrls.push(url);
-        }
-
-        // ✅ 사용자 이름 조회
-        db.query("SELECT name FROM users WHERE id = ?", [decoded.user_id], (err, result) => {
-            if (err || result.length === 0) {
-                return res.status(500).json({ error: "유효하지 않은 사용자입니다." });
-            }
-
-            const userName = result[0].name;
-
-            // ✅ 피드 저장 (media_url을 JSON 배열로 저장하거나 별도 테이블 구성 가능)
-            const sql = "INSERT INTO feeds (user_id, name, content, media_url) VALUES (?, ?, ?, ?)";
-            db.query(sql, [decoded.user_id, userName, content, JSON.stringify(mediaUrls)], async (err, result) => {
-                if (err) return res.status(500).json({ error: err });
-
-                // 🔥🔥 피드 저장 성공 후, 이 위치에 문자 발송 추가
-                const smsMessage = `[일맥스타그램] ${userName}님의 피드가 생성되었습니다.`;
-
-                // 🔥 원하는 전화번호를 여기에 추가해
-                const phoneNumbers = [
-                  '01021446765', 
-                  // '010xxxxOOOO', '010xxxxOOOO', 추가 번호들 여기에 주석처리 제거하고 넣어!
-                ];
-
-                // 문자 발송 반복 처리
-                for (const number of phoneNumbers) {
-                    try {
-                        await sendSMS(number, smsMessage);
-                        console.log(`✅ 문자 발송 성공 → ${number}`);
-                    } catch (e) {
-                        console.error(`🔥 문자 발송 실패 → ${number}`, e);
-                    }
-                }
-
-                // 최종 응답
-                res.json({ success: true });
-            });
-        });
-
-    } catch (error) {
-        console.error("🔥 서버 오류 발생:", error);
-        res.status(500).json({ error: "Internal Server Error", details: error.message });
+    if (req.files && req.files.length > 0) {
+      for (let file of req.files) {
+        const url = await uploadToFirebase(file, "feeds");
+        media_urls.push(url);
+      }
     }
+
+    const sql = `
+      INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+    `;
+    const media = JSON.stringify(media_urls); // ✅ 미디어 배열로 저장
+
+    db.query(sql, [user_id, event, record, content, media], (err, result) => {
+      if (err) {
+        console.error("🔥 DB 저장 실패:", err);
+        return res.status(500).json({ error: "DB 저장 실패" });
+      }
+
+      res.json({ success: true, feed_id: result.insertId });
+    });
+
+  } catch (e) {
+    console.error("❌ 업로드 실패:", e);
+    res.status(500).json({ error: "서버 오류" });
+  }
 });
+
 
 
 
