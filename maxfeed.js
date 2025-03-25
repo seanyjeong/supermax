@@ -254,6 +254,16 @@ app.post('/feed/update-goals', (req, res) => {
   }
 });
 
+app.get('/feed/user-goals/:userId', (req, res) => {
+  const userId = req.params.userId;
+
+  const sql = `SELECT event, goal_record FROM user_goals WHERE user_id = ?`;
+  db.query(sql, [userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    res.json(rows);
+  });
+});
+
 
 
 // ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함)
