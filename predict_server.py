@@ -3,6 +3,7 @@ from flask_cors import CORS
 import numpy as np
 from datetime import datetime, timedelta
 from sklearn.linear_model import LinearRegression
+from dateutil.parser import parse  # 파일 상단에 추가
 
 app = Flask(__name__)
 CORS(app)  # 모든 도메인 허용
@@ -20,7 +21,10 @@ def predict():
                 continue  # 최소 2개 이상 있어야 예측 가능
 
             # 날짜 → timestamp, 기록값 → float으로 변환
-            X = np.array([datetime.strptime(r['created_at'], '%Y-%m-%d %H:%M:%S').timestamp() for r in records]).reshape(-1, 1)
+            X = np.array([
+    parse(r['created_at']).timestamp()
+    for r in records
+]).reshape(-1, 1)
             y = np.array([float(r['record']) for r in records])
 
             # 모델 학습
