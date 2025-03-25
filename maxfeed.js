@@ -335,13 +335,14 @@ app.post('/feed/ai-predict', async (req, res) => {
       }
 
       const grouped = {};
-      for (let r of results) {
-        if (!grouped[r.event]) grouped[r.event] = [];
-        grouped[r.event].push({
-          x: new Date(r.created_at).getTime() / 1000, // 초 단위
-          y: parseFloat(r.record)
-        });
-      }
+for (let r of results) {
+  if (!grouped[r.event]) grouped[r.event] = [];
+  grouped[r.event].push({
+    record: parseFloat(r.record),
+    created_at: r.created_at  // ✅ 예측 서버용 raw 날짜 전달
+  });
+}
+
 
       try {
         const aiRes = await axios.post('http://localhost:5050/predict', { grouped });
