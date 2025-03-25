@@ -9,6 +9,9 @@ const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const serviceAccount = require('/root/supermax/firebase-key.json');
+// 파이썬 서버 주소 포트 수정!
+const aiRes = await axios.post('http://localhost:5050/predict', { grouped });
+
 
 const app = express();
 // 이 코드 위치: const app = express(); 선언 바로 아래에 추가
