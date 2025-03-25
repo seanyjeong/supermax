@@ -406,6 +406,38 @@ app.get('/feed/user-achievements/:userId', (req, res) => {
     res.json(results);
   });
 });
+app.post('/feed/save-achievement-if-new', (req, res) => {
+  const { user_id, event, goal_value, goal_record, goal_date } = req.body;
+
+  // 이 유저가 이 종목에 대해 저장된 목표가 있는지 확인
+  const sql = `
+    SELECT * FROM user_achievements 
+    WHERE user_id = ? AND event = ? 
+    ORDER BY goal_value DESC LIMIT 1
+  `;
+
+  db.query(sql, [user_id, event], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 조회 실패' });
+
+    const alreadySaved = rows[0];
+
+    // 조건: 기존보다 더 높은 목표를 새로 달성했을 때만 저장
+    if (!alreadySaved || goal_value > alreadySaved.goal_value) {
+      const insertSql = `
+        INSERT INTO user_achievements 
+        (user_id, event, goal_value, goal_record, goal_date)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      db.query(insertSql, [user_id, event, goal_value, goal_record, goal_date], (err2) => {
+        if (err2) return res.status(500).json({ error: 'DB 저장 실패' });
+        return res.json({ saved: true });
+      });
+    } else {
+      return res.json({ saved: false });
+    }
+  });
+});
+
 
 
 
