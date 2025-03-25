@@ -357,6 +357,56 @@ for (let r of results) {
   }
 });
 
+//목표기록 저장 api들
+app.post('/feed/save-achievement', (req, res) => {
+  const { user_id, event, goal_value, goal_record, goal_date, medal } = req.body;
+
+  // 목표 달성 기록 저장
+  const sql = `INSERT INTO user_achievements (user_id, event, goal_value, goal_record, goal_date, medal)
+               VALUES (?, ?, ?, ?, ?, ?)`;
+
+  db.query(sql, [user_id, event, goal_value, goal_record, goal_date, medal], (err, result) => {
+    if (err) {
+      console.error("🔥 DB 오류:", err);
+      return res.status(500).json({ error: 'DB 오류' });
+    }
+
+    res.json({ success: true });
+  });
+});
+
+app.get('/feed/my-achievements', (req, res) => {
+  const user_id = req.user.id;  // 로그인한 유저의 ID
+
+  const sql = `SELECT * FROM user_achievements WHERE user_id = ? ORDER BY goal_date DESC`;
+  db.query(sql, [user_id], (err, results) => {
+    if (err) {
+      console.error("🔥 DB 오류:", err);
+      return res.status(500).json({ error: 'DB 오류' });
+    }
+
+    res.json(results);
+  });
+});
+
+app.get('/feed/user-achievements/:userId', (req, res) => {
+  const userId = req.params.userId;
+
+  const sql = `SELECT event, goal_value, goal_record, goal_date, medal 
+               FROM user_achievements 
+               WHERE user_id = ? 
+               ORDER BY goal_date DESC`;
+
+  db.query(sql, [userId], (err, results) => {
+    if (err) {
+      console.error("🔥 유저 메달 조회 오류:", err);
+      return res.status(500).json({ error: 'DB 오류' });
+    }
+
+    res.json(results);
+  });
+});
+
 
 
 
