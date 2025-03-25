@@ -1,46 +1,44 @@
+from datetime import datetime, timedelta
+from dateutil.parser import parse
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import numpy as np
-from datetime import datetime, timedelta
 from sklearn.linear_model import LinearRegression
-from dateutil.parser import parse  # 파일 상단에 추가
 
 app = Flask(__name__)
-CORS(app)  # 모든 도메인 허용
+CORS(app)
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
         data = request.get_json()
         grouped = data.get("grouped", {})
-
         result = {}
 
         for event, records in grouped.items():
             if len(records) < 2:
-                continue  # 최소 2개 이상 있어야 예측 가능
+                continue
 
             # 날짜 → timestamp, 기록값 → float으로 변환
-            X = np.array([
-    parse(r['created_at']).timestamp()
-    for r in records
-]).reshape(-1, 1)
+            timestamps = [parse(r['created_at']).timestamp() for r in records]
+            base_time = timestamps[0]
+            X = np.array([ts - base_time for ts in timestamps]).reshape(-1, 1)
             y = np.array([float(r['record']) for r in records])
 
             # 모델 학습
             model = LinearRegression()
             model.fit(X, y)
 
-            # 마지막 날짜 기준으로 앞으로 3개 예측 (하루 간격)
-            last_date = datetime.fromtimestamp(X[-1][0])
-            future_dates = [(last_date + timedelta(days=i)).timestamp() for i in range(1, 4)]
-            future_X = np.array(future_dates).reshape(-1, 1)
+            # 미래 날짜 생성 (3일 예측)
+            last_ts = timestamps[-1]
+            future_ts = [last_ts + 86400 * i for i in range(1, 4)]  # 하루 간격 (초 단위)
+            future_X = np.array([ts - base_time for ts in future_ts]).reshape(-1, 1)
             pred_y = model.predict(future_X)
 
-            # 결과 저장 (기본 타입으로 변환)
+            # 결과 저장
             result[event] = [
                 { 'x': int(ts), 'y': float(val) }
-                for ts, val in zip(future_dates, pred_y)
+                for ts, val in zip(future_ts, pred_y)
             ]
 
         return jsonify(result)
