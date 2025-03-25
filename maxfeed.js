@@ -280,7 +280,7 @@ app.post('/feed/user-info', (req, res) => {
     try {
         jwt.verify(token, JWT_SECRET); // 유효성만 체크 (user_id는 직접 받음)
 
-        db.query("SELECT name, profile_image, phone, birth_date, intro FROM users WHERE id = ?", [user_id], (err, results) => {
+        db.query("SELECT name, profile_image, phone, birth_date, intro, gender FROM users WHERE id = ?", [user_id], (err, results) => {
             if (err) {
                 console.error("🔥 MySQL 조회 오류:", err);
                 return res.status(500).json({ error: "DB 조회 실패" });
