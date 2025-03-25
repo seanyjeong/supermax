@@ -375,7 +375,8 @@ app.post('/feed/save-achievement', (req, res) => {
   });
 });
 
-app.get('/feed/my-achievements', (req,verifyToken, res) => {
+app.get('/feed/my-achievements', verifyToken, (req, res) => {
+
   const user_id = req.user.id;  // 로그인한 유저의 ID
 
   const sql = `SELECT * FROM user_achievements WHERE user_id = ? ORDER BY goal_date DESC`;
