@@ -299,7 +299,8 @@ app.post('/feed/user-info', (req, res) => {
                 profile_image: profileImgUrl,
                 phone,
                 birth_date,
-                intro
+                intro,
+                gender
             });
         });
     } catch (error) {
