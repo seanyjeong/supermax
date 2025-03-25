@@ -9,8 +9,7 @@ const crypto = require('crypto');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const serviceAccount = require('/root/supermax/firebase-key.json');
-// 파이썬 서버 주소 포트 수정!
-const aiRes = await axios.post('http://localhost:5050/predict', { grouped });
+
 
 
 const app = express();
@@ -307,6 +306,54 @@ app.post('/feed/user-info', (req, res) => {
         console.error("🔥 JWT 오류:", error);
         res.status(401).json({ error: "Invalid token", details: error.message });
     }
+});
+
+/* ======================================
+   📌파이썬 연결AI (파일 업로드 포함)
+====================================== */
+
+app.post('/feed/ai-predict', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '토큰 없음' });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+
+    const sql = `
+      SELECT event, record, created_at
+      FROM feeds
+      WHERE user_id = ? AND record IS NOT NULL
+      ORDER BY created_at ASC
+    `;
+
+    db.query(sql, [user_id], async (err, results) => {
+      if (err) {
+        console.error('🔥 DB 오류:', err);
+        return res.status(500).json({ error: '서버 오류' });
+      }
+
+      const grouped = {};
+      for (let r of results) {
+        if (!grouped[r.event]) grouped[r.event] = [];
+        grouped[r.event].push({
+          x: new Date(r.created_at).getTime() / 1000, // 초 단위
+          y: parseFloat(r.record)
+        });
+      }
+
+      try {
+        const aiRes = await axios.post('http://localhost:5050/predict', { grouped });
+        res.json(aiRes.data);
+      } catch (err) {
+        console.error('❌ Python 예측 서버 응답 오류:', err.message);
+        res.status(500).json({ error: 'AI 예측 실패' });
+      }
+    });
+  } catch (err) {
+    res.status(403).json({ error: '토큰 유효하지 않음' });
+  }
 });
 
 
