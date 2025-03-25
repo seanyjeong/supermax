@@ -17,23 +17,22 @@ def predict():
 
         for event, records in grouped.items():
             if len(records) < 2:
-                continue  # 예측 최소 2개 필요
+                continue  # 최소 2개 필요
 
-            # 순서를 인덱스로 사용 (하루에 여러 기록 있어도 괜찮게!)
+            # ✅ record 값 찾기 (record 또는 y 중 있는 키 사용)
+            sample = records[0]
+            value_key = 'y' if 'y' in sample else 'record'
+
             X = np.array([i for i in range(len(records))]).reshape(-1, 1)
-            y = np.array([float(r['y']) for r in records])
+            y = np.array([float(r[value_key]) for r in records])
 
             model = LinearRegression()
             model.fit(X, y)
 
-            # 다음 3개 인덱스 예측
             future_X = np.array([len(records) + i for i in range(1, 4)]).reshape(-1, 1)
             pred_y = model.predict(future_X)
-
-            # 예측값이 음수인 경우 0으로 보정
             pred_y = np.clip(pred_y, 0, None)
 
-            # 오늘 날짜 기준으로 timestamp 생성
             last_ts = datetime.now()
             future_timestamps = [(last_ts + timedelta(days=i)).timestamp() for i in range(1, 4)]
 
