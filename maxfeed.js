@@ -369,7 +369,35 @@ if (tag) {
     res.json(results);
   });
 });
+//기록들 
+app.get('/feed/my-records', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '토큰 없음' });
 
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+
+    const sql = `
+      SELECT event, record, created_at
+      FROM feeds
+      WHERE user_id = ? AND record IS NOT NULL
+      ORDER BY created_at ASC
+    `;
+
+    db.query(sql, [user_id], (err, results) => {
+      if (err) {
+        console.error('🔥 기록 불러오기 실패:', err);
+        return res.status(500).json({ error: '서버 오류' });
+      }
+      res.json(results);
+    });
+
+  } catch (err) {
+    return res.status(403).json({ error: '토큰 유효하지 않음' });
+  }
+});
 
 // 내 피드만 조회 (로그인 사용자 전용)
 app.get('/feed/my-feeds', (req, res) => {
