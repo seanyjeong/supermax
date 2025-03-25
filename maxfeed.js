@@ -209,6 +209,51 @@ app.post('/feed/login', (req, res) => {
         res.json({ success: true, token, user_id: user.id, username: user.username });
     });
 });
+//목표기록
+app.get('/feed/my-goals', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '토큰 없음' });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+
+    const sql = `SELECT event, goal_record FROM user_goals WHERE user_id = ?`;
+    db.query(sql, [user_id], (err, rows) => {
+      if (err) return res.status(500).json({ error: 'DB 오류' });
+      res.json(rows);
+    });
+
+  } catch (err) {
+    return res.status(403).json({ error: '토큰 유효하지 않음' });
+  }
+});
+//목표기록수정
+app.post('/feed/update-goals', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '토큰 없음' });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+    const goals = req.body.goals; // [{event, goal_record}, ...]
+
+    const sql = `INSERT INTO user_goals (user_id, event, goal_record)
+                 VALUES ? 
+                 ON DUPLICATE KEY UPDATE goal_record = VALUES(goal_record)`;
+
+    const values = goals.map(g => [user_id, g.event, g.goal_record]);
+
+    db.query(sql, [values], (err) => {
+      if (err) return res.status(500).json({ error: 'DB 저장 오류' });
+      res.json({ success: true });
+    });
+
+  } catch (err) {
+    return res.status(403).json({ error: '토큰 유효하지 않음' });
+  }
+});
+
 
 
 // ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함)
