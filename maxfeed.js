@@ -358,11 +358,11 @@ for (let r of results) {
 });
 
 //목표기록 저장 api들
-app.post('/feed/save-achievement', (req, res) => {
+app.post('/feed/save-ievement', (req, res) => {
   const { user_id, event, goal_value, goal_record, goal_date, medal } = req.body;
 
   // 목표 달성 기록 저장
-  const sql = `INSERT INTO user_achievements (user_id, event, goal_value, goal_record, goal_date, medal)
+  const sql = `INSERT INTO user_ievements (user_id, event, goal_value, goal_record, goal_date, medal)
                VALUES (?, ?, ?, ?, ?, ?)`;
 
   db.query(sql, [user_id, event, goal_value, goal_record, goal_date, medal], (err, result) => {
@@ -375,20 +375,25 @@ app.post('/feed/save-achievement', (req, res) => {
   });
 });
 
-app.get('/feed/my-achievements', verifyToken, (req, res) => {
+app.get('/feed/my-achievements', (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '토큰 없음' });
 
-  const user_id = req.user.id;  // 로그인한 유저의 ID
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
 
-  const sql = `SELECT * FROM user_achievements WHERE user_id = ? ORDER BY goal_date DESC`;
-  db.query(sql, [user_id], (err, results) => {
-    if (err) {
-      console.error("🔥 DB 오류:", err);
-      return res.status(500).json({ error: 'DB 오류' });
-    }
+    const sql = `SELECT * FROM user_achievements WHERE user_id = ? ORDER BY goal_date DESC`;
+    db.query(sql, [user_id], (err, results) => {
+      if (err) return res.status(500).json({ error: 'DB 오류' });
+      res.json(results);
+    });
 
-    res.json(results);
-  });
+  } catch (err) {
+    return res.status(403).json({ error: '토큰 유효하지 않음' });
+  }
 });
+
 
 app.get('/feed/user-achievements/:userId', (req, res) => {
   const userId = req.params.userId;
