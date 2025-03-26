@@ -1282,21 +1282,21 @@ app.post('/feed/like', (req, res) => {
                 } else {
                     // ✅ 좋아요 추가
                     db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], (err) => {
-                      const feedOwnerSql = `SELECT user_id FROM feeds WHERE id = ?`;
-                      db.query(feedOwnerSql, [feed_id], (err, feedRes) => {
-                        const feedOwnerId = feedRes?.[0]?.user_id;
-                        if (feedOwnerId && feedOwnerId !== decoded.user_id) {
-                          const message = `${decoded.username}님이 피드에 좋아요를 눌렀습니다.`;
-                          const insertSql = `
-                            INSERT INTO notifications (user_id, type, message, feed_id)
-                            VALUES (?, 'like', ?, ?)
-                          `;
-                          db.query(insertSql, [feedOwnerId, message, feed_id], (err) => {
-                            if (err) console.warn("❌ 좋아요 알림 저장 실패:", err);
-                            else console.log("✅ 좋아요 알림 저장 완료!");
-                          });
-                        }
+                      const userSql = `SELECT name FROM users WHERE id = ?`;
+                      db.query(userSql, [decoded.user_id], (err, nameResult) => {
+                        const likerName = nameResult?.[0]?.name || '누군가';
+                        const message = `${likerName}님이 피드에 좋아요를 눌렀습니다.`;
+                      
+                        const insertSql = `
+                          INSERT INTO notifications (user_id, type, message, feed_id)
+                          VALUES (?, 'like', ?, ?)
+                        `;
+                        db.query(insertSql, [feedOwnerId, message, feed_id], (err) => {
+                          if (err) console.warn("❌ 좋아요 알림 저장 실패:", err);
+                          else console.log("✅ 좋아요 알림 저장 완료!");
+                        });
                       });
+                      
                     
                         if (err) return db.rollback(() => res.status(500).json({ error: "좋아요 추가 실패" }));
 
