@@ -509,12 +509,21 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
       INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
       VALUES (?, ?, ?, ?, ?, NOW())
     `;
-    const media = JSON.stringify(media_urls); // ✅ 미디어 배열로 저장
+    const media = JSON.stringify(media_urls);
 
-    db.query(sql, [user_id, event, record, content, media], (err, result) => {
+    // ✅ 콜백을 async로!
+    db.query(sql, [user_id, event, record, content, media], async (err, result) => {
       if (err) {
         console.error("🔥 DB 저장 실패:", err);
         return res.status(500).json({ error: "DB 저장 실패" });
+      }
+
+      // ✅ 문자 전송
+      try {
+        await sendSMS("01021446765", `[MAX] 새 피드가 등록되었습니다.`);
+        console.log("✅ 문자 전송 성공!");
+      } catch (err) {
+        console.warn("📡 문자 전송 실패:", err.message);
       }
 
       res.json({ success: true, feed_id: result.insertId });
