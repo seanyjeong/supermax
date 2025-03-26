@@ -319,36 +319,48 @@ app.post('/feed/clear-notifications', (req, res) => {
 
 
 // ✅ 로그인 (JWT 발급)
+// ✅ 로그인 (JWT 발급)
 app.post('/feed/login', (req, res) => {
-    const { username, password } = req.body;
+  const { username, password } = req.body;
 
-    db.query("SELECT * FROM users WHERE username = ?", [username], async (err, results) => {
-        if (err || results.length === 0) {
-            console.error("❌ 로그인 실패: 아이디 또는 비밀번호가 틀림");
-            return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
-        }
+  db.query("SELECT * FROM users WHERE username = ?", [username], async (err, results) => {
+    if (err || results.length === 0) {
+      console.error("❌ 로그인 실패: 아이디 또는 비밀번호가 틀림");
+      return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+    }
 
-        const user = results[0];
-        console.log("🛠 로그인된 유저 정보:", user); // ✅ 유저 정보 출력
+    const user = results[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      console.error("❌ 로그인 실패: 비밀번호 불일치");
+      return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+    }
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            console.error("❌ 로그인 실패: 비밀번호 불일치");
-            return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
-        }
+    const isAdmin = user.username === 'admin'; // ✅ 관리자 여부 판단
 
-        const token = jwt.sign({ user_id: user.id, username: user.username }, JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign(
+      { user_id: user.id, username: user.username, is_admin: isAdmin }, // ✅ 관리자 정보 포함
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
 
-        console.log("✅ 로그인 성공! 응답 데이터:", JSON.stringify({
-            success: true,
-            token,
-            user_id: user.id,
-            username: user.username
-        }, null, 2)); // ✅ JSON.stringify() 사용해서 더 명확하게 출력
-
-        res.json({ success: true, token, user_id: user.id, username: user.username });
+    console.log("✅ 로그인 성공:", {
+      token,
+      user_id: user.id,
+      username: user.username,
+      is_admin: isAdmin
     });
+
+    res.json({
+      success: true,
+      token,
+      user_id: user.id,
+      username: user.username,
+      is_admin: isAdmin // ✅ 프론트에도 전달
+    });
+  });
 });
+
 //목표기록
 app.get('/feed/my-goals', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
