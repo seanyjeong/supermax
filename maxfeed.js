@@ -1038,6 +1038,31 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
             VALUES (?, ?, ?, ?, ?)
         `;
         db.query(sql, [feed_id, decoded.user_id, content, parent_id || null, media_url], (err, result) => {
+          if (parent_id) {
+            const replyTargetSql = `
+              SELECT user_id FROM comments WHERE id = ?
+            `;
+            db.query(replyTargetSql, [parent_id], (err, replyTarget) => {
+              const parentUserId = replyTarget?.[0]?.user_id;
+              if (parentUserId && parentUserId !== decoded.user_id) {
+                const nameSql = "SELECT name FROM users WHERE id = ?";
+                db.query(nameSql, [decoded.user_id], (err, result) => {
+                  const replyerName = result?.[0]?.name || '누군가';
+                  const message = `${replyerName}님이 댓글에 답글을 남겼습니다.`;
+        
+                  const insertSql = `
+                    INSERT INTO notifications (user_id, type, message, feed_id)
+                    VALUES (?, 'reply', ?, ?)
+                  `;
+                  db.query(insertSql, [parentUserId, message, feed_id], (err) => {
+                    if (err) console.warn("❌ 대댓글 알림 저장 실패:", err);
+                    else console.log("✅ 대댓글 알림 저장 완료!");
+                  });
+                });
+              }
+            });
+          }
+        
             if (err) {
                 console.error("🔥 댓글 추가 오류:", err);
                 return res.status(500).json({ error: "댓글 추가 실패" });
@@ -1070,7 +1095,23 @@ app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
                                 const smsMessage = `[일맥스타그램] 회원님의 피드에 댓글이 생성되었습니다.`;
                                 try {
                                     await sendSMS(feedOwnerPhone, smsMessage);
+
                                     console.log(`✅ 댓글 알림 문자 발송 완료 → ${feedOwnerPhone}`);
+
+                                    const commenterNameSql = "SELECT name FROM users WHERE id = ?";
+                                    db.query(commenterNameSql, [decoded.user_id], (err, result) => {
+                                      const commenterName = result?.[0]?.name || '누군가';
+                                      const insertSql = `
+                                        INSERT INTO notifications (user_id, type, message, feed_id)
+                                        VALUES (?, 'comment', ?, ?)
+                                      `;
+                                      const message = `${commenterName}님이 댓글을 남겼습니다.`;
+                                      db.query(insertSql, [feedOwnerId, message, feed_id], (err) => {
+                                        if (err) console.warn("❌ 댓글 알림 저장 실패:", err);
+                                        else console.log("✅ 댓글 알림 저장 완료!");
+                                      });
+                                    });
+                              
                                 } catch (smsErr) {
                                     console.error(`🔥 댓글 알림 문자 발송 실패 → ${feedOwnerPhone}`, smsErr);
                                 }
@@ -1241,6 +1282,22 @@ app.post('/feed/like', (req, res) => {
                 } else {
                     // ✅ 좋아요 추가
                     db.query("INSERT INTO likes (feed_id, user_id) VALUES (?, ?)", [feed_id, decoded.user_id], (err) => {
+                      const feedOwnerSql = `SELECT user_id FROM feeds WHERE id = ?`;
+                      db.query(feedOwnerSql, [feed_id], (err, feedRes) => {
+                        const feedOwnerId = feedRes?.[0]?.user_id;
+                        if (feedOwnerId && feedOwnerId !== decoded.user_id) {
+                          const message = `${decoded.username}님이 피드에 좋아요를 눌렀습니다.`;
+                          const insertSql = `
+                            INSERT INTO notifications (user_id, type, message, feed_id)
+                            VALUES (?, 'like', ?, ?)
+                          `;
+                          db.query(insertSql, [feedOwnerId, message, feed_id], (err) => {
+                            if (err) console.warn("❌ 좋아요 알림 저장 실패:", err);
+                            else console.log("✅ 좋아요 알림 저장 완료!");
+                          });
+                        }
+                      });
+                    
                         if (err) return db.rollback(() => res.status(500).json({ error: "좋아요 추가 실패" }));
 
                         // ✅ 최신 `COUNT(*)` 값 조회 후 `like_count` 업데이트
