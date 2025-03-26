@@ -180,7 +180,7 @@ app.post('/feed/register', async (req, res) => {
 });
 
 // 🔔 알림 목록 API
-router.get('/my-notifications', async (req, res) => {
+router.post('/my-notifications', async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "토큰 없음" });
 
@@ -202,6 +202,7 @@ router.get('/my-notifications', async (req, res) => {
     res.status(500).json({ error: "알림 조회 실패" });
   }
 });
+
 
 
 
