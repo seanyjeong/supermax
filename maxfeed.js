@@ -458,6 +458,25 @@ app.post('/feed/save-achievement', (req, res) => {
   });
 });
 
+app.post('/feed/delete-achievements-over-record', (req, res) => {
+  const { user_id, event, record } = req.body;
+  if (!user_id || !event || !record) return res.status(400).json({ error: "user_id, event, record 필요" });
+
+  const sql = `
+    DELETE FROM user_achievements 
+    WHERE user_id = ? AND event = ? AND goal_value > ?
+  `;
+  db.query(sql, [user_id, event, record], (err, result) => {
+    if (err) {
+      console.error("🔥 메달 조건 삭제 오류:", err);
+      return res.status(500).json({ error: 'DB 오류' });
+    }
+
+    res.json({ deleted: result.affectedRows });
+  });
+});
+
+
 app.get('/feed/my-achievements', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: '토큰 없음' });
