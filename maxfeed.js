@@ -181,47 +181,59 @@ app.post('/feed/register', async (req, res) => {
 
 // ✅ 유저강제 삭제
 app.post('/admin/delete-user', (req, res) => {
-  const { user_id } = req.body;
-  const token = req.headers.authorization?.split(" ")[1];
-
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '토큰 없음' });
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.username !== 'admin') {
-      return res.status(403).json({ error: "관리자만 접근 가능합니다." });
-    }
+    if (!decoded.is_admin) return res.status(403).json({ error: '관리자 권한 없음' });
 
-    // ✅ 순서대로 관련 데이터 삭제
-    const deleteSteps = [
-      { table: 'comment_likes', where: 'user_id = ?' },
-      { table: 'likes', where: 'user_id = ?' },
-      { table: 'comments', where: 'user_id = ? OR id IN (SELECT id FROM comments WHERE parent_id IN (SELECT id FROM comments WHERE user_id = ?))' },
-      { table: 'notifications', where: 'user_id = ?' },
-      { table: 'user_goals', where: 'user_id = ?' },
-      { table: 'user_achievements', where: 'user_id = ?' },
-      { table: 'feeds', where: 'user_id = ?' },
-      { table: 'users', where: 'id = ?' }
-    ];
+    const { user_id } = req.body;
+    if (!user_id) return res.status(400).json({ error: 'user_id 누락' });
 
-    // 순차 실행
-    const executeDeletes = (i = 0) => {
-      if (i >= deleteSteps.length) return res.json({ success: true });
+    // 🔥 여기서부터 삭제 로직
+    // feeds, comments, likes, notifications, achievements 등 삭제
+    // 마지막에 users 테이블에서 delete
 
-      const { table, where } = deleteSteps[i];
-      db.query(`DELETE FROM ${table} WHERE ${where}`, [user_id, user_id], (err) => {
-        if (err) return res.status(500).json({ error: `삭제 실패 (${table}): ${err}` });
-        executeDeletes(i + 1);
-      });
-    };
+    db.beginTransaction(err => {
+      if (err) return res.status(500).json({ error: '트랜잭션 시작 실패' });
 
-    executeDeletes();
+      const queries = [
+        ["DELETE FROM comment_likes WHERE user_id = ?", [user_id]],
+        ["DELETE FROM comments WHERE user_id = ?", [user_id]],
+        ["DELETE FROM likes WHERE user_id = ?", [user_id]],
+        ["DELETE FROM feeds WHERE user_id = ?", [user_id]],
+        ["DELETE FROM notifications WHERE user_id = ?", [user_id]],
+        ["DELETE FROM user_achievements WHERE user_id = ?", [user_id]],
+        ["DELETE FROM user_goals WHERE user_id = ?", [user_id]],
+        ["DELETE FROM users WHERE id = ?", [user_id]],
+      ];
+
+      let idx = 0;
+      function next() {
+        if (idx >= queries.length) {
+          return db.commit(err => {
+            if (err) return db.rollback(() => res.status(500).json({ error: '커밋 실패' }));
+            res.json({ success: true });
+          });
+        }
+
+        const [sql, params] = queries[idx++];
+        db.query(sql, params, (err) => {
+          if (err) return db.rollback(() => res.status(500).json({ error: '쿼리 실패', sql }));
+          next();
+        });
+      }
+
+      next();
+    });
 
   } catch (err) {
-    console.error("❌ 관리자 인증 실패", err);
-    res.status(401).json({ error: "Token invalid" });
+    console.error("❌ 관리자 인증 실패:", err);
+    res.status(403).json({ error: '토큰 오류 또는 관리자 아님' });
   }
 });
+
 
 // 🔔 알림 목록 API
 // 🔔 알림 조회 API
