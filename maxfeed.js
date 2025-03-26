@@ -372,17 +372,23 @@ app.post('/feed/login', (req, res) => {
 
     const user = results[0];
 
+    // 비밀번호 해시 출력 (로그인 시 비교하는 해시 값)
+    console.log("🔐 입력된 비밀번호:", password);
+    console.log("🔐 DB에 저장된 해시된 비밀번호:", user.password);  // 이 값이 bcrypt 해시값입니다.
+
     // 입력된 비밀번호와 DB에 저장된 해시 비밀번호 비교
     const isMatch = await bcrypt.compare(password, user.password);
+    
     if (!isMatch) {
       console.error("❌ 로그인 실패: 비밀번호 불일치");
+      console.log("🔐 비밀번호 불일치: 입력된 비밀번호와 해시된 비밀번호가 다릅니다.");
       return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
     }
 
-    // 관리자 여부를 판단
-    const isAdmin = user.username === 'admin'; // 이 부분을 통해 'admin' 사용자만 관리자로 구분
+    // 관리자 여부 판단
+    const isAdmin = user.username === 'admin'; // 'admin'인 경우에만 관리자 권한 부여
 
-    // JWT 토큰 생성, 관리자 정보도 포함
+    // JWT 토큰 생성, 관리자 정보 포함
     const token = jwt.sign(
       { user_id: user.id, username: user.username, is_admin: isAdmin }, // 관리자 정보 포함
       JWT_SECRET,
