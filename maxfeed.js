@@ -180,7 +180,7 @@ app.post('/feed/register', async (req, res) => {
 });
 
 // ✅ 유저강제 삭제
-app.post('/admin/delete-user', (req, res) => {
+app.post('/feed/deleteuser', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: '토큰 없음' });
 
@@ -231,6 +231,47 @@ app.post('/admin/delete-user', (req, res) => {
   } catch (err) {
     console.error("❌ 관리자 인증 실패:", err);
     res.status(403).json({ error: '토큰 오류 또는 관리자 아님' });
+  }
+});
+
+//전체 초기화! 
+// ✅ 전체 데이터 초기화 API (관리자 전용)
+app.post('/feed/adminreset', (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "토큰 없음" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.username !== 'admin') {
+      return res.status(403).json({ error: "관리자만 접근 가능" });
+    }
+
+    const tables = [
+      "feeds", "comments", "likes", "comment_likes", "notifications",
+      "user_achievements", "user_goals"
+    ];
+
+    // 모든 테이블 삭제
+    const deletePromises = tables.map(table => {
+      return new Promise((resolve, reject) => {
+        db.query(`DELETE FROM ${table}`, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+    });
+
+    Promise.all(deletePromises)
+      .then(() => {
+        res.json({ success: true, message: "모든 데이터 초기화 완료" });
+      })
+      .catch(err => {
+        console.error("🔥 초기화 중 오류:", err);
+        res.status(500).json({ error: "초기화 실패" });
+      });
+
+  } catch (e) {
+    res.status(403).json({ error: "유효하지 않은 토큰" });
   }
 });
 
