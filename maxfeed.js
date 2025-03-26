@@ -211,6 +211,25 @@ app.post('/feed/my-notifications', (req, res) => {
   }
 });
 
+app.post('/feed/read-notification', (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "토큰 없음" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+    const { id } = req.body;
+
+    const sql = `DELETE FROM notifications WHERE id = ? AND user_id = ?`;
+    db.query(sql, [id, user_id], (err) => {
+      if (err) return res.status(500).json({ error: "삭제 실패" });
+      res.json({ success: true });
+    });
+  } catch (err) {
+    res.status(403).json({ error: "토큰 오류" });
+  }
+});
+
 
 
 
