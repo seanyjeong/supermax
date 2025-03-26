@@ -233,6 +233,30 @@ app.post('/feed/read-notification', (req, res) => {
   }
 });
 
+app.post('/feed/clear-notifications', (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "토큰 없음" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user_id = decoded.user_id;
+
+    const sql = `DELETE FROM notifications WHERE user_id = ?`;
+    db.query(sql, [user_id], (err) => {
+      if (err) {
+        console.error("❌ 알림 삭제 실패:", err);
+        return res.status(500).json({ error: "삭제 실패" });
+      }
+
+      res.json({ success: true });
+    });
+  } catch (err) {
+    console.error("❌ JWT 오류:", err);
+    res.status(403).json({ error: "토큰 유효하지 않음" });
+  }
+});
+
+
 
 
 
