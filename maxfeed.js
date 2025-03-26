@@ -519,6 +519,18 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
       `;
       db.query(insertSql, [user_id, event, goal_value, goal_record, goal_date], (err2) => {
         if (err2) return res.status(500).json({ error: 'DB 저장 실패' });
+
+        // ✅ 메달 알림 저장
+        const message = `🎖 ${event} 종목에서 새로운 목표를 달성했어요!`;
+        const notiSql = `
+          INSERT INTO notifications (user_id, type, message, feed_id)
+          VALUES (?, 'medal', ?, NULL)
+        `;
+        db.query(notiSql, [user_id, message], (err3) => {
+          if (err3) console.warn("❌ 메달 알림 저장 실패:", err3);
+          else console.log("✅ 메달 알림 저장 완료!");
+        });
+
         return res.json({ saved: true });
       });
     } else {
@@ -526,6 +538,7 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
     }
   });
 });
+
 
 
 
