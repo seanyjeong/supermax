@@ -441,7 +441,7 @@ for (let r of results) {
 });
 
 //목표기록 저장 api들
-app.post('/feed/save-ievement', (req, res) => {
+app.post('/feed/save-achievement', (req, res) => {
   const { user_id, event, goal_value, goal_record, goal_date, medal } = req.body;
 
   // 목표 달성 기록 저장
