@@ -371,16 +371,20 @@ app.post('/feed/login', (req, res) => {
     }
 
     const user = results[0];
+
+    // 입력된 비밀번호와 DB에 저장된 해시 비밀번호 비교
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       console.error("❌ 로그인 실패: 비밀번호 불일치");
       return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
     }
 
-    const isAdmin = user.username === 'admin'; // ✅ 관리자 여부 판단
+    // 관리자 여부를 판단
+    const isAdmin = user.username === 'admin'; // 이 부분을 통해 'admin' 사용자만 관리자로 구분
 
+    // JWT 토큰 생성, 관리자 정보도 포함
     const token = jwt.sign(
-      { user_id: user.id, username: user.username, is_admin: isAdmin }, // ✅ 관리자 정보 포함
+      { user_id: user.id, username: user.username, is_admin: isAdmin }, // 관리자 정보 포함
       JWT_SECRET,
       { expiresIn: "1d" }
     );
@@ -397,10 +401,11 @@ app.post('/feed/login', (req, res) => {
       token,
       user_id: user.id,
       username: user.username,
-      is_admin: isAdmin // ✅ 프론트에도 전달
+      is_admin: isAdmin // 프론트에 관리자 정보 전달
     });
   });
 });
+
 
 //목표기록
 app.get('/feed/my-goals', (req, res) => {
