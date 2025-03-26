@@ -179,6 +179,46 @@ app.post('/feed/register', async (req, res) => {
     });
 });
 
+// 임시 관리자 토큰 생성 API
+app.post('/feed/adminresetgenerate-temp-token', (req, res) => {
+  const { username, password } = req.body;
+
+  // 관리자 비밀번호 확인
+  if (username === 'admin' && password === 'admin1234') {
+    const token = jwt.sign({ username: 'admin' }, JWT_SECRET, { expiresIn: '1h' });
+    res.json({ success: true, token });
+  } else {
+    res.status(403).json({ error: "관리자 비밀번호가 틀립니다." });
+  }
+});
+
+
+// 비밀번호 리셋 API
+app.post('/feed/adminresetreset-password', (req, res) => {
+  const { token, password } = req.body;
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (decoded.username === 'admin') {
+      const hashedPassword = bcrypt.hashSync(password, 10);
+      
+      const sql = "UPDATE users SET password = ? WHERE username = 'admin'";
+      db.query(sql, [hashedPassword], (err, result) => {
+        if (err) {
+          return res.status(500).json({ error: "비밀번호 변경 실패" });
+        }
+        res.json({ success: true, message: "비밀번호가 성공적으로 변경되었습니다." });
+      });
+    } else {
+      res.status(403).json({ error: "관리자만 비밀번호를 리셋할 수 있습니다." });
+    }
+  } catch (err) {
+    res.status(403).json({ error: "토큰이 만료되었거나 유효하지 않습니다." });
+  }
+});
+
+
 // ✅ 유저강제 삭제
 app.post('/feed/deleteuser', (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
