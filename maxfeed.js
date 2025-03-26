@@ -190,7 +190,7 @@ app.post('/feed/my-notifications', (req, res) => {
     const user_id = decoded.user_id;
 
     const sql = `
-      SELECT id, type, message, created_at
+      SELECT id, type, message, feed_id, created_at
       FROM notifications
       WHERE user_id = ?
       ORDER BY created_at DESC
@@ -203,13 +203,14 @@ app.post('/feed/my-notifications', (req, res) => {
         return res.status(500).json({ error: "알림 조회 실패" });
       }
 
-      res.json(rows); // 알림 리스트 반환
+      res.json(rows); // 이제 feed_id도 포함됨
     });
   } catch (e) {
     console.error("❌ JWT 인증 실패:", e);
     res.status(403).json({ error: "토큰 유효하지 않음" });
   }
 });
+
 
 app.post('/feed/read-notification', (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
