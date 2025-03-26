@@ -222,14 +222,17 @@ app.post('/feed/read-notification', (req, res) => {
     const { id } = req.body;
 
     const sql = `DELETE FROM notifications WHERE id = ? AND user_id = ?`;
+
     db.query(sql, [id, user_id], (err) => {
       if (err) return res.status(500).json({ error: "삭제 실패" });
       res.json({ success: true });
     });
   } catch (err) {
-    res.status(403).json({ error: "토큰 오류" });
+    console.error("❌ JWT 오류:", err);
+    res.status(403).json({ error: "토큰 유효하지 않음" });
   }
 });
+
 
 
 
