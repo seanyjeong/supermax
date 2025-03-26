@@ -179,6 +179,31 @@ app.post('/feed/register', async (req, res) => {
     });
 });
 
+// 🔔 알림 목록 API
+router.get('/my-notifications', async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "토큰 없음" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    const [rows] = await db.execute(`
+      SELECT id, type, message, created_at
+      FROM notifications
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [userId]);
+
+    res.json(rows);
+  } catch (e) {
+    console.error("❌ 알림 조회 실패:", e);
+    res.status(500).json({ error: "알림 조회 실패" });
+  }
+});
+
+
 
 // ✅ 로그인 (JWT 발급)
 app.post('/feed/login', (req, res) => {
