@@ -677,23 +677,24 @@ app.post('/feed/save-achievement', (req, res) => {
   });
 });
 
-app.post('/feed/delete-achievements-over-record', (req, res) => {
-  const { user_id, event, record } = req.body;
-  if (!user_id || !event || !record) return res.status(400).json({ error: "user_id, event, record 필요" });
+// 서버측 간단 예시 코드 (maxfeed.js)
+app.post('/feed/delete-achievements-over-record', async (req, res) => {
+  const { user_id, event, record, isReverse } = req.body;
 
-  const sql = `
-    DELETE FROM user_achievements 
-    WHERE user_id = ? AND event = ? AND goal_value > ?
-  `;
-  db.query(sql, [user_id, event, record], (err, result) => {
-    if (err) {
-      console.error("🔥 메달 조건 삭제 오류:", err);
-      return res.status(500).json({ error: 'DB 오류' });
-    }
+  try {
+    await db.query(`
+      DELETE FROM user_achievements
+      WHERE user_id = ? AND event = ? AND
+      ${isReverse ? 'goal_value < ?' : 'goal_value > ?'}
+    `, [user_id, event, record]);
 
-    res.json({ deleted: result.affectedRows });
-  });
+    res.json({ success: true });
+  } catch (e) {
+    console.error("🔥 삭제 실패:", e);
+    res.status(500).json({ error: "삭제 실패" });
+  }
 });
+
 
 
 app.get('/feed/my-achievements', (req, res) => {
