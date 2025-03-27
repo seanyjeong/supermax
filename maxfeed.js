@@ -614,7 +614,7 @@ app.post('/feed/get-ai-recommended-goal', async (req, res) => {
   }
 });
 
-const jwt = require('jsonwebtoken');
+
 
 // 사용자의 종목별 기록 조회 (JWT decode로 user_id 가져오기)
 app.get('/feed/user-records', async (req, res) => {
