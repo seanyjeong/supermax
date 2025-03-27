@@ -739,10 +739,13 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
 
   console.log("📌 [메달 요청 도착]", { user_id, event, goal_value, goal_record, goal_date });
 
+  // ✅ 역방향 이벤트 체크 추가
+  const isReverse = ['20m왕복달리기', '100m달리기', '달리기'].includes(event);
+  
   const sql = `
     SELECT * FROM user_achievements 
     WHERE user_id = ? AND event = ? 
-    ORDER BY goal_value DESC LIMIT 1
+    ORDER BY goal_value ${isReverse ? 'ASC' : 'DESC'} LIMIT 1
   `;
 
   db.query(sql, [user_id, event], (err, rows) => {
@@ -754,7 +757,10 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
     const alreadySaved = rows[0];
     console.log("🔍 기존 메달:", alreadySaved);
 
-    if (!alreadySaved || goal_value > alreadySaved.goal_value) {
+    // ✅ 정방향 vs 역방향 조건 명확히 체크
+    const shouldSave = !alreadySaved || (isReverse ? goal_value < alreadySaved.goal_value : goal_value > alreadySaved.goal_value);
+
+    if (shouldSave) {
       const insertSql = `
         INSERT INTO user_achievements 
         (user_id, event, goal_value, goal_record, goal_date)
@@ -787,6 +793,7 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
     }
   });
 });
+
 
 
 
