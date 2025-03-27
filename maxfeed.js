@@ -439,6 +439,7 @@ app.post('/feed/login', (req, res) => {
       token,
       user_id: user.id,
       username: user.username,
+        gender: user.gender,  
       is_admin: isAdmin
     });
 
@@ -447,6 +448,7 @@ app.post('/feed/login', (req, res) => {
       token,
       user_id: user.id,
       username: user.username,
+        gender: user.gender,  
       is_admin: isAdmin // 프론트에 관리자 정보 전달
     });
   });
