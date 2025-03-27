@@ -600,6 +600,21 @@ for (let r of results) {
   }
 });
 
+// 맥스피드.js에서 Flask서버 연결
+app.post('/feed/get-ai-recommended-goal', async (req, res) => {
+  const { records } = req.body;
+
+  try {
+    const aiRes = await axios.post('http://localhost:5050/recommend-goal', { records });
+
+    res.json(aiRes.data);
+  } catch (e) {
+    console.error("🔥 Flask API 호출 실패:", e);
+    res.status(500).json({ error: "AI 서버 연결 실패" });
+  }
+});
+
+
 //목표기록 저장 api들
 app.post('/feed/save-achievement', (req, res) => {
   const { user_id, event, goal_value, goal_record, goal_date, medal } = req.body;
