@@ -614,6 +614,45 @@ app.post('/feed/get-ai-recommended-goal', async (req, res) => {
   }
 });
 
+const jwt = require('jsonwebtoken');
+
+// 사용자의 종목별 기록 조회 (JWT decode로 user_id 가져오기)
+app.get('/feed/user-records', async (req, res) => {
+  const authHeader = req.headers['authorization'];
+  
+  if (!authHeader) {
+    return res.status(401).json({ error: "토큰 없음" });
+  }
+
+  const token = authHeader.split(' ')[1];
+  let user_id;
+
+  try {
+    const decoded = jwt.decode(token);
+    user_id = decoded.user_id; // ✅ 토큰에서 user_id 추출
+  } catch (err) {
+    return res.status(403).json({ error: "잘못된 토큰" });
+  }
+
+  const { event } = req.query;
+
+  if (!event) {
+    return res.status(400).json({ error: "event가 필요합니다." });
+  }
+
+  try {
+    const [records] = await db.query(`
+      SELECT record, eventDate as date FROM feeds
+      WHERE user_id = ? AND event = ? AND record IS NOT NULL
+      ORDER BY eventDate ASC
+    `, [user_id, event]);
+
+    res.json(records);
+  } catch (e) {
+    console.error("🔥 기록 조회 실패:", e);
+    res.status(500).json({ error: "기록 조회 실패" });
+  }
+});
 
 //목표기록 저장 api들
 app.post('/feed/save-achievement', (req, res) => {
