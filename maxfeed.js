@@ -606,13 +606,18 @@ app.post('/feed/get-ai-recommended-goal', async (req, res) => {
 
   try {
     const aiRes = await axios.post('http://localhost:5050/recommend-goal', { records });
-
+    console.log("🚩 Flask 응답 성공:", aiRes.data); // ✅ 응답 성공 시 출력
     res.json(aiRes.data);
   } catch (e) {
-    console.error("🔥 Flask API 호출 실패:", e);
+    if (e.response) {
+      console.error("🚨 Flask 응답 실패 (상세 메시지):", e.response.data); // ✅ Flask에서 보낸 오류 내용 출력
+    } else {
+      console.error("🔥 Flask API 호출 실패:", e.message);
+    }
     res.status(500).json({ error: "AI 서버 연결 실패" });
   }
 });
+
 
 
 
