@@ -899,7 +899,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
 app.get('/feed/feeds', (req, res) => {
   const tag = req.query.tag;
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 5;
+  const limit = parseInt(req.query.limit) || 20;
   const offset = (page - 1) * limit;
 
   let sql = `
