@@ -16,19 +16,38 @@ def predict():
 
         for event, records in grouped.items():
             if len(records) < 2:
-                continue  # 최소 2개 필요
+                continue
 
             value_key = 'y' if 'y' in records[0] else 'record'
-            X = np.array([i for i in range(len(records))]).reshape(-1, 1)
-            y = np.array([float(r[value_key]) for r in records])
+            values = [float(r[value_key]) for r in records]
+
+            # ① 평균 계산
+            mean = np.mean(values)
+            slump_threshold = mean - 10
+
+            # ② 가중치 설정
+            weights = []
+            for i, val in enumerate(values):
+                if val < slump_threshold:
+                    weights.append(0.5)  # 슬럼프 → 낮은 가중치
+                else:
+                    boost = 1.0 + (i / len(values))  # 선형 증가
+                    weights.append(boost)
+
+            # ③ 선형 회귀 + 가중치 적용
+            X = np.arange(len(values)).reshape(-1, 1)
+            y = np.array(values)
+            sample_weight = np.array(weights)
 
             model = LinearRegression()
-            model.fit(X, y)
+            model.fit(X, y, sample_weight=sample_weight)
 
-            future_X = np.array([len(records) + i for i in range(1, 4)]).reshape(-1, 1)
+            # ④ 미래 예측 (3일치)
+            future_X = np.array([len(values) + i for i in range(1, 4)]).reshape(-1, 1)
             pred_y = model.predict(future_X)
-            pred_y = np.clip(pred_y, 0, None)
+            pred_y = np.clip(pred_y, 0, None)  # 음수 방지
 
+            # ⑤ 날짜 변환
             last_ts = datetime.now()
             future_timestamps = [
                 (last_ts + timedelta(days=i)).timestamp()
@@ -45,6 +64,7 @@ def predict():
     except Exception as e:
         print("🔥 예측 실패:", e)
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/recommend-goal', methods=['POST'])
 def recommend_goal():
