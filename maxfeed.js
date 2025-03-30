@@ -180,24 +180,43 @@ app.post('/feed/register', async (req, res) => {
 });
 
 // 비밀번호 재설정 요청 API
+// 비밀번호 재설정 요청 API
 app.post('/feed/reset-password-request', async (req, res) => {
-  const { phone } = req.body;
-  
-  if (!phone) return res.status(400).json({ error: '전화번호를 입력해주세요.' });
+  const { username, phone } = req.body;
 
-  const code = generateCode(); // 인증번호 생성
-  verificationCodes[phone] = code; // 인증번호 저장
-  
-  const message = `[MaxFeed] 비밀번호 재설정 인증번호: ${code}`;
-  
-  try {
-    await sendSMS(phone, message); // SMS 발송 함수
-    res.json({ success: '인증번호가 발송되었습니다.' });
-  } catch (err) {
-    console.error('SMS 전송 실패:', err);
-    res.status(500).json({ error: 'SMS 전송 실패' });
-  }
+  if (!username || !phone) return res.status(400).json({ error: '아이디와 전화번호를 입력해주세요.' });
+
+  // 아이디로 사용자 찾기
+  const sql = "SELECT phone FROM users WHERE username = ?";
+  db.query(sql, [username], (err, results) => {
+    if (err) return res.status(500).json({ error: 'DB 조회 오류' });
+
+    if (results.length === 0) {
+      return res.status(400).json({ error: '해당 아이디를 찾을 수 없습니다.' });
+    }
+
+    const userPhone = results[0].phone;
+
+    if (userPhone !== phone) {
+      return res.status(400).json({ error: '아이디와 전화번호가 일치하지 않습니다.' });
+    }
+
+    // 전화번호가 일치하면 인증번호 전송
+    const code = generateCode();
+    verificationCodes[phone] = code;
+
+    const message = `[MaxFeed] 비밀번호 재설정 인증번호: ${code}`;
+
+    try {
+      sendSMS(phone, message); // 인증번호 전송
+      res.json({ success: '인증번호가 발송되었습니다.' });
+    } catch (err) {
+      console.error('SMS 전송 실패:', err);
+      res.status(500).json({ error: 'SMS 전송 실패' });
+    }
+  });
 });
+
 
 
 // 임시 관리자 토큰 생성 API
