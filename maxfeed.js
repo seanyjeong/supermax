@@ -179,6 +179,27 @@ app.post('/feed/register', async (req, res) => {
     });
 });
 
+// 비밀번호 재설정 요청 API
+app.post('/feed/reset-password-request', async (req, res) => {
+  const { phone } = req.body;
+  
+  if (!phone) return res.status(400).json({ error: '전화번호를 입력해주세요.' });
+
+  const code = generateCode(); // 인증번호 생성
+  verificationCodes[phone] = code; // 인증번호 저장
+  
+  const message = `[MaxFeed] 비밀번호 재설정 인증번호: ${code}`;
+  
+  try {
+    await sendSMS(phone, message); // SMS 발송 함수
+    res.json({ success: '인증번호가 발송되었습니다.' });
+  } catch (err) {
+    console.error('SMS 전송 실패:', err);
+    res.status(500).json({ error: 'SMS 전송 실패' });
+  }
+});
+
+
 // 임시 관리자 토큰 생성 API
 app.post('/feed/adminresetgenerate-temp-token', (req, res) => {
   const { username, password } = req.body;
@@ -189,6 +210,31 @@ app.post('/feed/adminresetgenerate-temp-token', (req, res) => {
     res.json({ success: true, token });
   } else {
     res.status(403).json({ error: "관리자 비밀번호가 틀립니다." });
+  }
+});
+
+// 비밀번호 재설정 API
+app.post('/feed/reset-password', async (req, res) => {
+  const { phone, code, newPassword } = req.body;
+  
+  if (!phone || !code || !newPassword) {
+    return res.status(400).json({ error: '전화번호, 인증번호, 새 비밀번호가 필요합니다.' });
+  }
+
+  if (verificationCodes[phone] === code) {
+    delete verificationCodes[phone]; // 인증번호 사용 후 삭제
+
+    // 새 비밀번호 해싱
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const sql = "UPDATE users SET password = ? WHERE phone = ?";
+    db.query(sql, [hashedPassword, phone], (err, result) => {
+      if (err) return res.status(500).json({ error: '비밀번호 재설정 실패' });
+
+      res.json({ success: '비밀번호가 성공적으로 변경되었습니다.' });
+    });
+  } else {
+    res.status(400).json({ error: '잘못된 인증번호' });
   }
 });
 
