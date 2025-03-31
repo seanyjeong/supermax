@@ -879,52 +879,74 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
 // 추천 피드 API
 app.get('/feed/recommendation', async (req, res) => {
   try {
-    const userId = req.user.id;
+    // ✅ 토큰 꺼내기
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
 
-    // 사용자 정보 가져오기
-    const [[user]] = await db.query(`
-      SELECT school, grade, gender FROM users WHERE id = ?
-    `, [userId]);
+    let user = null;
+    let userId = null;
 
-    // 사용자의 주력 종목 자동 추정
-    const [[eventRow]] = await db.query(`
-      SELECT event FROM feeds
-      WHERE user_id = ?
-      GROUP BY event
-      ORDER BY COUNT(*) DESC
-      LIMIT 1
-    `, [userId]);
-    const mainEvent = eventRow?.event || '제자리멀리뛰기';
+    // ✅ 로그인 여부 확인
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        userId = decoded.id;
 
-    // 피드 점수 기반 정렬
-   const [feeds] = await db.query(`
-  SELECT f.*, u.school, u.grade, u.gender,
-    (
-      f.like_count * 2 +
-      f.comment_count * 1.5 +
-      IF(f.event = ?, 3, 0) +
-      IF(u.school = ?, 2, 0) +
-      IF(u.gender = ?, 1, 0) +
-      IF(u.grade = ?, 1, 0) +
-      IF(f.has_medal = 1, 5, 0) +
-      IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1, 999,
-        IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3, 20, 0)) -
-      TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
-      (RAND() * 3)
-    ) AS score
-  FROM feeds f
-  JOIN users u ON f.user_id = u.id
-  ORDER BY score DESC
-  LIMIT 20
-`, [mainEvent, user.school, user.gender, user.grade, userId, userId]);
+        const [[userRow]] = await db.query(`
+          SELECT school, grade, gender FROM users WHERE id = ?
+        `, [userId]);
 
+        user = userRow;
+      } catch (err) {
+        console.warn('❗️토큰 검증 실패: 비로그인 사용자로 간주');
+      }
+    }
 
+    let query = '';
+    let params = [];
+
+    if (user) {
+      // ✅ 로그인된 사용자 → 학교/성별/학년 기반 추천
+      query = `
+        SELECT f.*, u.school, u.grade, u.gender,
+          (
+            f.like_count * 2 +
+            f.comment_count * 1.5 +
+            IF(u.school = ?, 2, 0) +
+            IF(u.gender = ?, 1, 0) +
+            IF(u.grade = ?, 1, 0) +
+            IF(f.has_medal = 1, 5, 0) +
+            IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1, 999,
+              IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3, 20, 0)) - 
+            TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
+            (RAND() * 3)
+          ) AS score
+        FROM feeds f
+        JOIN users u ON f.user_id = u.id
+        ORDER BY score DESC
+        LIMIT 20
+      `;
+      params = [user.school, user.gender, user.grade, userId, userId];
+    } else {
+      // ✅ 비로그인 사용자 → 최신 + 랜덤 정렬
+      query = `
+        SELECT f.*, u.school, u.grade, u.gender
+        FROM feeds f
+        JOIN users u ON f.user_id = u.id
+        ORDER BY f.created_at DESC, RAND()
+        LIMIT 20
+      `;
+    }
+
+    const [feeds] = await db.query(query, params);
     res.json({ success: true, feeds });
+
   } catch (err) {
-    console.error('피드 추천 오류:', err);
+    console.error('❌ 추천 피드 오류:', err);
     res.status(500).json({ success: false, message: '추천 피드 오류' });
   }
 });
+
 
 
 // ✅ Firebase Storage에 파일 업로드 & URL 반환
