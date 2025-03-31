@@ -876,6 +876,54 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
    📌 2️⃣ 피드 기능 (파일 업로드 포함)
 ====================================== */
 
+// 추천 피드 API
+app.get('/feed/recommendation', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 사용자 정보 가져오기
+    const [[user]] = await db.query(`
+      SELECT school, grade, gender FROM users WHERE id = ?
+    `, [userId]);
+
+    // 사용자의 주력 종목 자동 추정
+    const [[eventRow]] = await db.query(`
+      SELECT event FROM feeds
+      WHERE user_id = ?
+      GROUP BY event
+      ORDER BY COUNT(*) DESC
+      LIMIT 1
+    `, [userId]);
+    const mainEvent = eventRow?.event || '제자리멀리뛰기';
+
+    // 피드 점수 기반 정렬
+    const [feeds] = await db.query(`
+      SELECT f.*, u.school, u.grade, u.gender,
+        (
+          f.like_count * 2 +
+          f.comment_count * 1.5 +
+          IF(f.event = ?, 3, 0) +
+          IF(u.school = ?, 2, 0) +
+          IF(u.gender = ?, 1, 0) +
+          IF(u.grade = ?, 1, 0) +
+          IF(f.has_medal = 1, 5, 0) -
+          TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
+          (RAND() * 3)
+        ) AS score
+      FROM feeds f
+      JOIN users u ON f.user_id = u.id
+      ORDER BY score DESC
+      LIMIT 20
+    `, [mainEvent, user.school, user.gender, user.grade]);
+
+    res.json({ success: true, feeds });
+  } catch (err) {
+    console.error('피드 추천 오류:', err);
+    res.status(500).json({ success: false, message: '추천 피드 오류' });
+  }
+});
+
+
 // ✅ Firebase Storage에 파일 업로드 & URL 반환
 async function uploadToFirebase(file, folder = "uploads") {
     try {
