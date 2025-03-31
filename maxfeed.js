@@ -932,7 +932,7 @@ app.get('/feed/recommendation', async (req, res) => {
 
       if (userInfo) {
         query = `
-          SELECT f.*, u.school, u.grade, u.gender,
+          SELECT f.*, u.name, u.profile_image, u.school, u.grade, u.gender,
             (
               f.like_count * 2 +
               f.comment_count * 1.5 +
@@ -952,16 +952,16 @@ app.get('/feed/recommendation', async (req, res) => {
             ) AS score
           FROM feeds f
           JOIN users u ON f.user_id = u.id
-          ORDER BY score DESC
+          ORDER BY score DESC, RAND(NOW())
           LIMIT 20
         `;
         params = [event, userInfo.school, userInfo.gender, userInfo.grade, userId, userId];
       } else {
         query = `
-          SELECT f.*, u.school, u.grade, u.gender
+          SELECT f.*, u.name, u.profile_image, u.school, u.grade, u.gender
           FROM feeds f
           JOIN users u ON f.user_id = u.id
-          ORDER BY f.created_at DESC, RAND()
+          ORDER BY f.created_at DESC, RAND(NOW())
           LIMIT 20
         `;
       }
@@ -982,6 +982,7 @@ app.get('/feed/recommendation', async (req, res) => {
     res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 
 
