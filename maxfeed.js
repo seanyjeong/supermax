@@ -884,80 +884,98 @@ app.get('/feed/recommendation', async (req, res) => {
     let user = null;
     let mainEvent = '제자리멀리뛰기';
 
-    // ✅ 토큰 검증 및 사용자 정보 조회
     if (token) {
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        userId = decoded.id;
+        const decoded = jwt.verify(token, JWT_SECRET); // ❌ 여기 원래 process.env.JWT_SECRET 이었는데 너 코드랑 맞춤
+        userId = decoded.user_id;
 
-        const [userRows] = await db.query(`
-          SELECT school, grade, gender FROM users WHERE id = ?
-        `, [userId]);
+        db.query(
+          `SELECT school, grade, gender FROM users WHERE id = ?`,
+          [userId],
+          (err, userRows) => {
+            if (err || userRows.length === 0) {
+              console.warn("❗️사용자 정보 조회 실패");
+              return handleQuery(null); // fallback
+            }
 
-        const userRow = userRows[0];
-        if (!userRow) throw new Error('❌ 사용자 정보가 없습니다.');
-        user = userRow; // ✅ user 설정!!
+            user = userRows[0];
 
-        // 주력 종목 추정
-        const [[eventRow]] = await db.query(`
-          SELECT event FROM feeds
-          WHERE user_id = ?
-          GROUP BY event
-          ORDER BY COUNT(*) DESC
-          LIMIT 1
-        `, [userId]);
-
-        mainEvent = eventRow?.event || '제자리멀리뛰기';
+            db.query(
+              `
+              SELECT event FROM feeds
+              WHERE user_id = ?
+              GROUP BY event
+              ORDER BY COUNT(*) DESC
+              LIMIT 1
+              `,
+              [userId],
+              (err2, eventRows) => {
+                if (!err2 && eventRows.length > 0) {
+                  mainEvent = eventRows[0].event;
+                }
+                handleQuery(user, mainEvent);
+              }
+            );
+          }
+        );
       } catch (err) {
         console.warn('❗️토큰 검증 실패. 비로그인 사용자로 처리');
+        handleQuery(null); // fallback for non-logged-in
       }
-    }
-
-    let query = '';
-    let params = [];
-
-    if (user) {
-      // ✅ 로그인 사용자용 추천 피드
-      query = `
-        SELECT f.*, u.school, u.grade, u.gender,
-          (
-            f.like_count * 2 +
-            f.comment_count * 1.5 +
-            IF(f.event = ?, 3, 0) +
-            IF(u.school = ?, 2, 0) +
-            IF(u.gender = ?, 1, 0) +
-            IF(u.grade = ?, 1, 0) +
-            IF(f.has_medal = 1, 5, 0) +
-            IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1, 999,
-              IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3, 20, 0)) - 
-            TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
-            (RAND() * 3)
-          ) AS score
-        FROM feeds f
-        JOIN users u ON f.user_id = u.id
-        ORDER BY score DESC
-        LIMIT 20
-      `;
-      params = [mainEvent, user.school, user.gender, user.grade, userId, userId];
     } else {
-      // ✅ 비로그인 사용자용 피드
-      query = `
-        SELECT f.*, u.school, u.grade, u.gender
-        FROM feeds f
-        JOIN users u ON f.user_id = u.id
-        ORDER BY f.created_at DESC, RAND()
-        LIMIT 20
-      `;
+      handleQuery(null); // no token
     }
 
-    const [feeds] = await db.query(query, params); // ✅ 여기도 이제 문제없음
-    res.json({ success: true, feeds });
+    function handleQuery(userInfo, event = '제자리멀리뛰기') {
+      let query = '';
+      let params = [];
 
+      if (userInfo) {
+        query = `
+          SELECT f.*, u.school, u.grade, u.gender,
+            (
+              f.like_count * 2 +
+              f.comment_count * 1.5 +
+              IF(f.event = ?, 3, 0) +
+              IF(u.school = ?, 2, 0) +
+              IF(u.gender = ?, 1, 0) +
+              IF(u.grade = ?, 1, 0) +
+              IF(f.has_medal = 1, 5, 0) +
+              IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1, 999,
+                IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3, 20, 0)) - 
+              TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
+              (RAND() * 3)
+            ) AS score
+          FROM feeds f
+          JOIN users u ON f.user_id = u.id
+          ORDER BY score DESC
+          LIMIT 20
+        `;
+        params = [event, userInfo.school, userInfo.gender, userInfo.grade, userId, userId];
+      } else {
+        query = `
+          SELECT f.*, u.school, u.grade, u.gender
+          FROM feeds f
+          JOIN users u ON f.user_id = u.id
+          ORDER BY f.created_at DESC, RAND()
+          LIMIT 20
+        `;
+      }
+
+      db.query(query, params, (err, feeds) => {
+        if (err) {
+          console.error('🔥 추천 피드 오류:', err);
+          return res.status(500).json({ success: false, message: '추천 피드 오류' });
+        }
+        res.json({ success: true, feeds });
+      });
+    }
   } catch (err) {
-    console.error('추천 피드 오류:', err);
-    res.status(500).json({ success: false, message: '추천 피드 오류' });
+    console.error('🔥 서버 전체 오류:', err);
+    res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 
 
