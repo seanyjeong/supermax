@@ -879,26 +879,24 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
 // 추천 피드 API
 app.get('/feed/recommendation', async (req, res) => {
   try {
-    // ✅ 토큰 꺼내기
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     let user = null;
     let userId = null;
 
-    // ✅ 로그인 여부 확인
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         userId = decoded.id;
 
-        const [[userRow]] = await db.query(`
+        const userResult = await db.query(`
           SELECT school, grade, gender FROM users WHERE id = ?
         `, [userId]);
 
-        user = userRow;
+        user = userResult?.[0]?.[0]; // 안전하게 구조 분해
       } catch (err) {
-        console.warn('❗️토큰 검증 실패: 비로그인 사용자로 간주');
+        console.warn('❗️토큰 검증 실패 또는 사용자 없음');
       }
     }
 
@@ -906,7 +904,6 @@ app.get('/feed/recommendation', async (req, res) => {
     let params = [];
 
     if (user) {
-      // ✅ 로그인된 사용자 → 학교/성별/학년 기반 추천
       query = `
         SELECT f.*, u.school, u.grade, u.gender,
           (
@@ -928,7 +925,6 @@ app.get('/feed/recommendation', async (req, res) => {
       `;
       params = [user.school, user.gender, user.grade, userId, userId];
     } else {
-      // ✅ 비로그인 사용자 → 최신 + 랜덤 정렬
       query = `
         SELECT f.*, u.school, u.grade, u.gender
         FROM feeds f
@@ -946,6 +942,7 @@ app.get('/feed/recommendation', async (req, res) => {
     res.status(500).json({ success: false, message: '추천 피드 오류' });
   }
 });
+
 
 
 
