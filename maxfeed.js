@@ -886,7 +886,7 @@ app.get('/feed/recommendation', async (req, res) => {
 
     if (token) {
       try {
-        const decoded = jwt.verify(token, JWT_SECRET); // 원래는 process.env.JWT_SECRET
+        const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.user_id;
 
         db.query(
@@ -894,7 +894,7 @@ app.get('/feed/recommendation', async (req, res) => {
           [userId],
           (err, userRows) => {
             if (err || userRows.length === 0) {
-              console.warn("❗ 사용자 정보 조회 실패:", err);
+              console.warn("❗️사용자 정보 조회 실패");
               return handleQuery(null); // fallback
             }
 
@@ -919,11 +919,11 @@ app.get('/feed/recommendation', async (req, res) => {
           }
         );
       } catch (err) {
-        console.warn('❗ 토큰 검증 실패:', err);
-        handleQuery(null); // fallback for non-logged-in
+        console.warn('❗️토큰 검증 실패. 비로그인 사용자로 처리');
+        handleQuery(null);
       }
     } else {
-      handleQuery(null); // no token
+      handleQuery(null);
     }
 
     function handleQuery(userInfo, event = '제자리멀리뛰기') {
@@ -940,7 +940,6 @@ app.get('/feed/recommendation', async (req, res) => {
               IF(u.school = ?, 2, 0) +
               IF(u.gender = ?, 1, 0) +
               IF(u.grade = ?, 1, 0) +
-              IF(f.has_medal = 1, 5, 0) +
               (
                 CASE 
                   WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1 THEN 999
@@ -967,29 +966,23 @@ app.get('/feed/recommendation', async (req, res) => {
         `;
       }
 
-      // ✅ 디버깅용 로그 출력
-      console.log("🛠️ 최종 쿼리문:\n", query);
-      console.log("🧾 파라미터:", params);
+      console.log('🧾 파라미터:', params);
 
       db.query(query, params, (err, feeds) => {
         if (err) {
           console.error('🔥 추천 피드 쿼리 오류:', err.sqlMessage || err);
-          return res.status(500).json({
-            success: false,
-            message: '추천 피드 오류',
-            error: err.sqlMessage || err
-          });
+          console.error('📜 실행된 쿼리:', query);
+          return res.status(500).json({ success: false, message: '추천 피드 오류' });
         }
-
         res.json({ success: true, feeds });
       });
     }
-
   } catch (err) {
-    console.error('🔥 전체 서버 오류:', err);
-    res.status(500).json({ success: false, message: '서버 오류', error: err.message });
+    console.error('🔥 서버 전체 오류:', err);
+    res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 
 
