@@ -886,7 +886,7 @@ app.get('/feed/recommendation', async (req, res) => {
 
     if (token) {
       try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, JWT_SECRET); // 원래는 process.env.JWT_SECRET
         userId = decoded.user_id;
 
         db.query(
@@ -894,14 +894,20 @@ app.get('/feed/recommendation', async (req, res) => {
           [userId],
           (err, userRows) => {
             if (err || userRows.length === 0) {
-              console.warn("❗️사용자 정보 조회 실패");
-              return handleQuery(null);
+              console.warn("❗ 사용자 정보 조회 실패:", err);
+              return handleQuery(null); // fallback
             }
 
             user = userRows[0];
 
             db.query(
-              `SELECT event FROM feeds WHERE user_id = ? GROUP BY event ORDER BY COUNT(*) DESC LIMIT 1`,
+              `
+              SELECT event FROM feeds
+              WHERE user_id = ?
+              GROUP BY event
+              ORDER BY COUNT(*) DESC
+              LIMIT 1
+              `,
               [userId],
               (err2, eventRows) => {
                 if (!err2 && eventRows.length > 0) {
@@ -913,11 +919,11 @@ app.get('/feed/recommendation', async (req, res) => {
           }
         );
       } catch (err) {
-        console.warn('❗️토큰 검증 실패. 비로그인 사용자로 처리');
-        handleQuery(null);
+        console.warn('❗ 토큰 검증 실패:', err);
+        handleQuery(null); // fallback for non-logged-in
       }
     } else {
-      handleQuery(null);
+      handleQuery(null); // no token
     }
 
     function handleQuery(userInfo, event = '제자리멀리뛰기') {
@@ -942,7 +948,7 @@ app.get('/feed/recommendation', async (req, res) => {
                   ELSE 0
                 END
               ) -
-              (TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2) +
+              TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
               (RAND() * 3)
             ) AS score
           FROM feeds f
@@ -961,19 +967,30 @@ app.get('/feed/recommendation', async (req, res) => {
         `;
       }
 
+      // ✅ 디버깅용 로그 출력
+      console.log("🛠️ 최종 쿼리문:\n", query);
+      console.log("🧾 파라미터:", params);
+
       db.query(query, params, (err, feeds) => {
         if (err) {
-          console.error('🔥 추천 피드 오류:', err);
-          return res.status(500).json({ success: false, message: '추천 피드 오류' });
+          console.error('🔥 추천 피드 쿼리 오류:', err.sqlMessage || err);
+          return res.status(500).json({
+            success: false,
+            message: '추천 피드 오류',
+            error: err.sqlMessage || err
+          });
         }
+
         res.json({ success: true, feeds });
       });
     }
+
   } catch (err) {
-    console.error('🔥 서버 전체 오류:', err);
-    res.status(500).json({ success: false, message: '서버 오류' });
+    console.error('🔥 전체 서버 오류:', err);
+    res.status(500).json({ success: false, message: '서버 오류', error: err.message });
   }
 });
+
 
 
 
