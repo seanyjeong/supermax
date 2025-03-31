@@ -886,7 +886,7 @@ app.get('/feed/recommendation', async (req, res) => {
 
     if (token) {
       try {
-        const decoded = jwt.verify(token, JWT_SECRET); // ❌ 여기 원래 process.env.JWT_SECRET 이었는데 너 코드랑 맞춤
+        const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.user_id;
 
         db.query(
@@ -895,19 +895,13 @@ app.get('/feed/recommendation', async (req, res) => {
           (err, userRows) => {
             if (err || userRows.length === 0) {
               console.warn("❗️사용자 정보 조회 실패");
-              return handleQuery(null); // fallback
+              return handleQuery(null);
             }
 
             user = userRows[0];
 
             db.query(
-              `
-              SELECT event FROM feeds
-              WHERE user_id = ?
-              GROUP BY event
-              ORDER BY COUNT(*) DESC
-              LIMIT 1
-              `,
+              `SELECT event FROM feeds WHERE user_id = ? GROUP BY event ORDER BY COUNT(*) DESC LIMIT 1`,
               [userId],
               (err2, eventRows) => {
                 if (!err2 && eventRows.length > 0) {
@@ -920,10 +914,10 @@ app.get('/feed/recommendation', async (req, res) => {
         );
       } catch (err) {
         console.warn('❗️토큰 검증 실패. 비로그인 사용자로 처리');
-        handleQuery(null); // fallback for non-logged-in
+        handleQuery(null);
       }
     } else {
-      handleQuery(null); // no token
+      handleQuery(null);
     }
 
     function handleQuery(userInfo, event = '제자리멀리뛰기') {
@@ -941,9 +935,14 @@ app.get('/feed/recommendation', async (req, res) => {
               IF(u.gender = ?, 1, 0) +
               IF(u.grade = ?, 1, 0) +
               IF(f.has_medal = 1, 5, 0) +
-              IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1, 999,
-                IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3, 20, 0)) - 
-              TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
+              (
+                CASE 
+                  WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1 THEN 999
+                  WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3 THEN 20
+                  ELSE 0
+                END
+              ) -
+              (TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2) +
               (RAND() * 3)
             ) AS score
           FROM feeds f
@@ -975,6 +974,7 @@ app.get('/feed/recommendation', async (req, res) => {
     res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 
 
