@@ -892,10 +892,15 @@ app.get('/feed/recommendation', async (req, res) => {
         userId = decoded.id;
 
         // 사용자 정보
-        const [[userRow]] = await db.query(`
-          SELECT school, grade, gender FROM users WHERE id = ?
-        `, [userId]);
-        user = userRow;
+const [userRows] = await db.query(`
+  SELECT school, grade, gender FROM users WHERE id = ?
+`, [userId]);
+
+const userRow = userRows[0];
+if (!userRow) {
+  throw new Error('❌ 사용자 정보가 없습니다.');
+}
+
 
         // 주력 종목 추정
         const [[eventRow]] = await db.query(`
