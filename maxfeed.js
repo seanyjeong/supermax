@@ -876,7 +876,6 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
    📌 2️⃣ 피드 기능 (파일 업로드 포함)
 ====================================== */
 
-// 추천 피드 API
 app.get('/feed/recommendation', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -885,22 +884,19 @@ app.get('/feed/recommendation', async (req, res) => {
     let user = null;
     let mainEvent = '제자리멀리뛰기';
 
-    // ✅ 토큰이 있으면 인증 시도
+    // ✅ 토큰 검증 및 사용자 정보 조회
     if (token) {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         userId = decoded.id;
 
-        // 사용자 정보
-const [userRows] = await db.query(`
-  SELECT school, grade, gender FROM users WHERE id = ?
-`, [userId]);
+        const [userRows] = await db.query(`
+          SELECT school, grade, gender FROM users WHERE id = ?
+        `, [userId]);
 
-const userRow = userRows[0];
-if (!userRow) {
-  throw new Error('❌ 사용자 정보가 없습니다.');
-}
-
+        const userRow = userRows[0];
+        if (!userRow) throw new Error('❌ 사용자 정보가 없습니다.');
+        user = userRow; // ✅ user 설정!!
 
         // 주력 종목 추정
         const [[eventRow]] = await db.query(`
@@ -910,6 +906,7 @@ if (!userRow) {
           ORDER BY COUNT(*) DESC
           LIMIT 1
         `, [userId]);
+
         mainEvent = eventRow?.event || '제자리멀리뛰기';
       } catch (err) {
         console.warn('❗️토큰 검증 실패. 비로그인 사용자로 처리');
@@ -920,7 +917,7 @@ if (!userRow) {
     let params = [];
 
     if (user) {
-      // ✅ 로그인 사용자 → 맞춤형 추천 피드
+      // ✅ 로그인 사용자용 추천 피드
       query = `
         SELECT f.*, u.school, u.grade, u.gender,
           (
@@ -943,7 +940,7 @@ if (!userRow) {
       `;
       params = [mainEvent, user.school, user.gender, user.grade, userId, userId];
     } else {
-      // ✅ 비로그인 사용자 → 최신 + 랜덤 정렬
+      // ✅ 비로그인 사용자용 피드
       query = `
         SELECT f.*, u.school, u.grade, u.gender
         FROM feeds f
@@ -953,7 +950,7 @@ if (!userRow) {
       `;
     }
 
-    const [feeds] = await db.query(query, params);
+    const [feeds] = await db.query(query, params); // ✅ 여기도 이제 문제없음
     res.json({ success: true, feeds });
 
   } catch (err) {
@@ -961,6 +958,7 @@ if (!userRow) {
     res.status(500).json({ success: false, message: '추천 피드 오류' });
   }
 });
+
 
 
 
