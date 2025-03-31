@@ -897,24 +897,27 @@ app.get('/feed/recommendation', async (req, res) => {
     const mainEvent = eventRow?.event || '제자리멀리뛰기';
 
     // 피드 점수 기반 정렬
-    const [feeds] = await db.query(`
-      SELECT f.*, u.school, u.grade, u.gender,
-        (
-          f.like_count * 2 +
-          f.comment_count * 1.5 +
-          IF(f.event = ?, 3, 0) +
-          IF(u.school = ?, 2, 0) +
-          IF(u.gender = ?, 1, 0) +
-          IF(u.grade = ?, 1, 0) +
-          IF(f.has_medal = 1, 5, 0) -
-          TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
-          (RAND() * 3)
-        ) AS score
-      FROM feeds f
-      JOIN users u ON f.user_id = u.id
-      ORDER BY score DESC
-      LIMIT 20
-    `, [mainEvent, user.school, user.gender, user.grade]);
+   const [feeds] = await db.query(`
+  SELECT f.*, u.school, u.grade, u.gender,
+    (
+      f.like_count * 2 +
+      f.comment_count * 1.5 +
+      IF(f.event = ?, 3, 0) +
+      IF(u.school = ?, 2, 0) +
+      IF(u.gender = ?, 1, 0) +
+      IF(u.grade = ?, 1, 0) +
+      IF(f.has_medal = 1, 5, 0) +
+      IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1, 999,
+        IF(f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3, 20, 0)) -
+      TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
+      (RAND() * 3)
+    ) AS score
+  FROM feeds f
+  JOIN users u ON f.user_id = u.id
+  ORDER BY score DESC
+  LIMIT 20
+`, [mainEvent, user.school, user.gender, user.grade, userId, userId]);
+
 
     res.json({ success: true, feeds });
   } catch (err) {
