@@ -877,6 +877,10 @@ app.post('/feed/save-achievement-if-new', (req, res) => {
 ====================================== */
 
 app.get('/feed/recommendation', async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const offset = (page - 1) * limit;
+
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -889,37 +893,26 @@ app.get('/feed/recommendation', async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.user_id;
 
-        db.query(
-          `SELECT school, grade, gender FROM users WHERE id = ?`,
-          [userId],
-          (err, userRows) => {
-            if (err || userRows.length === 0) {
-              console.warn("❗️사용자 정보 조회 실패");
-              return handleQuery(null); // fallback
-            }
-
-            user = userRows[0];
-
-            db.query(
-              `
-              SELECT event FROM feeds
-              WHERE user_id = ?
-              GROUP BY event
-              ORDER BY COUNT(*) DESC
-              LIMIT 1
-              `,
-              [userId],
-              (err2, eventRows) => {
-                if (!err2 && eventRows.length > 0) {
-                  mainEvent = eventRows[0].event;
-                }
-                handleQuery(user, mainEvent);
-              }
-            );
+        db.query(`SELECT school, grade, gender FROM users WHERE id = ?`, [userId], (err, userRows) => {
+          if (err || userRows.length === 0) {
+            return handleQuery(null);
           }
-        );
+
+          user = userRows[0];
+
+          db.query(
+            `SELECT event FROM feeds WHERE user_id = ? GROUP BY event ORDER BY COUNT(*) DESC LIMIT 1`,
+            [userId],
+            (err2, eventRows) => {
+              if (!err2 && eventRows.length > 0) {
+                mainEvent = eventRows[0].event;
+              }
+              handleQuery(user, mainEvent);
+            }
+          );
+        });
       } catch (err) {
-        console.warn('❗️토큰 검증 실패. 비로그인 사용자로 처리');
+        console.warn('❗️토큰 검증 실패');
         handleQuery(null);
       }
     } else {
@@ -946,42 +939,39 @@ app.get('/feed/recommendation', async (req, res) => {
                   WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3 THEN 20
                   ELSE 0
                 END
-              ) -
-              TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
-              (RAND() * 3)
+              )
             ) AS score
           FROM feeds f
           JOIN users u ON f.user_id = u.id
-          ORDER BY score DESC, RAND(NOW())
-          LIMIT 20
+          ORDER BY f.created_at DESC
+          LIMIT ? OFFSET ?
         `;
-        params = [event, userInfo.school, userInfo.gender, userInfo.grade, userId, userId];
+        params = [event, userInfo.school, userInfo.gender, userInfo.grade, userId, userId, limit, offset];
       } else {
         query = `
           SELECT f.*, u.name, u.profile_image, u.school, u.grade, u.gender
           FROM feeds f
           JOIN users u ON f.user_id = u.id
-          ORDER BY f.created_at DESC, RAND(NOW())
-          LIMIT 20
+          ORDER BY f.created_at DESC
+          LIMIT ? OFFSET ?
         `;
+        params = [limit, offset];
       }
-
-      console.log('🧾 파라미터:', params);
 
       db.query(query, params, (err, feeds) => {
         if (err) {
-          console.error('🔥 추천 피드 쿼리 오류:', err.sqlMessage || err);
-          console.error('📜 실행된 쿼리:', query);
+          console.error('🔥 추천 피드 쿼리 오류:', err);
           return res.status(500).json({ success: false, message: '추천 피드 오류' });
         }
         res.json({ success: true, feeds });
       });
     }
   } catch (err) {
-    console.error('🔥 서버 전체 오류:', err);
+    console.error('🔥 서버 오류:', err);
     res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 
 
