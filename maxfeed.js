@@ -1062,10 +1062,10 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
   const { event, record, content } = req.body;
   const files = req.files;
 
-  // ✅ 1차 응답 먼저
+  // ✅ 빠른 응답
   res.json({ uploading: true });
 
-  // ✅ 백그라운드 비동기 처리
+  // ✅ 백그라운드 작업
   (async () => {
     try {
       let media_urls = [];
@@ -1084,14 +1084,21 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
               console.log("✅ .mov 파일 임시 저장:", inputPath);
             } catch (err) {
               console.error("❌ mov 저장 실패:", err.message);
-              continue; // 다음 파일로
+              continue;
             }
 
             try {
               await new Promise((resolve, reject) => {
                 ffmpeg(inputPath)
                   .inputOptions('-fflags +genpts')
-                  .outputOptions(['-preset ultrafast', '-c:v libx264', '-c:a aac', '-movflags +faststart'])
+                  .outputOptions([
+                    '-preset ultrafast',
+                    '-vf scale=720:-2',   // ✅ 해상도 제한
+                    '-r 24',              // ✅ 프레임 제한
+                    '-c:v libx264',
+                    '-c:a aac',
+                    '-movflags +faststart'
+                  ])
                   .on('start', command => console.log('▶️ ffmpeg 시작:', command))
                   .on('end', () => {
                     console.log('✅ ffmpeg 변환 완료:', outputPath);
@@ -1120,14 +1127,14 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
               console.log("🧹 임시 파일 삭제 완료");
 
             } catch (err) {
-              console.error("❌ ffmpeg 처리 실패 또는 Firebase 업로드 실패:", err.message);
+              console.error("❌ 변환/업로드 실패:", err.message);
             }
 
           } else {
             try {
               const url = await uploadToFirebase(file, "feeds");
               media_urls.push(url);
-              console.log("🌍 일반파일 업로드 성공:", url);
+              console.log("🌍 일반 파일 업로드 성공:", url);
             } catch (err) {
               console.error("❌ Firebase 업로드 실패:", err.message);
             }
@@ -1163,6 +1170,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
     }
   })();
 });
+
 
 
 
