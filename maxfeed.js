@@ -77,6 +77,68 @@ app.post('/feed/auth/send-verification', async (req, res) => { // 🔥 변경
     }
 });
 
+app.post('/feed/test-trim-upload', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: '파일이 업로드되지 않았습니다.' });
+  }
+
+  try {
+    // 파일 정보 가져오기
+    const file = req.file;
+    console.log("업로드된 파일 정보:", file);
+
+    // 여기서 비디오 처리 로직 추가 (예: ffmpeg로 비디오 트리밍)
+    const inputPath = `/tmp/${Date.now()}_${file.originalname}`;
+    const outputPath = inputPath + '_trimmed.mp4';
+
+    // 임시 파일 저장
+    fs.writeFileSync(inputPath, file.buffer);
+
+    // ffmpeg로 비디오 트리밍 처리 (예시로 10초 구간만 자른다고 가정)
+    await new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .setStartTime('00:00:05') // 5초부터
+        .setDuration(10) // 10초 동안
+        .output(outputPath)
+        .on('start', command => console.log('▶️ ffmpeg 시작:', command))
+        .on('end', () => {
+          console.log('✅ ffmpeg 트리밍 완료:', outputPath);
+          resolve();
+        })
+        .on('error', err => {
+          console.error('❌ ffmpeg 에러:', err.message);
+          reject(err);
+        })
+        .run();
+    });
+
+    // 트리밍 완료된 파일 Firebase에 업로드
+    const trimmedFile = fs.readFileSync(outputPath);
+    const newFile = {
+      originalname: 'trimmed_video.mp4',
+      buffer: trimmedFile,
+      mimetype: 'video/mp4'
+    };
+
+    // Firebase 업로드 함수 호출
+    const videoUrl = await uploadToFirebase(newFile, "feeds");
+
+    // 임시 파일 삭제
+    fs.unlinkSync(inputPath);
+    fs.unlinkSync(outputPath);
+
+    // 결과 반환
+    res.json({
+      success: true,
+      message: '비디오 트리밍 성공',
+      url: videoUrl // 트리밍된 비디오 URL 반환
+    });
+
+  } catch (err) {
+    console.error("❌ 비디오 트리밍 처리 실패:", err);
+    res.status(500).json({ error: '비디오 처리 실패' });
+  }
+});
 
 // ✅ 인증번호 검증 API
 app.post('/feed/auth/verify-code', (req, res) => { // 🔥 변경
