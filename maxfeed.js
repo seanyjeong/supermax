@@ -1054,12 +1054,49 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
     const { event, record, content } = req.body;
     let media_urls = [];
 
-    if (req.files && req.files.length > 0) {
-      for (let file of req.files) {
-        const url = await uploadToFirebase(file, "feeds");
-        media_urls.push(url);
-      }
+const ffmpeg = require('fluent-ffmpeg');
+const path = require('path');
+const fs = require('fs');
+
+if (req.files && req.files.length > 0) {
+  for (let file of req.files) {
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (ext === '.mov') {
+      // 🔥 변환 경로 설정
+      const inputPath = `/tmp/${Date.now()}_${file.originalname}`;
+      const outputPath = inputPath + '.mp4';
+      fs.writeFileSync(inputPath, file.buffer); // 버퍼를 임시파일로 저장
+
+      await new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .outputOptions(['-c:v libx264', '-c:a aac', '-movflags +faststart'])
+          .save(outputPath)
+          .on('end', resolve)
+          .on('error', reject);
+      });
+
+      // 🔥 변환된 mp4를 Firebase에 업로드
+      const mp4Buffer = fs.readFileSync(outputPath);
+      const newFile = {
+        originalname: path.basename(outputPath),
+        buffer: mp4Buffer,
+        mimetype: 'video/mp4'
+      };
+      const url = await uploadToFirebase(newFile, "feeds");
+      media_urls.push(url);
+
+      // 임시 파일 정리
+      fs.unlinkSync(inputPath);
+      fs.unlinkSync(outputPath);
+    } else {
+      // 일반 파일(mp4, jpg 등)은 그대로 업로드
+      const url = await uploadToFirebase(file, "feeds");
+      media_urls.push(url);
     }
+  }
+}
+
 
     const sql = `
       INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
