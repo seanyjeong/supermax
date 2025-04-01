@@ -893,8 +893,11 @@ app.get('/feed/recommendation', async (req, res) => {
         const decoded = jwt.verify(token, JWT_SECRET);
         userId = decoded.user_id;
 
+        console.log("✅ 토큰 인증됨:", decoded);
+
         db.query(`SELECT school, grade, gender FROM users WHERE id = ?`, [userId], (err, userRows) => {
           if (err || userRows.length === 0) {
+            console.warn("⚠️ 사용자 정보 불러오기 실패");
             return handleQuery(null);
           }
 
@@ -906,16 +909,18 @@ app.get('/feed/recommendation', async (req, res) => {
             (err2, eventRows) => {
               if (!err2 && eventRows.length > 0) {
                 mainEvent = eventRows[0].event;
+                console.log("🎯 주 종목:", mainEvent);
               }
               handleQuery(user, mainEvent);
             }
           );
         });
       } catch (err) {
-        console.warn('❗️토큰 검증 실패');
+        console.warn('❗️토큰 검증 실패:', err.message);
         handleQuery(null);
       }
     } else {
+      console.warn("❗️토큰 없음 (비로그인 사용자)");
       handleQuery(null);
     }
 
@@ -939,14 +944,18 @@ app.get('/feed/recommendation', async (req, res) => {
                   WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3 THEN 20
                   ELSE 0
                 END
-              )
+              ) -
+              TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
+              (RAND() * 3)
             ) AS score
           FROM feeds f
           JOIN users u ON f.user_id = u.id
-          ORDER BY f.created_at DESC
+          ORDER BY score DESC, RAND()
           LIMIT ? OFFSET ?
         `;
         params = [event, userInfo.school, userInfo.gender, userInfo.grade, userId, userId, limit, offset];
+
+        console.log("📦 추천 쿼리 파라미터:", params);
       } else {
         query = `
           SELECT f.*, u.name, u.profile_image, u.school, u.grade, u.gender
@@ -956,6 +965,8 @@ app.get('/feed/recommendation', async (req, res) => {
           LIMIT ? OFFSET ?
         `;
         params = [limit, offset];
+
+        console.log("📦 비로그인 사용자 - 시간순 추천");
       }
 
       db.query(query, params, (err, feeds) => {
@@ -963,14 +974,17 @@ app.get('/feed/recommendation', async (req, res) => {
           console.error('🔥 추천 피드 쿼리 오류:', err);
           return res.status(500).json({ success: false, message: '추천 피드 오류' });
         }
+        console.log("✅ 추천 피드 개수:", feeds.length);
         res.json({ success: true, feeds });
       });
     }
+
   } catch (err) {
     console.error('🔥 서버 오류:', err);
     res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 
 
