@@ -1042,6 +1042,9 @@ async function uploadToFirebase(file, folder = "uploads") {
 }
 
 
+const path = require('path');
+const fs = require('fs');
+const ffmpeg = require('fluent-ffmpeg');
 
 app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
@@ -1051,6 +1054,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
   try {
     decoded = jwt.verify(token, JWT_SECRET);
   } catch (e) {
+    console.error("❌ JWT 인증 실패:", e.message);
     return res.status(401).json({ error: 'Invalid token' });
   }
 
@@ -1058,10 +1062,10 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
   const { event, record, content } = req.body;
   const files = req.files;
 
-  // ✅ 바로 응답 (유저는 업로드 성공했다고 느낌)
+  // ✅ 1차 응답 먼저
   res.json({ uploading: true });
 
-  // ✅ 백그라운드에서 업로드 처리
+  // ✅ 백그라운드 비동기 처리
   (async () => {
     try {
       let media_urls = [];
@@ -1069,42 +1073,64 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
       if (files && files.length > 0) {
         for (let file of files) {
           const ext = path.extname(file.originalname).toLowerCase();
+          console.log("📂 업로드 파일:", file.originalname, "| 확장자:", ext, "| 크기:", file.buffer.length);
 
           if (ext === '.mov') {
             const inputPath = `/tmp/${Date.now()}_${file.originalname}`;
             const outputPath = inputPath + '.mp4';
-            fs.writeFileSync(inputPath, file.buffer);
 
-            await new Promise((resolve, reject) => {
-              ffmpeg(inputPath)
-                .inputOptions('-fflags +genpts')
-                .outputOptions(['-preset ultrafast', '-c:v libx264', '-c:a aac', '-movflags +faststart'])
-                .on('start', command => console.log('▶️ ffmpeg 시작:', command))
-                .on('end', () => {
-                  console.log('✅ ffmpeg 변환 완료');
-                  resolve();
-                })
-                .on('error', err => {
-                  console.error('❌ ffmpeg 변환 에러:', err.message);
-                  reject(err);
-                })
-                .save(outputPath);
-            });
+            try {
+              fs.writeFileSync(inputPath, file.buffer);
+              console.log("✅ .mov 파일 임시 저장:", inputPath);
+            } catch (err) {
+              console.error("❌ mov 저장 실패:", err.message);
+              continue; // 다음 파일로
+            }
 
-            const mp4Buffer = fs.readFileSync(outputPath);
-            const newFile = {
-              originalname: path.basename(outputPath),
-              buffer: mp4Buffer,
-              mimetype: 'video/mp4'
-            };
-            const url = await uploadToFirebase(newFile, "feeds");
-            media_urls.push(url);
+            try {
+              await new Promise((resolve, reject) => {
+                ffmpeg(inputPath)
+                  .inputOptions('-fflags +genpts')
+                  .outputOptions(['-preset ultrafast', '-c:v libx264', '-c:a aac', '-movflags +faststart'])
+                  .on('start', command => console.log('▶️ ffmpeg 시작:', command))
+                  .on('end', () => {
+                    console.log('✅ ffmpeg 변환 완료:', outputPath);
+                    resolve();
+                  })
+                  .on('error', err => {
+                    console.error('❌ ffmpeg 에러:', err.message);
+                    reject(err);
+                  })
+                  .save(outputPath);
+              });
 
-            fs.unlinkSync(inputPath);
-            fs.unlinkSync(outputPath);
+              const mp4Buffer = fs.readFileSync(outputPath);
+              const newFile = {
+                originalname: path.basename(outputPath),
+                buffer: mp4Buffer,
+                mimetype: 'video/mp4'
+              };
+
+              const url = await uploadToFirebase(newFile, "feeds");
+              media_urls.push(url);
+              console.log("🌍 mp4 업로드 성공:", url);
+
+              fs.unlinkSync(inputPath);
+              fs.unlinkSync(outputPath);
+              console.log("🧹 임시 파일 삭제 완료");
+
+            } catch (err) {
+              console.error("❌ ffmpeg 처리 실패 또는 Firebase 업로드 실패:", err.message);
+            }
+
           } else {
-            const url = await uploadToFirebase(file, "feeds");
-            media_urls.push(url);
+            try {
+              const url = await uploadToFirebase(file, "feeds");
+              media_urls.push(url);
+              console.log("🌍 일반파일 업로드 성공:", url);
+            } catch (err) {
+              console.error("❌ Firebase 업로드 실패:", err.message);
+            }
           }
         }
       }
@@ -1114,6 +1140,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
         VALUES (?, ?, ?, ?, ?, NOW())
       `;
       const media = JSON.stringify(media_urls);
+      console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media });
 
       db.query(sql, [user_id, event, record, content, media], async (err, result) => {
         if (err) {
@@ -1128,14 +1155,15 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
           console.warn("📡 문자 전송 실패:", err.message);
         }
 
-        console.log("🎉 피드 업로드 완료! feed_id:", result.insertId);
+        console.log("🎉 피드 DB 저장 성공! feed_id:", result.insertId);
       });
 
     } catch (e) {
-      console.error("❌ 백그라운드 업로드 실패:", e);
+      console.error("❌ 백그라운드 처리 실패:", e);
     }
   })();
 });
+
 
 
 
