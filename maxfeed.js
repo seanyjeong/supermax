@@ -1068,13 +1068,22 @@ if (req.files && req.files.length > 0) {
       const outputPath = inputPath + '.mp4';
       fs.writeFileSync(inputPath, file.buffer); // 버퍼를 임시파일로 저장
 
-      await new Promise((resolve, reject) => {
-        ffmpeg(inputPath)
-          .outputOptions(['-c:v libx264', '-c:a aac', '-movflags +faststart'])
-          .save(outputPath)
-          .on('end', resolve)
-          .on('error', reject);
-      });
+await new Promise((resolve, reject) => {
+  ffmpeg(inputPath)
+    .inputOptions('-fflags +genpts') // 🔄 iOS .mov 호환성 향상 옵션
+    .outputOptions(['-c:v libx264', '-c:a aac', '-movflags +faststart'])
+    .on('start', command => console.log('▶️ ffmpeg 시작:', command))
+    .on('end', () => {
+      console.log('✅ ffmpeg 변환 완료');
+      resolve();
+    })
+    .on('error', err => {
+      console.error('❌ ffmpeg 변환 에러:', err.message);
+      reject(err);
+    })
+    .save(outputPath);
+});
+
 
       // 🔥 변환된 mp4를 Firebase에 업로드
       const mp4Buffer = fs.readFileSync(outputPath);
