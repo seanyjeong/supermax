@@ -1047,96 +1047,95 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const { event, record, content } = req.body;
-    let media_urls = [];
-
-const ffmpeg = require('fluent-ffmpeg');
-const path = require('path');
-const fs = require('fs');
-
-if (req.files && req.files.length > 0) {
-  for (let file of req.files) {
-    const ext = path.extname(file.originalname).toLowerCase();
-
-    if (ext === '.mov') {
-      // 🔥 변환 경로 설정
-      const inputPath = `/tmp/${Date.now()}_${file.originalname}`;
-      const outputPath = inputPath + '.mp4';
-      fs.writeFileSync(inputPath, file.buffer); // 버퍼를 임시파일로 저장
-
-await new Promise((resolve, reject) => {
-  ffmpeg(inputPath)
-    .inputOptions('-fflags +genpts') // 🔄 iOS .mov 호환성 향상 옵션
-    .outputOptions(['-c:v libx264', '-c:a aac', '-movflags +faststart'])
-    .on('start', command => console.log('▶️ ffmpeg 시작:', command))
-    .on('end', () => {
-      console.log('✅ ffmpeg 변환 완료');
-      resolve();
-    })
-    .on('error', err => {
-      console.error('❌ ffmpeg 변환 에러:', err.message);
-      reject(err);
-    })
-    .save(outputPath);
-});
-
-
-      // 🔥 변환된 mp4를 Firebase에 업로드
-      const mp4Buffer = fs.readFileSync(outputPath);
-      const newFile = {
-        originalname: path.basename(outputPath),
-        buffer: mp4Buffer,
-        mimetype: 'video/mp4'
-      };
-      const url = await uploadToFirebase(newFile, "feeds");
-      media_urls.push(url);
-
-      // 임시 파일 정리
-      fs.unlinkSync(inputPath);
-      fs.unlinkSync(outputPath);
-    } else {
-      // 일반 파일(mp4, jpg 등)은 그대로 업로드
-      const url = await uploadToFirebase(file, "feeds");
-      media_urls.push(url);
-    }
-  }
-}
-
-
-    const sql = `
-      INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
-      VALUES (?, ?, ?, ?, ?, NOW())
-    `;
-    const media = JSON.stringify(media_urls);
-
-    // ✅ 콜백을 async로!
-    db.query(sql, [user_id, event, record, content, media], async (err, result) => {
-      if (err) {
-        console.error("🔥 DB 저장 실패:", err);
-        return res.status(500).json({ error: "DB 저장 실패" });
-      }
-
-      // ✅ 문자 전송
-      try {
-        await sendSMS("01021446765", `[MAX] 새 피드가 등록되었습니다.`);
-        console.log("✅ 문자 전송 성공!");
-      } catch (err) {
-        console.warn("📡 문자 전송 실패:", err.message);
-      }
-
-      res.json({ success: true, feed_id: result.insertId });
-    });
-
+    decoded = jwt.verify(token, JWT_SECRET);
   } catch (e) {
-    console.error("❌ 업로드 실패:", e);
-    res.status(500).json({ error: "서버 오류" });
+    return res.status(401).json({ error: 'Invalid token' });
   }
-});
 
+  const user_id = decoded.user_id;
+  const { event, record, content } = req.body;
+  const files = req.files;
+
+  // ✅ 바로 응답 (유저는 업로드 성공했다고 느낌)
+  res.json({ uploading: true });
+
+  // ✅ 백그라운드에서 업로드 처리
+  (async () => {
+    try {
+      let media_urls = [];
+
+      if (files && files.length > 0) {
+        for (let file of files) {
+          const ext = path.extname(file.originalname).toLowerCase();
+
+          if (ext === '.mov') {
+            const inputPath = `/tmp/${Date.now()}_${file.originalname}`;
+            const outputPath = inputPath + '.mp4';
+            fs.writeFileSync(inputPath, file.buffer);
+
+            await new Promise((resolve, reject) => {
+              ffmpeg(inputPath)
+                .inputOptions('-fflags +genpts')
+                .outputOptions(['-preset ultrafast', '-c:v libx264', '-c:a aac', '-movflags +faststart'])
+                .on('start', command => console.log('▶️ ffmpeg 시작:', command))
+                .on('end', () => {
+                  console.log('✅ ffmpeg 변환 완료');
+                  resolve();
+                })
+                .on('error', err => {
+                  console.error('❌ ffmpeg 변환 에러:', err.message);
+                  reject(err);
+                })
+                .save(outputPath);
+            });
+
+            const mp4Buffer = fs.readFileSync(outputPath);
+            const newFile = {
+              originalname: path.basename(outputPath),
+              buffer: mp4Buffer,
+              mimetype: 'video/mp4'
+            };
+            const url = await uploadToFirebase(newFile, "feeds");
+            media_urls.push(url);
+
+            fs.unlinkSync(inputPath);
+            fs.unlinkSync(outputPath);
+          } else {
+            const url = await uploadToFirebase(file, "feeds");
+            media_urls.push(url);
+          }
+        }
+      }
+
+      const sql = `
+        INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
+        VALUES (?, ?, ?, ?, ?, NOW())
+      `;
+      const media = JSON.stringify(media_urls);
+
+      db.query(sql, [user_id, event, record, content, media], async (err, result) => {
+        if (err) {
+          console.error("🔥 DB 저장 실패:", err);
+          return;
+        }
+
+        try {
+          await sendSMS("01021446765", `[MAX] 새 피드가 등록되었습니다.`);
+          console.log("✅ 문자 전송 성공!");
+        } catch (err) {
+          console.warn("📡 문자 전송 실패:", err.message);
+        }
+
+        console.log("🎉 피드 업로드 완료! feed_id:", result.insertId);
+      });
+
+    } catch (e) {
+      console.error("❌ 백그라운드 업로드 실패:", e);
+    }
+  })();
+});
 
 
 
