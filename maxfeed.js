@@ -1143,10 +1143,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
         }
       }
 
-      const sql = `
-        INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
-        VALUES (?, ?, ?, ?, ?, NOW())
-      `;
+
 const media = JSON.stringify(media_urls);
 
 const sql = `
