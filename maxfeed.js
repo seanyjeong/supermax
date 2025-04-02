@@ -1060,7 +1060,7 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
   }
 
   const user_id = decoded.user_id;
-  const { event, record, content } = req.body;
+ const { event, record, content, is_private } = req.body; // ✅ is_private 받아오기
   const files = req.files;
 
   // ✅ 빠른 응답
@@ -1147,14 +1147,20 @@ app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
         INSERT INTO feeds (user_id, event, record, content, media_url, created_at)
         VALUES (?, ?, ?, ?, ?, NOW())
       `;
-      const media = JSON.stringify(media_urls);
-      console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media });
+const media = JSON.stringify(media_urls);
 
-      db.query(sql, [user_id, event, record, content, media], async (err, result) => {
-        if (err) {
-          console.error("🔥 DB 저장 실패:", err);
-          return;
-        }
+const sql = `
+  INSERT INTO feeds (user_id, event, record, content, media_url, created_at, is_private)
+  VALUES (?, ?, ?, ?, ?, NOW(), ?)
+`;
+
+console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media, is_private });
+
+db.query(sql, [user_id, event, record, content, media, is_private || 0], async (err, result) => {
+  if (err) {
+    console.error("🔥 DB 저장 실패:", err);
+    return;
+  }
 
         try {
           await sendSMS("01021446765", `[MAX] 새 피드가 등록되었습니다.`);
