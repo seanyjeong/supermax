@@ -1493,7 +1493,9 @@ app.get('/feed/feeds/:id', (req, res) => {
       like_count,
       comment_count,
       event,
-      record
+      record,
+      is_private
+      
     FROM feeds
     WHERE id = ?
   `;
