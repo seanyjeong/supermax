@@ -258,6 +258,56 @@ app.post('/feed/adminresetgenerate-temp-token', (req, res) => {
   }
 });
 
+// /feed/all-students
+app.get('/feed/all-students', async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "토큰 없음" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.is_admin) return res.status(403).json({ error: "관리자 권한 없음" });
+
+    const sql = `
+      SELECT id, username, name, school, grade, gender
+      FROM users
+      ORDER BY name ASC
+    `;
+    db.query(sql, (err, results) => {
+      if (err) return res.status(500).json({ error: "DB 오류" });
+      res.json(results);
+    });
+  } catch (e) {
+    return res.status(401).json({ error: "토큰 오류" });
+  }
+});
+// /feed/student-records?user_id=123
+app.get('/feed/student-records', (req, res) => {
+  const user_id = parseInt(req.query.user_id, 10);
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "토큰 없음" });
+  if (!user_id) return res.status(400).json({ error: "user_id 필요" });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.is_admin) return res.status(403).json({ error: "관리자 권한 없음" });
+
+    const sql = `
+      SELECT f.event, f.record, f.created_at, u.name, u.school, u.grade, u.gender
+      FROM feeds f
+      JOIN users u ON f.user_id = u.id
+      WHERE f.user_id = ?
+      ORDER BY f.created_at ASC
+      LIMIT 100
+    `;
+    db.query(sql, [user_id], (err, results) => {
+      if (err) return res.status(500).json({ error: "DB 오류" });
+      if (results.length === 0) return res.status(404).json({ error: "기록 없음" });
+      res.json(results);
+    });
+  } catch (e) {
+    return res.status(401).json({ error: "토큰 오류" });
+  }
+});
 
 
 
