@@ -1203,21 +1203,27 @@ const sql = `
 
 console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media, is_private });
 
+const phoneNumbers = ["01021446765"]; // 원하는 번호들을 배열로 설정
+
 db.query(sql, [user_id, event, record, content, media, is_private || 0], async (err, result) => {
   if (err) {
     console.error("🔥 DB 저장 실패:", err);
     return;
   }
 
-        try {
-          await sendSMS("01021446765", `[MAX] 새 피드가 등록되었습니다.`);
-          console.log("✅ 문자 전송 성공!");
-        } catch (err) {
-          console.warn("📡 문자 전송 실패:", err.message);
-        }
+  // 여러 전화번호로 문자 전송
+  for (const phone of phoneNumbers) {
+    try {
+      await sendSMS(phone, `[MAX] 새 피드가 등록되었습니다.`);
+      console.log(`✅ 문자 전송 성공: ${phone}`);
+    } catch (err) {
+      console.warn(`📡 문자 전송 실패 (${phone}):`, err.message);
+    }
+  }
 
-        console.log("🎉 피드 DB 저장 성공! feed_id:", result.insertId);
-      });
+  console.log("🎉 피드 DB 저장 성공! feed_id:", result.insertId);
+});
+
 
     } catch (e) {
       console.error("❌ 백그라운드 처리 실패:", e);
