@@ -1203,7 +1203,7 @@ const sql = `
 
 console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media, is_private });
 
-const phoneNumbers = ["01021446765","01021446765"]; // 원하는 번호들을 배열로 설정
+const phoneNumbers = ["01021446765","01071511941"]; // 원하는 번호들을 배열로 설정
 
 db.query(sql, [user_id, event, record, content, media, is_private || 0], async (err, result) => {
   if (err) {
