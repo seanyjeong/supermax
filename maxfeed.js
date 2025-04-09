@@ -1203,7 +1203,7 @@ const sql = `
 
 console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media, is_private });
 
-const phoneNumbers = ["01021446765","01071511941"]; // 원하는 번호들을 배열로 설정
+const phoneNumbers = ["01021446765","01071511941","01082408417","01092898449","01055941838"]; // 원하는 번호들을 배열로 설정
 
 db.query(sql, [user_id, event, record, content, media, is_private || 0], async (err, result) => {
   if (err) {
@@ -1214,7 +1214,7 @@ db.query(sql, [user_id, event, record, content, media, is_private || 0], async (
   // 여러 전화번호로 문자 전송
   for (const phone of phoneNumbers) {
     try {
-      await sendSMS(phone, `[MAX] 새 피드가 등록되었습니다.`);
+      await sendSMS(phone, `[STAC] 새 피드가 등록되었습니다. 피드백 및 응원부탁해요.`);
       console.log(`✅ 문자 전송 성공: ${phone}`);
     } catch (err) {
       console.warn(`📡 문자 전송 실패 (${phone}):`, err.message);
