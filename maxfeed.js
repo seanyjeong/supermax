@@ -2157,6 +2157,15 @@ app.get('/feed/check-group-assigned', (req, res) => {
 });
 
 
+// 해당 조의 수험번호 리스트
+app.get('/feed/group/:group', (req, res) => {
+  const group = req.params.group;
+  const sql = 'SELECT exam_number FROM 실기기록 WHERE record_group = ? ORDER BY exam_number ASC';
+  db.query(sql, [group], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    res.json(rows);
+  });
+});
 
 
 
