@@ -2074,6 +2074,34 @@ app.post('/feed/submit-record', (req, res) => {
 });
 
 
+// ✅ 수험번호로 학생 기본 정보 조회 API
+app.get('/feed/get-student', (req, res) => {
+  const { branch, exam_number } = req.query;
+
+  if (!branch || !exam_number) {
+    return res.status(400).json({ error: "지점(branch)와 수험번호(exam_number)가 필요합니다." });
+  }
+
+  const sql = `
+    SELECT name, school, grade, gender 
+    FROM 실기기록 
+    WHERE branch = ? AND exam_number = ?
+    LIMIT 1
+  `;
+
+  db.query(sql, [branch, exam_number], (err, rows) => {
+    if (err) {
+      console.error("❌ 학생 정보 조회 실패:", err);
+      return res.status(500).json({ error: "DB 오류" });
+    }
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "해당 학생을 찾을 수 없습니다." });
+    }
+
+    res.json(rows[0]);
+  });
+});
 
 
 
