@@ -108,45 +108,76 @@ function getField(event, type) {
 }
 
 app.post('/submit-record', (req, res) => {
-  console.log('📥 요청 도착:', req.body);
+  console.log('📥 [기록 제출] 요청 도착:', req.body);
 
   const { branch, exam_number, event, record, gender } = req.body;
+
+  // 필수 입력값 확인
   if (!branch || !exam_number || !event || !record || !gender) {
-    return res.status(400).json({ error: '❌ 필드 누락됨' });
+    console.warn('⚠️ 필수 항목 누락');
+    return res.status(400).json({ error: '❌ 필수 항목 누락' });
   }
 
+  // 점수 계산
   const score = calculateScore(event, gender, record);
   const field_record = getField(event, 'record');
   const field_score = getField(event, 'score');
 
-  const sql = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
-  db.query(sql, [branch, exam_number], (err, result) => {
+  // SELECT로 기존 여부 확인
+  const selectSql = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
+  connection.query(selectSql, [branch, exam_number], (err, result) => {
     if (err) {
-      console.error('❌ SELECT 실패:', err.message);
+      console.error('❌ [DB 조회 실패]', err.message);
       return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
     }
 
     if (result.length > 0) {
+      // UPDATE
       const updateSql = `UPDATE 실기기록 SET ${field_record} = ?, ${field_score} = ? WHERE branch = ? AND exam_number = ?`;
-      db.query(updateSql, [record, score, branch, exam_number], err => {
+      connection.query(updateSql, [record, score, branch, exam_number], err => {
         if (err) {
-          console.error('❌ UPDATE 실패:', err.message);
+          console.error('❌ [DB 업데이트 실패]', err.message);
           return res.status(500).json({ error: 'DB 업데이트 실패', detail: err.message });
         }
+        console.log(`✅ [기록 업데이트 완료] ${branch}-${exam_number} ${event} → ${record} → ${score}점`);
         res.json({ success: true, score });
       });
     } else {
+      // INSERT
       const insertSql = `INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}) VALUES (?, ?, ?, ?, ?)`;
-      db.query(insertSql, [branch, exam_number, gender, record, score], err => {
+      connection.query(insertSql, [branch, exam_number, gender, record, score], err => {
         if (err) {
-          console.error('❌ INSERT 실패:', err.message);
+          console.error('❌ [DB 삽입 실패]', err.message);
           return res.status(500).json({ error: 'DB 삽입 실패', detail: err.message });
         }
+        console.log(`🆕 [기록 삽입 완료] ${branch}-${exam_number} ${event} → ${record} → ${score}점`);
         res.json({ success: true, score });
       });
     }
   });
 });
+function calculateScore(event, gender, record) {
+  const 기준 = 기준표[event]?.[gender];
+  if (!기준) return 0;
+
+  let index = 기준.findIndex((value) => {
+    return event === '10m' ? record <= value : record >= value;
+  });
+
+  if (index === -1) index = 기준.length - 1;
+  return Math.max(100 - index * 2, 52);
+}
+function getField(event, type) {
+  const map = {
+    '제멀': 'jump',
+    '10m': 'shuttle',
+    '좌전굴': 'sit_reach',
+    '배근력': 'back_strength',
+    '메디신볼': 'medicineball'
+  };
+  return `${map[event]}_${type}`;
+}
+
 
 
 // 로그인 엔드포인트
