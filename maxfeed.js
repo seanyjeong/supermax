@@ -1963,6 +1963,7 @@ app.post('/feed/like', (req, res) => {
 });
 
     // 기준표 정의(슈퍼맥스12&북부테스트)
+// 기준표 정의
 const 기준표 = {
   '제멀': {
     남: [300, 297, 294, 291, 288, 285, 282, 279, 276, 273, 270, 267, 264, 261, 258, 255, 252, 249, 246, 243, 240, 230, 220, 210, -Infinity],
@@ -1986,19 +1987,21 @@ const 기준표 = {
   }
 };
 
+// 점수 계산 함수
 function calculateScore(event, gender, record) {
   const 기준 = 기준표[event]?.[gender];
   if (!기준) return 0;
 
-  let index = 기준.findIndex((value, i) => {
-    if (event === '10m') return record <= value;
-    else return record >= value;
+  let index = 기준.findIndex((v, i) => {
+    if (event === '10m') return record <= v;
+    else return record >= v;
   });
 
   if (index === -1) index = 기준.length - 1;
   return Math.max(100 - index * 2, 52);
 }
 
+// DB 컬럼명 매핑
 function getField(event, type) {
   const map = {
     '제멀': 'jump',
@@ -2010,45 +2013,61 @@ function getField(event, type) {
   return `${map[event]}_${type}`;
 }
 
+// 기록 제출 API
 app.post('/feed/submit-record', (req, res) => {
-  console.log('📥 [submit-record 요청]', req.body);
+  console.log('📥 [submit-record] 요청:', req.body);
 
   const { branch, exam_number, event, record, gender } = req.body;
   if (!branch || !exam_number || !event || !record || !gender) {
-    console.warn('❌ 필수값 누락');
-    return res.status(400).json({ error: '필수값 누락' });
+    return res.status(400).json({ error: '❌ 필수 항목 누락' });
   }
 
-  const score = calculateScore(event, gender, record);
+  const score = calculateScore(event, gender, parseFloat(record));
   const field_record = getField(event, 'record');
   const field_score = getField(event, 'score');
 
   const selectSql = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
-  connection.query(selectSql, [branch, exam_number], (err, result) => {
+  db.query(selectSql, [branch, exam_number], (err, result) => {
     if (err) {
-      console.error('❌ 조회 실패:', err.message);
-      return res.status(500).json({ error: '조회 실패' });
+      console.error('❌ SELECT 실패:', err.message);
+      return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
     }
 
     if (result.length > 0) {
-      const updateSql = `UPDATE 실기기록 SET ${field_record} = ?, ${field_score} = ? WHERE branch = ? AND exam_number = ?`;
-      connection.query(updateSql, [record, score, branch, exam_number], err2 => {
-        if (err2) {
-          console.error('❌ 업데이트 실패:', err2.message);
-          return res.status(500).json({ error: '업데이트 실패' });
+      const row = result[0];
+      const total = 
+        (field_score === 'jump_score' ? score : (row.jump_score || 0)) +
+        (field_score === 'shuttle_score' ? score : (row.shuttle_score || 0)) +
+        (field_score === 'sit_reach_score' ? score : (row.sit_reach_score || 0)) +
+        (field_score === 'back_strength_score' ? score : (row.back_strength_score || 0)) +
+        (field_score === 'medicineball_score' ? score : (row.medicineball_score || 0));
+
+      const updateSql = `
+        UPDATE 실기기록 
+        SET ${field_record} = ?, ${field_score} = ?, total_score = ?
+        WHERE branch = ? AND exam_number = ?
+      `;
+      db.query(updateSql, [record, score, total, branch, exam_number], err => {
+        if (err) {
+          console.error('❌ UPDATE 실패:', err.message);
+          return res.status(500).json({ error: 'DB 업데이트 실패', detail: err.message });
         }
-        console.log(`✅ 기록 업데이트 성공: ${branch}-${exam_number}, ${event}, ${record} → ${score}`);
-        res.json({ success: true, score });
+        console.log(`✅ 업데이트 완료 | 총점: ${total}`);
+        res.json({ success: true, score, total });
       });
+
     } else {
-      const insertSql = `INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}) VALUES (?, ?, ?, ?, ?)`;
-      connection.query(insertSql, [branch, exam_number, gender, record, score], err3 => {
-        if (err3) {
-          console.error('❌ 삽입 실패:', err3.message);
-          return res.status(500).json({ error: '삽입 실패' });
+      const insertSql = `
+        INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}, total_score)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `;
+      db.query(insertSql, [branch, exam_number, gender, record, score, score], err => {
+        if (err) {
+          console.error('❌ INSERT 실패:', err.message);
+          return res.status(500).json({ error: 'DB 삽입 실패', detail: err.message });
         }
-        console.log(`✅ 기록 삽입 성공: ${branch}-${exam_number}, ${event}, ${record} → ${score}`);
-        res.json({ success: true, score });
+        console.log(`🆕 삽입 완료 | ${event}: ${record} → ${score}점`);
+        res.json({ success: true, score, total: score });
       });
     }
   });
