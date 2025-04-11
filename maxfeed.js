@@ -2185,6 +2185,20 @@ app.get('/feed_recorded', (req, res) => {
   });
 });
 
+// 특정 조에서 특정 종목 기록 완료된 exam_number 리스트 조회
+app.get('/feed_recorded_check', (req, res) => {
+  const { group, event } = req.query;
+  if (!group || !event) return res.status(400).json({ error: 'group, event 필요' });
+
+  const field = getField(event, 'record');  // 예: jump_record
+  const sql = `SELECT exam_number FROM 실기기록 WHERE record_group = ? AND ${field} IS NOT NULL`;
+  db.query(sql, [group], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    res.json(rows.map(row => row.exam_number));
+  });
+});
+
+
 
   
 
