@@ -2078,30 +2078,27 @@ app.post('/feed/submit-record', (req, res) => {
 app.get('/feed/get-student', (req, res) => {
   const { branch, exam_number } = req.query;
 
+  console.log("📥 [학생 정보 요청]", { branch, exam_number });
+
   if (!branch || !exam_number) {
-    return res.status(400).json({ error: "지점(branch)와 수험번호(exam_number)가 필요합니다." });
+    return res.status(400).json({ error: 'branch 또는 exam_number 누락' });
   }
 
-  const sql = `
-    SELECT name, school, grade, gender 
-    FROM 실기기록 
-    WHERE branch = ? AND exam_number = ?
-    LIMIT 1
-  `;
-
-  db.query(sql, [branch, exam_number], (err, rows) => {
+  const sql = `SELECT name, school, grade FROM 실기기록 WHERE branch = ? AND exam_number = ?`;
+  connection.query(sql, [branch, exam_number], (err, results) => {
     if (err) {
-      console.error("❌ 학생 정보 조회 실패:", err);
-      return res.status(500).json({ error: "DB 오류" });
+      console.error("🔥 DB 오류:", err.message);
+      return res.status(500).json({ error: "DB 오류", detail: err.message });
     }
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "해당 학생을 찾을 수 없습니다." });
+    if (results.length === 0) {
+      return res.status(404).json({ error: "학생 정보를 찾을 수 없습니다." });
     }
 
-    res.json(rows[0]);
+    res.json({ success: true, student: results[0] });
   });
 });
+
 
 
 
