@@ -57,6 +57,82 @@ app.use(bodyParser.json());
 app.use(requestIp.mw({ attributeName: 'clientIp' }));
 // HTTP 서버를 생성합니다.
 const server = http.createServer(app);
+
+
+// 기준표 정의
+const 기준표 = {
+  '제멀': {
+    남: [300, 297, 294, 291, 288, 285, 282, 279, 276, 273, 270, 267, 264, 261, 258, 255, 252, 249, 246, 243, 240, 230, 220, 210, -Infinity],
+    여: [250, 247, 244, 241, 238, 235, 232, 229, 226, 223, 220, 217, 214, 211, 208, 205, 202, 199, 196, 193, 190, 170, 160, 150, -Infinity]
+  },
+  '10m': {
+    남: [8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.2, 10.4, 10.6, Infinity],
+    여: [9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0, 11.1, 11.2, 11.4, 11.6, 11.8, Infinity]
+  },
+  '좌전굴': {
+    남: [32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 10, 8, 6, -Infinity],
+    여: [34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 12, 10, 8, -Infinity]
+  },
+  '배근력': {
+    남: [220, 216, 212, 208, 204, 200, 196, 192, 188, 184, 180, 176, 172, 168, 164, 160, 156, 152, 148, 144, 140, 130, 120, 110, -Infinity],
+    여: [150, 146, 142, 138, 134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 86, 82, 78, 74, 70, 60, 50, 40, -Infinity]
+  },
+  '메디신볼': {
+    남: [12.5, 12.2, 11.9, 11.6, 11.3, 11.0, 10.7, 10.4, 10.1, 9.8, 9.5, 9.2, 8.9, 8.6, 8.3, 8.0, 7.7, 7.4, 7.1, 6.8, 6.5, 6.0, 5.5, 5.0, -Infinity],
+    여: [9.5, 9.2, 8.9, 8.6, 8.3, 8.0, 7.7, 7.4, 7.1, 6.8, 6.5, 6.2, 5.9, 5.6, 5.3, 5.0, 4.7, 4.4, 4.1, 3.8, 3.5, 3.0, 2.5, 2.0, -Infinity]
+  }
+};
+
+function calculateScore(event, gender, record) {
+  const 기준 = 기준표[event]?.[gender];
+  if (!기준) return 0;
+
+  let index = 기준.findIndex((value, i) => {
+    if (event === '10m') return record <= value;
+    else return record >= value;
+  });
+
+  if (index === -1) index = 기준.length - 1;
+  return Math.max(100 - index * 2, 52);
+}
+
+function getField(event, type) {
+  const map = {
+    '제멀': 'jump',
+    '10m': 'shuttle',
+    '좌전굴': 'sit_reach',
+    '배근력': 'back_strength',
+    '메디신볼': 'medicineball'
+  };
+  return `${map[event]}_${type}`;
+}
+
+app.post('/api/submit-record', (req, res) => {
+  const { branch, exam_number, event, record, gender } = req.body;
+  const score = calculateScore(event, gender, record);
+  const field_record = getField(event, 'record');
+  const field_score = getField(event, 'score');
+
+  const selectQuery = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
+  db.query(selectQuery, [branch, exam_number], (err, result) => {
+    if (err) return res.status(500).json({ error: 'DB 조회 실패' });
+
+    if (result.length > 0) {
+      const updateQuery = `UPDATE 실기기록 SET ${field_record} = ?, ${field_score} = ? WHERE branch = ? AND exam_number = ?`;
+      db.query(updateQuery, [record, score, branch, exam_number], err => {
+        if (err) return res.status(500).json({ error: 'DB 업데이트 실패' });
+        res.json({ success: true, score });
+      });
+    } else {
+      const insertQuery = `INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}) VALUES (?, ?, ?, ?, ?)`;
+      db.query(insertQuery, [branch, exam_number, gender, record, score], err => {
+        if (err) return res.status(500).json({ error: 'DB 삽입 실패' });
+        res.json({ success: true, score });
+      });
+    }
+  });
+});
+
 // 로그인 엔드포인트
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
