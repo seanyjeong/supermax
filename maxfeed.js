@@ -2102,7 +2102,51 @@ app.get('/feed/get-student', (req, res) => {
   });
 });
 
+// 1. 전체 학생 수 조회 API
+app.get('/feed/student-count', (req, res) => {
+  const sql = 'SELECT COUNT(*) AS count FROM 실기기록';
+  db.query(sql, (err, result) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    res.json({ total: result[0].count });
+  });
+});
 
+// 2. 랜덤 조편성 API
+app.post('/feed/assign-groups', (req, res) => {
+  const { totalGroups } = req.body;
+  if (!totalGroups || isNaN(totalGroups)) return res.status(400).json({ error: '조 수 누락 또는 유효하지 않음' });
+
+  const selectSql = 'SELECT id FROM 실기기록';
+  db.query(selectSql, (err, rows) => {
+    if (err) return res.status(500).json({ error: '학생 조회 실패' });
+
+    const shuffled = rows.sort(() => Math.random() - 0.5);
+    const updates = [];
+
+    shuffled.forEach((row, index) => {
+      const group = (index % totalGroups) + 1;
+      updates.push([group, row.id]);
+    });
+
+    const updateSql = 'UPDATE 실기기록 SET record_group = ? WHERE id = ?';
+    updates.forEach(([group, id]) => {
+      db.query(updateSql, [group, id], (err) => {
+        if (err) console.error(`❌ 조 업데이트 실패: id=${id}`, err);
+      });
+    });
+
+    res.json({ success: true, assigned: updates.length });
+  });
+});
+
+// 3. 조별 인원 수 통계 API
+app.get('/feed/group-summary', (req, res) => {
+  const sql = `SELECT record_group AS group_no, COUNT(*) AS count FROM 실기기록 GROUP BY record_group ORDER BY group_no ASC`;
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: '요약 조회 실패' });
+    res.json(results);
+  });
+});
 
 
 
