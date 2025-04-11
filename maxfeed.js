@@ -2197,6 +2197,21 @@ app.get('/feed_recorded_check', (req, res) => {
     res.json(rows.map(row => row.exam_number));
   });
 });
+// 예시 GET 요청: /feed_recorded_one?group=1&event=제멀&exam_number=123456
+app.get('/feed_recorded_one', (req, res) => {
+  const { group, event, exam_number } = req.query;
+  if (!group || !event || !exam_number) return res.status(400).json({ error: '누락된 파라미터' });
+
+  const field = getField(event, 'record'); // 예: jump_record
+  const sql = `SELECT ${field} AS record FROM 실기기록 WHERE record_group = ? AND exam_number = ?`;
+
+  db.query(sql, [group, exam_number], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    if (rows.length === 0) return res.json({ record: null });
+    res.json({ record: rows[0].record });
+  });
+});
+
 
 
 
