@@ -1962,6 +1962,122 @@ app.post('/feed/like', (req, res) => {
   }
 });
 
+    // 기준표 정의(슈퍼맥스12&북부테스트)
+const 기준표 = {
+  '제멀': {
+    남: [300, 297, 294, 291, 288, 285, 282, 279, 276, 273, 270, 267, 264, 261, 258, 255, 252, 249, 246, 243, 240, 230, 220, 210, -Infinity],
+    여: [250, 247, 244, 241, 238, 235, 232, 229, 226, 223, 220, 217, 214, 211, 208, 205, 202, 199, 196, 193, 190, 170, 160, 150, -Infinity]
+  },
+  '10m': {
+    남: [8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.2, 10.4, 10.6, Infinity],
+    여: [9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0, 11.1, 11.2, 11.4, 11.6, 11.8, Infinity]
+  },
+  '좌전굴': {
+    남: [32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 10, 8, 6, -Infinity],
+    여: [34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 12, 10, 8, -Infinity]
+  },
+  '배근력': {
+    남: [220, 216, 212, 208, 204, 200, 196, 192, 188, 184, 180, 176, 172, 168, 164, 160, 156, 152, 148, 144, 140, 130, 120, 110, -Infinity],
+    여: [150, 146, 142, 138, 134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 86, 82, 78, 74, 70, 60, 50, 40, -Infinity]
+  },
+  '메디신볼': {
+    남: [12.5, 12.2, 11.9, 11.6, 11.3, 11.0, 10.7, 10.4, 10.1, 9.8, 9.5, 9.2, 8.9, 8.6, 8.3, 8.0, 7.7, 7.4, 7.1, 6.8, 6.5, 6.0, 5.5, 5.0, -Infinity],
+    여: [9.5, 9.2, 8.9, 8.6, 8.3, 8.0, 7.7, 7.4, 7.1, 6.8, 6.5, 6.2, 5.9, 5.6, 5.3, 5.0, 4.7, 4.4, 4.1, 3.8, 3.5, 3.0, 2.5, 2.0, -Infinity]
+  }
+};
+
+function calculateScore(event, gender, record) {
+  const 기준 = 기준표[event]?.[gender];
+  if (!기준) return 0;
+
+  let index = 기준.findIndex((value, i) => {
+    if (event === '10m') return record <= value;
+    else return record >= value;
+  });
+
+  if (index === -1) index = 기준.length - 1;
+  return Math.max(100 - index * 2, 52);
+}
+
+function getField(event, type) {
+  const map = {
+    '제멀': 'jump',
+    '10m': 'shuttle',
+    '좌전굴': 'sit_reach',
+    '배근력': 'back_strength',
+    '메디신볼': 'medicineball'
+  };
+  return `${map[event]}_${type}`;
+}
+
+app.post('/feed/submit-record', (req, res) => {
+  console.log('📥 [기록 제출] 요청 도착:', req.body);
+
+  const { branch, exam_number, event, record, gender } = req.body;
+
+  if (!branch || !exam_number || !event || !record || !gender) {
+    console.warn('⚠️ 필수 항목 누락');
+    return res.status(400).json({ error: '❌ 필수 항목 누락' });
+  }
+
+  const score = calculateScore(event, gender, record);
+  const field_record = getField(event, 'record');
+  const field_score = getField(event, 'score');
+
+  const selectSql = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
+  connection.query(selectSql, [branch, exam_number], (err, result) => {
+    if (err) {
+      console.error('❌ [DB 조회 실패]', err.message);
+      return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
+    }
+
+    if (result.length > 0) {
+      // 기존 점수들 가져오기
+      const row = result[0];
+      const scoreKeys = ['jump_score', 'shuttle_score', 'sit_reach_score', 'back_strength_score', 'medicineball_score'];
+      const scoreMap = {
+        'jump_score': row.jump_score || 0,
+        'shuttle_score': row.shuttle_score || 0,
+        'sit_reach_score': row.sit_reach_score || 0,
+        'back_strength_score': row.back_strength_score || 0,
+        'medicineball_score': row.medicineball_score || 0
+      };
+      scoreMap[field_score] = score;
+
+      const total = Object.values(scoreMap).reduce((sum, val) => sum + Number(val), 0);
+
+      const updateSql = `
+        UPDATE 실기기록 
+        SET ${field_record} = ?, ${field_score} = ?, total_score = ? 
+        WHERE branch = ? AND exam_number = ?
+      `;
+      connection.query(updateSql, [record, score, total, branch, exam_number], err => {
+        if (err) {
+          console.error('❌ [DB 업데이트 실패]', err.message);
+          return res.status(500).json({ error: 'DB 업데이트 실패', detail: err.message });
+        }
+        console.log(`✅ [기록 업데이트] ${branch}-${exam_number} ${event}: ${record} → ${score}점 | 총점: ${total}`);
+        res.json({ success: true, score, total });
+      });
+
+    } else {
+      const insertSql = `
+        INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}, total_score) 
+        VALUES (?, ?, ?, ?, ?, ?)
+      `;
+      connection.query(insertSql, [branch, exam_number, gender, record, score, score], err => {
+        if (err) {
+          console.error('❌ [DB 삽입 실패]', err.message);
+          return res.status(500).json({ error: 'DB 삽입 실패', detail: err.message });
+        }
+        console.log(`🆕 [기록 삽입] ${branch}-${exam_number} ${event}: ${record} → ${score}점 | 총점: ${score}`);
+        res.json({ success: true, score, total: score });
+      });
+    }
+  });
+});
+
+
 
 
 
