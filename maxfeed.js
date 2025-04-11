@@ -2075,27 +2075,26 @@ app.post('/feed/submit-record', (req, res) => {
 
 
 // ✅ 수험번호로 학생 기본 정보 조회 API
+// 기존 버전 (branch까지 필요하게 되어 있었음)
 app.get('/feed/get-student', (req, res) => {
-  const { branch, exam_number } = req.query;
+  const { exam_number } = req.query;
+  if (!exam_number) return res.status(400).json({ error: 'exam_number 필요' });
 
-  console.log("📥 [학생 정보 요청]", { branch, exam_number });
+  const sql = `SELECT * FROM 실기기록 WHERE exam_number = ? LIMIT 1`;
+  db.query(sql, [exam_number], (err, results) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    if (results.length === 0) return res.status(404).json({ error: '학생 정보 없음' });
 
-  if (!branch || !exam_number) {
-    return res.status(400).json({ error: 'branch 또는 exam_number 누락' });
-  }
-
-  const sql = `SELECT name, school, grade FROM 실기기록 WHERE branch = ? AND exam_number = ?`;
-  connection.query(sql, [branch, exam_number], (err, results) => {
-    if (err) {
-      console.error("🔥 DB 오류:", err.message);
-      return res.status(500).json({ error: "DB 오류", detail: err.message });
-    }
-
-    if (results.length === 0) {
-      return res.status(404).json({ error: "학생 정보를 찾을 수 없습니다." });
-    }
-
-    res.json({ success: true, student: results[0] });
+    const student = results[0];
+    res.json({
+      success: true,
+      student: {
+        name: student.name,
+        school: student.school,
+        grade: student.grade,
+        branch: student.branch
+      }
+    });
   });
 });
 
