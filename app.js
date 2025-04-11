@@ -107,7 +107,7 @@ function getField(event, type) {
   return `${map[event]}_${type}`;
 }
 
-app.post('/api/submit-record', (req, res) => {
+app.post('/submit-record', (req, res) => {
   const { branch, exam_number, event, record, gender } = req.body;
   const score = calculateScore(event, gender, record);
   const field_record = getField(event, 'record');
