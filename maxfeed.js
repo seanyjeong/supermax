@@ -2166,6 +2166,27 @@ app.get('/feed/group/:group', (req, res) => {
     res.json(rows);
   });
 });
+// ✅ 특정 종목에 대해 이미 기록된 수험번호 조회 (그룹 기준)
+app.get('/feed_recorded', (req, res) => {
+  const { event, group } = req.query;
+  if (!event || !group) {
+    return res.status(400).json({ error: 'event와 group 값이 필요합니다.' });
+  }
+
+  const field = getField(event, 'record');
+  const sql = `
+    SELECT exam_number 
+    FROM 실기기록 
+    WHERE record_group = ? AND ${field} IS NOT NULL AND ${field} != ''
+  `;
+  db.query(sql, [group], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류', detail: err.message });
+    res.json(rows.map(r => r.exam_number));
+  });
+});
+
+
+  
 
 
 
