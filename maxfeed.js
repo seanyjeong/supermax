@@ -2148,6 +2148,13 @@ app.get('/feed/group-summary', (req, res) => {
   });
 });
 
+app.get('/feed/check-group-assigned', (req, res) => {
+  const sql = 'SELECT COUNT(*) AS count FROM 실기기록 WHERE record_group IS NOT NULL';
+  db.query(sql, (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    res.json({ assigned: rows[0].count > 0 });
+  });
+});
 
 
 
