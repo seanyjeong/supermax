@@ -108,30 +108,46 @@ function getField(event, type) {
 }
 
 app.post('/submit-record', (req, res) => {
+  console.log('📥 요청 도착:', req.body);
+
   const { branch, exam_number, event, record, gender } = req.body;
+  if (!branch || !exam_number || !event || !record || !gender) {
+    return res.status(400).json({ error: '❌ 필드 누락됨' });
+  }
+
   const score = calculateScore(event, gender, record);
   const field_record = getField(event, 'record');
   const field_score = getField(event, 'score');
 
-  const selectQuery = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
-  db.query(selectQuery, [branch, exam_number], (err, result) => {
-    if (err) return res.status(500).json({ error: 'DB 조회 실패' });
+  const sql = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
+  db.query(sql, [branch, exam_number], (err, result) => {
+    if (err) {
+      console.error('❌ SELECT 실패:', err.message);
+      return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
+    }
 
     if (result.length > 0) {
-      const updateQuery = `UPDATE 실기기록 SET ${field_record} = ?, ${field_score} = ? WHERE branch = ? AND exam_number = ?`;
-      db.query(updateQuery, [record, score, branch, exam_number], err => {
-        if (err) return res.status(500).json({ error: 'DB 업데이트 실패' });
+      const updateSql = `UPDATE 실기기록 SET ${field_record} = ?, ${field_score} = ? WHERE branch = ? AND exam_number = ?`;
+      db.query(updateSql, [record, score, branch, exam_number], err => {
+        if (err) {
+          console.error('❌ UPDATE 실패:', err.message);
+          return res.status(500).json({ error: 'DB 업데이트 실패', detail: err.message });
+        }
         res.json({ success: true, score });
       });
     } else {
-      const insertQuery = `INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}) VALUES (?, ?, ?, ?, ?)`;
-      db.query(insertQuery, [branch, exam_number, gender, record, score], err => {
-        if (err) return res.status(500).json({ error: 'DB 삽입 실패' });
+      const insertSql = `INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}) VALUES (?, ?, ?, ?, ?)`;
+      db.query(insertSql, [branch, exam_number, gender, record, score], err => {
+        if (err) {
+          console.error('❌ INSERT 실패:', err.message);
+          return res.status(500).json({ error: 'DB 삽입 실패', detail: err.message });
+        }
         res.json({ success: true, score });
       });
     }
   });
 });
+
 
 // 로그인 엔드포인트
 app.post('/login', async (req, res) => {
