@@ -2092,7 +2092,8 @@ app.get('/feed/get-student', (req, res) => {
         name: student.name,
         school: student.school,
         grade: student.grade,
-        branch: student.branch
+        branch: student.branch,
+        gender: student.gender
       }
     });
   });
