@@ -2013,7 +2013,6 @@ function getField(event, type) {
   return `${map[event]}_${type}`;
 }
 
-// 기록 제출 API
 app.post('/feed/submit-record', (req, res) => {
   console.log('📥 [submit-record] 요청:', req.body);
 
@@ -2022,7 +2021,10 @@ app.post('/feed/submit-record', (req, res) => {
     return res.status(400).json({ error: '❌ 필수 항목 누락' });
   }
 
-  const score = calculateScore(event, gender, parseFloat(record));
+  const isFoul = record === 'F' || record === 'f';
+  const savedRecord = isFoul ? 'F' : parseFloat(record);
+  const score = isFoul ? 52 : calculateScore(event, gender, parseFloat(record));
+
   const field_record = getField(event, 'record');
   const field_score = getField(event, 'score');
 
@@ -2047,12 +2049,12 @@ app.post('/feed/submit-record', (req, res) => {
         SET ${field_record} = ?, ${field_score} = ?, total_score = ?
         WHERE branch = ? AND exam_number = ?
       `;
-      db.query(updateSql, [record, score, total, branch, exam_number], err => {
+      db.query(updateSql, [savedRecord, score, total, branch, exam_number], err => {
         if (err) {
           console.error('❌ UPDATE 실패:', err.message);
           return res.status(500).json({ error: 'DB 업데이트 실패', detail: err.message });
         }
-        console.log(`✅ 업데이트 완료 | 총점: ${total}`);
+        console.log(`✅ 업데이트 완료 | ${event}: ${savedRecord} → ${score}점 | 총점: ${total}`);
         res.json({ success: true, score, total });
       });
 
@@ -2061,17 +2063,18 @@ app.post('/feed/submit-record', (req, res) => {
         INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}, total_score)
         VALUES (?, ?, ?, ?, ?, ?)
       `;
-      db.query(insertSql, [branch, exam_number, gender, record, score, score], err => {
+      db.query(insertSql, [branch, exam_number, gender, savedRecord, score, score], err => {
         if (err) {
           console.error('❌ INSERT 실패:', err.message);
           return res.status(500).json({ error: 'DB 삽입 실패', detail: err.message });
         }
-        console.log(`🆕 삽입 완료 | ${event}: ${record} → ${score}점`);
+        console.log(`🆕 삽입 완료 | ${event}: ${savedRecord} → ${score}점`);
         res.json({ success: true, score, total: score });
       });
     }
   });
 });
+
 
 
 // ✅ 수험번호로 학생 기본 정보 조회 API
