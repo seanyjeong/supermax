@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>기록 입력</title>
+  <link href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css" rel="stylesheet">
+  <style>
+    body { max-width: 480px; margin: auto; padding: 1em; }
+    select, input { width: 100%; }
+    .success { color: green; }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+  <h2>실기 기록 입력</h2>
+  <form id="recordForm">
+    <label>지점
+      <input type="text" name="branch" required>
+    </label>
+    <label>수험번호
+      <input type="text" name="exam_number" required>
+    </label>
+    <label>성별
+      <select name="gender" required>
+        <option value="남">남</option>
+        <option value="여">여</option>
+      </select>
+    </label>
+    <label>종목
+      <select name="event" required>
+        <option value="제멀">제자리멀리뛰기</option>
+        <option value="10m">10m 왕복달리기</option>
+        <option value="좌전굴">좌전굴</option>
+        <option value="배근력">배근력</option>
+        <option value="메디신볼">메디신볼던지기</option>
+      </select>
+    </label>
+    <label>기록
+      <input type="number" step="any" name="record" required>
+    </label>
+    <button type="submit">기록 제출</button>
+  </form>
+  <p id="result"></p>
+
+  <script>
+    const form = document.getElementById('recordForm');
+    const result = document.getElementById('result');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+      data.record = parseFloat(data.record);
+
+      try {
+        const res = await fetch('https://supermax.kr/submit-record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const json = await res.json();
+        if (json.success) {
+          result.innerHTML = `✅ ${data.event} 기록 ${data.record} → ${json.score}점`; 
+          result.className = 'success';
+        } else {
+          result.innerHTML = '❌ 오류 발생';
+          result.className = 'error';
+        }
+      } catch (err) {
+        console.error(err);
+        result.innerHTML = '❌ 서버 연결 오류';
+        result.className = 'error';
+      }
+    });
+  </script>
+</body>
+</html>
