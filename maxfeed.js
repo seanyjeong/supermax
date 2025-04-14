@@ -2272,19 +2272,32 @@ app.post('/feed/attendance-check', (req, res) => {
 });
 
 // ✅ 결시자 → 대체자 등록 API
+// ✅ 대체자 등록 및 실기기록 업데이트 로직
 app.post('/feed/add-swap', (req, res) => {
   const { origin_exam_number, new_name, new_school, new_grade, new_gender, branch } = req.body;
   if (!origin_exam_number || !new_name || !new_school || !new_grade || !new_gender || !branch) {
     return res.status(400).json({ error: '모든 필수값 누락' });
   }
 
-  const sql = `INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch)
-               VALUES (?, ?, ?, ?, ?, ?)`;
-  db.query(sql, [origin_exam_number, new_name, new_school, new_grade, new_gender, branch], (err) => {
-    if (err) return res.status(500).json({ error: 'DB 저장 실패', detail: err.message });
-    res.json({ success: true });
+  // 1. 추가등록 테이블에 기록
+  const insertSwapSql = `
+    INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch)
+    VALUES (?, ?, ?, ?, ?, ?)`;
+  db.query(insertSwapSql, [origin_exam_number, new_name, new_school, new_grade, new_gender, branch], (err) => {
+    if (err) return res.status(500).json({ error: '추가등록 저장 실패', detail: err.message });
+
+    // 2. 실기기록 테이블 수정
+    const updateStudentSql = `
+      UPDATE 실기기록
+      SET name = ?, school = ?, grade = ?, gender = ?, attended = 1
+      WHERE exam_number = ? AND branch = ?`;
+    db.query(updateStudentSql, [new_name, new_school, new_grade, new_gender, origin_exam_number, branch], (err2) => {
+      if (err2) return res.status(500).json({ error: '실기기록 대체 실패', detail: err2.message });
+      res.json({ success: true, exam_number: origin_exam_number });
+    });
   });
 });
+
 
 // ✅ 신규 추가 등록 API
 app.post('/feed/add-new', (req, res) => {
