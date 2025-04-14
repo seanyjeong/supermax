@@ -2177,7 +2177,7 @@ app.get('/feed/group/:group', (req, res) => {
   const sql = `
     SELECT exam_number, 
       jump_record, shuttle_record, sit_reach_record, 
-      back_strength_record, medicineball_record
+      back_strength_record, medicineball_record,record_group
     FROM 실기기록 
     WHERE record_group = ? ORDER BY exam_number ASC
   `;
