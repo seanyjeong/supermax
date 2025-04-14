@@ -2302,17 +2302,80 @@ app.post('/feed/add-swap', (req, res) => {
 // ✅ 신규 추가 등록 API
 app.post('/feed/add-new', (req, res) => {
   const { new_name, new_school, new_grade, new_gender, branch } = req.body;
+
   if (!new_name || !new_school || !new_grade || !new_gender || !branch) {
     return res.status(400).json({ error: '모든 필수값 누락' });
   }
 
-  const sql = `INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch)
-               VALUES (NULL, ?, ?, ?, ?, ?)`;
-  db.query(sql, [new_name, new_school, new_grade, new_gender, branch], (err) => {
-    if (err) return res.status(500).json({ error: 'DB 저장 실패', detail: err.message });
-    res.json({ success: true });
+  // 1. 가장 인원이 적은 조 찾기
+  const groupSql = `
+    SELECT record_group, COUNT(*) AS count 
+    FROM 실기기록 
+    GROUP BY record_group 
+    ORDER BY count ASC 
+    LIMIT 1
+  `;
+
+  db.query(groupSql, (err, groupRows) => {
+    if (err || groupRows.length === 0) {
+      console.error('❌ 조 조회 실패:', err);
+      return res.status(500).json({ error: '조 조회 실패' });
+    }
+
+    const selectedGroup = groupRows[0].record_group;
+
+    // 2. 해당 조의 가장 큰 수험번호 조회
+    const maxExamSql = `
+      SELECT MAX(exam_number) AS max_exam 
+      FROM 실기기록 
+      WHERE record_group = ?
+    `;
+
+    db.query(maxExamSql, [selectedGroup], (err, maxRows) => {
+      if (err) {
+        console.error('❌ 수험번호 조회 실패:', err);
+        return res.status(500).json({ error: '수험번호 조회 실패' });
+      }
+
+      let nextSeq = 1;
+      if (maxRows[0].max_exam) {
+        const maxExam = maxRows[0].max_exam;
+        nextSeq = parseInt(maxExam.slice(1)) + 1;
+      }
+
+      const newExamNumber = `${selectedGroup}${String(nextSeq).padStart(3, '0')}`;
+
+      // 3. 실기기록 테이블에 INSERT
+      const insertRecordSql = `
+        INSERT INTO 실기기록 (name, school, grade, gender, branch, record_group, exam_number, attended)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      `;
+
+      db.query(insertRecordSql, [new_name, new_school, new_grade, new_gender, branch, selectedGroup, newExamNumber], (err) => {
+        if (err) {
+          console.error('❌ 실기기록 등록 실패:', err);
+          return res.status(500).json({ error: '기록 등록 실패' });
+        }
+
+        // 4. 추가등록 테이블에 INSERT
+        const insertExtraSql = `
+          INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
+          VALUES (NULL, ?, ?, ?, ?, ?, '신규')
+        `;
+
+        db.query(insertExtraSql, [new_name, new_school, new_grade, new_gender, branch], (err2) => {
+          if (err2) {
+            console.error('❌ 추가등록 테이블 실패:', err2);
+            return res.status(500).json({ error: '추가등록 실패' });
+          }
+
+          res.json({ success: true, assigned_exam_number: newExamNumber });
+        });
+      });
+    });
   });
 });
+
 
 
 // ✅ 지점별 학생 목록 조회 API
