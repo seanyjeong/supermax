@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>본부 출결 대시보드</title>
+  <link href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css" rel="stylesheet">
+  <style>
+    body { max-width: 1000px; margin: auto; padding: 2em; text-align: center; }
+    h2 { margin-bottom: 1em; }
+    select { padding: 0.5em; margin-bottom: 1em; }
+    table { width: 100%; margin-top: 1em; border-collapse: collapse; }
+    th, td { padding: 0.6em; border-bottom: 1px solid #ccc; text-align: center; }
+    .stat-box {
+      display: flex; justify-content: space-around; flex-wrap: wrap; gap: 1em;
+      margin-top: 1em;
+    }
+    .stat-card {
+      background: #f5f5f5;
+      padding: 1em;
+      border-radius: 8px;
+      flex: 1 1 200px;
+    }
+  </style>
+</head>
+<body>
+<h2>본부 출결 대시보드</h2>
+
+<select id="branchSelect">
+  <option value="">지점 선택</option>
+  <option value="일산">일산</option>
+  <option value="행신">행신</option>
+</select>
+
+<div class="stat-box">
+  <div class="stat-card"><strong>✅ 최종인원</strong><br><span id="totalCount">-</span></div>
+  <div class="stat-card"><strong>✅ 출석인원</strong><br><span id="attendedCount">-</span></div>
+  <div class="stat-card"><strong>❌ 결시인원</strong><br><span id="absentCount">-</span></div>
+  <div class="stat-card"><strong>➕ 추가인원</strong><br><span id="newCount">-</span></div>
+  <div class="stat-card"><strong>🔁 대체인원</strong><br><span id="swapCount">-</span></div>
+</div>
+
+<table id="detailTable">
+  <thead>
+    <tr>
+      <th>수험번호</th><th>이름</th><th>학교</th><th>학년</th><th>성별</th><th>출석</th><th>비고</th>
+    </tr>
+  </thead>
+  <tbody id="detailBody"></tbody>
+</table>
+
+<script>
+const branchSelect = document.getElementById('branchSelect');
+const totalCount = document.getElementById('totalCount');
+const attendedCount = document.getElementById('attendedCount');
+const absentCount = document.getElementById('absentCount');
+const newCount = document.getElementById('newCount');
+const swapCount = document.getElementById('swapCount');
+const detailBody = document.getElementById('detailBody');
+
+branchSelect.addEventListener('change', async () => {
+  const branch = branchSelect.value;
+  if (!branch) return;
+
+  // 전체 정보 불러오기
+  const res = await fetch(`https://supermax.kr/feed/dashboard?branch=${branch}`);
+  const json = await res.json();
+
+  totalCount.innerText = json.total;
+  attendedCount.innerText = json.attended;
+  absentCount.innerText = json.absent;
+  newCount.innerText = json.new_count;
+  swapCount.innerText = json.swap_count;
+
+  // 상세 테이블
+  detailBody.innerHTML = '';
+  json.students.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.exam_number}</td>
+      <td>${s.name}</td>
+      <td>${s.school}</td>
+      <td>${s.grade}</td>
+      <td>${s.gender}</td>
+      <td>${s.attended === 1 ? '출석' : '결시'}</td>
+      <td>${s.note || ''}</td>
+    `;
+    detailBody.appendChild(tr);
+  });
+});
+</script>
+</body>
+</html>
