@@ -2392,6 +2392,79 @@ app.get('/feed/branch-students', (req, res) => {
 });
 
   
+app.get('/feed/dashboard', (req, res) => {
+  const { branch } = req.query;
+  if (!branch) return res.status(400).json({ error: 'branch 누락' });
+
+  // 1. 실기기록에서 출석정보 가져오기
+  const mainSql = `
+    SELECT exam_number, name, school, grade, gender, attended
+    FROM 실기기록
+    WHERE branch = ?
+  `;
+
+  db.query(mainSql, [branch], (err1, mainRows) => {
+    if (err1) return res.status(500).json({ error: '실기기록 조회 실패', detail: err1.message });
+
+    // 2. 추가등록 테이블에서 해당 지점의 신규/대체 등록 정보 가져오기
+    const addSql = `
+      SELECT origin_exam_number, new_name, new_school, new_grade, new_gender, type
+      FROM 추가등록
+      WHERE branch = ?
+    `;
+
+    db.query(addSql, [branch], (err2, addRows) => {
+      if (err2) return res.status(500).json({ error: '추가등록 조회 실패', detail: err2.message });
+
+      // 신규/대체 정보를 매핑
+      const noteMap = {};
+      addRows.forEach(row => {
+        if (row.origin_exam_number) {
+          // 대체자 → 기존 수험번호 사용
+          noteMap[row.origin_exam_number] = '대체';
+        } else {
+          // 신규자 → 실기기록에서 이름 매칭
+          noteMap[row.new_name] = '신규'; // name으로 매칭 (주의: 이름 중복 가능성 존재)
+        }
+      });
+
+      let total = 0;
+      let attended = 0;
+      let absent = 0;
+      let new_count = 0;
+      let swap_count = 0;
+
+      const students = mainRows.map(s => {
+        const note = noteMap[s.exam_number] || noteMap[s.name] || '';
+        if (note === '신규') new_count++;
+        if (note === '대체') swap_count++;
+
+        total++;
+        if (s.attended === 1) attended++;
+        else if (s.attended === 0) absent++;
+
+        return {
+          exam_number: s.exam_number,
+          name: s.name,
+          school: s.school,
+          grade: s.grade,
+          gender: s.gender,
+          attended: s.attended,
+          note
+        };
+      });
+
+      res.json({
+        total,
+        attended,
+        absent,
+        new_count,
+        swap_count,
+        students
+      });
+    });
+  });
+});
 
 
 
