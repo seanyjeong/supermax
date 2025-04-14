@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>지점 출결</title>
+  <link href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css" rel="stylesheet" />
+  <style>
+    body { max-width: 800px; margin: auto; text-align: center; font-size: 0.95em; }
+    table { width: 100%; margin-top: 1em; font-size: 0.9em; }
+    th, td { padding: 0.4em; border-bottom: 1px solid #ccc; }
+    .attended { background: #d9fdd3; }
+    .absent { background: #ffe0e0; }
+    .action-btn { padding: 0.3em 0.6em; margin-left: 0.3em; font-size: 0.85em; }
+    #summary { margin-top: 1em; font-weight: bold; font-size: 0.95em; }
+  </style>
+</head>
+<body>
+<h2 id="pageTitle">지점 출결</h2>
+<div id="summary"></div>
+<div id="branch-section" style="display:none">
+  <table>
+    <thead>
+      <tr><th>수험번호</th><th>이름</th><th>학교</th><th>학년</th><th>성별</th><th>출결</th><th>비고</th></tr>
+    </thead>
+    <tbody id="studentTable"></tbody>
+  </table>
+  <button onclick="submitNew()">➕ 신규 추가등록</button>
+ 
+  </div>
+</div>
+
+<!-- 로그인 모달 -->
+<div id="loginModal">
+  <h3>지점 로그인</h3>
+  <input placeholder="지점명" id="branchInput" />
+  <input placeholder="비밀번호" type="password" id="pwInput" />
+  <button onclick="login()">확인</button>
+  <p id="loginError" class="error"></p>
+</div>
+
+<script>
+const loginModal = document.getElementById('loginModal');
+const branchSection = document.getElementById('branch-section');
+const studentTable = document.getElementById('studentTable');
+const summary = document.getElementById('summary');
+
+const branchMap = { '일산': '1234', '행신': '1222' };
+
+function login() {
+  const branch = document.getElementById('branchInput').value.trim();
+  const pw = document.getElementById('pwInput').value.trim();
+  if (branchMap[branch] === pw) {
+    sessionStorage.setItem('branch', branch);
+    document.getElementById('pageTitle').innerText = `${branch} 북부테스트 출결`;
+    loginModal.style.display = 'none';
+    branchSection.style.display = 'block';
+    loadStudents(branch);
+  } else {
+    document.getElementById('loginError').innerText = '지점명 또는 비밀번호 오류';
+  }
+}
+
+async function loadStudents(branch) {
+  const res = await fetch(`https://supermax.kr/feed/branch-students?branch=${branch}`);
+  const list = await res.json();
+  let attended = 0, absent = 0, unchecked = 0;
+  studentTable.innerHTML = '';
+
+  list.forEach(s => {
+    const tr = document.createElement('tr');
+    if (s.attended === 1) attended++;
+    else if (s.attended === 0) absent++;
+    else unchecked++;
+
+    tr.className = s.attended === 1 ? 'attended' : (s.attended === 0 ? 'absent' : '');
+
+    tr.innerHTML = `
+      <td>${s.record_group}조 (${s.exam_number})</td>
+      <td>${s.name}</td>
+      <td>${s.school}</td>
+      <td>${s.grade}</td>
+      <td>${s.gender}</td>
+      <td>
+        <input type="checkbox" ${s.attended === 1 ? 'checked' : ''}
+          onchange="toggleAttendance('${s.exam_number}', this.checked)" />
+      </td>
+      <td>
+        ${(s.attended === 0 || s.attended === null) ? `<button class='action-btn' onclick="openSwap('${s.exam_number}')">대체자 등록</button>` : ''}
+      </td>
+    `;
+    studentTable.appendChild(tr);
+  });
+
+  summary.innerHTML = `✅ 최종인원: ${list.length}명 | ✅ 출석: ${attended}명 | ❌ 결시: ${absent}명 | ⏳ 미체크: ${unchecked}명`;
+}
+
+function showAddForm() {
+  document.getElementById('addForm').style.display = 'block';
+}
+
+async function submitNew() {
+  const branch = sessionStorage.getItem('branch');
+  const body = {
+    branch,
+    new_name: document.getElementById('newName').value,
+    new_school: document.getElementById('newSchool').value,
+    new_grade: document.getElementById('newGrade').value,
+    new_gender: document.getElementById('newGender').value
+  };
+  const res = await fetch('https://supermax.kr/feed/add-new', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  if (json.success) {
+    alert('등록 완료!');
+    loadStudents(branch);
+  } else alert('등록 실패');
+}
+
+async function toggleAttendance(exam_number, attended) {
+  await fetch('https://supermax.kr/feed/attendance-check', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ exam_number, attended })
+  });
+  const branch = sessionStorage.getItem('branch');
+  loadStudents(branch);
+}
+
+function openSwap(origin_exam_number) {
+  const name = prompt('대체자 이름은?');
+  const school = prompt('학교명은?');
+  const grade = prompt('학년은?');
+  const gender = prompt('성별 (남/여)?');
+  const branch = sessionStorage.getItem('branch');
+
+  if (!name || !school || !grade || !gender) {
+    alert('❌ 모든 항목을 입력해야 합니다.');
+    return;
+  }
+
+  // ✅ 입력 확인
+  const confirmText = `
+[대체자 등록 확인]
+
+원래 수험번호: ${origin_exam_number}
+대체자 이름: ${name}
+학교: ${school}
+학년: ${grade}
+성별: ${gender}
+지점: ${branch}
+
+등록하시겠습니까?
+  `.trim();
+
+  const isOk = confirm(confirmText);
+  if (!isOk) return;
+
+  fetch('https://supermax.kr/feed/add-swap', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origin_exam_number, new_name: name, new_school: school, new_grade: grade, new_gender: gender, branch })
+  }).then(r => r.json()).then(json => {
+    if (json.success) {
+      alert(`✅ 대체자 등록 완료\n수험번호: ${json.exam_number}`);
+      loadStudents(branch);
+    } else {
+      alert('❌ 등록 실패');
+    }
+  });
+}
+
+function submitNew() {
+  const branch = sessionStorage.getItem('branch');
+
+  const name = prompt('이름은?');
+  const school = prompt('학교는?');
+  const grade = prompt('학년은?');
+  const gender = prompt('성별 (남/여)?');
+
+  if (!name || !school || !grade || !gender) {
+    alert('❌ 모든 항목을 입력해야 합니다.');
+    return;
+  }
+
+  // ✅ 입력 확인 창
+  const confirmText = `
+[신규 등록 확인]
+
+이름: ${name}
+학교: ${school}
+학년: ${grade}
+성별: ${gender}
+지점: ${branch}
+
+등록하시겠습니까?
+  `.trim();
+
+  const isOk = confirm(confirmText);
+  if (!isOk) return; // ❌ 취소 시 종료
+
+  // ✅ 등록 요청
+  const body = {
+    branch,
+    new_name: name,
+    new_school: school,
+    new_grade: grade,
+    new_gender: gender
+  };
+
+  fetch('https://supermax.kr/feed/add-new', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  })
+    .then(res => res.json())
+    .then(json => {
+      if (json.success) {
+        alert(`✅ 등록 완료!\n수험번호: ${json.assigned_exam_number}`);
+        loadStudents(branch);
+      } else {
+        alert('❌ 등록 실패');
+      }
+    });
+}
+
+
+</script>
+</body>
+</html>
