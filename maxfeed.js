@@ -2116,6 +2116,35 @@ app.post('/feed/assign-groups', (req, res) => {
   const { totalGroups } = req.body;
   if (!totalGroups || isNaN(totalGroups)) return res.status(400).json({ error: '조 수 누락 또는 유효하지 않음' });
 
+  const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
+  db.query(selectSql, (err, rows) => {
+    if (err) return res.status(500).json({ error: '학생 조회 실패' });
+
+    const shuffled = rows.sort(() => Math.random() - 0.5);
+    const updates = [];
+
+    shuffled.forEach((row, index) => {
+      const group = (index % totalGroups) + 1;
+      const seq = String(index + 1).padStart(3, '0'); // 예: 001, 002
+      const newExamNumber = `${group}${seq}`; // 예: 1001, 2002, 3003 ...
+
+      updates.push([group, newExamNumber, row.id]);
+    });
+
+    const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
+    updates.forEach(([group, exam_number, id]) => {
+      db.query(updateSql, [group, exam_number, id], (err) => {
+        if (err) console.error(`❌ 조편성 실패 (id=${id})`, err);
+      });
+    });
+
+    res.json({ success: true, assigned: updates.length });
+  });
+});
+app.post('/feed/assign-groups', (req, res) => {
+  const { totalGroups } = req.body;
+  if (!totalGroups || isNaN(totalGroups)) return res.status(400).json({ error: '조 수 누락 또는 유효하지 않음' });
+
   const selectSql = 'SELECT id FROM 실기기록';
   db.query(selectSql, (err, rows) => {
     if (err) return res.status(500).json({ error: '학생 조회 실패' });
