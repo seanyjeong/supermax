@@ -2302,6 +2302,17 @@ app.post('/feed/add-new', (req, res) => {
 });
 
 
+// ✅ 지점별 학생 목록 조회 API
+app.get('/feed/branch-students', (req, res) => {
+  const { branch } = req.query;
+  if (!branch) return res.status(400).json({ error: 'branch 파라미터 필요' });
+
+  const sql = `SELECT * FROM 실기기록 WHERE branch = ? ORDER BY exam_number ASC`;
+  db.query(sql, [branch], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
+    res.json(rows);
+  });
+});
 
   
 
