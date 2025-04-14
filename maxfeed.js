@@ -2179,6 +2179,31 @@ app.get('/feed/group/:group', (req, res) => {
     res.json(rows);
   });
 });
+
+      app.get('/feed/get-student', (req, res) => {
+  const { exam_number } = req.query;
+  if (!exam_number) return res.status(400).json({ error: 'exam_number 누락' });
+
+  const sql = `
+    SELECT 
+      name, school, grade, gender, branch,
+      jump_record, shuttle_record, sit_reach_record, 
+      back_strength_record, medicineball_record
+    FROM 실기기록
+    WHERE exam_number = ?
+  `;
+
+  db.query(sql, [exam_number], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'DB 오류', detail: err.message });
+    if (rows.length === 0) return res.status(404).json({ error: '학생 없음' });
+
+    res.json({
+      success: true,
+      student: rows[0]
+    });
+  });
+});
+
 // ✅ 특정 종목에 대해 이미 기록된 수험번호 조회 (그룹 기준)
 app.get('/feed_recorded', (req, res) => {
   const { event, group } = req.query;
