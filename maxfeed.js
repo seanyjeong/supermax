@@ -2279,10 +2279,10 @@ app.post('/feed/add-swap', (req, res) => {
     return res.status(400).json({ error: '모든 필수값 누락' });
   }
 
-  // 1. 추가등록 테이블에 기록
+  // 1. 추가등록 테이블에 기록 (type = '대체')
   const insertSwapSql = `
-    INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch)
-    VALUES (?, ?, ?, ?, ?, ?)`;
+    INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
+    VALUES (?, ?, ?, ?, ?, ?, '대체')`;
   db.query(insertSwapSql, [origin_exam_number, new_name, new_school, new_grade, new_gender, branch], (err) => {
     if (err) return res.status(500).json({ error: '추가등록 저장 실패', detail: err.message });
 
@@ -2357,7 +2357,7 @@ app.post('/feed/add-new', (req, res) => {
           return res.status(500).json({ error: '기록 등록 실패' });
         }
 
-        // 4. 추가등록 테이블에 INSERT
+        // 4. 추가등록 테이블에 INSERT (type = '신규')
         const insertExtraSql = `
           INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
           VALUES (NULL, ?, ?, ?, ?, ?, '신규')
@@ -2375,6 +2375,7 @@ app.post('/feed/add-new', (req, res) => {
     });
   });
 });
+
 
 
 
