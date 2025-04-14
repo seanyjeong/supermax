@@ -2257,7 +2257,49 @@ app.get('/feed_recorded_one', (req, res) => {
     res.json({ record: rows[0].record });
   });
 });
+// ✅ 출석 체크 API
+app.post('/feed/attendance-check', (req, res) => {
+  const { exam_number, attended } = req.body;
+  if (!exam_number || typeof attended === 'undefined') {
+    return res.status(400).json({ error: 'exam_number 또는 attended 누락' });
+  }
 
+  const sql = 'UPDATE 실기기록 SET attended = ? WHERE exam_number = ?';
+  db.query(sql, [attended ? 1 : 0, exam_number], (err) => {
+    if (err) return res.status(500).json({ error: '출석 저장 실패' });
+    res.json({ success: true });
+  });
+});
+
+// ✅ 결시자 → 대체자 등록 API
+app.post('/feed/add-swap', (req, res) => {
+  const { origin_exam_number, new_name, new_school, new_grade, new_gender, branch } = req.body;
+  if (!origin_exam_number || !new_name || !new_school || !new_grade || !new_gender || !branch) {
+    return res.status(400).json({ error: '모든 필수값 누락' });
+  }
+
+  const sql = `INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch)
+               VALUES (?, ?, ?, ?, ?, ?)`;
+  db.query(sql, [origin_exam_number, new_name, new_school, new_grade, new_gender, branch], (err) => {
+    if (err) return res.status(500).json({ error: 'DB 저장 실패', detail: err.message });
+    res.json({ success: true });
+  });
+});
+
+// ✅ 신규 추가 등록 API
+app.post('/feed/add-new', (req, res) => {
+  const { new_name, new_school, new_grade, new_gender, branch } = req.body;
+  if (!new_name || !new_school || !new_grade || !new_gender || !branch) {
+    return res.status(400).json({ error: '모든 필수값 누락' });
+  }
+
+  const sql = `INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch)
+               VALUES (NULL, ?, ?, ?, ?, ?)`;
+  db.query(sql, [new_name, new_school, new_grade, new_gender, branch], (err) => {
+    if (err) return res.status(500).json({ error: 'DB 저장 실패', detail: err.message });
+    res.json({ success: true });
+  });
+});
 
 
 
