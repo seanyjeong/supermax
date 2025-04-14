@@ -2171,14 +2171,22 @@ app.get('/feed/check-group-assigned', (req, res) => {
 
 
 // 해당 조의 수험번호 리스트
+// 백엔드 수정: 실기기록 전체 필드 포함
 app.get('/feed/group/:group', (req, res) => {
   const group = req.params.group;
-  const sql = 'SELECT exam_number FROM 실기기록 WHERE record_group = ? ORDER BY exam_number ASC';
+  const sql = `
+    SELECT exam_number, 
+      jump_record, shuttle_record, sit_reach_record, 
+      back_strength_record, medicineball_record
+    FROM 실기기록 
+    WHERE record_group = ? ORDER BY exam_number ASC
+  `;
   db.query(sql, [group], (err, rows) => {
     if (err) return res.status(500).json({ error: 'DB 오류' });
     res.json(rows);
   });
 });
+
 
       app.get('/feed/get-student', (req, res) => {
   const { exam_number } = req.query;
