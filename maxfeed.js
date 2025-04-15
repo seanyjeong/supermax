@@ -2466,6 +2466,76 @@ app.get('/feed/dashboard', (req, res) => {
   });
 });
 
+app.get('/feed/dashboard-summary', (req, res) => {
+  const mainSql = `
+    SELECT branch, exam_number, attended
+    FROM 실기기록
+  `;
+
+  db.query(mainSql, (err1, mainRows) => {
+    if (err1) return res.status(500).json({ error: '실기기록 조회 실패', detail: err1.message });
+
+    const addSql = `
+      SELECT origin_exam_number, new_name, branch, type
+      FROM 추가등록
+    `;
+
+    db.query(addSql, (err2, addRows) => {
+      if (err2) return res.status(500).json({ error: '추가등록 조회 실패', detail: err2.message });
+
+      // 전체 통계용
+      let total = 0, attended = 0, absent = 0;
+      let new_count = 0, swap_count = 0;
+
+      // 지점별 누적
+      const branchMap = {};
+
+      const noteMap = {};
+      addRows.forEach(row => {
+        const key = row.origin_exam_number || row.new_name;
+        noteMap[key] = row.type; // '신규' or '대체'
+      });
+
+      mainRows.forEach(s => {
+        const note = noteMap[s.exam_number] || noteMap[s.exam_number?.toString()] || noteMap[s.exam_number?.toString().padStart(4, '0')] || '';
+        const b = s.branch || '기타';
+
+        if (!branchMap[b]) {
+          branchMap[b] = { total: 0, attended: 0, absent: 0, new_count: 0, swap_count: 0 };
+        }
+
+        branchMap[b].total++;
+        total++;
+
+        if (note === '신규') {
+          branchMap[b].new_count++;
+          new_count++;
+        } else if (note === '대체') {
+          branchMap[b].swap_count++;
+          swap_count++;
+        }
+
+        if (s.attended === 1) {
+          branchMap[b].attended++;
+          attended++;
+        } else if (s.attended === 0) {
+          branchMap[b].absent++;
+          absent++;
+        }
+      });
+
+      const branches = Object.entries(branchMap).map(([branch, stats]) => ({
+        branch,
+        ...stats
+      }));
+
+      res.json({
+        total, attended, absent, new_count, swap_count,
+        branches
+      });
+    });
+  });
+});
 
 
 
