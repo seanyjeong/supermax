@@ -114,6 +114,41 @@
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
+.record-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8em;
+  margin-top: 0.8em;
+}
+
+#recordInput {
+  padding: 0.6em;
+  font-size: 1em;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 120px;
+  text-align: center;
+}
+
+#recordForm button {
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  background-color: #e2376a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+#recordForm button:hover {
+  background-color: #c92a5c;
+}
+
+
+
+
 
   </style>
 </head>
@@ -157,10 +192,12 @@
   <div id="studentInfo" class="student-info" style="display: none;"></div>
   <form id="recordForm" style="display: none;">
     <label><input type="checkbox" id="foulCheck"> 파울 (F)</label>
-    <input type="number" step="any" name="record" id="recordInput" placeholder="기록" required autocomplete="off" />
-
-    <button type="submit">저장</button>
+    <div class="record-row">
+      <input type="number" step="any" name="record" id="recordInput" placeholder="기록" required autocomplete="off" />
+      <button type="submit">저장</button>
+    </div>
   </form>
+  
   <p id="result"></p>
 </div>
 
@@ -341,7 +378,7 @@ form.addEventListener('submit', async (e) => {
 
   const json = await res.json();
   if (json.success) {
-    result.innerHTML = `✅ ${currentEvent} ${record} → ${json.score}점`;
+    result.innerHTML = `저장완료 ✅ ${currentEvent} ${record} → ${json.score}점`;
     result.className = 'success';
     const recordField = getField(currentEvent, 'record');
     const student = studentList.find(s => s.exam_number == selectedExam);
