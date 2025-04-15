@@ -2541,7 +2541,7 @@ app.get('/feed/dashboard-summary', (req, res) => {
 app.get('/feed/all-records', (req, res) => {
   const sql = `
     SELECT 
-      exam_number, branch, name, gender,
+      exam_number, branch, name, gender, grade,
       jump_record, jump_score,
       shuttle_record, shuttle_score,
       sit_reach_record, sit_reach_score,
@@ -2561,6 +2561,7 @@ app.get('/feed/all-records', (req, res) => {
     res.json(rows);
   });
 });
+
 
 
 /* ======================================
