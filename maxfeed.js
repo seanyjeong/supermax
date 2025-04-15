@@ -2537,6 +2537,30 @@ app.get('/feed/dashboard-summary', (req, res) => {
   });
 });
 
+// 전체 기록 불러오기 API
+app.get('/feed/all-records', (req, res) => {
+  const sql = `
+    SELECT 
+      exam_number, branch, name, gender,
+      jump_record, jump_score,
+      shuttle_record, shuttle_score,
+      sit_reach_record, sit_reach_score,
+      back_strength_record, back_strength_score,
+      medicineball_record, medicineball_score,
+      total_score
+    FROM 실기기록
+    ORDER BY total_score DESC
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ 전체 기록 조회 실패:", err);
+      return res.status(500).json({ error: "기록 조회 실패" });
+    }
+
+    res.json(rows);
+  });
+});
 
 
 /* ======================================
