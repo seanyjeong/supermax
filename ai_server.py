@@ -1,7 +1,9 @@
+# -*- coding: utf-8 -*-
 from flask import Flask, jsonify
 from flask_cors import CORS
 import datetime
 import random
+
 
 app = Flask(__name__)
 CORS(app)
