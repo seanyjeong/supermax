@@ -4,7 +4,7 @@ const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 7000;
-const TWELVE_API_KEY = '여기에 너 키 넣어줘';
+const TWELVE_API_KEY = '6827da1940aa4607a10a039a262a998e';
 
 app.use(cors());
 app.use(express.json());
@@ -81,7 +81,7 @@ app.get('/etfapi/price', async (req, res) => {
 // ✅ 시그널 프록시
 app.get('/etfapi/signal', async (req, res) => {
   try {
-    const signalRes = await axios.get('http://localhost:8000/signal');
+    const signalRes = await axios.get('http://127.0.0.1:8000/signal');
     res.json(signalRes.data);
   } catch (err) {
     console.error('❌ [signal 전체] 처리 오류:', err.message);
@@ -92,7 +92,7 @@ app.get('/etfapi/signal', async (req, res) => {
 // ✅ 뉴스 프록시
 app.get('/etfapi/news', async (req, res) => {
   try {
-    const newsRes = await axios.get('http://localhost:8000/news');
+    const newsRes = await axios.get('http://127.0.0.1:8000/news');
     res.json(newsRes.data);
   } catch (err) {
     console.error('❌ [news] AI 서버 연결 실패:', err.message);
