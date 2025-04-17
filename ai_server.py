@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 import datetime
 import requests
@@ -21,18 +21,19 @@ ETF_POOL = [
     {"ticker": "TIGER 미국S&P500", "name": "TIGER 미국S&P500", "region": "국내", "sector": "미국지수", "theme": "S&P500 추종"},
 ]
 
-# ✅ 실시간 가격 API 키
+# ✅ 모델 불러오기
+try:
+    signal_model = joblib.load('./data/etf_model.pkl')
+    buy_model    = joblib.load('./data/buy_model.pkl')
+    profit_model = joblib.load('./data/profit_model.pkl')
+    loss_model   = joblib.load('./data/loss_model.pkl')
+except:
+    signal_model = None
+    buy_model = profit_model = loss_model = None
+
+# ✅ 실시간 가격 API
 TWELVE_API_KEY = "6827da1940aa4607a10a039a262a998e"
 TWELVE_URL = "https://api.twelvedata.com/price"
-
-# ✅ 모델 불러오기
-MODEL_PATH = "etf_model.pkl"
-try:
-    model = joblib.load(MODEL_PATH)
-except:
-    model = None
-
-# ✅ 실시간 가격 가져오기
 
 def fetch_price(ticker, region):
     try:
@@ -57,8 +58,6 @@ def fetch_price(ticker, region):
         print(f"❌ 가격 조회 실패: {ticker} → {e}")
         return 0
 
-# ✅ 시그널 생성
-
 def generate_signals():
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     results = []
@@ -68,8 +67,8 @@ def generate_signals():
         if not price:
             continue
 
-        # 기본 입력값 생성 (모델 입력형식에 맞게 수정 필요)
-        dummy = {
+        # 입력 피처
+        features = {
             "open": price * 0.98,
             "high": price * 1.01,
             "low": price * 0.97,
@@ -80,20 +79,19 @@ def generate_signals():
             "rsi": 50.0,
         }
 
-        signal = "HOLD"
-        probability = 65 + hash(etf["ticker"]) % 31
-        if model:
-            try:
-                df = pd.DataFrame([dummy])
-                signal = model.predict(df)[0]
-            except:
-                pass
-        else:
-            if probability >= 70:
-                signal = "BUY"
+        df = pd.DataFrame([features])
 
-        stop_loss = round(price * 0.97, 2)
-        take_profit = round(price * 1.05, 2)
+        try:
+            signal = signal_model.predict(df)[0]
+        except:
+            signal = "HOLD"
+
+        try:
+            buy_price = round(buy_model.predict(df)[0], 2)
+            take_profit = round(profit_model.predict(df)[0], 2)
+            stop_loss = round(loss_model.predict(df)[0], 2)
+        except:
+            buy_price = take_profit = stop_loss = price
 
         results.append({
             "datetime": now,
@@ -102,12 +100,12 @@ def generate_signals():
             "region": etf["region"],
             "sector": etf["sector"],
             "theme": etf["theme"],
-            "probability": probability,
             "signal": signal,
-            "buy_price": price,
-            "stop_loss": stop_loss,
+            "probability": None,
+            "buy_price": buy_price,
             "take_profit": take_profit,
-            "reason": f"{etf['theme']} 관련 모멘텀 분석 기반 추천"
+            "stop_loss": stop_loss,
+            "reason": f"{etf['theme']} 관련 AI 시그널 추천"
         })
 
     return results
@@ -120,20 +118,5 @@ def get_signals():
     except Exception as e:
         return jsonify({"error": "시그널 병합 실패", "detail": str(e)}), 500
 
-@app.route('/news')
-def get_news():
-    return jsonify([
-        {
-            "title": "CPI 발표로 금리 인하 기대감 확대",
-            "summary": "인플레이션 둔화가 확인되며 미국 기술주 반등 가능성 제기",
-            "related_ticker": ["TQQQ", "TIGER 미국S&P500"]
-        },
-        {
-            "title": "삼성전자, 반도체 투자 확대 발표",
-            "summary": "국내 반도체 섹터 수급 개선 기대감",
-            "related_ticker": ["KODEX 반도체", "SOXL"]
-        }
-    ])
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host="0.0.0.0", port=8000)
