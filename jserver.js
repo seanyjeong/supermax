@@ -13,6 +13,13 @@ app.use(cors({
 
 app.use(express.json());
 
+const TOSS_CODES = {
+  SQQQ: 'US20211109010',
+  TQQQ: 'US19681202001',
+  SOXL: 'US19960228004',
+  ARKQ: 'US19960228003',
+};
+
 // ✅ /etfapi/signal → Python 서버에서 시그널 받아오기
 app.get('/etfapi/signal', async (req, res) => {
   try {
@@ -35,47 +42,45 @@ app.get('/etfapi/news', async (req, res) => {
   }
 });
 
-// ✅ /etfapi/price → 실시간 ETF 가격 조회 (USD → KRW)
+// ✅ /etfapi/price → 토스 API에서 ETF 시세 가져오기
 app.get('/etfapi/price', async (req, res) => {
   const { ticker } = req.query;
-  if (!ticker) return res.status(400).json({ error: 'ticker 쿼리 누락' });
+  const code = TOSS_CODES[ticker];
+
+  if (!code) {
+    return res.status(400).json({ error: '지원되지 않는 ticker입니다' });
+  }
 
   try {
-    const [priceRes, fxRes] = await Promise.all([
-      axios.get(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1m&range=1d`),
-      axios.get('https://api.exchangerate.host/latest?base=USD&symbols=KRW')
-    ]);
-
-    const priceData = priceRes.data?.chart?.result?.[0];
-    const lastClose = priceData?.meta?.regularMarketPrice || priceData?.meta?.previousClose;
-    const krwRate = fxRes.data?.rates?.KRW;
-
-    if (!lastClose || !krwRate) {
-      console.warn(`⚠️ [${ticker}] 가격 또는 환율 누락 → lastClose=${lastClose}, krwRate=${krwRate}`);
-      return res.status(200).json({
-        ticker,
-        price: null,
-        currency: 'USD',
-        price_krw: null,
-        krw_rate: krwRate || null
-      });
-    }
-
-    res.json({
-      ticker,
-      price: lastClose,
-      currency: 'USD',
-      price_krw: Math.round(lastClose * krwRate),
-      krw_rate: krwRate
+    const url = `https://wts-info-api.tossinvest.com/api/v3/stock-prices?meta=true&productCodes=${code}`;
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
     });
-  } catch (err) {
-    console.warn(`❌ [price] ${ticker} 시세 조회 실패:`, err.message);
+
+    const priceInfo = response.data?.prices?.[code];
+    if (!priceInfo) throw new Error('가격 정보 없음');
+
+    const price = priceInfo.lastPrice;
+    const currency = priceInfo.currency;
+    const price_krw = currency === 'USD' ? priceInfo.krwPrice : price;
+
+    return res.json({
+      ticker,
+      price,
+      price_krw,
+      currency,
+      source: 'toss'
+    });
+  } catch (e) {
+    console.warn(`❌ 토스 가격 API 실패 [${ticker}]:`, e.message);
     return res.status(200).json({
       ticker,
       price: null,
-      currency: 'USD',
       price_krw: null,
-      krw_rate: null
+      currency: null,
+      source: 'toss'
     });
   }
 });
