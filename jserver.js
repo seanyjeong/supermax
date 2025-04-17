@@ -35,7 +35,7 @@ app.get('/etfapi/news', async (req, res) => {
   }
 });
 
-// ✅ /etfapi/price?ticker=XXXX → 실시간 가격 (미국 ETF만 우선 지원)
+// ✅ /etfapi/price → 실시간 ETF 가격 조회 (USD → KRW)
 app.get('/etfapi/price', async (req, res) => {
   const { ticker } = req.query;
   if (!ticker) return res.status(400).json({ error: 'ticker 쿼리 누락' });
@@ -46,11 +46,20 @@ app.get('/etfapi/price', async (req, res) => {
       axios.get('https://api.exchangerate.host/latest?base=USD&symbols=KRW')
     ]);
 
-    const priceData = priceRes.data.chart.result?.[0];
-    const lastClose = priceData?.meta?.regularMarketPrice;
-    const krwRate = fxRes.data.rates.KRW;
+    const priceData = priceRes.data?.chart?.result?.[0];
+    const lastClose = priceData?.meta?.regularMarketPrice || priceData?.meta?.previousClose;
+    const krwRate = fxRes.data?.rates?.KRW;
 
-    if (!lastClose || !krwRate) throw new Error('데이터 누락');
+    if (!lastClose || !krwRate) {
+      console.warn(`⚠️ [${ticker}] 가격 또는 환율 누락 → lastClose=${lastClose}, krwRate=${krwRate}`);
+      return res.status(200).json({
+        ticker,
+        price: null,
+        currency: 'USD',
+        price_krw: null,
+        krw_rate: krwRate || null
+      });
+    }
 
     res.json({
       ticker,
@@ -60,8 +69,14 @@ app.get('/etfapi/price', async (req, res) => {
       krw_rate: krwRate
     });
   } catch (err) {
-    console.error(`❌ [price] ${ticker} 시세 조회 실패:`, err.message);
-    res.status(500).json({ error: '시세 조회 실패', detail: err.message });
+    console.warn(`❌ [price] ${ticker} 시세 조회 실패:`, err.message);
+    return res.status(200).json({
+      ticker,
+      price: null,
+      currency: 'USD',
+      price_krw: null,
+      krw_rate: null
+    });
   }
 });
 
