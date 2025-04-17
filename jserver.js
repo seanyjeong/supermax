@@ -1,108 +1,113 @@
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 7000;
-const TWELVE_API_KEY = '6827da1940aa4607a10a039a262a998e';
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
-// ✅ 미국 ETF 여부 판별
-function isUS(ticker) {
-  return /^[A-Z]+$/.test(ticker);
-}
+const TWELVE_API_KEY = '6827da1940aa4607a10a039a262a998e';
 
-// ✅ 가격 조회 API
+// 국내 ETF 코드 매핑
+const codeMap = {
+  'KODEX 반도체': 'A091160',
+  'TIGER 2차전지': 'A305720',
+  'KODEX 인버스': 'A114800',
+  'TIGER 미국S&P500': 'A143850'
+};
+
+// ✅ 실시간 가격 조회 (국내/해외 모두)
 app.get('/etfapi/price', async (req, res) => {
-const raw = req.query.ticker;
-const ticker = Buffer.from(raw, 'latin1').toString('utf8');
+  const raw = req.query.ticker;
+  const ticker = Buffer.from(raw, 'latin1').toString('utf8');
 
-
-  try {
-    if (isUS(ticker)) {
-      // ✅ 미국 ETF → Twelve Data
-      const { data } = await axios.get(`https://api.twelvedata.com/price?symbol=${ticker}&apikey=${TWELVE_API_KEY}`);
-      const price = parseFloat(data.price);
-
-      res.json({
-        ticker,
-        price,
-        price_krw: Math.round(price * 1370),
-        currency: 'USD',
-        source: 'twelvedata'
-      });
-    } else {
-      // ✅ 국내 ETF → Daum 크롤링
-      const codeMap = {
-        'KODEX 반도체': 'A091160',
-        'TIGER 2차전지': 'A305720',
-        'KODEX 인버스': 'A114800',
-        'TIGER 미국S&P500': 'A143850',
-        'KODEX 2차전지': 'A102960',
-        'TIGER 코스닥150': 'A232080',
-        'TIGER 차이나전기차': 'A371460'
-      };
-
+  // 국내 종목이면 다음 API
+  if (codeMap[ticker]) {
+    try {
       const code = codeMap[ticker];
-      if (!code) throw new Error('국내 티커 매핑 없음');
-
-      const url = `https://finance.daum.net/quotes/${code}`;
-      const response = await axios.get(url, {
-        headers: { referer: 'https://finance.daum.net/' }
+      const { data } = await axios.get(`https://finance.daum.net/api/quotes/${code}`, {
+        headers: {
+          referer: 'https://finance.daum.net'
+        }
       });
-
-      const $ = cheerio.load(response.data);
-      const priceText = $('.stock .num').first().text().replace(/,/g, '');
-      const price = parseFloat(priceText);
-
-      res.json({
+      const price = parseFloat(data.tradePrice);
+      return res.json({
         ticker,
         price,
         price_krw: price,
         currency: 'KRW',
         source: 'daum'
       });
+    } catch (err) {
+      console.error('❌ 국내 ETF 가격 실패:', err.message);
+      return res.json({
+        ticker,
+        price: null,
+        price_krw: null,
+        currency: 'KRW',
+        source: 'daum'
+      });
     }
+  }
+
+  // 해외 종목이면 TwelveData API
+  try {
+    const url = `https://api.twelvedata.com/price?symbol=${ticker}&apikey=${TWELVE_API_KEY}`;
+    const { data } = await axios.get(url);
+
+    const price = parseFloat(data.price);
+    const krwRate = 1370; // 환율 하드코딩 or API 연동 가능
+    return res.json({
+      ticker,
+      price,
+      price_krw: Math.round(price * krwRate),
+      currency: 'USD',
+      source: 'twelvedata'
+    });
   } catch (err) {
-    console.error(`❌ [${ticker}] 가격 조회 실패:`, err.message);
-    res.status(500).json({
+    console.error('❌ 해외 ETF 가격 실패:', err.message);
+    return res.json({
       ticker,
       price: null,
       price_krw: null,
-      currency: null,
-      source: 'error'
+      currency: 'USD',
+      source: 'twelvedata'
     });
   }
 });
 
-// ✅ 시그널 → Python Flask 연동
+// ✅ 시그널 프록시
 app.get('/etfapi/signal', async (req, res) => {
   try {
     const { data } = await axios.get('http://localhost:8000/signal');
     res.json(data);
   } catch (err) {
-    console.error('❌ AI 시그널 실패:', err.message);
+    console.error('❌ [signal] AI 서버 연결 실패:', err.message);
     res.status(500).json({ error: 'AI 서버 연결 실패' });
   }
 });
 
-// ✅ 뉴스 → Python Flask 연동
+// ✅ 뉴스 프록시
 app.get('/etfapi/news', async (req, res) => {
   try {
     const { data } = await axios.get('http://localhost:8000/news');
     res.json(data);
   } catch (err) {
-    console.error('❌ AI 뉴스 실패:', err.message);
+    console.error('❌ [news] AI 서버 연결 실패:', err.message);
     res.status(500).json({ error: 'AI 서버 연결 실패' });
   }
 });
 
-// ✅ 루트 확인
+// ✅ 헬스체크
 app.get('/', (req, res) => {
-  res.send('✅ ETF API 서버 작동 중');
+  res.send('✅ ETF API 서버 정상 작동 중');
 });
 
 app.listen(PORT, () => {
