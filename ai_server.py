@@ -47,7 +47,8 @@ def generate_signals():
             "buy_price": buy_price,
             "stop_loss": stop_loss,
             "take_profit": take_profit,
-            "reason": f"{etf['theme']} 관련 모멘텀 분석 기반 추천"
+            "reason": "{} 관련 모멘텀 분석 기반 추천".format(etf['theme'])
+
         })
 
     return results
