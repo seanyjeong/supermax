@@ -17,7 +17,9 @@ function isUS(ticker) {
 
 // ✅ 가격 조회 API
 app.get('/etfapi/price', async (req, res) => {
-  const ticker = decodeURIComponent(req.query.ticker); // ✅ 한글 지원
+const raw = req.query.ticker;
+const ticker = Buffer.from(raw, 'latin1').toString('utf8');
+
 
   try {
     if (isUS(ticker)) {
