@@ -13,7 +13,7 @@ app.use(cors({
 app.use(express.json());
 
 // ✅ Python 시그널 서버 프록시
-app.get('/api/signal', async (req, res) => {
+app.get('/etfapi/signal', async (req, res) => {
   try {
     const response = await axios.get('http://localhost:8000/signal');
     res.json(response.data);
@@ -24,7 +24,7 @@ app.get('/api/signal', async (req, res) => {
 });
 
 // ✅ 뉴스 요약 프록시
-app.get('/api/news', async (req, res) => {
+app.get('/etfapi/news', async (req, res) => {
   try {
     const response = await axios.get('http://localhost:8000/news');
     res.json(response.data);
@@ -35,7 +35,7 @@ app.get('/api/news', async (req, res) => {
 });
 
 // ✅ 문자 발송용 API (연결되면 여기에 붙이기)
-app.post('/api/send-sms', (req, res) => {
+app.post('/etfapi/send-sms', (req, res) => {
   const { to, message } = req.body;
   console.log(`📩 문자 전송 요청 → ${to}: ${message}`);
   // 문자 API 연동 로직 여기에 작성 예정
