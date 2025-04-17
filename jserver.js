@@ -13,99 +13,91 @@ app.use(cors({
 
 app.use(express.json());
 
-const TWELVE_API_KEY = '6827da1940aa4607a10a039a262a998e';
+// ✅ 시그널 가져오기 + 가격 병합
+app.get('/etfapi/signal', async (req, res) => {
+  try {
+    const signalRes = await axios.get('http://localhost:8000/signal');
+    const signals = signalRes.data;
 
-// 국내 ETF 코드 매핑
-const codeMap = {
-  'KODEX 반도체': 'A091160',
-  'TIGER 2차전지': 'A305720',
-  'KODEX 인버스': 'A114800',
-  'TIGER 미국S&P500': 'A143850'
-};
+    const results = await Promise.all(
+      signals.map(async (item) => {
+        try {
+          if (item.region === '국내') {
+            return { ...item, current_price: null, current_price_krw: null };
+          }
 
-// ✅ 실시간 가격 조회 (국내/해외 모두)
-app.get('/etfapi/price', async (req, res) => {
-  const raw = req.query.ticker;
-  const ticker = Buffer.from(raw, 'latin1').toString('utf8');
+          const priceRes = await axios.get(`https://supermax.kr/etfapi/price?ticker=${encodeURIComponent(item.ticker)}`);
+          const { price, price_krw, currency } = priceRes.data;
 
-  // 국내 종목이면 다음 API
-  if (codeMap[ticker]) {
-    try {
-      const code = codeMap[ticker];
-      const { data } = await axios.get(`https://finance.daum.net/api/quotes/${code}`, {
-        headers: {
-          referer: 'https://finance.daum.net'
+          return {
+            ...item,
+            current_price: price,
+            current_price_krw: price_krw,
+            currency
+          };
+        } catch (err) {
+          console.warn(`❌ 가격 실패: ${item.ticker}`, err.message);
+          return { ...item, current_price: null, current_price_krw: null };
         }
+      })
+    );
+
+    res.json(results);
+  } catch (err) {
+    console.error('❌ [signal 전체] 처리 오류:', err.message);
+    res.status(500).json({ error: '시그널 병합 실패' });
+  }
+});
+
+// ✅ 가격 API (이미 작동 중이면 유지)
+app.get('/etfapi/price', async (req, res) => {
+  const ticker = req.query.ticker;
+  if (!ticker) return res.status(400).json({ error: 'ticker 쿼리 필요' });
+
+  try {
+    const isDomestic = /KODEX|TIGER/.test(ticker);
+    if (isDomestic) {
+      const codeMap = {
+        "KODEX 반도체": "A091160",
+        "TIGER 2차전지": "A305720",
+        "KODEX 인버스": "A114800",
+        "TIGER 미국S&P500": "A143850"
+      };
+      const daumCode = codeMap[ticker];
+      if (!daumCode) throw new Error('해당 국내 ETF 코드 없음');
+
+      const resDaum = await axios.get(`https://finance.daum.net/api/quotes/${daumCode}`, {
+        headers: { referer: 'https://finance.daum.net' }
       });
-      const price = parseFloat(data.tradePrice);
+      const tradePrice = resDaum.data.tradePrice;
+      return res.json({ ticker, price: tradePrice, price_krw: tradePrice, currency: "KRW", source: "daum" });
+    } else {
+      const API_KEY = "6827da1940aa4607a10a039a262a998e";
+      const url = `https://api.twelvedata.com/price?symbol=${ticker}&apikey=${API_KEY}`;
+      const response = await axios.get(url);
+      const price = parseFloat(response.data.price);
+      const rate = 1370; // 환율 고정값
+
       return res.json({
         ticker,
         price,
-        price_krw: price,
-        currency: 'KRW',
-        source: 'daum'
-      });
-    } catch (err) {
-      console.error('❌ 국내 ETF 가격 실패:', err.message);
-      return res.json({
-        ticker,
-        price: null,
-        price_krw: null,
-        currency: 'KRW',
-        source: 'daum'
+        price_krw: Math.round(price * rate),
+        currency: "USD",
+        source: "twelvedata"
       });
     }
-  }
-
-  // 해외 종목이면 TwelveData API
-  try {
-    const url = `https://api.twelvedata.com/price?symbol=${ticker}&apikey=${TWELVE_API_KEY}`;
-    const { data } = await axios.get(url);
-
-    const price = parseFloat(data.price);
-    const krwRate = 1370; // 환율 하드코딩 or API 연동 가능
-    return res.json({
-      ticker,
-      price,
-      price_krw: Math.round(price * krwRate),
-      currency: 'USD',
-      source: 'twelvedata'
-    });
-  } catch (err) {
-    console.error('❌ 해외 ETF 가격 실패:', err.message);
+  } catch (e) {
+    console.error(`❌ 가격 오류: ${ticker} | ${e.message}`);
     return res.json({
       ticker,
       price: null,
       price_krw: null,
-      currency: 'USD',
-      source: 'twelvedata'
+      currency: null,
+      source: 'error'
     });
   }
 });
 
-// ✅ 시그널 프록시
-app.get('/etfapi/signal', async (req, res) => {
-  try {
-    const { data } = await axios.get('http://localhost:8000/signal');
-    res.json(data);
-  } catch (err) {
-    console.error('❌ [signal] AI 서버 연결 실패:', err.message);
-    res.status(500).json({ error: 'AI 서버 연결 실패' });
-  }
-});
-
-// ✅ 뉴스 프록시
-app.get('/etfapi/news', async (req, res) => {
-  try {
-    const { data } = await axios.get('http://localhost:8000/news');
-    res.json(data);
-  } catch (err) {
-    console.error('❌ [news] AI 서버 연결 실패:', err.message);
-    res.status(500).json({ error: 'AI 서버 연결 실패' });
-  }
-});
-
-// ✅ 헬스체크
 app.get('/', (req, res) => {
   res.send('✅ ETF API 서버 정상 작동 중');
 });
