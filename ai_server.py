@@ -10,10 +10,10 @@ app = Flask(__name__)
 CORS(app)
 
 # ✅ 모델 로딩
-signal_model = joblib.load('./data/etf_model.pkl')
-buy_model    = joblib.load('./data/buy_model.pkl')
-profit_model = joblib.load('./data/profit_model.pkl')
-loss_model   = joblib.load('./data/loss_model.pkl')
+signal_model = joblib.load('etf_model.pkl')
+buy_model    = joblib.load('buy_model.pkl')
+profit_model = joblib.load('profit_model.pkl')
+loss_model   = joblib.load('loss_model.pkl')
 
 # ✅ ETF 리스트
 ETF_POOL = [
