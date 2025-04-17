@@ -14,15 +14,22 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ ETF 티커 → 다음 URL 매핑
+// ✅ 티커별 다음 금융 URL 매핑
 const DAEUM_URLS = {
+  // 🔹 해외 ETF
   SQQQ: 'https://finance.daum.net/quotes/US20211109010',
   TQQQ: 'https://finance.daum.net/quotes/US19681202001',
   SOXL: 'https://finance.daum.net/quotes/US19960228004',
   ARKQ: 'https://finance.daum.net/quotes/US19960228003',
+
+  // 🔸 국내 ETF
+  'KODEX 반도체': 'https://finance.daum.net/quotes/A091160',
+  'TIGER 2차전지': 'https://finance.daum.net/quotes/A305720',
+  'KODEX 인버스': 'https://finance.daum.net/quotes/A114800',
+  'TIGER 미국S&P500': 'https://finance.daum.net/quotes/A143850'
 };
 
-// ✅ /etfapi/signal → Python 서버에서 시그널 받아오기
+// ✅ 시그널 받아오기 (Python 서버 연동)
 app.get('/etfapi/signal', async (req, res) => {
   try {
     const response = await axios.get('http://localhost:8000/signal');
@@ -33,7 +40,7 @@ app.get('/etfapi/signal', async (req, res) => {
   }
 });
 
-// ✅ /etfapi/news → Python 서버에서 뉴스 받아오기
+// ✅ 뉴스 받아오기 (Python 서버 연동)
 app.get('/etfapi/news', async (req, res) => {
   try {
     const response = await axios.get('http://localhost:8000/news');
@@ -44,7 +51,7 @@ app.get('/etfapi/news', async (req, res) => {
   }
 });
 
-// ✅ /etfapi/price → 다음 금융에서 크롤링해서 실시간 ETF 시세 가져오기
+// ✅ 실시간 가격 크롤링
 app.get('/etfapi/price', async (req, res) => {
   const { ticker } = req.query;
   const url = DAEUM_URLS[ticker];
@@ -57,6 +64,7 @@ app.get('/etfapi/price', async (req, res) => {
     const html = await axios.get(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
+
     const $ = cheerio.load(html.data);
     const text = $('div[data-id="quote"] .current').first().text().replace(/,/g, '');
     const price_krw = parseFloat(text);
@@ -82,7 +90,7 @@ app.get('/etfapi/price', async (req, res) => {
   }
 });
 
-// ✅ 기본 경로
+// ✅ 상태 확인
 app.get('/', (req, res) => {
   res.send('✅ ETF API 서버 정상 작동 중');
 });
