@@ -69,6 +69,47 @@ app.post('/college/insert', (req, res) => {
   });
 });
 
+// ✅ 추천 API (백/백 그룹 전용 계산)
+app.post('/college/recommend', (req, res) => {
+  const input = req.body;
+
+  db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 = "백/백"', (err, rows) => {
+    if (err) {
+      console.error('❌ 대학 불러오기 실패:', err);
+      return res.status(500).json({ success: false, message: 'DB 오류' });
+    }
+
+    const results = rows.map(row => {
+      const 탐구 = (input.subject1 + input.subject2) / 2;
+      const 선택값 = row.수능선택조건?.includes('수영택1')
+        ? Math.max(input.math, input.english)
+        : (input.math + input.english) / 2;
+
+      const 점수합 =
+        (input.korean * ((row.국어비율 || 0) / 100)) +
+        (탐구 * ((row.탐구비율 || 0) / 100)) +
+        (선택값 * ((row.수학비율 || 0) + (row.영어비율 || 0) === 0
+          ? row.수능반영비율 / 3 / 100
+          : ((row.수학비율 || 0) + (row.영어비율 || 0)) / 100));
+
+      const 총점 = 점수합 * (1000 / (row.수능반영비율 || 100));
+
+      return {
+        대학명: row.대학명,
+        학과명: row.학과명,
+        총점: Math.round(총점 * 10) / 10,
+        국어: input.korean,
+        수학: input.math,
+        영어: input.english,
+        탐구: 탐구
+      };
+    });
+
+    results.sort((a, b) => b.총점 - a.총점);
+    res.json({ success: true, data: results });
+  });
+});
+
 app.listen(port, () => {
   console.log(`🚀 대학 추천 서버 ${port}번 포트에서 실행 중`);
 });
