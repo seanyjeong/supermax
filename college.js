@@ -69,11 +69,11 @@ app.post('/college/insert', (req, res) => {
   });
 });
 
-// ✅ 추천 API (백/백 그룹 + 수영택1 전용 계산)
+// ✅ 추천 API (백/백 그룹 + 수영택1 / 국수영탐택2 계산 포함)
 app.post('/college/recommend', (req, res) => {
   const input = req.body;
 
-  db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 = "백/백" AND 수능선택조건 = "수영택1"', (err, rows) => {
+  db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 = "백/백"', (err, rows) => {
     if (err) {
       console.error('❌ 대학 불러오기 실패:', err);
       return res.status(500).json({ success: false, message: 'DB 오류' });
@@ -89,41 +89,37 @@ app.post('/college/recommend', (req, res) => {
         탐구 = 0;
       }
 
-      const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
       let 선택값 = 0;
-      if (input.math >= 영어등급점수) {
-        선택값 = input.math * (row.수학비율 / 100);
+      if (row.수능선택조건 === '수영택1') {
+        const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
+        선택값 = input.math >= 영어등급점수
+          ? input.math * (row.수학비율 / 100)
+          : 영어등급점수 * (row.영어비율 / 100);
+      } else if (row.수능선택조건 === '국수영탐택2') {
+        const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
+        const candidates = [input.korean, input.math, 영어등급점수, 탐구];
+        candidates.sort((a, b) => b - a);
+        선택값 = (candidates[0] + candidates[1]) / 2;
       } else {
-        선택값 = 영어등급점수 * (row.영어비율 / 100);
+        return null; // 지원 안 하는 조건 제외
       }
 
-      const 국어점수 = input.korean * (row.국어비율 / 100);
-      const 탐구점수 = 탐구 * (row.탐구비율 / 100);
-      const 수능합산 = 국어점수 + 탐구점수 + 선택값;
-      const 수능최종반영점수 = 수능합산 * (row.수능반영비율 / 100);
-      const 최종합산점수 = 수능최종반영점수;
-
+      const 수능최종반영점수 = 선택값 * (row.수능반영비율 / 100);
       return {
         대학명: row.대학명,
         학과명: row.학과명,
-        최종합산점수: Math.round(최종합산점수 * 10) / 10,
+        최종합산점수: Math.round(수능최종반영점수 * 10) / 10,
         수능최종반영점수: Math.round(수능최종반영점수 * 10) / 10,
+        선택점수: 선택값,
         국어: input.korean,
         수학: input.math,
         영어: input.english,
         영어등급: input.englishGrade,
         탐구: 탐구,
         수능반영비율: row.수능반영비율,
-        내신반영비율: row.내신반영비율,
-        실기반영비율: row.실기반영비율,
-        국어비율: row.국어비율,
-        수학비율: row.수학비율,
-        영어비율: row.영어비율,
-        탐구비율: row.탐구비율,
-        수능선택조건: row.수능선택조건,
-        탐구과목수: row.탐구과목수
+        수능선택조건: row.수능선택조건
       };
-    });
+    }).filter(Boolean);
 
     results.sort((a, b) => b.최종합산점수 - a.최종합산점수);
     res.json({ success: true, data: results });
