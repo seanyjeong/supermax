@@ -80,15 +80,32 @@ app.post('/college/recommend', (req, res) => {
     }
 
     const results = rows.map(row => {
-      const 탐구 = (input.subject1 + input.subject2) / 2;
-      const 선택값 = row.수능선택조건?.includes('수영택1')
-        ? Math.max(input.math, input.english)
-        : (input.math * (row.수학비율 / 100)) + (input.english * (row.영어비율 / 100));
+      let 탐구 = 0;
+      if (row.탐구과목수 === 2) {
+        탐구 = (input.subject1 + input.subject2) / 2;
+      } else if (row.탐구과목수 === 1) {
+        탐구 = Math.max(input.subject1, input.subject2);
+      } else {
+        탐구 = 0;
+      }
+
+      let 선택값 = 0;
+      if (row.수능선택조건?.includes('수영택1')) {
+        if (input.math >= input.english) {
+          선택값 = input.math * (row.수학비율 / 100);
+        } else {
+          선택값 = input.english * (row.영어비율 / 100);
+        }
+      } else {
+        선택값 =
+          (input.math * (row.수학비율 / 100)) +
+          (input.english * (row.영어비율 / 100));
+      }
 
       const 국어점수 = input.korean * (row.국어비율 / 100);
       const 탐구점수 = 탐구 * (row.탐구비율 / 100);
       const 수능최종반영점수 = 국어점수 + 탐구점수 + 선택값;
-      const 최종합산점수 = 수능최종반영점수; // 수능만 반영 (600점 만점 기준)
+      const 최종합산점수 = 수능최종반영점수;
 
       return {
         대학명: row.대학명,
@@ -106,7 +123,8 @@ app.post('/college/recommend', (req, res) => {
         수학비율: row.수학비율,
         영어비율: row.영어비율,
         탐구비율: row.탐구비율,
-        수능선택조건: row.수능선택조건
+        수능선택조건: row.수능선택조건,
+        탐구과목수: row.탐구과목수
       };
     });
 
