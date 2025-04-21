@@ -37,6 +37,8 @@ app.post('/college/recommend', (req, res) => {
       return res.status(500).json({ success: false, message: 'DB 오류' });
     }
 
+    const 과탐목록 = ["물리1", "물리2", "화학1", "화학2", "생명과학1", "생명과학2", "지구과학1", "지구과학2"];
+
     const results = rows.map(row => {
       const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
       const 한국사등급점수 = row[`한국사${input.khistoryGrade}등급점수`] || 0;
@@ -44,25 +46,53 @@ app.post('/college/recommend', (req, res) => {
       let 수능최종반영점수 = 0;
       let 선택점수 = 0;
 
-      let 탐구 = 0;
-      if (row.탐구과목수 === 2) {
-        탐구 = (input.subject1 + input.subject2) / 2;
-      } else if (row.탐구과목수 === 1) {
-        탐구 = Math.max(input.subject1, input.subject2);
+      let 수학점수 = input.math;
+      let 탐구1점수 = input.subject1;
+      let 탐구2점수 = input.subject2;
+
+      // 수학 가산점 적용
+      if (row.수학가산과목조건) {
+        const 조건들 = row.수학가산과목조건.split(',');
+        조건들.forEach(조건 => {
+          const [과목, 퍼센트] = 조건.split(':');
+          if (input.mathSubject === 과목.trim()) {
+            수학점수 *= (1 + parseFloat(퍼센트 || 0) / 100);
+          }
+        });
       }
 
-      if (row.수능선택조건 === '수영택1') {
-        const 선택 = input.math >= 영어등급점수
-          ? input.math * (row.수학비율 / 100)
+      // 탐구 가산점 적용
+      if (row.탐구가산과목조건?.includes('과탐')) {
+        const 가산 = parseFloat(row.탐구가산과목조건.split(':')[1] || 0);
+        if (과탐목록.includes(input.subject1Name)) 탐구1점수 *= (1 + 가산 / 100);
+        if (과탐목록.includes(input.subject2Name)) 탐구2점수 *= (1 + 가산 / 100);
+      }
+
+      let 탐구 = 0;
+      if (row.탐구과목수 === 2) {
+        탐구 = (탐구1점수 + 탐구2점수) / 2;
+      } else if (row.탐구과목수 === 1) {
+        탐구 = Math.max(탐구1점수, 탐구2점수);
+      }
+
+      if (!row.수능선택조건 || row.수능선택조건.trim() === '') {
+        const 국어점수 = input.korean * (row.국어비율 / 100);
+        const 수학점수_가산 = 수학점수 * (row.수학비율 / 100);
+        const 영어점수 = 영어등급점수 * (row.영어비율 / 100);
+        const 탐구점수 = 탐구 * (row.탐구비율 / 100);
+
+        선택점수 = 국어점수 + 수학점수_가산 + 영어점수 + 탐구점수;
+        수능최종반영점수 = 선택점수 * (row.수능반영비율 / 100);
+      } else if (row.수능선택조건 === '수영택1') {
+        const 선택 = 수학점수 >= 영어등급점수
+          ? 수학점수 * (row.수학비율 / 100)
           : 영어등급점수 * (row.영어비율 / 100);
         const 국어점수 = input.korean * (row.국어비율 / 100);
         const 탐구점수 = 탐구 * (row.탐구비율 / 100);
         선택점수 = 선택;
         수능최종반영점수 = (국어점수 + 선택 + 탐구점수) * (row.수능반영비율 / 100);
-      }
-
-      else if (row.수능선택조건 === '국수영탐택2') {
-        const candidates = [input.korean, input.math, 영어등급점수, 탐구];
+      } else if (row.수능선택조건 === '국수영탐택2') {
+        const candidates = [input.korean, 수학점수, 영어등급점수, 탐구];
         candidates.sort((a, b) => b - a);
         선택점수 = (candidates[0] + candidates[1]) / 2;
         수능최종반영점수 = 선택점수 * (row.수능반영비율 / 100);
