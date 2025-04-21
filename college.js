@@ -4,7 +4,15 @@ const cors = require('cors');
 const app = express();
 const port = 9000;
 
-app.use(cors({ origin: '*' }));
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));  // preflight 요청 처리
+
 app.use(express.json());
 
 const db = mysql.createConnection({
