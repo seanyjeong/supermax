@@ -5,10 +5,10 @@ const app = express();
 const port = 9000;
 
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*'); // 모든 출처 허용
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.sendStatus(200); // preflight 대응
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
@@ -83,29 +83,34 @@ app.post('/college/recommend', (req, res) => {
       const 탐구 = (input.subject1 + input.subject2) / 2;
       const 선택값 = row.수능선택조건?.includes('수영택1')
         ? Math.max(input.math, input.english)
-        : (input.math + input.english) / 2;
+        : (input.math * (row.수학비율 / 100)) + (input.english * (row.영어비율 / 100));
 
-      const 점수합 =
-        (input.korean * ((row.국어비율 || 0) / 100)) +
-        (탐구 * ((row.탐구비율 || 0) / 100)) +
-        (선택값 * ((row.수학비율 || 0) + (row.영어비율 || 0) === 0
-          ? row.수능반영비율 / 3 / 100
-          : ((row.수학비율 || 0) + (row.영어비율 || 0)) / 100));
-
-      const 총점 = 점수합 * (1000 / (row.수능반영비율 || 100));
+      const 국어점수 = input.korean * (row.국어비율 / 100);
+      const 탐구점수 = 탐구 * (row.탐구비율 / 100);
+      const 수능최종반영점수 = 국어점수 + 탐구점수 + 선택값;
+      const 최종합산점수 = 수능최종반영점수; // 수능만 반영 (600점 만점 기준)
 
       return {
         대학명: row.대학명,
         학과명: row.학과명,
-        총점: Math.round(총점 * 10) / 10,
+        최종합산점수: Math.round(최종합산점수 * 10) / 10,
+        수능최종반영점수: Math.round(수능최종반영점수 * 10) / 10,
         국어: input.korean,
         수학: input.math,
         영어: input.english,
-        탐구: 탐구
+        탐구: 탐구,
+        수능반영비율: row.수능반영비율,
+        내신반영비율: row.내신반영비율,
+        실기반영비율: row.실기반영비율,
+        국어비율: row.국어비율,
+        수학비율: row.수학비율,
+        영어비율: row.영어비율,
+        탐구비율: row.탐구비율,
+        수능선택조건: row.수능선택조건
       };
     });
 
-    results.sort((a, b) => b.총점 - a.총점);
+    results.sort((a, b) => b.최종합산점수 - a.최종합산점수);
     res.json({ success: true, data: results });
   });
 });
