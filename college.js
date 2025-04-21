@@ -27,7 +27,7 @@ db.connect(err => {
   else console.log('✅ MySQL 연결 성공');
 });
 
-// ✅ 추천 API (백/백 그룹 + 수영택1 / 국수영탐택2 계산 포함)
+// ✅ 추천 API (백/백 그룹 + 수영택1 / 국수영탐택2 계산 포함 + 한국사 가산점 적용)
 app.post('/college/recommend', (req, res) => {
   const input = req.body;
 
@@ -39,6 +39,7 @@ app.post('/college/recommend', (req, res) => {
 
     const results = rows.map(row => {
       const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
+      const 한국사등급점수 = row[`한국사${input.khistoryGrade}등급점수`] || 0;
 
       let 수능최종반영점수 = 0;
       let 선택점수 = 0;
@@ -69,6 +70,10 @@ app.post('/college/recommend', (req, res) => {
         return null;
       }
 
+      if (row.한국사반영방식 === '가산점') {
+        수능최종반영점수 += 한국사등급점수;
+      }
+
       return {
         대학명: row.대학명,
         학과명: row.학과명,
@@ -80,13 +85,15 @@ app.post('/college/recommend', (req, res) => {
         영어: input.english,
         영어등급: input.englishGrade,
         탐구: 탐구,
+        한국사등급: input.khistoryGrade,
         수능반영비율: row.수능반영비율,
         수능선택조건: row.수능선택조건,
         국어비율: row.국어비율,
         수학비율: row.수학비율,
         영어비율: row.영어비율,
         탐구비율: row.탐구비율,
-        탐구과목수: row.탐구과목수
+        탐구과목수: row.탐구과목수,
+        한국사반영방식: row.한국사반영방식
       };
     }).filter(Boolean);
 
