@@ -96,7 +96,37 @@ app.post('/college/recommend', (req, res) => {
         candidates.sort((a, b) => b - a);
         선택점수 = (candidates[0] + candidates[1]) / 2;
         수능최종반영점수 = 선택점수 * (row.수능반영비율 / 100);
-      } else {
+      }else if (row.수능선택조건 === '국수4020') {
+  // 국어 / 수학 중 잘본거 선택
+  let 국수 = [
+    { name: '국어', 점수: input.korean },
+    { name: '수학', 점수: input.math }
+  ];
+  국수.sort((a, b) => b.점수 - a.점수);
+  const 잘본과목 = 국수[0];
+  const 덜본과목 = 국수[1];
+
+  let 국어점수 = 잘본과목.name === '국어' ? 잘본과목.점수 * 0.4 : 덜본과목.점수 * 0.2;
+  let 수학점수 = 잘본과목.name === '수학' ? 잘본과목.점수 * 0.4 : 덜본과목.점수 * 0.2;
+
+  const 영어점수 = (row.영어비율 ?? 0) / 100 * (row[`영어${input.englishGrade}등급점수`] || 0);
+
+  let 탐구 = 0;
+  if (row.탐구과목수 === 2) 탐구 = (input.subject1 + input.subject2) / 2;
+  else if (row.탐구과목수 === 1) 탐구 = Math.max(input.subject1, input.subject2);
+  const 탐구점수 = 탐구 * (row.탐구비율 / 100);
+
+  let 수능최종반영점수 = (국어점수 + 수학점수 + 영어점수 + 탐구점수) * (row.수능반영비율 / 100);
+
+  if (row.한국사반영방식 === '가산점') {
+    const 한국사 = row[`한국사${input.khistoryGrade}등급점수`] || 0;
+    수능최종반영점수 += 한국사;
+  }
+
+  선택점수 = 국어점수 + 수학점수;
+}
+
+      else {
         return null;
       }
 
