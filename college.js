@@ -4,7 +4,14 @@ const cors = require('cors');
 const app = express();
 const port = 9000;
 
-app.use(cors({ origin: '*' }));
+app.use(cors());  // 이걸로 충분함
+app.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.sendStatus(200);
+});
+
 app.use(express.json());
 
 const db = mysql.createConnection({
