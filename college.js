@@ -66,7 +66,7 @@ app.post('/college/recommend', (req, res) => {
         선택점수 = (candidates[0] + candidates[1]) / 2;
         수능최종반영점수 = 선택점수 * (row.수능반영비율 / 100);
       } else {
-        return null; // 처리 안된 조건 제외
+        return null;
       }
 
       return {
@@ -81,7 +81,12 @@ app.post('/college/recommend', (req, res) => {
         영어등급: input.englishGrade,
         탐구: 탐구,
         수능반영비율: row.수능반영비율,
-        수능선택조건: row.수능선택조건
+        수능선택조건: row.수능선택조건,
+        국어비율: row.국어비율,
+        수학비율: row.수학비율,
+        영어비율: row.영어비율,
+        탐구비율: row.탐구비율,
+        탐구과목수: row.탐구과목수
       };
     }).filter(Boolean);
 
