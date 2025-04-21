@@ -1,20 +1,22 @@
 const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');
+
 const app = express();
 const port = 9000;
 
+// ✅ CORS 설정 (모든 출처 허용 + preflight 처리)
 const corsOptions = {
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type']
 };
-
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));  // preflight 요청 처리
+app.options('*', cors(corsOptions)); // preflight 대응
 
 app.use(express.json());
 
+// ✅ DB 연결
 const db = mysql.createConnection({
   host: '211.37.174.218',
   user: 'maxilsan',
@@ -24,11 +26,14 @@ const db = mysql.createConnection({
 });
 
 db.connect(err => {
-  if (err) console.error('❌ DB 연결 실패:', err);
-  else console.log('✅ MySQL 연결 성공');
+  if (err) {
+    console.error('❌ MySQL 연결 실패:', err);
+  } else {
+    console.log('✅ MySQL 연결 성공');
+  }
 });
 
-// ✅ 대학 정보 입력 API
+// ✅ INSERT API
 app.post('/college/insert', (req, res) => {
   const data = req.body;
 
@@ -44,7 +49,11 @@ app.post('/college/insert', (req, res) => {
       한국사6등급점수, 한국사7등급점수, 한국사8등급점수, 한국사9등급점수,
       반영지표, 표준점수기준, 수능선택조건, 계산방식그룹,
       수학가산과목조건, 탐구가산과목조건
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
   `;
 
   const values = [
@@ -63,13 +72,14 @@ app.post('/college/insert', (req, res) => {
   db.query(sql, values, (err, result) => {
     if (err) {
       console.error('❌ INSERT 실패:', err);
-      res.status(500).send('DB INSERT 오류');
+      res.status(500).send({ success: false, error: err });
     } else {
       res.send({ success: true, id: result.insertId });
     }
   });
 });
 
+// ✅ 서버 시작
 app.listen(port, () => {
-  console.log(`🚀 대학 추천 서버 ${port}번 포트에서 실행 중`);
+  console.log(`🚀 대학추천 서버가 ${port}번 포트에서 실행 중`);
 });
