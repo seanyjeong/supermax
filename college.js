@@ -4,12 +4,12 @@ const cors = require('cors');
 const app = express();
 const port = 9000;
 
-app.use(cors());  // 이걸로 충분함
-app.options('*', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.sendStatus(200);
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*'); // 모든 출처 허용
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200); // preflight 대응
+  next();
 });
 
 app.use(express.json());
