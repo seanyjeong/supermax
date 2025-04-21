@@ -69,11 +69,11 @@ app.post('/college/insert', (req, res) => {
   });
 });
 
-// ✅ 추천 API (백/백 그룹 전용 계산)
+// ✅ 추천 API (백/백 그룹 + 수영택1 전용 계산)
 app.post('/college/recommend', (req, res) => {
   const input = req.body;
 
-  db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 = "백/백"', (err, rows) => {
+  db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 = "백/백" AND 수능선택조건 = "수영택1"', (err, rows) => {
     if (err) {
       console.error('❌ 대학 불러오기 실패:', err);
       return res.status(500).json({ success: false, message: 'DB 오류' });
@@ -89,22 +89,18 @@ app.post('/college/recommend', (req, res) => {
         탐구 = 0;
       }
 
+      const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
       let 선택값 = 0;
-      if (row.수능선택조건?.includes('수영택1')) {
-        if (input.math >= input.english) {
-          선택값 = input.math * (row.수학비율 / 100);
-        } else {
-          선택값 = input.english * (row.영어비율 / 100);
-        }
+      if (input.math >= 영어등급점수) {
+        선택값 = input.math * (row.수학비율 / 100);
       } else {
-        선택값 =
-          (input.math * (row.수학비율 / 100)) +
-          (input.english * (row.영어비율 / 100));
+        선택값 = 영어등급점수 * (row.영어비율 / 100);
       }
 
       const 국어점수 = input.korean * (row.국어비율 / 100);
       const 탐구점수 = 탐구 * (row.탐구비율 / 100);
-      const 수능최종반영점수 = 국어점수 + 탐구점수 + 선택값;
+      const 수능합산 = 국어점수 + 탐구점수 + 선택값;
+      const 수능최종반영점수 = 수능합산 * (row.수능반영비율 / 100);
       const 최종합산점수 = 수능최종반영점수;
 
       return {
@@ -115,6 +111,7 @@ app.post('/college/recommend', (req, res) => {
         국어: input.korean,
         수학: input.math,
         영어: input.english,
+        영어등급: input.englishGrade,
         탐구: 탐구,
         수능반영비율: row.수능반영비율,
         내신반영비율: row.내신반영비율,
