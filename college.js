@@ -27,26 +27,29 @@ db.connect(err => {
   else console.log('✅ MySQL 연결 성공');
 });
 
-const calculatePercentLogic = require('./percent');
+
 
 app.post('/college/recommend', (req, res) => {
     const input = req.body;
   
-    db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "표/표")', (err, rows) => {
+    db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "표/표", "표")', (err, rows) => {
       if (err) return res.status(500).json({ success: false, message: 'DB 오류' });
   
       db.query('SELECT * FROM 표준점수최고점', (err2, maxRows) => {
         if (err2) return res.status(500).json({ success: false, message: 'DB 오류' });
   
-        const 최고점Map = maxRows[0]; // 최고점 기준
+        const 최고점Map = maxRows[0];
   
         const 백백Rows = rows.filter(r => r.반영지표 === '백/백');
         const 표표Rows = rows.filter(r => r.반영지표 === '표/표');
+        const 표Rows   = rows.filter(r => r.반영지표 === '표');
   
         const percentResults = require('./percent')(input, 백백Rows);
         const standardResults = require('./standard')(input, 표표Rows, 최고점Map);
+        const standardSingleResults = require('./standardsingle')(input, 표Rows, 최고점Map);
   
-        const results = [...percentResults, ...standardResults].sort((a, b) => b.최종합산점수 - a.최종합산점수);
+        const results = [...percentResults, ...standardResults, ...standardSingleResults]
+          .sort((a, b) => b.최종합산점수 - a.최종합산점수);
   
         res.json({ success: true, data: results });
       });
