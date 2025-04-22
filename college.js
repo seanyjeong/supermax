@@ -30,38 +30,31 @@ db.connect(err => {
 const calculatePercentLogic = require('./percent');
 
 app.post('/college/recommend', (req, res) => {
-  const input = req.body;
-
-  db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 = "백/백"', (err, rows) => {
-    if (err) {
-      console.error('❌ 대학 불러오기 실패:', err);
-      return res.status(500).json({ success: false, message: 'DB 오류' });
-    }
-
-    const results = calculatePercentLogic(input, rows);
-    res.json({ success: true, data: results });
+    const input = req.body;
+  
+    db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "표/표")', (err, rows) => {
+      if (err) return res.status(500).json({ success: false, message: 'DB 오류' });
+  
+      db.query('SELECT * FROM 표준점수최고점', (err2, maxRows) => {
+        if (err2) return res.status(500).json({ success: false, message: 'DB 오류' });
+  
+        const 최고점Map = maxRows[0]; // 최고점 기준
+  
+        const 백백Rows = rows.filter(r => r.반영지표 === '백/백');
+        const 표표Rows = rows.filter(r => r.반영지표 === '표/표');
+  
+        const percentResults = require('./percent')(input, 백백Rows);
+        const standardResults = require('./standard')(input, 표표Rows, 최고점Map);
+  
+        const results = [...percentResults, ...standardResults].sort((a, b) => b.최종합산점수 - a.최종합산점수);
+  
+        res.json({ success: true, data: results });
+      });
+    });
   });
-});
-
-app.post('/college/insert-max-score', (req, res) => {
-  const data = req.body;
-  const keys = Object.keys(data);
-  const values = keys.map(k => data[k]);
-
-  const columns = keys.join(',');
-  const placeholders = keys.map(() => '?').join(',');
-
-  const sql = `INSERT INTO 표준점수최고점 (${columns}) VALUES (${placeholders})`;
-
-  db.query(sql, values, (err, result) => {
-    if (err) {
-      console.error('❌ 표준점수최고점 INSERT 실패:', err);
-      return res.status(500).json({ success: false });
-    }
-    res.json({ success: true });
-  });
-});
-
+  
+  
+  
 
 
 
