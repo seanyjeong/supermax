@@ -43,6 +43,26 @@ app.post('/college/recommend', (req, res) => {
   });
 });
 
+app.post('/college/insert-max-score', (req, res) => {
+  const data = req.body;
+  const keys = Object.keys(data);
+  const values = keys.map(k => data[k]);
+
+  const columns = keys.join(',');
+  const placeholders = keys.map(() => '?').join(',');
+
+  const sql = `INSERT INTO 표준점수최고점 (${columns}) VALUES (${placeholders})`;
+
+  db.query(sql, values, (err, result) => {
+    if (err) {
+      console.error('❌ 표준점수최고점 INSERT 실패:', err);
+      return res.status(500).json({ success: false });
+    }
+    res.json({ success: true });
+  });
+});
+
+
 
 
 app.listen(port, () => {
