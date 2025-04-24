@@ -43,6 +43,11 @@ db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "�
         if (err2) return res.status(500).json({ success: false, message: 'DB 오류' });
   
         const 최고점Map = maxRows[0];
+        rows.forEach(row => {
+  Object.keys(row).forEach(key => {
+    if (row[key] === null) row[key] = 0;
+  });
+});
   
         const 백백Rows = rows.filter(r => r.반영지표 === '백/백');
         const 표표Rows = rows.filter(r => r.반영지표 === '표/표');
