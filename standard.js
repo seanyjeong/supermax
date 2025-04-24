@@ -61,17 +61,19 @@ module.exports = function(input, rows, 최고점Map) {
 
     const 국어환산 = getConvertedScore(input.korean_std, input.koreanSubject, 기준);
     const 수학환산 = getConvertedScore(수학점수, input.mathSubject, 기준);
-    const 영어환산 = getConvertedScore(영어등급점수, '영어', 기준);
-
     const 탐구환산 = getConvertedScore(탐구, '탐구', 기준);
 
     const 국어점수 = 국어환산 * (row.국어비율 / 100);
     const 수학점수_가산 = 수학환산 * (row.수학비율 / 100);
 
-    let 영어점수 = 0;
-    if (row.영어비율 !== '감점') {
-      영어점수 = 영어환산 * (parseFloat(row.영어비율 || 0) / 100);
-    }
+// 영어점수는 getConvertedScore 하지 않고, 등급 점수를 그대로 사용하거나 감점만 고려
+let 영어점수 = 0;
+if (row.영어비율 === '감점') {
+  영어점수 = 영어등급점수;
+} else if (typeof row.영어비율 === 'number' || !isNaN(parseFloat(row.영어비율))) {
+  영어점수 = 영어등급점수 * (parseFloat(row.영어비율) / 100);
+}
+
     
 
     const 탐구점수 = 탐구환산 * (row.탐구비율 / 100);
