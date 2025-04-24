@@ -4,24 +4,23 @@ module.exports = function(input, rows, 최고점Map) {
 
   const 과탐목록 = ["물리1", "물리2", "화학1", "화학2", "생명과학1", "생명과학2", "지구과학1", "지구과학2"];
 
-  function getConvertedScore(stdScore, subjectName, 기준) {
-    const 최고점 = 최고점Map[subjectName];
-  
-    console.log('🎯 변환 시도:', subjectName, '기준:', 기준, 'std:', stdScore, '최고점:', 최고점);
-  
-    if (subjectName === '영어') {
-      if (기준 === '최고점') {
-        const engTop = 최고점Map['영어1등급점수'];
-        return engTop ? stdScore / engTop : 0;
-      } else if (기준 === '200') {
-        return stdScore / 200;
-      }
+function getConvertedScore(stdScore, subjectName, 기준) {
+  if (subjectName === '영어') {
+    if (기준 === '최고점') {
+      const 최고점 = 최고점Map['영어1등급점수'];
+      return 최고점 ? stdScore / 최고점 : 0;
+    } else if (기준 === '200') {
+      return stdScore / 200;
     }
-  
-    if (기준 === '최고점') return 최고점 ? stdScore / 최고점 : 0;
-    if (기준 === '200') return stdScore / 200;
-    return 0;
   }
+
+  const 최고점 = 최고점Map[subjectName.trim()]; // ✅ 여기!
+  if (기준 === '최고점') return 최고점 ? stdScore / 최고점 : 0;
+  if (기준 === '200') return stdScore / 200;
+
+  return 0;
+}
+
   console.log('🧾 과목명:', {
     국어과목: input.koreanSubject,
     수학과목: input.mathSubject,
