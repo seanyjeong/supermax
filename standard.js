@@ -75,15 +75,19 @@ module.exports = function(input, rows, 최고점Map) {
       수능최종반영점수 = (선택점수 + 탐구점수) * (row.수능반영비율 / 100);
     } else if (row.수능선택조건 === '국수영택2') {
       const candidates = [
-        { 점수: 국어점수 }, 
-        { 점수: 수학점수_가산 }, 
-        { 점수: 영어점수 }
+        { 과목: '국어', 점수: 국어점수 },
+        { 과목: '수학', 점수: 수학점수_가산 },
+        { 과목: '영어', 점수: 영어점수 }
       ];
+    
       candidates.sort((a, b) => b.점수 - a.점수);
-      선택점수 = candidates[0].점수 + candidates[1].점수;
+      const top2 = candidates.slice(0, 2);
+    
+      console.log('🎯 선택과목 Top2:', top2);
+    
+      선택점수 = top2.reduce((acc, cur) => acc + cur.점수, 0);
       수능최종반영점수 = (선택점수 + 탐구점수) * (row.수능반영비율 / 100);
     }
-
     if (row.한국사반영방식 === '가산점') 수능최종반영점수 += 한국사등급점수;
     if (row.영어비율 === '감점') 수능최종반영점수 += 영어등급점수;
 
