@@ -41,13 +41,12 @@ module.exports = function(input, rows, 최고점Map) {
       }
   
       // 탐구 가산점 적용
-if (typeof row.탐구가산과목조건 === 'string' && row.탐구가산과목조건.includes('과탐')) {
-  const parts = row.탐구가산과목조건.split(':');
-  const 가산 = parseFloat(parts[1]) || 0;
-  if (과탐목록.includes(input.subject1Name)) 탐구1점수 *= (1 + 가산 / 100);
-  if (과탐목록.includes(input.subject2Name)) 탐구2점수 *= (1 + 가산 / 100);
-}
-
+      if (typeof row.탐구가산과목조건 === 'string' && row.탐구가산과목조건.includes('과탐')) {
+        const parts = row.탐구가산과목조건.split(':');
+        const 가산 = parseFloat(parts[1]) || 0;
+        if (과탐목록.includes(input.subject1Name)) 탐구1점수 *= (1 + 가산 / 100);
+        if (과탐목록.includes(input.subject2Name)) 탐구2점수 *= (1 + 가산 / 100);
+      }
   
       // 탐구 계산
       let 탐구 = 0;
@@ -132,6 +131,21 @@ if (typeof row.탐구가산과목조건 === 'string' && row.탐구가산과목�
     }).filter(Boolean);
   
     results.sort((a, b) => b.최종합산점수 - a.최종합산점수);
+
+
     return results;
+
+    box.innerHTML += `
+  <div style="margin-bottom:20px; border-bottom:1px dashed #ddd; padding-bottom:10px;">
+    <strong>${item.대학명} ${item.학과명}</strong><br>
+    총점: <b>${item.최종합산점수}</b>점<br>
+    🔍 기준: ${item.계산기준 || '-'} / 반영지표: ${item.반영지표 || '-'} / 조건: ${item.수능선택조건 || '없음'}<br>
+    📊 국어: ${item.국어} (${item.국어비율}%) /
+        수학: ${item.수학} (${item.수학비율}%) /
+        영어: ${item.영어} (${item.영어비율}%) /
+        탐구: ${item.탐구 || '-'} (${item.탐구비율 || 0}%)
+  </div>
+`;
+
   };
   
