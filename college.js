@@ -70,11 +70,15 @@ app.post('/college/recommend', (req, res) => {
         console.log(`✅ [COMPLETE] 결과 ${results.length}개 계산됨`);
         res.json({ success: true, data: results });
 
-      } catch (e) {
-        console.error('❌ [LOGIC] 점수 계산 중 오류 발생:', e);
-        res.status(500).json({ success: false, message: '서버 내부 계산 에러' });
-      }
-    });
+} catch (e) {
+  console.error('❌ [LOGIC] 점수 계산 중 오류 발생:', e);
+  res.status(500).json({ 
+    success: false, 
+    message: '서버 내부 계산 에러', 
+    error: e.message // 👈 요거 추가!
+  });
+}
+
   });
 });
 
