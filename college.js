@@ -32,8 +32,12 @@ db.connect(err => {
 app.post('/college/recommend', (req, res) => {
     const input = req.body;
   
-    db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "표/표", "표")', (err, rows) => {
-      if (err) return res.status(500).json({ success: false, message: 'DB 오류' });
+db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "표/표", "표")', (err, rows) => {
+  if (err) {
+    console.error("❌ 대학점수계산 SELECT 오류:", err); // ✅ 로그추가
+    return res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+
   
       db.query('SELECT * FROM 표준점수최고점', (err2, maxRows) => {
         if (err2) return res.status(500).json({ success: false, message: 'DB 오류' });
