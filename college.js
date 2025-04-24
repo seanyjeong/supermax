@@ -30,7 +30,7 @@ db.connect(err => {
 
 
 app.post('/college/recommend', (req, res) => {
-  console.log('✅ [REQUEST] POST /college/recommend 도착'); // 요청 진입 확인
+  console.log('✅ [REQUEST] POST /college/recommend 도착');
   const input = req.body;
 
   db.query('SELECT * FROM 대학점수계산 WHERE 반영지표 IN ("백/백", "표/표", "표")', (err, rows) => {
@@ -58,7 +58,7 @@ app.post('/college/recommend', (req, res) => {
       try {
         const 백백Rows = rows.filter(r => r.반영지표 === '백/백');
         const 표표Rows = rows.filter(r => r.반영지표 === '표/표');
-        const 표Rows = rows.filter(r => r.반영지표 === '표');
+        const 표Rows   = rows.filter(r => r.반영지표 === '표');
 
         const percentResults = require('./percent')(input, 백백Rows);
         const standardResults = require('./standard')(input, 표표Rows, 최고점Map);
@@ -70,17 +70,18 @@ app.post('/college/recommend', (req, res) => {
         console.log(`✅ [COMPLETE] 결과 ${results.length}개 계산됨`);
         res.json({ success: true, data: results });
 
-} catch (e) {
-  console.error('❌ [LOGIC] 점수 계산 중 오류 발생:', e);
-  res.status(500).json({ 
-    success: false, 
-    message: '서버 내부 계산 에러', 
-    error: e.message // 👈 요거 추가!
-  });
-}
-
+      } catch (e) {
+        console.error('❌ [LOGIC] 점수 계산 중 오류 발생:', e);
+        res.status(500).json({
+          success: false,
+          message: '서버 내부 계산 에러',
+          error: e.message
+        });
+      }
+    });
   });
 });
+
 
   
   
