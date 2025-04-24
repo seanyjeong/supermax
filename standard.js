@@ -89,7 +89,44 @@ module.exports = function(input, rows, 최고점Map) {
 
     // ✅ 개별 디버깅 출력
     console.log(`🎯 [${row.대학명}] 총점계산 → 국어:${국어점수}, 수학:${수학점수_가산}, 영어:${영어점수}, 탐구:${탐구점수}, 최종:${수능최종반영점수}`);
-
+    console.log('📌 대학:', row.대학명, row.학과명);
+    console.log('📊 입력 과목:', {
+      국어과목: input.koreanSubject,
+      수학과목: input.mathSubject,
+      탐구1과목: input.subject1Name,
+      탐구2과목: input.subject2Name
+    });
+    console.log('📊 입력 점수:', {
+      국어: input.korean_std,
+      수학: input.math_std,
+      탐구1: input.subject1_std,
+      탐구2: input.subject2_std,
+      영어등급: input.englishGrade,
+      영어등급점수: 영어등급점수
+    });
+    console.log('📐 변환 점수:', {
+      국어환산: 국어환산,
+      수학환산: 수학환산,
+      탐구환산: 탐구환산,
+      영어: 영어점수
+    });
+    console.log('⚙️ 반영비율:', {
+      국어비율: row.국어비율,
+      수학비율: row.수학비율,
+      영어비율: row.영어비율,
+      탐구비율: row.탐구비율,
+      수능반영비율: row.수능반영비율
+    });
+    console.log('🧠 수능선택조건:', row.수능선택조건 || '기본');
+    console.log('🧮 과목별 점수:', {
+      국어점수,
+      수학점수_가산,
+      영어점수,
+      탐구점수
+    });
+    console.log('✅ 선택점수:', 선택점수, '/ 최종 수능합산점수:', 수능최종반영점수);
+    console.log('----------------------------------------------');
+    
     return {
       대학명: row.대학명,
       학과명: row.학과명,
