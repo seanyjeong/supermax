@@ -61,7 +61,8 @@ module.exports = function(input, rows, 최고점Map) {
 
     const 국어환산 = getConvertedScore(input.korean_std, input.koreanSubject, 기준);
     const 수학환산 = getConvertedScore(수학점수, input.mathSubject, 기준);
-    const 영어환산 = getConvertedScore(input.english_std, '영어', 기준);
+    const 영어환산 = getConvertedScore(영어등급점수, '영어', 기준);
+
     const 탐구환산 = getConvertedScore(탐구, '탐구', 기준);
 
     const 국어점수 = 국어환산 * (row.국어비율 / 100);
@@ -69,8 +70,9 @@ module.exports = function(input, rows, 최고점Map) {
 
     let 영어점수 = 0;
     if (row.영어비율 !== '감점') {
-      영어점수 = 영어환산 * (parseFloat(row.영어비율) / 100);
+      영어점수 = 영어환산 * (parseFloat(row.영어비율 || 0) / 100);
     }
+    
 
     const 탐구점수 = 탐구환산 * (row.탐구비율 / 100);
 
@@ -137,16 +139,5 @@ module.exports = function(input, rows, 최고점Map) {
 
   return results;
 
-  box.innerHTML += `
-<div style="margin-bottom:20px; border-bottom:1px dashed #ddd; padding-bottom:10px;">
-  <strong>${item.대학명} ${item.학과명}</strong><br>
-  총점: <b>${item.최종합산점수}</b>점<br>
-  🔍 기준: ${item.계산기준 || '-'} / 반영지표: ${item.반영지표 || '-'} / 조건: ${item.수능선택조건 || '없음'}<br>
-  📊 국어: ${item.국어} (${item.국어비율}%) /
-      수학: ${item.수학} (${item.수학비율}%) /
-      영어: ${item.영어} (${item.영어비율}%) /
-      탐구: ${item.탐구 || '-'} (${item.탐구비율 || 0}%)
-</div>
-`;
-
+ 
 };
