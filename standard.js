@@ -120,7 +120,8 @@ module.exports = function(input, rows, 최고점Map) {
       수능선택조건: row.수능선택조건 || '',
       국어: input.korean_std,
       수학: input.math_std,
-      영어: input.english_std || 0,
+      영어: Math.round(영어점수 * 10) / 10,
+
       탐구: Math.round(탐구 * 10) / 10,
       국어비율: row.국어비율 || 0,
       수학비율: row.수학비율 || 0,
