@@ -1,4 +1,6 @@
 module.exports = function(input, rows, 최고점Map) {
+
+  console.log('📌 최고점Map:', 최고점Map) // ✅ 요기!
   const 과탐목록 = ["물리1", "물리2", "화학1", "화학2", "생명과학1", "생명과학2", "지구과학1", "지구과학2"];
 
   function getConvertedScore(stdScore, subjectName, 기준) {
@@ -10,16 +12,15 @@ module.exports = function(input, rows, 최고점Map) {
         return stdScore / 200;
       }
     }
-
-    if (기준 === '최고점') {
-      const 최고점 = 최고점Map[subjectName];
-      return 최고점 ? stdScore / 최고점 : 0;
-    } else if (기준 === '200') {
-      return stdScore / 200;
-    } else {
-      return 0;
-    }
+  
+    // 🔥 핵심: 과목명(subjectName)은 '화법과작문' 등으로 그대로 매핑해야 함
+    const 최고점 = 최고점Map[subjectName];
+    if (기준 === '최고점') return 최고점 ? stdScore / 최고점 : 0;
+    if (기준 === '200') return stdScore / 200;
+  
+    return 0;
   }
+  
 
   const results = rows.map(row => {
     const 영어등급점수 = row[`영어${input.englishGrade}등급점수`] || 0;
