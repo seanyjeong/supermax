@@ -41,11 +41,13 @@ module.exports = function(input, rows, 최고점Map) {
       }
   
       // 탐구 가산점 적용
-      if (row.탐구가산과목조건?.includes('과탐')) {
-        const 가산 = parseFloat(row.탐구가산과목조건.split(':')[1] || 0);
-        if (과탐목록.includes(input.subject1Name)) 탐구1점수 *= (1 + 가산 / 100);
-        if (과탐목록.includes(input.subject2Name)) 탐구2점수 *= (1 + 가산 / 100);
-      }
+if (typeof row.탐구가산과목조건 === 'string' && row.탐구가산과목조건.includes('과탐')) {
+  const parts = row.탐구가산과목조건.split(':');
+  const 가산 = parseFloat(parts[1]) || 0;
+  if (과탐목록.includes(input.subject1Name)) 탐구1점수 *= (1 + 가산 / 100);
+  if (과탐목록.includes(input.subject2Name)) 탐구2점수 *= (1 + 가산 / 100);
+}
+
   
       // 탐구 계산
       let 탐구 = 0;
