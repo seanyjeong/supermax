@@ -146,113 +146,153 @@ app.post('/college/upload-rule', async (req, res) => {
 });
 
 app.post('/college/recommend-debug', (req, res) => {
-  const input = req.body;
   console.log('✅ [DEBUG] 추천 디버깅 요청 도착');
+  console.log('📦 입력값:', req.body);
 
-  db.query('SELECT * FROM university_rules', (err, ruleRows) => {
-    if (err) return res.status(500).json({ success: false, message: '룰 조회 실패', error: err });
+  const input = req.body;
+  if (!input) {
+    return res.status(400).json({ success: false, message: '입력값이 없습니다.' });
+  }
 
-    db.query('SELECT * FROM university_score_weights', (err2, weightRows) => {
-      if (err2) return res.status(500).json({ success: false, message: '과목 조건 조회 실패', error: err2 });
+  try {
+    db.query('SELECT * FROM university_rules', (err, ruleRows) => {
+      if (err) {
+        console.error('❌ university_rules 조회 실패:', err);
+        return res.status(500).json({ success: false, message: '룰 조회 실패', error: err });
+      }
 
-      db.query('SELECT * FROM university_grade_score', (err3, gradeRows) => {
-        if (err3) return res.status(500).json({ success: false, message: '등급 점수 조회 실패', error: err3 });
+      console.log(`✅ university_rules ${ruleRows.length}개 불러옴`);
 
-        db.query('SELECT * FROM 표준점수최고점 LIMIT 1', (err4, maxScoreRows) => {
-          if (err4) return res.status(500).json({ success: false, message: '최고점 조회 실패', error: err4 });
+      db.query('SELECT * FROM university_score_weights', (err2, weightRows) => {
+        if (err2) {
+          console.error('❌ university_score_weights 조회 실패:', err2);
+          return res.status(500).json({ success: false, message: '과목 조건 조회 실패', error: err2 });
+        }
 
-          const 최고점Map = maxScoreRows[0];
-          const results = [];
+        console.log(`✅ university_score_weights ${weightRows.length}개 불러옴`);
 
-          for (const rule of ruleRows) {
-            const 학과과목 = weightRows.filter(w => w.대학명 === rule.대학명 && w.학과명 === rule.학과명);
-            const 영어점수 = gradeRows.find(g => g.대학명 === rule.대학명 && g.학과명 === rule.학과명 && g.과목 === '영어' && g.등급 == input.englishGrade)?.점수 || 0;
-            const 한국사점수 = gradeRows.find(g => g.대학명 === rule.대학명 && g.학과명 === rule.학과명 && g.과목 === '한국사' && g.등급 == input.khistoryGrade)?.점수 || 0;
-
-            const 점수 = {
-              국어: input.korean_std,
-              수학: input.math_std,
-              탐구: (input.subject1_std + input.subject2_std) / 2
-            };
-
-            let 선택점수 = 0;
-            let 탐구점수 = 0;
-
-            for (const subj of 학과과목) {
-              let std = 0;
-              if (subj.과목 === '국어') std = 점수.국어;
-              else if (subj.과목 === '수학') std = 점수.수학;
-              else if (subj.과목 === '탐구') std = 점수.탐구;
-
-              let 기준 = 100;
-              if (subj.반영지표 === '표준점수') {
-                기준 = subj.표준점수기준 === '200'
-                  ? 200
-                  : 최고점Map[subj.과목] || 1;
-              }
-
-              const 환산 = std / 기준;
-              const 최종점수 = 환산 * (subj.반영비율 / 100);
-
-              if (subj.과목 === '탐구') 탐구점수 += 최종점수;
-              else if (subj.과목 !== '영어') 선택점수 += 최종점수;
-            }
-
-            // 영어 처리 분기
-// 등급별 점수는 무조건 조회 (기준 점수 확보용)
-const 영어등급점수 = gradeRows.find(g =>
-  g.대학명 === rule.대학명 &&
-  g.학과명 === rule.학과명 &&
-  g.과목 === '영어' &&
-  g.등급 == input.englishGrade
-)?.점수 || 0;
-
-
-const 영어조건 = 학과과목.find(s => s.과목 === '영어');
-const 기준 = 영어조건?.표준점수기준;
-
-if (기준 === '200') {
-  영어점수 = 영어등급점수 / 200;
-} else if (기준 === '100') {
-  영어점수 = 영어등급점수 / 100;
-} else if (기준 === '최고점') {
-  // university_grade_score에서 이 학교의 영어 1등급 기준 점수를 가져와야 함
-  const 최고점기준 = gradeRows.find(
-    g => g.대학명 === rule.대학명 && g.학과명 === rule.학과명 && g.과목 === '영어' && g.등급 == 1
-  )?.점수 || 100;
-
-  영어점수 = 영어등급점수 / 최고점기준;
-}
-영어점수 *= (영어조건?.반영비율 || 0) / 100;
-
-
-
-            // 한국사 가산점
-            if (rule.한국사반영방식 === '가산점') 선택점수 += 한국사점수;
-
-            const 수능반영 = rule.수능반영비율 || 100;
-            const 최종점수 = (선택점수 + 탐구점수) * (수능반영 / 100);
-
-            results.push({
-              대학명: rule.대학명,
-              학과명: rule.학과명,
-              국어: 점수.국어,
-              수학: 점수.수학,
-              탐구: 점수.탐구,
-              영어등급: input.englishGrade,
-              한국사등급: input.khistoryGrade,
-              선택점수: Math.round(선택점수 * 10) / 10,
-              탐구점수: Math.round(탐구점수 * 10) / 10,
-              최종합산점수: Math.round(최종점수 * 10) / 10
-            });
+        db.query('SELECT * FROM university_grade_score', (err3, gradeRows) => {
+          if (err3) {
+            console.error('❌ university_grade_score 조회 실패:', err3);
+            return res.status(500).json({ success: false, message: '등급 점수 조회 실패', error: err3 });
           }
 
-          res.json({ success: true, data: results });
+          console.log(`✅ university_grade_score ${gradeRows.length}개 불러옴`);
+
+          db.query('SELECT * FROM 표준점수최고점 LIMIT 1', (err4, maxScoreRows) => {
+            if (err4) {
+              console.error('❌ 표준점수최고점 조회 실패:', err4);
+              return res.status(500).json({ success: false, message: '최고점 조회 실패', error: err4 });
+            }
+
+            const 최고점Map = maxScoreRows[0];
+            console.log('✅ 표준점수최고점 불러오기 완료');
+
+            const results = [];
+
+            for (const rule of ruleRows) {
+              const 학과과목 = weightRows.filter(w => w.대학명 === rule.대학명 && w.학과명 === rule.학과명);
+              const 점수 = {
+                국어: input.korean_std || 0,
+                수학: input.math_std || 0,
+                탐구: ((input.subject1_std || 0) + (input.subject2_std || 0)) / 2
+              };
+
+              const 영어등급점수 = gradeRows.find(g =>
+                g.대학명 === rule.대학명 &&
+                g.학과명 === rule.학과명 &&
+                g.과목 === '영어' &&
+                String(g.등급) === String(input.englishGrade)
+              )?.점수 || 0;
+
+              const 한국사점수 = gradeRows.find(g =>
+                g.대학명 === rule.대학명 &&
+                g.학과명 === rule.학과명 &&
+                g.과목 === '한국사' &&
+                String(g.등급) === String(input.khistoryGrade)
+              )?.점수 || 0;
+
+              let 선택점수 = 0;
+              let 탐구점수 = 0;
+
+              for (const subj of 학과과목) {
+                let std = 0;
+                if (subj.과목 === '국어') std = 점수.국어;
+                else if (subj.과목 === '수학') std = 점수.수학;
+                else if (subj.과목 === '탐구') std = 점수.탐구;
+
+                let 기준 = 100;
+                if (subj.반영지표 === '표준점수') {
+                  기준 = subj.표준점수기준 === '200'
+                    ? 200
+                    : 최고점Map[subj.과목] || 1;
+                }
+
+                const 환산 = std / 기준;
+                const 최종점수 = 환산 * (subj.반영비율 / 100);
+
+                if (subj.과목 === '탐구') 탐구점수 += 최종점수;
+                else if (subj.과목 !== '영어') 선택점수 += 최종점수;
+              }
+
+              // 영어 분기
+              const 영어조건 = 학과과목.find(s => s.과목 === '영어');
+              let 영어점수 = 0;
+              const 기준 = 영어조건?.표준점수기준;
+
+              if (기준 === '200') {
+                영어점수 = 영어등급점수 / 200;
+              } else if (기준 === '100') {
+                영어점수 = 영어등급점수 / 100;
+              } else if (기준 === '최고점') {
+                const 최고점기준 = gradeRows.find(
+                  g => g.대학명 === rule.대학명 &&
+                       g.학과명 === rule.학과명 &&
+                       g.과목 === '영어' &&
+                       String(g.등급) === '1'
+                )?.점수 || 100;
+                영어점수 = 영어등급점수 / 최고점기준;
+              }
+
+              영어점수 *= (영어조건?.반영비율 || 0) / 100;
+
+              if (rule.한국사반영방식 === '가산점') 선택점수 += 한국사점수;
+
+              const 수능반영 = rule.수능반영비율 || 100;
+              const 최종점수 = (선택점수 + 탐구점수 + 영어점수) * (수능반영 / 100);
+
+              results.push({
+                대학명: rule.대학명,
+                학과명: rule.학과명,
+                국어: 점수.국어,
+                수학: 점수.수학,
+                탐구: 점수.탐구,
+                영어등급: input.englishGrade,
+                한국사등급: input.khistoryGrade,
+                선택점수: Math.round(선택점수 * 10) / 10,
+                탐구점수: Math.round(탐구점수 * 10) / 10,
+                영어점수: Math.round(영어점수 * 10) / 10,
+                최종합산점수: Math.round(최종점수 * 10) / 10
+              });
+            }
+
+            console.log(`🎯 최종 결과 ${results.length}개 계산됨`);
+            res.json({ success: true, data: results });
+          });
         });
       });
     });
-  });
+  } catch (e) {
+    console.error('❌ [CATCH] 내부 오류 발생:', e);
+    res.status(500).json({
+      success: false,
+      message: '서버 내부 오류',
+      error: e.message,
+      stack: e.stack
+    });
+  }
 });
+
 
 
 
