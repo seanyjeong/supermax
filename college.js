@@ -207,7 +207,7 @@ const 영어등급점수 = gradeRows.find(g =>
   g.등급 == input.englishGrade
 )?.점수 || 0;
 
-let 영어점수 = 0;
+
 const 영어조건 = 학과과목.find(s => s.과목 === '영어');
 const 기준 = 영어조건?.표준점수기준;
 
