@@ -223,7 +223,10 @@ app.post('/college/recommend-debug', (req, res) => {
                     기준 = subj.표준점수기준 === '200'
                       ? 200
                       : 최고점Map[subj.과목] || 1;
+                  } else if (subj.반영지표 === '백분위') {
+                    기준 = 100;
                   }
+
                   const 환산 = (raw / 기준) * subj.반영비율;
                   if (subj.과목 === '탐구') 탐구점수 += 환산;
                   else 선택점수 += 환산;
@@ -264,6 +267,7 @@ app.post('/college/recommend-debug', (req, res) => {
     });
   }
 });
+
 
 
 
