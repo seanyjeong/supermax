@@ -171,9 +171,9 @@ app.post('/college/recommend-debug', (req, res) => {
             const results = [];
 
             for (const rule of ruleRows) {
+              console.log(`🎓 대학: ${rule.대학명}, 학과: ${rule.학과명}`);
               const 학과과목 = weightRows.filter(w => w.대학명 === rule.대학명 && w.학과명 === rule.학과명);
 
-              // 영어/한국사 등급 점수 추출
               const 영어등급점수 = gradeRows.find(g =>
                 g.대학명 === rule.대학명 &&
                 g.학과명 === rule.학과명 &&
@@ -196,10 +196,9 @@ app.post('/college/recommend-debug', (req, res) => {
                 let raw = 0;
                 let 기준 = 100;
 
-                // 과목별 점수 추출
+                // 등급
                 if (subj.반영지표 === '등급') {
                   let 등급값 = 0;
-
                   if (subj.과목 === '국어') 등급값 = input.korean.grade;
                   else if (subj.과목 === '수학') 등급값 = input.math.grade;
                   else if (subj.과목 === '탐구') {
@@ -208,6 +207,7 @@ app.post('/college/recommend-debug', (req, res) => {
                     raw = 영어등급점수;
                     const 환산 = (raw * subj.반영비율) / 100;
                     영어점수 += 환산;
+                    console.log(`🟦 영어 등급점수: ${raw}, 반영비율: ${subj.반영비율}, 환산: ${환산.toFixed(3)}`);
                     continue;
                   }
 
@@ -221,10 +221,12 @@ app.post('/college/recommend-debug', (req, res) => {
                   const 환산 = (raw * subj.반영비율) / 100;
                   if (subj.과목 === '탐구') 탐구점수 += 환산;
                   else 선택점수 += 환산;
+
+                  console.log(`🟨 ${subj.과목} [등급]: 등급=${등급값}, 점수=${raw}, 반영=${subj.반영비율}, 환산=${환산.toFixed(3)}`);
                   continue;
                 }
 
-                // 표점/백분위일 경우
+                // 표점/백분위
                 if (subj.과목 === '국어') {
                   raw = subj.반영지표 === '표준점수' ? input.korean.std : input.korean.percent;
                 } else if (subj.과목 === '수학') {
@@ -235,22 +237,21 @@ app.post('/college/recommend-debug', (req, res) => {
                     : (input.subject1.percent + input.subject2.percent) / 2;
                   raw = 평균;
                 } else if (subj.과목 === '영어') {
-                  // 영어 등급표 기준 반영지표가 등급이 아닌 경우
                   기준 = subj.표준점수기준 === '200' ? 200 :
                          subj.표준점수기준 === '100' ? 100 :
                          gradeRows.find(g =>
-                            g.대학명 === rule.대학명 &&
-                            g.학과명 === rule.학과명 &&
-                            g.과목 === '영어' &&
-                            String(g.등급) === '1'
-                          )?.점수 || 100;
+                           g.대학명 === rule.대학명 &&
+                           g.학과명 === rule.학과명 &&
+                           g.과목 === '영어' &&
+                           String(g.등급) === '1'
+                         )?.점수 || 100;
 
                   const 환산 = (영어등급점수 / 기준) * subj.반영비율;
                   영어점수 += 환산;
+                  console.log(`🟦 영어 [표준/백]: 점수=${영어등급점수}, 기준=${기준}, 환산=${환산.toFixed(3)}`);
                   continue;
                 }
 
-                // 기준 설정
                 if (subj.반영지표 === '표준점수') {
                   기준 = subj.표준점수기준 === '200'
                     ? 200
@@ -262,12 +263,19 @@ app.post('/college/recommend-debug', (req, res) => {
                 const 환산 = (raw / 기준) * subj.반영비율;
                 if (subj.과목 === '탐구') 탐구점수 += 환산;
                 else 선택점수 += 환산;
+
+                console.log(`🟩 ${subj.과목} [${subj.반영지표}]: raw=${raw}, 기준=${기준}, 반영=${subj.반영비율}, 환산=${환산.toFixed(3)}`);
               }
 
-              if (rule.한국사반영방식 === '가산점') 선택점수 += 한국사점수;
+              if (rule.한국사반영방식 === '가산점') {
+                console.log(`➕ 한국사 가산점: ${한국사점수}`);
+                선택점수 += 한국사점수;
+              }
 
               const 수능반영 = rule.수능반영비율 || 100;
               const 최종점수 = (선택점수 + 탐구점수 + 영어점수) * (수능반영 / 100);
+
+              console.log(`✅ 총합 점수: 선택=${선택점수.toFixed(3)}, 탐구=${탐구점수.toFixed(3)}, 영어=${영어점수.toFixed(3)}, 수능반영=${수능반영}%, 최종합산=${최종점수.toFixed(3)}\n`);
 
               results.push({
                 대학명: rule.대학명,
