@@ -28,6 +28,7 @@ db.connect(err => {
 });
 
 // 📌 대학 룰 업로드 API
+// 📌 대학 룰 업로드 API
 app.post('/college/upload-rule', async (req, res) => {
   const rules = req.body.rules;
   if (!rules || !Array.isArray(rules)) {
@@ -37,7 +38,6 @@ app.post('/college/upload-rule', async (req, res) => {
   let errorOccurred = false;
 
   const processRule = (rule, callback) => {
-    // 1️⃣ university_rules 저장
     const query1 = `
       INSERT INTO university_rules
       (대학명, 학과명, 수능반영비율, 내신반영비율, 실기반영비율, 기타반영비율, 수능선택조건)
@@ -49,55 +49,75 @@ app.post('/college/upload-rule', async (req, res) => {
       rule.내신반영비율 || 0, rule.실기반영비율 || 0,
       rule.기타반영비율 || 0, rule.수능선택조건 || ''
     ];
-    conn.query(query1, values1, (err1) => {
+
+    db.query(query1, values1, (err1) => {
       if (err1) return callback(err1);
 
       // 2️⃣ 과목별 저장
-      const subjQueries = rule.과목들?.map(subj => {
+      const subjQueries = (rule.과목들 || []).map(subj => {
         return new Promise((resolve, reject) => {
-          conn.query(`
+          db.query(`
             INSERT INTO university_score_weights
             (대학명, 학과명, 과목, 반영지표, 반영비율, 표준점수기준, 가산방식)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE 반영비율 = VALUES(반영비율)
-          `, [rule.대학명, rule.학과명, subj.과목, subj.반영지표, subj.반영비율, subj.표준점수기준, subj.가산방식], (err2) => {
+          `, [
+            rule.대학명,
+            rule.학과명,
+            subj.과목 || '',
+            subj.반영지표 || '',
+            subj.반영비율 || 0,
+            subj.표준점수기준 || '',
+            subj.가산방식 || ''
+          ], (err2) => {
             if (err2) reject(err2);
             else resolve();
           });
         });
-      }) || [];
+      });
 
       // 3️⃣ 등급 점수
-      const gradeQueries = rule.등급점수?.map(scoreRow => {
+      const gradeQueries = (rule.등급점수 || []).map(scoreRow => {
         return new Promise((resolve, reject) => {
-          conn.query(`
+          db.query(`
             INSERT INTO university_grade_score
             (대학명, 학과명, 과목, 등급, 점수)
             VALUES (?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE 점수 = VALUES(점수)
-          `, [rule.대학명, rule.학과명, scoreRow.과목, scoreRow.등급, scoreRow.점수], (err3) => {
+          `, [
+            rule.대학명,
+            rule.학과명,
+            scoreRow.과목 || '',
+            scoreRow.등급 || '',
+            scoreRow.점수 || 0
+          ], (err3) => {
             if (err3) reject(err3);
             else resolve();
           });
         });
-      }) || [];
+      });
 
       // 4️⃣ 가산 조건
-      const adjQueries = rule.가산조건?.map(adj => {
+      const adjQueries = (rule.가산조건 || []).map(adj => {
         return new Promise((resolve, reject) => {
-          conn.query(`
+          db.query(`
             INSERT INTO university_adjustments
             (대학명, 학과명, 과목, 적용과목, 가산비율)
             VALUES (?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE 가산비율 = VALUES(가산비율)
-          `, [rule.대학명, rule.학과명, adj.과목, adj.적용과목, adj.가산비율], (err4) => {
+          `, [
+            rule.대학명,
+            rule.학과명,
+            adj.과목 || '',
+            adj.적용과목 || '',
+            adj.가산비율 || 0
+          ], (err4) => {
             if (err4) reject(err4);
             else resolve();
           });
         });
-      }) || [];
+      });
 
-      // 병렬 실행
       Promise.all([...subjQueries, ...gradeQueries, ...adjQueries])
         .then(() => callback(null))
         .catch(callback);
@@ -124,6 +144,7 @@ app.post('/college/upload-rule', async (req, res) => {
     res.json({ success: true, message: '✅ 모든 룰 저장 완료' });
   }
 });
+
 
 
 
