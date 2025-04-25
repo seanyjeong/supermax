@@ -27,6 +27,61 @@ db.connect(err => {
   else console.log('✅ MySQL 연결 성공');
 });
 
+// 📌 대학 룰 업로드 API
+app.post('/college/upload-rule', async (req, res) => {
+  try {
+    const rules = req.body.rules; // 전체 JSON 객체 배열
+
+    for (const rule of rules) {
+      // 1️⃣ 메인 룰 저장
+      await conn.promise().query(`
+        INSERT INTO university_rules
+        (대학명, 학과명, 수능반영비율, 내신반영비율, 실기반영비율, 기타반영비율, 수능선택조건)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE 수능반영비율 = VALUES(수능반영비율)
+      `, [rule.대학명, rule.학과명, rule.수능반영비율, rule.내신반영비율, rule.실기반영비율, rule.기타반영비율, rule.수능선택조건]);
+
+      // 2️⃣ 과목별 반영 지표 저장
+      for (const subj of rule.과목들) {
+        await conn.promise().query(`
+          INSERT INTO university_score_weights
+          (대학명, 학과명, 과목, 반영지표, 반영비율, 표준점수기준, 가산방식)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON DUPLICATE KEY UPDATE 반영비율 = VALUES(반영비율)
+        `, [rule.대학명, rule.학과명, subj.과목, subj.반영지표, subj.반영비율, subj.표준점수기준, subj.가산방식]);
+      }
+
+      // 3️⃣ 영어, 한국사 등급 점수
+      if (rule.등급점수) {
+        for (const scoreRow of rule.등급점수) {
+          await conn.promise().query(`
+            INSERT INTO university_grade_score
+            (대학명, 학과명, 과목, 등급, 점수)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 점수 = VALUES(점수)
+          `, [rule.대학명, rule.학과명, scoreRow.과목, scoreRow.등급, scoreRow.점수]);
+        }
+      }
+
+      // 4️⃣ 수학/탐구 가산 조건
+      if (rule.가산조건) {
+        for (const adj of rule.가산조건) {
+          await conn.promise().query(`
+            INSERT INTO university_adjustments
+            (대학명, 학과명, 과목, 적용과목, 가산비율)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 가산비율 = VALUES(가산비율)
+          `, [rule.대학명, rule.학과명, adj.과목, adj.적용과목, adj.가산비율]);
+        }
+      }
+    }
+
+    res.json({ success: true, message: '룰 등록 완료!' });
+  } catch (err) {
+    console.error('❌ 룰 업로드 오류:', err);
+    res.status(500).json({ success: false, message: '서버 오류', error: err });
+  }
+});
 
 
 app.post('/college/recommend', (req, res) => {
