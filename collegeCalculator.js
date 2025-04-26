@@ -175,16 +175,18 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
 
 // ✨ 모듈 export
 module.exports = {
-    calculateCollegeScore,
-    calculateSuneungScore,
-    applyKoreanHistoryScore,
-    getSubjectScore,
-    calculateEnglishScore,
-    calculateKoreanHistoryScore,
-    processScienceScore,
-    normalizeScore,
-    normalizeEnglishScore,
-    calculateDefaultTotalScore,
-    calculateRankTotalScore
+  calculateCollegeScore,            // ✨ 수능 합산 점수 계산
+  calculateSuneungScore,             // ✨ 과목별 점수 추출
+  applyKoreanHistoryScore,           // ✨ 한국사 점수 적용
+  getSubjectScore,                   // ✨ 과목 점수 추출
+  calculateEnglishScore,             // ✨ 영어 점수 변환
+  calculateKoreanHistoryScore,       // ✨ 한국사 점수 변환
+  processScienceScore,               // ✨ 탐구 점수 계산
+  normalizeScore,                    // ✨ 점수 정규화
+  normalizeEnglishScore,             // ✨ 영어 점수 정규화
+  calculateDefaultTotalScore,        // ✨ default 방식 수능 계산
+  calculateRankTotalScore,           // ✨ rank 방식 수능 계산
+  calculateFinalCollegeScore         // ✨ [추가] 한국사 포함 최종 계산
 };
+
 
