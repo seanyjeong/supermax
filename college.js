@@ -147,6 +147,98 @@ function safeJson(input) {
   }
 }
 
+app.post('/college/korean-history-score', (req, res) => {
+  const { 대학학과ID, 등급, 점수 } = req.body;
+
+  if (!대학학과ID || !등급 || !점수) {
+    return res.status(400).json({ message: '필수 데이터가 없습니다.' });
+  }
+
+  const sql = `
+    INSERT INTO 한국사등급별점수 (대학학과ID, 등급, 점수)
+    VALUES (?, ?, ?)
+  `;
+
+  db.query(sql, [대학학과ID, JSON.stringify(등급), JSON.stringify(점수)], (err) => {
+    if (err) {
+      console.error('❌ 한국사 점수 저장 실패:', err);
+      return res.status(500).json({ message: '한국사 점수 저장 실패' });
+    }
+    res.json({ message: '✅ 한국사 점수 저장 완료' });
+  });
+});
+
+app.post('/college/english-score', (req, res) => {
+  const { 대학학과ID, 등급, 점수 } = req.body;
+
+  if (!대학학과ID || !등급 || !점수) {
+    return res.status(400).json({ message: '필수 데이터가 없습니다.' });
+  }
+
+  const sql = `
+    INSERT INTO 영어등급별점수 (대학학과ID, 등급, 점수)
+    VALUES (?, ?, ?)
+  `;
+
+  db.query(sql, [대학학과ID, JSON.stringify(등급), JSON.stringify(점수)], (err) => {
+    if (err) {
+      console.error('❌ 영어 점수 저장 실패:', err);
+      return res.status(500).json({ message: '영어 점수 저장 실패' });
+    }
+    res.json({ message: '✅ 영어 점수 저장 완료' });
+  });
+});
+
+app.get('/college/korean-history-score/:id', (req, res) => {
+  const 대학학과ID = req.params.id;
+
+  const sql = `
+    SELECT 등급, 점수
+    FROM 한국사등급별점수
+    WHERE 대학학과ID = ?
+  `;
+
+  db.query(sql, [대학학과ID], (err, results) => {
+    if (err) {
+      console.error('❌ 한국사 점수 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 조회 실패' });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: '해당 데이터 없음' });
+    }
+    res.json({
+      success: true,
+      등급: JSON.parse(results[0].등급),
+      점수: JSON.parse(results[0].점수)
+    });
+  });
+});
+
+app.get('/college/english-score/:id', (req, res) => {
+  const 대학학과ID = req.params.id;
+
+  const sql = `
+    SELECT 등급, 점수
+    FROM 영어등급별점수
+    WHERE 대학학과ID = ?
+  `;
+
+  db.query(sql, [대학학과ID], (err, results) => {
+    if (err) {
+      console.error('❌ 영어 점수 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 조회 실패' });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: '해당 데이터 없음' });
+    }
+    res.json({
+      success: true,
+      등급: JSON.parse(results[0].등급),
+      점수: JSON.parse(results[0].점수)
+    });
+  });
+});
+
 
 
   
