@@ -152,35 +152,29 @@ function calculateMixTotalScore(과목점수셋, 그룹정보) {
     const { 과목리스트, 선택개수, 반영비율 } = 그룹;
     if (!과목리스트 || 과목리스트.length === 0) continue;
 
-    // 1. 사용 안된 과목만 추려서
     const availableScores = 과목리스트
-      .filter(subject => !usedSubjects.has(subject)) // 안쓴 과목만
+      .filter(subject => !usedSubjects.has(subject))
       .map(subject => ({
         subject,
-        score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
+        score: (과목점수셋[subject] ?? -1)
       }))
-      .filter(({ score }) => score > 0); // 0점 초과만 (탐구=85 잘 살아있음)
+      .filter(({ score }) => score >= 0);  // ← 0점은 허용하고, -1만 거르자
 
-    if (availableScores.length === 0) continue; // 선택할게 없으면 skip
+    if (availableScores.length === 0) continue;
 
-    // 2. 점수 높은 순으로 정렬
     availableScores.sort((a, b) => b.score - a.score);
 
-    // 3. 선택개수만큼 골라
     const selected = availableScores.slice(0, 선택개수);
-
-    // 4. 평균 계산
     const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
 
-    // 5. 선택한 과목 usedSubjects에 추가
     selected.forEach(({ subject }) => usedSubjects.add(subject));
 
-    // 6. 반영비율 적용
     total += averageScore * (반영비율 / 100);
   }
 
   return total;
 }
+
 
   
   
