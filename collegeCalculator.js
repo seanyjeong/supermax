@@ -153,20 +153,22 @@ function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과�
     수능환산 = calculateRankTotalScore(점수셋, 반영과목리스트, 반영비율, 반영과목수);
   } 
   else {
-    // future: mix 처리할 자리
     수능환산 = 0;
   }
 
   const 내신점수 = studentScore.내신 || 0;
   const 실기점수 = studentScore.실기 || 0;
+  const 기타환산 = 0;  // 지금은 기타 없음
 
-  const 내신환산 = 내신점수 * (collegeRule.내신비율 / 100);
-  const 실기환산 = 실기점수 * (collegeRule.실기비율 / 100);
-  const 기타환산 = 0;
+  const 최종합산점수 = 
+    (수능환산 * (collegeRule.수능비율 / 100)) +
+    (내신점수 * (collegeRule.내신비율 / 100)) +
+    (실기점수 * (collegeRule.실기비율 / 100)) +
+    (기타환산 * (collegeRule.기타비율 / 100));
 
-  const 최종합산점수 = 수능환산 + 내신환산 + 실기환산 + 기타환산;
   return 최종합산점수;
 }
+
 
 // ✨ 모듈 export
 module.exports = {
