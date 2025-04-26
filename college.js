@@ -249,6 +249,76 @@ app.get('/college/english-score/:id', (req, res) => {
   });
 });
 
+app.post('/college/calculate', async (req, res) => {
+  const { 대학학과ID, studentScore } = req.body;
+
+  if (!대학학과ID || !studentScore) {
+    return res.status(400).json({ message: '대학학과ID, studentScore는 필수입니다.' });
+  }
+
+  try {
+    // 1. 학교 비율 불러오기
+    const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
+    if (!school) return res.status(404).json({ message: '학교 정보 없음' });
+
+    // 2. 반영비율 규칙 불러오기
+    const [rule] = await dbQuery('SELECT * FROM 반영비율규칙 WHERE 대학학과ID = ?', [대학학과ID]);
+    if (!rule) return res.status(404).json({ message: '반영비율 규칙 없음' });
+
+    // 3. 탐구/한국사 규칙 불러오기
+    const [khistoryRule] = await dbQuery('SELECT * FROM 탐구한국사 WHERE 대학학과ID = ?', [대학학과ID]);
+    if (!khistoryRule) return res.status(404).json({ message: '탐구한국사 규칙 없음' });
+
+    // 4. 한국사 등급별 점수
+    const [khistoryScore] = await dbQuery('SELECT 등급, 점수 FROM 한국사등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
+    const koreanHistoryScoreRule = khistoryScore ? JSON.parse(khistoryScore.점수) : [];
+
+    // 5. 영어 등급별 점수
+    const [englishScore] = await dbQuery('SELECT 등급, 점수 FROM 영어등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
+    const englishScoreRule = englishScore ? JSON.parse(englishScore.점수) : [];
+
+    // 6. 점수셋 만들기
+    const 점수셋 = {
+      국어: calculator.getSubjectScore(studentScore.국어, rule.국수영반영지표),
+      수학: calculator.getSubjectScore(studentScore.수학, rule.국수영반영지표),
+      영어: calculator.normalizeEnglishScore(studentScore.영어등급, englishScoreRule, rule.영어표준점수만점) * 100,
+      탐구: calculator.processScienceScore(
+        calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
+        calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
+        khistoryRule.탐구과목반영수
+      )
+    };
+
+    // 7. 계산
+    const 반영과목리스트 = JSON.parse(rule.과목 || '[]');
+    const 반영비율 = JSON.parse(rule.반영비율 || '[]');
+    const finalScore = calculator.calculateCollegeScore(
+      studentScore,
+      { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
+      점수셋,
+      반영과목리스트,
+      반영비율,
+      rule.반영규칙,
+      rule.반영과목수
+    );
+
+    res.json({ success: true, totalScore: finalScore });
+
+  } catch (err) {
+    console.error('❌ 계산 에러:', err);
+    res.status(500).json({ message: '계산 실패' });
+  }
+});
+
+// ✨ DB query promise 버전
+function dbQuery(sql, params) {
+  return new Promise((resolve, reject) => {
+    db.query(sql, params, (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
+}
 
 
   
