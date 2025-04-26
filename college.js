@@ -333,6 +333,7 @@ if (koreanHistoryResult && (koreanHistoryResult.처리방식 === '수능환산' 
 res.json({ success: true, totalScore: finalScore });
 
 
+
         console.log('🏫 school:', school);
 console.log('📏 rule:', rule);
 console.log('🧮 점수셋:', 점수셋);
