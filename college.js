@@ -69,7 +69,8 @@ app.post('/college/school-detail', (req, res) => {
     과목, 반영과목수, 반영규칙, 반영비율,
     그룹1_과목, 그룹1_선택개수, 그룹1_반영비율,
     그룹2_과목, 그룹2_선택개수, 그룹2_반영비율,
-    그룹3_과목, 그룹3_선택개수, 그룹3_반영비율
+    그룹3_과목, 그룹3_선택개수, 그룹3_반영비율,
+    수학가산점, 과탐가산점   // ⭐️ 추가된 부분
   } = req.body;
 
   if (!대학학과ID) {
@@ -87,8 +88,9 @@ app.post('/college/school-detail', (req, res) => {
       과목, 반영과목수, 반영규칙, 반영비율,
       그룹1_과목, 그룹1_선택개수, 그룹1_반영비율,
       그룹2_과목, 그룹2_선택개수, 그룹2_반영비율,
-      그룹3_과목, 그룹3_선택개수, 그룹3_반영비율
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      그룹3_과목, 그룹3_선택개수, 그룹3_반영비율,
+      수학가산점, 과탐가산점
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.beginTransaction(err => {
@@ -119,7 +121,9 @@ app.post('/college/school-detail', (req, res) => {
         safeJson(그룹2_반영비율),
         safeJson(그룹3_과목),
         그룹3_선택개수 || null,
-        safeJson(그룹3_반영비율)
+        safeJson(그룹3_반영비율),
+        수학가산점 || 0,  // ⭐️
+        과탐가산점 || 0   // ⭐️
       ], (err) => {
         if (err) {
           return db.rollback(() => {
@@ -149,6 +153,7 @@ function safeJson(input) {
     return null;
   }
 }
+
 
 app.post('/college/korean-history-score', (req, res) => {
   const { 대학학과ID, 등급, 점수 } = req.body;
