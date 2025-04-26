@@ -73,7 +73,11 @@ app.post('/college/school-detail', (req, res) => {
     return res.status(400).json({ message: '학교를 선택하세요' });
   }
 
-  const sql1 = 'INSERT INTO 탐구한국사 (대학학과ID, 탐구과목반영수, 한국사반영) VALUES (?, ?, ?)';
+  const sql1 = `
+    INSERT INTO 탐구한국사 (대학학과ID, 탐구과목반영수, 한국사반영) 
+    VALUES (?, ?, ?)
+  `;
+
   const sql2 = `
     INSERT INTO 반영비율규칙 (
       대학학과ID, 국수영반영지표, 탐구반영지표, 표준점수반영기준, 영어표준점수만점,
@@ -100,19 +104,19 @@ app.post('/college/school-detail', (req, res) => {
         탐구반영지표,
         표준점수반영기준,
         영어표준점수만점,
-        JSON.stringify(과목),
+        safeJson(과목),
         반영과목수,
         반영규칙,
-        JSON.stringify(반영비율),
-        그룹1_과목 ? JSON.stringify(그룹1_과목) : null,
-        그룹1_선택개수,
-        그룹1_반영비율 ? JSON.stringify(그룹1_반영비율) : null,
-        그룹2_과목 ? JSON.stringify(그룹2_과목) : null,
-        그룹2_선택개수,
-        그룹2_반영비율 ? JSON.stringify(그룹2_반영비율) : null,
-        그룹3_과목 ? JSON.stringify(그룹3_과목) : null,
-        그룹3_선택개수,
-        그룹3_반영비율 ? JSON.stringify(그룹3_반영비율) : null
+        safeJson(반영비율),
+        safeJson(그룹1_과목),
+        그룹1_선택개수 || null,
+        safeJson(그룹1_반영비율),
+        safeJson(그룹2_과목),
+        그룹2_선택개수 || null,
+        safeJson(그룹2_반영비율),
+        safeJson(그룹3_과목),
+        그룹3_선택개수 || null,
+        safeJson(그룹3_반영비율)
       ], (err) => {
         if (err) {
           return db.rollback(() => {
@@ -132,6 +136,16 @@ app.post('/college/school-detail', (req, res) => {
     });
   });
 });
+
+// 안전하게 JSON 파싱하는 함수
+function safeJson(input) {
+  if (!input || input.trim() === "") return null;
+  try {
+    return JSON.stringify(JSON.parse(input));
+  } catch (e) {
+    return null;
+  }
+}
 
 
 
