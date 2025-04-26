@@ -54,7 +54,7 @@ app.post('/college/school', (req, res) => {
 // 학교 리스트 불러오기 API
 app.get('/college/schools', (req, res) => {
   const sql = 'SELECT 대학학과ID, 군명, 대학명, 학과명 FROM 학교 ORDER BY 대학명, 학과명';
-  
+
   db.query(sql, (err, results) => {
     if (err) {
       console.error('❌ 학교 리스트 불러오기 실패:', err);
@@ -288,13 +288,6 @@ app.post('/college/calculate', async (req, res) => {
         khistoryRule.탐구과목반영수
       )
     };
-        // 📣 📣 📣 요기 바로 넣어! 
-    console.log('🏫 불러온 학교:', school);
-    console.log('📏 불러온 규칙:', rule);
-    console.log('🔍 탐구/한국사 룰:', khistoryRule);
-    console.log('🧮 점수셋:', 점수셋);
-    console.log('🗒️ 반영과목리스트:', JSON.parse(rule.과목 || '[]'));
-    console.log('📈 반영비율:', JSON.parse(rule.반영비율 || '[]'));
 
     // 7. 계산
     const 반영과목리스트 = JSON.parse(rule.과목 || '[]');
@@ -329,7 +322,6 @@ function dbQuery(sql, params) {
 
 
 
-  
 
 
 
