@@ -27,17 +27,19 @@ db.connect(err => {
   else console.log('✅ MySQL 연결 성공');
 });
 
-// 학교 등록 API
 app.post('/college/school', (req, res) => {
-  const { 군명, 대학명, 학과명 } = req.body;
+  const { 군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율 } = req.body;
 
   if (!군명 || !대학명 || !학과명) {
     return res.status(400).json({ message: '군명, 대학명, 학과명 모두 입력하세요.' });
   }
 
-  const sql = 'INSERT INTO 학교 (군명, 대학명, 학과명) VALUES (?, ?, ?)';
+  const sql = `
+    INSERT INTO 학교 (군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
 
-  db.query(sql, [군명, 대학명, 학과명], (err, result) => {
+  db.query(sql, [군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율], (err, result) => {
     if (err) {
       console.error('❌ 학교 등록 실패:', err);
       return res.status(500).json({ message: '학교 등록 실패' });
@@ -45,6 +47,7 @@ app.post('/college/school', (req, res) => {
     res.json({ message: '✅ 학교 등록 완료', 대학학과ID: result.insertId });
   });
 });
+
 
 // 학교 리스트 불러오기 API
 app.get('/college/schools', (req, res) => {
