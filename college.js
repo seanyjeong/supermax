@@ -26,6 +26,8 @@ db.connect(err => {
   if (err) console.error('❌ DB 연결 실패:', err);
   else console.log('✅ MySQL 연결 성공');
 });
+const calculator = require('./collegeCalculator');
+
 
 app.post('/college/school', (req, res) => {
   const { 군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율 } = req.body;
