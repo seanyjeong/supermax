@@ -332,26 +332,44 @@ const 점수셋 = {
     ];
     
     // ✨ 수능 점수 계산
-    const finalScoreWithoutHistory = calculator.calculateCollegeScore(
-      studentScore,
-      { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
-      점수셋,
-      반영과목리스트,
-      반영비율,
-      rule.반영규칙,
-      rule.반영과목수,
-      그룹정보   // ✨ mix 규칙 추가됨
-    );
-    
-    // ✨ 한국사 가산점 추가
-    const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
-    
-    let finalScore = finalScoreWithoutHistory;
-    if (koreanHistoryResult && (koreanHistoryResult.처리방식 === '수능환산' || koreanHistoryResult.처리방식 === '직접더함')) {
-      finalScore += koreanHistoryResult.점수;
-    }
-    
-    res.json({ success: true, totalScore: finalScore });
+const 수능환산점수 = calculator.calculateCollegeScore(
+  studentScore,
+  { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
+  점수셋,
+  반영과목리스트,
+  반영비율,
+  rule.반영규칙,
+  rule.반영과목수,
+  그룹정보
+);
+
+const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
+
+// 수능비율 가져오기
+const 수능비율 = school.수능비율 || 0;
+
+// 최종 점수
+let finalScore = 0;
+
+// 한국사 처리 방식 분기
+if (koreanHistoryResult) {
+  if (koreanHistoryResult.처리방식 === '수능환산') {
+    // 수능환산이면 ➔ 한국사 포함해서 수능비율 적용
+    finalScore = (수능환산점수 + koreanHistoryResult.점수) * (수능비율 / 100);
+  } else if (koreanHistoryResult.처리방식 === '직접더함') {
+    // 직접더함이면 ➔ 수능비율 먼저 적용 후 가산점 더함
+    finalScore = (수능환산점수 * (수능비율 / 100)) + koreanHistoryResult.점수;
+  } else {
+    // 다른 처리방식이면 무시하고 기본 수능비율만 적용
+    finalScore = 수능환산점수 * (수능비율 / 100);
+  }
+} else {
+  // 한국사 아예 없으면 기본 수능비율만 적용
+  finalScore = 수능환산점수 * (수능비율 / 100);
+}
+
+// 최종 결과 반환
+res.json({ success: true, totalScore: finalScore });
 
 
 
