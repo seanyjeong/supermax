@@ -288,11 +288,7 @@ app.post('/college/calculate', async (req, res) => {
         khistoryRule.탐구과목반영수
       )
     };
-    console.log('🏫 school:', school);
-console.log('📏 rule:', rule);
-console.log('🧮 점수셋:', 점수셋);
-console.log('📚 반영과목리스트:', 반영과목리스트);
-console.log('📊 반영비율:', 반영비율);
+
 
 
     // 7. 계산
@@ -309,6 +305,13 @@ console.log('📊 반영비율:', 반영비율);
     );
 
     res.json({ success: true, totalScore: finalScore });
+
+        console.log('🏫 school:', school);
+console.log('📏 rule:', rule);
+console.log('🧮 점수셋:', 점수셋);
+console.log('📚 반영과목리스트:', 반영과목리스트);
+console.log('📊 반영비율:', 반영비율);
+console.log('🔥 최종합산점수:', finalScore);
 
   } catch (err) {
     console.error('❌ 계산 에러:', err);
