@@ -147,34 +147,32 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
 // ✨ mix 방식 수능합산 계산
 function calculateMixTotalScore(과목점수셋, 그룹정보) {
   let total = 0;
-  const usedSubjects = new Set();  // 이미 선택된 과목 저장
+  const usedSubjects = new Set();
 
   for (const 그룹 of 그룹정보) {
     const { 과목리스트, 선택개수, 반영비율 } = 그룹;
 
     if (!과목리스트 || 과목리스트.length === 0) continue;
 
-    // 아직 사용되지 않은 과목만 대상으로
+    // 점수가 0보다 큰 과목만 필터
     const availableScores = 과목리스트
-      .filter(subject => !usedSubjects.has(subject))  // 중복 제거
-      .map(subject => ({ subject, score: 과목점수셋[subject] ?? 0 }));
+      .filter(subject => !usedSubjects.has(subject))
+      .map(subject => ({ subject, score: 과목점수셋[subject] ?? 0 }))
+      .filter(({ score }) => score > 0); // ⬅️ 점수 0 초과인 과목만
 
-    // 점수 높은 것부터 정렬
     availableScores.sort((a, b) => b.score - a.score);
 
-    // 선택개수만큼 높은 점수 골라서 평균
     const selected = availableScores.slice(0, 선택개수);
     const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
 
-    // 선택된 과목들을 usedSubjects에 추가
     selected.forEach(({ subject }) => usedSubjects.add(subject));
 
-    // 그룹 반영비율 적용
     total += averageScore * (반영비율 / 100);
   }
 
   return total;
 }
+
 
   
 
