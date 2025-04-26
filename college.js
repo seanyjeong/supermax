@@ -278,17 +278,34 @@ const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율,
     const [englishScore] = await dbQuery('SELECT 등급, 점수 FROM 영어등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
     const englishScoreRule = englishScore ? JSON.parse(englishScore.점수) : [];
 
-    // 6. 점수셋 만들기
-    const 점수셋 = {
-      국어: calculator.getSubjectScore(studentScore.국어, rule.국수영반영지표),
-      수학: calculator.getSubjectScore(studentScore.수학, rule.국수영반영지표),
-      영어: calculator.normalizeEnglishScore(studentScore.영어등급, englishScoreRule, rule.영어표준점수만점) * 100,
-      탐구: calculator.processScienceScore(
-        calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
-        calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
-        khistoryRule.탐구과목반영수
-      )
-    };
+// 6. 점수셋 만들기
+const 점수셋 = {
+  국어: calculator.normalizeScore(
+    calculator.getSubjectScore(studentScore.국어, rule.국수영반영지표),
+    rule.국수영반영지표,
+    rule.표준점수반영기준,
+    '국어',
+    null //
+  ) * 100,
+  수학: calculator.normalizeScore(
+    calculator.getSubjectScore(studentScore.수학, rule.국수영반영지표),
+    rule.국수영반영지표,
+    rule.표준점수반영기준,
+    '수학',
+    null
+  ) * 100,
+  영어: calculator.normalizeEnglishScore(
+    studentScore.영어등급,
+    englishScoreRule,
+    rule.영어표준점수만점
+  ) * 100,
+  탐구: calculator.processScienceScore(
+    calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
+    calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
+    khistoryRule.탐구과목반영수
+  )
+};
+
 
 
 
