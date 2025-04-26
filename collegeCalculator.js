@@ -158,14 +158,12 @@ function calculateMixTotalScore(과목점수셋, 그룹정보) {
         subject,
         score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
       }))
-      .filter(({ score }) => score >= 0); // 0점도 허용. 없는 과목만 제외
+      .filter(({ score }) => score >= 0);
 
     if (availableScores.length === 0) continue;
 
-    // 점수 높은 순 정렬
     availableScores.sort((a, b) => b.score - a.score);
 
-    // 선택개수만큼 골라서 평균
     const selected = availableScores.slice(0, 선택개수);
 
     console.log('📋 [Mix] 그룹 대상:', availableScores);
@@ -173,10 +171,8 @@ function calculateMixTotalScore(과목점수셋, 그룹정보) {
 
     const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
 
-    // 사용한 과목은 기록
     selected.forEach(({ subject }) => usedSubjects.add(subject));
 
-    // 반영비율 적용
     total += averageScore * (반영비율 / 100);
   }
 
@@ -184,38 +180,31 @@ function calculateMixTotalScore(과목점수셋, 그룹정보) {
   return total;
 }
 
+function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보) {
+  let 수능환산 = 0;
 
-  
-  
-
-// ✨ 수능 합산 점수 계산
-// ✨ 기본 수능 합산 점수 계산
-function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보) {
-    let 수능환산 = 0;
-  
-    if (반영규칙 === 'default') {
-      수능환산 = calculateDefaultTotalScore(점수셋, 반영과목리스트, 반영비율);
-    } else if (반영규칙 === 'rank') {
-      수능환산 = calculateRankTotalScore(점수셋, 반영과목리스트, 반영비율, 반영과목수);
-    } else if (반영규칙 === 'mix') {
-      수능환산 = calculateMixTotalScore(점수셋, 그룹정보);
-    } else {
-      수능환산 = 0;
-    }
-  
-    const 내신점수 = studentScore.내신 || 0;
-    const 실기점수 = studentScore.실기 || 0;
-    const 기타환산 = 0;
-  
-    const 최종합산점수 = 
-      (수능환산 * (collegeRule.수능비율 / 100)) +
-      (내신점수 * (collegeRule.내신비율 / 100)) +
-      (실기점수 * (collegeRule.실기비율 / 100)) +
-      (기타환산 * (collegeRule.기타비율 / 100));
-  
-    return 최종합산점수;
+  if (반영규칙 === 'default') {
+    수능환산 = calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반영비율);
+  } else if (반영규칙 === 'rank') {
+    수능환산 = calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영비율, 반영과목수);
+  } else if (반영규칙 === 'mix') {
+    수능환산 = calculateMixTotalScore(과목점수셋, 그룹정보);
+  } else {
+    수능환산 = 0;
   }
-  
+
+  const 내신점수 = studentScore.내신 || 0;
+  const 실기점수 = studentScore.실기 || 0;
+  const 기타환산 = 0;
+
+  const 최종합산점수 =
+    (수능환산 * (collegeRule.수능비율 / 100)) +
+    (내신점수 * (collegeRule.내신비율 / 100)) +
+    (실기점수 * (collegeRule.실기비율 / 100)) +
+    (기타환산 * (collegeRule.기타비율 / 100));
+
+  return 최종합산점수;
+}
   
   
   
