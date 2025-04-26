@@ -258,7 +258,8 @@ app.post('/college/calculate', async (req, res) => {
 
   try {
     // 1. 학교 비율 불러오기
-    const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
+const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율, 기타비율 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
+
     if (!school) return res.status(404).json({ message: '학교 정보 없음' });
 
     // 2. 반영비율 규칙 불러오기
