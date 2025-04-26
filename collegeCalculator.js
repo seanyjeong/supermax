@@ -146,31 +146,36 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
 
 // ✨ mix 방식 수능합산 계산
 function calculateMixTotalScore(과목점수셋, 그룹정보) {
-    let total = 0;
-  
-    // 그룹정보는 배열 형태로 받음: [{ 과목리스트, 선택개수, 반영비율 }, { ... }, { ... }]
-    for (const 그룹 of 그룹정보) {
-      const { 과목리스트, 선택개수, 반영비율 } = 그룹;
-  
-      // 과목리스트 없으면 이 그룹은 스킵
-      if (!과목리스트 || 과목리스트.length === 0) continue;
-  
-      // 해당 그룹의 과목 점수들 추출
-      const scores = 과목리스트.map(subject => 과목점수셋[subject] ?? 0);
-  
-      // 점수 높은 것부터 정렬
-      scores.sort((a, b) => b - a);
-  
-      // 선택개수만큼 높은 점수 골라서 평균
-      const selectedScores = scores.slice(0, 선택개수);
-      const averageScore = selectedScores.reduce((sum, val) => sum + val, 0) / (선택개수 || 1);
-  
-      // 그룹 반영비율 적용해서 total에 더하기
-      total += averageScore * (반영비율 / 100);
-    }
-  
-    return total;
+  let total = 0;
+  const usedSubjects = new Set();  // 이미 선택된 과목 저장
+
+  for (const 그룹 of 그룹정보) {
+    const { 과목리스트, 선택개수, 반영비율 } = 그룹;
+
+    if (!과목리스트 || 과목리스트.length === 0) continue;
+
+    // 아직 사용되지 않은 과목만 대상으로
+    const availableScores = 과목리스트
+      .filter(subject => !usedSubjects.has(subject))  // 중복 제거
+      .map(subject => ({ subject, score: 과목점수셋[subject] ?? 0 }));
+
+    // 점수 높은 것부터 정렬
+    availableScores.sort((a, b) => b.score - a.score);
+
+    // 선택개수만큼 높은 점수 골라서 평균
+    const selected = availableScores.slice(0, 선택개수);
+    const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
+
+    // 선택된 과목들을 usedSubjects에 추가
+    selected.forEach(({ subject }) => usedSubjects.add(subject));
+
+    // 그룹 반영비율 적용
+    total += averageScore * (반영비율 / 100);
   }
+
+  return total;
+}
+
   
 
 // ✨ 수능 합산 점수 계산
