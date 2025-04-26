@@ -286,17 +286,22 @@ app.post('/college/calculate', async (req, res) => {
     const 반영과목리스트 = JSON.parse(rule.과목 || '[]');
     const 반영비율 = JSON.parse(rule.반영비율 || '[]');
 
-    const { 최종합산점수, 디버그 } = calculator.calculateCollegeScore(
-      studentScore,
-      { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
-      점수셋,
-      반영과목리스트,
-      반영비율,
-      rule.반영규칙,
-      rule.반영과목수
-    );
+// 계산
+const { 최종합산점수, 디버그 } = calculator.calculateCollegeScore(
+  studentScore,
+  { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
+  점수셋,
+  반영과목리스트,
+  반영비율,
+  rule.반영규칙,
+  rule.반영과목수
+);
 
-    res.json({ success: true, totalScore: 최종합산점수, debug: 디버그 });
+res.json({
+  success: true,
+  totalScore: 최종합산점수,
+  debug: 디버그
+});
 
   } catch (err) {
     console.error('❌ 계산 에러:', err);
