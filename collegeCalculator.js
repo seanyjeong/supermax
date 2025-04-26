@@ -143,31 +143,34 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
 }
 
 // ✨ 최종 대학 환산 점수 계산 (default/rank 자동 분기)
-function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수) {
-  let 수능환산 = 0;
-
-  if (반영규칙 === 'default') {
-    수능환산 = calculateDefaultTotalScore(점수셋, 반영과목리스트, 반영비율);
-  } 
-  else if (반영규칙 === 'rank') {
-    수능환산 = calculateRankTotalScore(점수셋, 반영과목리스트, 반영비율, 반영과목수);
-  } 
-  else {
-    수능환산 = 0;
+ function calculateFinalCollegeScore(studentScore, collegeRule, 점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, koreanHistoryResult) {
+    let 수능환산 = 0;
+  
+    if (반영규칙 === 'default') {
+      수능환산 = calculateDefaultTotalScore(점수셋, 반영과목리스트, 반영비율);
+    } else if (반영규칙 === 'rank') {
+      수능환산 = calculateRankTotalScore(점수셋, 반영과목리스트, 반영비율, 반영과목수);
+    } else {
+      수능환산 = 0;
+    }
+  
+    const 내신점수 = studentScore.내신 || 0;
+    const 실기점수 = studentScore.실기 || 0;
+    const 기타환산 = 0;  // 현재 기타 없음
+  
+    let 최종합산점수 = 
+      (수능환산 * (collegeRule.수능비율 / 100)) +
+      (내신점수 * (collegeRule.내신비율 / 100)) +
+      (실기점수 * (collegeRule.실기비율 / 100)) +
+      (기타환산 * (collegeRule.기타비율 / 100));
+  
+    // 🔥 한국사 가산점 추가
+    if (koreanHistoryResult && (koreanHistoryResult.처리방식 === '수능환산' || koreanHistoryResult.처리방식 === '직접더함')) {
+      최종합산점수 += koreanHistoryResult.점수;
+    }
+  
+    return 최종합산점수;
   }
-
-  const 내신점수 = studentScore.내신 || 0;
-  const 실기점수 = studentScore.실기 || 0;
-  const 기타환산 = 0;  // 지금은 기타 없음
-
-  const 최종합산점수 = 
-    (수능환산 * (collegeRule.수능비율 / 100)) +
-    (내신점수 * (collegeRule.내신비율 / 100)) +
-    (실기점수 * (collegeRule.실기비율 / 100)) +
-    (기타환산 * (collegeRule.기타비율 / 100));
-
-  return 최종합산점수;
-}
 
 
 // ✨ 모듈 export
