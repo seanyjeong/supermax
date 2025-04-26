@@ -379,6 +379,10 @@ console.log('🧮 점수셋:', 점수셋);
 console.log('📚 반영과목리스트:', 반영과목리스트);
 console.log('📊 반영비율:', 반영비율);
 console.log('🔥 최종합산점수:', finalScore);
+    console.log('🔥 수능환산점수:', 수능환산점수);
+console.log('🔥 수능비율:', 수능비율);
+console.log('🏛 한국사 처리결과:', koreanHistoryResult);
+
 
   } catch (err) {
     console.error('❌ 계산 에러:', err);
