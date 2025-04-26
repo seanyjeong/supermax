@@ -120,6 +120,8 @@ function calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반�
   return total;
 }
 
+
+
 // ✨ rank 방식 수능합산 계산
 function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영비율, 반영과목수) {
   const scores = [];
@@ -142,15 +144,46 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
   return total;
 }
 
+// ✨ mix 방식 수능합산 계산
+function calculateMixTotalScore(과목점수셋, 그룹정보) {
+    let total = 0;
+  
+    // 그룹정보는 배열 형태로 받음: [{ 과목리스트, 선택개수, 반영비율 }, { ... }, { ... }]
+    for (const 그룹 of 그룹정보) {
+      const { 과목리스트, 선택개수, 반영비율 } = 그룹;
+  
+      // 과목리스트 없으면 이 그룹은 스킵
+      if (!과목리스트 || 과목리스트.length === 0) continue;
+  
+      // 해당 그룹의 과목 점수들 추출
+      const scores = 과목리스트.map(subject => 과목점수셋[subject] ?? 0);
+  
+      // 점수 높은 것부터 정렬
+      scores.sort((a, b) => b - a);
+  
+      // 선택개수만큼 높은 점수 골라서 평균
+      const selectedScores = scores.slice(0, 선택개수);
+      const averageScore = selectedScores.reduce((sum, val) => sum + val, 0) / (선택개수 || 1);
+  
+      // 그룹 반영비율 적용해서 total에 더하기
+      total += averageScore * (반영비율 / 100);
+    }
+  
+    return total;
+  }
+  
+
 // ✨ 수능 합산 점수 계산
 // ✨ 기본 수능 합산 점수 계산
-function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수) {
+function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보) {
     let 수능환산 = 0;
   
     if (반영규칙 === 'default') {
       수능환산 = calculateDefaultTotalScore(점수셋, 반영과목리스트, 반영비율);
     } else if (반영규칙 === 'rank') {
       수능환산 = calculateRankTotalScore(점수셋, 반영과목리스트, 반영비율, 반영과목수);
+    } else if (반영규칙 === 'mix') {
+      수능환산 = calculateMixTotalScore(점수셋, 그룹정보);
     } else {
       수능환산 = 0;
     }
@@ -172,21 +205,22 @@ function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과�
   
   
   
+  
   // ✨ 모듈 export
   module.exports = {
-    calculateCollegeScore,            // ✨ 수능 합산 점수 계산
-    calculateSuneungScore,             // ✨ 과목별 점수 추출
-    applyKoreanHistoryScore,           // ✨ 한국사 점수 적용
-    getSubjectScore,                   // ✨ 과목 점수 추출
-    calculateEnglishScore,             // ✨ 영어 점수 변환
-    calculateKoreanHistoryScore,       // ✨ 한국사 점수 변환
-    processScienceScore,               // ✨ 탐구 점수 계산
-    normalizeScore,                    // ✨ 점수 정규화
-    normalizeEnglishScore,             // ✨ 영어 점수 정규화
-    calculateDefaultTotalScore,        // ✨ default 방식 수능 계산
-    calculateRankTotalScore,           // ✨ rank 방식 수능 계산
-    //calculateFinalCollegeScore         // ✨ [추가] 한국사 포함 최종 계산
+    calculateCollegeScore,
+    calculateSuneungScore,
+    applyKoreanHistoryScore,
+    getSubjectScore,
+    calculateEnglishScore,
+    calculateKoreanHistoryScore,
+    processScienceScore,
+    normalizeScore,
+    normalizeEnglishScore,
+    calculateDefaultTotalScore,
+    calculateRankTotalScore,
+    calculateMixTotalScore        // ✨ [추가] mix 방식 수능 계산
   };
   
-
+  
 
