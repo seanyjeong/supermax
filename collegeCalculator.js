@@ -156,22 +156,31 @@ function calculateMixTotalScore(과목점수셋, 그룹정보) {
       .filter(subject => !usedSubjects.has(subject))
       .map(subject => ({
         subject,
-        score: (과목점수셋[subject] ?? -1)
+        score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
       }))
-      .filter(({ score }) => score >= 0);  // ← 0점은 허용하고, -1만 거르자
+      .filter(({ score }) => score >= 0); // 0점도 허용. 없는 과목만 제외
 
     if (availableScores.length === 0) continue;
 
+    // 점수 높은 순 정렬
     availableScores.sort((a, b) => b.score - a.score);
 
+    // 선택개수만큼 골라서 평균
     const selected = availableScores.slice(0, 선택개수);
+
+    console.log('📋 [Mix] 그룹 대상:', availableScores);
+    console.log('🏆 [Mix] 그룹 선택:', selected);
+
     const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
 
+    // 사용한 과목은 기록
     selected.forEach(({ subject }) => usedSubjects.add(subject));
 
+    // 반영비율 적용
     total += averageScore * (반영비율 / 100);
   }
 
+  console.log('🔥 [Mix] 누적 Total:', total);
   return total;
 }
 
@@ -226,6 +235,7 @@ function calculateCollegeScore(studentScore, collegeRule, 점수셋, 반영과�
     calculateDefaultTotalScore,
     calculateRankTotalScore,
     calculateMixTotalScore        // ✨ [추가] mix 방식 수능 계산
+    
   };
   
   
