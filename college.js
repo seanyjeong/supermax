@@ -312,25 +312,46 @@ const 점수셋 = {
     // 7. 계산
     const 반영과목리스트 = JSON.parse(rule.과목 || '[]');
     const 반영비율 = JSON.parse(rule.반영비율 || '[]');
-const finalScoreWithoutHistory = calculator.calculateCollegeScore(
-  studentScore,
-  { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
-  점수셋,
-  반영과목리스트,
-  반영비율,
-  rule.반영규칙,
-  rule.반영과목수
-);
-
-// 🔥 한국사 가산점 추가
-const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
-
-let finalScore = finalScoreWithoutHistory;
-if (koreanHistoryResult && (koreanHistoryResult.처리방식 === '수능환산' || koreanHistoryResult.처리방식 === '직접더함')) {
-  finalScore += koreanHistoryResult.점수;
-}
-
-res.json({ success: true, totalScore: finalScore });
+    
+    const 그룹정보 = [
+      {
+        과목리스트: JSON.parse(rule.그룹1_과목 || '[]'),
+        선택개수: rule.그룹1_선택개수 || 0,
+        반영비율: rule.그룹1_반영비율 || 0
+      },
+      {
+        과목리스트: JSON.parse(rule.그룹2_과목 || '[]'),
+        선택개수: rule.그룹2_선택개수 || 0,
+        반영비율: rule.그룹2_반영비율 || 0
+      },
+      {
+        과목리스트: JSON.parse(rule.그룹3_과목 || '[]'),
+        선택개수: rule.그룹3_선택개수 || 0,
+        반영비율: rule.그룹3_반영비율 || 0
+      }
+    ];
+    
+    // ✨ 수능 점수 계산
+    const finalScoreWithoutHistory = calculator.calculateCollegeScore(
+      studentScore,
+      { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
+      점수셋,
+      반영과목리스트,
+      반영비율,
+      rule.반영규칙,
+      rule.반영과목수,
+      그룹정보   // ✨ mix 규칙 추가됨
+    );
+    
+    // ✨ 한국사 가산점 추가
+    const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
+    
+    let finalScore = finalScoreWithoutHistory;
+    if (koreanHistoryResult && (koreanHistoryResult.처리방식 === '수능환산' || koreanHistoryResult.처리방식 === '직접더함')) {
+      finalScore += koreanHistoryResult.점수;
+    }
+    
+    res.json({ success: true, totalScore: finalScore });
 
 
 
