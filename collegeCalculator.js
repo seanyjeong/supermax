@@ -1,5 +1,25 @@
 // collegeCalculator.js
 
+function 과목구분(과목명) {
+  const 사탐 = [
+    '생활과윤리', '윤리와사상', '한국지리', '세계지리',
+    '동아시아사', '세계사', '정치와법', '경제', '사회문화'
+  ];
+  const 과탐 = [
+    '생명과학1', '생명과학2', '화학1', '화학2',
+    '물리1', '물리2', '지구과학1', '지구과학2'
+  ];
+  const 국어 = ['화법과작문', '언어와매체'];
+  const 수학 = ['확률과통계', '미적분', '기하'];
+
+  if (사탐.includes(과목명)) return '사탐';
+  if (과탐.includes(과목명)) return '과탐';
+  if (국어.includes(과목명)) return '국어';   // ✨ 추가
+  if (수학.includes(과목명)) return '수학';   // ✨ 추가
+  return null; // 구분 못하면 null
+}
+
+
 // ✨ 영어 점수 변환
 function calculateEnglishScore(englishGrade, englishScoreRule) {
   if (!englishScoreRule || englishGrade < 1 || englishGrade > 9) return 0;
@@ -18,9 +38,11 @@ function getSubjectScore(subjectData, 반영지표) {
   if (반영지표 === '표') return subjectData.표준점수 ?? 0;
   if (반영지표 === '백') return subjectData.백분위 ?? 0;
   if (반영지표 === '등') return subjectData.등급 ?? 0;
+  if (반영지표 === '백자표') return subjectData.변환점수 ?? 0; // ✨ 추가
   if (반영지표 === '반영없음') return 0;
   return 0;
 }
+
 
 // ✨ 영어 점수 정규화
 function normalizeEnglishScore(영어등급, englishScoreRule, 영어표준점수만점) {
@@ -74,21 +96,20 @@ function normalizeScore(rawScore, 반영지표, 표준점수반영기준, 과목
   if (반영지표 === '등') return rawScore / 100;
   if (반영지표 === '표') {
     if (표준점수반영기준 === '최고점') {
-      const 최고점 = 표준점수최고점데이터?.[과목명] ?? 200;
+      const 최고점 = 표준점수최고점데이터?.[과목명] ?? 200; // ✨ 국어/수학/탐구 전부 해당 과목별로
       return rawScore / 최고점;
-    } else {
-      const 탐구과목목록 = [
-        '생활과윤리', '윤리와사상', '한국지리', '세계지리', '동아시아사', '세계사',
-        '정치와법', '경제', '사회문화', '생명과학1', '생명과학2',
-        '화학1', '화학2', '물리1', '물리2', '지구과학1', '지구과학2'
-      ];
-      const is탐구 = 탐구과목목록.includes(과목명);
+    } else if (표준점수반영기준 === '200') {
+      const 구분 = 과목구분(과목명);
+      const is탐구 = 구분 === '사탐' || 구분 === '과탐';
       const 기준점수 = is탐구 ? 100 : 200;
       return rawScore / 기준점수;
+    } else if (표준점수반영기준 === '기본') {
+      return rawScore;
     }
   }
   return 0;
 }
+
 
 // ✨ 수능 점수만 뽑기
 function calculateSuneungScore(studentScore, collegeRule) {
@@ -225,7 +246,8 @@ function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반�
     normalizeEnglishScore,
     calculateDefaultTotalScore,
     calculateRankTotalScore,
-    calculateMixTotalScore        // ✨ [추가] mix 방식 수능 계산
+    calculateMixTotalScore ,
+    과목구분       // ✨ [추가] mix 방식 수능 계산
     
   };
   
