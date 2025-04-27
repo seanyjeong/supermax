@@ -393,13 +393,30 @@ const 점수셋 = {
   )),
   탐구: (() => {
     if (rule.탐구반영지표 === '백자표') {
-      const 탐구1최고점 = studentScore.탐구1_백자표변환표?.[100] ?? 70;
-      const 탐구2최고점 = studentScore.탐구2_백자표변환표?.[100] ?? 70;
-
-      const t1 = (studentScore.탐구1.변환점수 || 0) / 탐구1최고점;
-      const t2 = (studentScore.탐구2.변환점수 || 0) / 탐구2최고점;
-
-      return ((t1 + t2) / 2) * 100;
+      if (rule.표준점수반영기준 === '최고점') {
+        // ✨ 최고점 기준
+        const 탐구1최고점 = studentScore.탐구1_백자표변환표?.[100] ?? 70;
+        const 탐구2최고점 = studentScore.탐구2_백자표변환표?.[100] ?? 70;
+  
+        const t1 = (studentScore.탐구1.변환점수 || 0) / 탐구1최고점;
+        const t2 = (studentScore.탐구2.변환점수 || 0) / 탐구2최고점;
+  
+        return ((t1 + t2) / 2) * 100;
+      } else if (rule.표준점수반영기준 === '200') {
+        // ✨ 200점 기준
+        const t1 = studentScore.탐구1.변환점수 || 0;
+        const t2 = studentScore.탐구2.변환점수 || 0;
+        const avg = (t1 + t2) / 2;
+  
+        return avg / 100;  // 💥 여기 나누기 100
+      } else {
+        // ✨ 기본
+        const t1 = studentScore.탐구1.변환점수 || 0;
+        const t2 = studentScore.탐구2.변환점수 || 0;
+        const avg = (t1 + t2) / 2;
+  
+        return avg;  // 💥 기본은 그대로 평균
+      }
     } else {
       return calculator.processScienceScore(
         calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
@@ -408,6 +425,7 @@ const 점수셋 = {
       );
     }
   })()
+  
 };
 
 
