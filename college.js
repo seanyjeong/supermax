@@ -30,8 +30,8 @@ exports.db = db;
 const collegeManage = require('./collegeManage');
 app.use('/college', collegeManage);
 
-const collegeDebug = require('./collegedebug'); // 이름 다르게
-app.use('/college', collegedebug);
+const collegeDebug = require('./collegedebug');
+app.use('/college', collegeDebug);
 
 
 
