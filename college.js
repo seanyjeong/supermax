@@ -29,7 +29,7 @@ db.connect(err => {
 exports.db = db;
 const collegeManage = require('./collegeManage');
 app.use('/college', collegeManage);
-const collegeManage = require('./collegedebug');
+const collegeDebug  = require('./collegedebug');
 app.use('/college', collegedebug);
 
 const calculator = require('./collegeCalculator');
