@@ -391,11 +391,23 @@ const 점수셋 = {
     englishScoreRule,
     rule.영어표준점수만점
   )),
-  탐구: calculator.processScienceScore(
-    calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
-    calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
-    khistoryRule.탐구과목반영수
-  )
+  탐구: (() => {
+    if (rule.탐구반영지표 === '백자표') {
+      const 탐구1최고점 = studentScore.탐구1_백자표변환표?.[100] ?? 70;
+      const 탐구2최고점 = studentScore.탐구2_백자표변환표?.[100] ?? 70;
+
+      const t1 = (studentScore.탐구1.변환점수 || 0) / 탐구1최고점;
+      const t2 = (studentScore.탐구2.변환점수 || 0) / 탐구2최고점;
+
+      return ((t1 + t2) / 2) * 100;
+    } else {
+      return calculator.processScienceScore(
+        calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
+        calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
+        khistoryRule.탐구과목반영수
+      );
+    }
+  })()
 };
 
 
