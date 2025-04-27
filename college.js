@@ -349,29 +349,28 @@ app.get('/college/tanguback-get/:대학학과ID/:구분', async (req, res) => {
 
 app.post('/college/korean-history-score', async (req, res) => {
   const { 대학학과ID, 등급, 점수 } = req.body;
-  if (!대학학과ID || !점수) {
+
+  if (!대학학과ID || !등급 || !점수) {
     return res.status(400).json({ message: '필수 데이터 누락' });
   }
 
   try {
-    await dbQuery(`
-      INSERT INTO 한국사등급점수 (대학학과ID, 등급1, 등급2, 등급3, 등급4, 등급5, 등급6, 등급7, 등급8, 등급9)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        등급1 = VALUES(등급1),
-        등급2 = VALUES(등급2),
-        등급3 = VALUES(등급3),
-        등급4 = VALUES(등급4),
-        등급5 = VALUES(등급5),
-        등급6 = VALUES(등급6),
-        등급7 = VALUES(등급7),
-        등급8 = VALUES(등급8),
-        등급9 = VALUES(등급9)
-    `, [
-      대학학과ID,
-      점수[0], 점수[1], 점수[2], 점수[3], 점수[4],
-      점수[5], 점수[6], 점수[7], 점수[8]
-    ]);
+    const [exist] = await dbQuery(`
+      SELECT id FROM 한국사등급별점수 WHERE 대학학과ID = ?
+    `, [대학학과ID]);
+
+    if (exist) {
+      // 있으면 업데이트
+      await dbQuery(`
+        UPDATE 한국사등급별점수 SET 등급 = ?, 점수 = ? WHERE 대학학과ID = ?
+      `, [JSON.stringify(등급), JSON.stringify(점수), 대학학과ID]);
+    } else {
+      // 없으면 인서트
+      await dbQuery(`
+        INSERT INTO 한국사등급별점수 (대학학과ID, 등급, 점수)
+        VALUES (?, ?, ?)
+      `, [대학학과ID, JSON.stringify(등급), JSON.stringify(점수)]);
+    }
 
     res.json({ success: true, message: '✅ 한국사 점수 저장 완료' });
   } catch (error) {
@@ -381,31 +380,29 @@ app.post('/college/korean-history-score', async (req, res) => {
 });
 
 
+
 app.post('/college/english-score', async (req, res) => {
   const { 대학학과ID, 등급, 점수 } = req.body;
-  if (!대학학과ID || !Array.isArray(점수) || 점수.length !== 9) {
-    return res.status(400).json({ message: '필수 데이터 누락 또는 형식 오류' });
+
+  if (!대학학과ID || !등급 || !점수) {
+    return res.status(400).json({ message: '필수 데이터 누락' });
   }
 
   try {
-    await dbQuery(`
-      INSERT INTO 영어등급점수 (대학학과ID, 등급1, 등급2, 등급3, 등급4, 등급5, 등급6, 등급7, 등급8, 등급9)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        등급1 = VALUES(등급1),
-        등급2 = VALUES(등급2),
-        등급3 = VALUES(등급3),
-        등급4 = VALUES(등급4),
-        등급5 = VALUES(등급5),
-        등급6 = VALUES(등급6),
-        등급7 = VALUES(등급7),
-        등급8 = VALUES(등급8),
-        등급9 = VALUES(등급9)
-    `, [
-      대학학과ID,
-      점수[0], 점수[1], 점수[2], 점수[3], 점수[4],
-      점수[5], 점수[6], 점수[7], 점수[8]
-    ]);
+    const [exist] = await dbQuery(`
+      SELECT id FROM 영어등급별점수 WHERE 대학학과ID = ?
+    `, [대학학과ID]);
+
+    if (exist) {
+      await dbQuery(`
+        UPDATE 영어등급별점수 SET 등급 = ?, 점수 = ? WHERE 대학학과ID = ?
+      `, [JSON.stringify(등급), JSON.stringify(점수), 대학학과ID]);
+    } else {
+      await dbQuery(`
+        INSERT INTO 영어등급별점수 (대학학과ID, 등급, 점수)
+        VALUES (?, ?, ?)
+      `, [대학학과ID, JSON.stringify(등급), JSON.stringify(점수)]);
+    }
 
     res.json({ success: true, message: '✅ 영어 점수 저장 완료' });
   } catch (error) {
@@ -413,6 +410,7 @@ app.post('/college/english-score', async (req, res) => {
     res.status(500).json({ success: false, message: '저장 실패' });
   }
 });
+
 
 
 app.get('/college/korean-history-score/:id', (req, res) => {
