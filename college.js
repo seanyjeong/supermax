@@ -324,11 +324,19 @@ const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율,
 
     if (!school) return res.status(404).json({ message: '학교 정보 없음' });
     // ✨ [추가] 표준점수 최고점 불러오기
-const 최고점데이터 = await dbQuery('SELECT 과목명, 최고점 FROM 표준점수최고점 WHERE 대학학과ID = ?', [대학학과ID]);
+// 최고점 데이터 가져오기
+const 최고점데이터 = await dbQuery('SELECT * FROM 표준점수최고점 LIMIT 1');
+
 const 표준점수최고점데이터 = {};
-for (const row of 최고점데이터) {
-  표준점수최고점데이터[row.과목명] = row.최고점;
+if (최고점데이터.length > 0) {
+  const row = 최고점데이터[0];
+  for (const key in row) {
+    if (key !== 'created_at') {  // created_at 컬럼은 제외
+      표준점수최고점데이터[key.trim()] = row[key];
+    }
+  }
 }
+
 
     // 2. 반영비율 규칙 불러오기
     const [rule] = await dbQuery('SELECT * FROM 반영비율규칙 WHERE 대학학과ID = ?', [대학학과ID]);
