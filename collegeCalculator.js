@@ -186,11 +186,11 @@ function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반�
   let 수능환산 = 0;
 
   if (반영규칙 === 'default') {
-    수능환산 = calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반영비율);
+    수능환산 = calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반영비율,총점기준);
   } else if (반영규칙 === 'rank') {
-    수능환산 = calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영비율, 반영과목수);
+    수능환산 = calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영비율, 반영과목수,총점기준);
   } else if (반영규칙 === 'mix') {
-    수능환산 = calculateMixTotalScore(과목점수셋, 그룹정보);
+    수능환산 = calculateMixTotalScore(과목점수셋, 그룹정보,총점기준);
   } else {
     수능환산 = 0;
   }
