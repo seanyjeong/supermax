@@ -354,19 +354,20 @@ let finalScore = 0;
 // 한국사 처리 방식 분기
 if (koreanHistoryResult) {
   if (koreanHistoryResult.처리방식 === '수능환산') {
-    // 수능환산이면 ➔ 한국사 포함해서 수능비율 적용
-    finalScore = (수능환산점수 + koreanHistoryResult.점수) * (수능비율 / 100);
+    // 수능환산이면 ➔ 그냥 수능환산점수 + (한국사 점수 × 수능비율 / 100)
+    finalScore = 수능환산점수 + (koreanHistoryResult.점수 * (school.수능비율 / 100));
   } else if (koreanHistoryResult.처리방식 === '직접더함') {
-    // 직접더함이면 ➔ 수능비율 먼저 적용 후 가산점 더함
-    finalScore = (수능환산점수 * (수능비율 / 100)) + koreanHistoryResult.점수;
+    // 직접더함이면 ➔ 그냥 수능환산점수 + 한국사 점수
+    finalScore = 수능환산점수 + koreanHistoryResult.점수;
   } else {
-    // 다른 처리방식이면 무시하고 기본 수능비율만 적용
-    finalScore = 수능환산점수 * (수능비율 / 100);
+    // 다른 경우는 그냥 수능환산점수만
+    finalScore = 수능환산점수;
   }
 } else {
-  // 한국사 아예 없으면 기본 수능비율만 적용
-  finalScore = 수능환산점수 * (수능비율 / 100);
+  // 한국사 아예 없으면 그냥 수능환산점수
+  finalScore = 수능환산점수;
 }
+
 
 // 최종 결과 반환
 res.json({ success: true, totalScore: finalScore });
