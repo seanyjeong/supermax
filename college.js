@@ -146,13 +146,13 @@ app.get('/college/schools', (req, res) => {
 
 app.post('/college/school-detail', (req, res) => {
   const {
-    대학학과ID, 탐구과목반영수, 한국사반영,
+    대학학과ID, 탐구과목반영수, 한국사반영, 한국사가산처리,
     국수영반영지표, 탐구반영지표, 표준점수반영기준, 영어표준점수만점,
     과목, 반영과목수, 반영규칙, 반영비율,
     그룹1_과목, 그룹1_선택개수, 그룹1_반영비율,
     그룹2_과목, 그룹2_선택개수, 그룹2_반영비율,
     그룹3_과목, 그룹3_선택개수, 그룹3_반영비율,
-    수학가산점, 과탐가산점   // ⭐️ 추가된 부분
+    수학가산점, 과탐가산점
   } = req.body;
 
   if (!대학학과ID) {
@@ -160,8 +160,12 @@ app.post('/college/school-detail', (req, res) => {
   }
 
   const sql1 = `
-    INSERT INTO 탐구한국사 (대학학과ID, 탐구과목반영수, 한국사반영) 
-    VALUES (?, ?, ?)
+    INSERT INTO 탐구한국사 (대학학과ID, 탐구과목반영수, 한국사반영, 한국사가산처리)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      탐구과목반영수 = VALUES(탐구과목반영수),
+      한국사반영 = VALUES(한국사반영),
+      한국사가산처리 = VALUES(한국사가산처리)
   `;
 
   const sql2 = `
@@ -172,13 +176,34 @@ app.post('/college/school-detail', (req, res) => {
       그룹2_과목, 그룹2_선택개수, 그룹2_반영비율,
       그룹3_과목, 그룹3_선택개수, 그룹3_반영비율,
       수학가산점, 과탐가산점
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      국수영반영지표 = VALUES(국수영반영지표),
+      탐구반영지표 = VALUES(탐구반영지표),
+      표준점수반영기준 = VALUES(표준점수반영기준),
+      영어표준점수만점 = VALUES(영어표준점수만점),
+      과목 = VALUES(과목),
+      반영과목수 = VALUES(반영과목수),
+      반영규칙 = VALUES(반영규칙),
+      반영비율 = VALUES(반영비율),
+      그룹1_과목 = VALUES(그룹1_과목),
+      그룹1_선택개수 = VALUES(그룹1_선택개수),
+      그룹1_반영비율 = VALUES(그룹1_반영비율),
+      그룹2_과목 = VALUES(그룹2_과목),
+      그룹2_선택개수 = VALUES(그룹2_선택개수),
+      그룹2_반영비율 = VALUES(그룹2_반영비율),
+      그룹3_과목 = VALUES(그룹3_과목),
+      그룹3_선택개수 = VALUES(그룹3_선택개수),
+      그룹3_반영비율 = VALUES(그룹3_반영비율),
+      수학가산점 = VALUES(수학가산점),
+      과탐가산점 = VALUES(과탐가산점)
   `;
 
   db.beginTransaction(err => {
     if (err) throw err;
 
-    db.query(sql1, [대학학과ID, 탐구과목반영수, 한국사반영], (err) => {
+    db.query(sql1, [대학학과ID, 탐구과목반영수, 한국사반영, 한국사가산처리], (err) => {
       if (err) {
         return db.rollback(() => {
           res.status(500).json({ message: '탐구한국사 저장 실패' });
@@ -204,8 +229,8 @@ app.post('/college/school-detail', (req, res) => {
         safeJson(그룹3_과목),
         그룹3_선택개수 || null,
         safeJson(그룹3_반영비율),
-        수학가산점 || 0,  // ⭐️
-        과탐가산점 || 0   // ⭐️
+        수학가산점 || 0,
+        과탐가산점 || 0
       ], (err) => {
         if (err) {
           return db.rollback(() => {
@@ -219,7 +244,7 @@ app.post('/college/school-detail', (req, res) => {
               res.status(500).json({ message: '커밋 실패' });
             });
           }
-          res.json({ message: '✅ 세부정보 저장 완료' });
+          res.json({ message: '✅ 세부정보 저장 완료 (업데이트 포함)' });
         });
       });
     });
@@ -235,6 +260,7 @@ function safeJson(input) {
     return null;
   }
 }
+
 
 // ✨ 1. 백자표 학교 리스트 뽑기
 app.get('/college/tanguback-create-list', async (req, res) => {
