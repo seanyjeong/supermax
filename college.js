@@ -339,6 +339,16 @@ const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율,
     // 5. 영어 등급별 점수
     const [englishScore] = await dbQuery('SELECT 등급, 점수 FROM 영어등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
     const englishScoreRule = englishScore ? JSON.parse(englishScore.점수) : [];
+    // 5번 영어등급별 점수까지 다 불러온 후
+// ✨ 탐구 백자표 변환점수 미리 추가
+if (rule.탐구반영지표 === '백자표') {
+  const 탐구1구분 = calculator.과목구분(studentScore.subject1Name);
+  const 탐구2구분 = calculator.과목구분(studentScore.subject2Name);
+
+  studentScore.탐구1.변환점수 = await get백자표변환점수(대학학과ID, 탐구1구분, studentScore.탐구1.백분위);
+  studentScore.탐구2.변환점수 = await get백자표변환점수(대학학과ID, 탐구2구분, studentScore.탐구2.백분위);
+}
+
 
 // 6. 점수셋 만들기
 const 점수셋 = {
@@ -453,6 +463,23 @@ console.log('🏛 한국사 처리결과:', koreanHistoryResult);
     res.status(500).json({ message: '계산 실패' });
   }
 });
+
+// ✨ 탐구 백자표 변환점수 가져오는 함수
+async function get백자표변환점수(대학학과ID, 구분, 백분위) {
+  const sql = `
+    SELECT 변환점수 
+    FROM 탐구백자표변환점수 
+    WHERE 대학학과ID = ? AND 구분 = ? AND 백분위 = ?
+  `;
+  try {
+    const [result] = await dbQuery(sql, [대학학과ID, 구분, 백분위]);
+    return result ? parseFloat(result.변환점수) : 0;
+  } catch (err) {
+    console.error('❌ 백자표 변환점수 조회 실패:', err);
+    return 0;
+  }
+}
+
 
 // ✨ DB query promise 버전
 function dbQuery(sql, params) {
