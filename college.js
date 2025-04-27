@@ -58,6 +58,30 @@ app.get('/college/get-debug-check', async (req, res) => {
   }
 });
 
+app.get('/college/get-school-detail', async (req, res) => {
+  const { 대학학과ID } = req.query;
+  if (!대학학과ID) return res.status(400).json({ message: '대학학과ID 필요' });
+
+  try {
+    const [탐구] = await dbQuery('SELECT * FROM 탐구한국사 WHERE 대학학과ID = ?', [대학학과ID]);
+    const [반영] = await dbQuery('SELECT * FROM 반영비율규칙 WHERE 대학학과ID = ?', [대학학과ID]);
+
+    if (!탐구 || !반영) {
+      return res.status(404).json({ message: '세부정보 없음' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        탐구,
+        반영
+      }
+    });
+  } catch (err) {
+    console.error('❌ 학교 세부정보 조회 에러:', err);
+    res.status(500).json({ success: false });
+  }
+});
 
 // 서버 college.js
 app.get('/college/calculate-all', async (req, res) => {
