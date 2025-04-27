@@ -182,7 +182,7 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
   return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
 }
 
-function calculateMixTotalScore(과목점수셋, 그룹정보,총점기준) {
+function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
   let total = 0;
   const usedSubjects = new Set();
 
@@ -207,16 +207,25 @@ function calculateMixTotalScore(과목점수셋, 그룹정보,총점기준) {
     console.log('📋 [Mix] 그룹 대상:', availableScores);
     console.log('🏆 [Mix] 그룹 선택:', selected);
 
-    const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
-
     selected.forEach(({ subject }) => usedSubjects.add(subject));
 
-    total += averageScore * (반영비율 / 100);
+    if (Array.isArray(반영비율)) {
+      // 반영비율이 배열이면 과목마다 따로 계산
+      selected.forEach((item, idx) => {
+        const ratio = 반영비율[idx] || 0;
+        total += (item.score * (ratio / 100));
+      });
+    } else {
+      // 반영비율이 숫자면 평균낸 다음에 곱하기
+      const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
+      total += averageScore * (반영비율 / 100);
+    }
   }
 
   console.log('🔥 [Mix] 누적 Total:', total * (총점기준 / 100));
-  return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
+  return total * (총점기준 / 100);
 }
+
 
 function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보, 총점기준) {
   let 수능환산 = 0;
