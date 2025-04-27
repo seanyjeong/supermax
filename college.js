@@ -347,6 +347,8 @@ if (rule.탐구반영지표 === '백자표') {
 
   studentScore.탐구1.변환점수 = await get백자표변환점수(대학학과ID, 탐구1구분, studentScore.탐구1.백분위);
   studentScore.탐구2.변환점수 = await get백자표변환점수(대학학과ID, 탐구2구분, studentScore.탐구2.백분위);
+  console.log(`🧪 탐구1 변환점수 (${studentScore.subject1Name} - ${탐구1구분}):`, studentScore.탐구1.변환점수);
+  console.log(`🧪 탐구2 변환점수 (${studentScore.subject2Name} - ${탐구2구분}):`, studentScore.탐구2.변환점수);
 }
 
 
