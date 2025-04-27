@@ -28,6 +28,54 @@ db.connect(err => {
 });
 const calculator = require('./collegeCalculator');
 
+// 서버 college.js
+app.get('/college/calculate-all', async (req, res) => {
+  try {
+    const schools = await dbQuery('SELECT 대학학과ID, 대학명, 학과명 FROM 학교');
+
+    const results = [];
+
+    for (const school of schools) {
+      const payload = {
+        대학학과ID: school.대학학과ID,
+        studentScore: {
+          국어: { 표준점수: 100, 백분위: 66, 등급: 2 },
+          수학: { 표준점수: 105, 백분위: 75, 등급: 1 },
+          영어등급: 2,
+          한국사등급: 1,
+          탐구1: { 표준점수: 64, 백분위: 80, 등급: 1 },
+          탐구2: { 표준점수: 63, 백분위: 85, 등급: 1 },
+          내신: 0,
+          실기: 0,
+          subject1Name: "사회문화",
+          subject2Name: "생활과윤리",
+          국어과목명: "화법과작문",
+          수학과목명: "확률과통계"
+        }
+      };
+
+      const response = await fetch('https://supermax.kr/college/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      results.push({
+        대학명: school.대학명,
+        학과명: school.학과명,
+        totalScore: result.totalScore ?? '에러'
+      });
+    }
+
+    res.json({ success: true, data: results });
+  } catch (err) {
+    console.error('❌ 전체 계산 에러:', err);
+    res.status(500).json({ message: '전체 계산 실패' });
+  }
+});
+
+
 
 app.post('/college/school', (req, res) => {
   const { 군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율 , 총점기준} = req.body;
