@@ -353,32 +353,37 @@ if (rule.탐구반영지표 === '백자표') {
 
 
 // 6. 점수셋 만들기
+const is기본 = rule.표준점수반영기준 === '기본';
+
+const normalize = (score) => is기본 ? score : score * 100;
+
 const 점수셋 = {
-  국어: calculator.normalizeScore(
+  국어: normalize(calculator.normalizeScore(
     calculator.getSubjectScore(studentScore.국어, rule.국수영반영지표),
     rule.국수영반영지표,
     rule.표준점수반영기준,
-    '국어',
-    null //
-  ) * 100,
-  수학: calculator.normalizeScore(
+    studentScore.국어과목명,
+    null
+  )),
+  수학: normalize(calculator.normalizeScore(
     calculator.getSubjectScore(studentScore.수학, rule.국수영반영지표),
     rule.국수영반영지표,
     rule.표준점수반영기준,
-    '수학',
+    studentScore.수학과목명,
     null
-  ) * 100,
-  영어: calculator.normalizeEnglishScore(
+  )),
+  영어: normalize(calculator.normalizeEnglishScore(
     studentScore.영어등급,
     englishScoreRule,
     rule.영어표준점수만점
-  ) * 100,
+  )),
   탐구: calculator.processScienceScore(
     calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
     calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
     khistoryRule.탐구과목반영수
   )
 };
+
 
 
 
