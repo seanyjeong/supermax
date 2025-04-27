@@ -5,7 +5,7 @@ const router = express.Router();
 const { db } = require('./college');
 const calculator = require('./collegeCalculator');
 
-router.post('/college/calculate', async (req, res) => {
+router.post('/calculate', async (req, res) => {
     const { 대학학과ID, studentScore } = req.body;
   
     if (!대학학과ID || !studentScore) {
