@@ -37,11 +37,11 @@ app.post('/college/school', (req, res) => {
   }
 
   const sql = `
-    INSERT INTO 학교 (군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO 학교 (군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율, 총점기준)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.query(sql, [군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율], (err, result) => {
+  db.query(sql, [군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율, 총점기준], (err, result) => {
     if (err) {
       console.error('❌ 학교 등록 실패:', err);
       return res.status(500).json({ message: '학교 등록 실패' });
@@ -258,7 +258,7 @@ app.post('/college/calculate', async (req, res) => {
 
   try {
     // 1. 학교 비율 불러오기
-const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율, 기타비율 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
+const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율, 기타비율,총점기준 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
 
     if (!school) return res.status(404).json({ message: '학교 정보 없음' });
 
@@ -340,7 +340,8 @@ const 수능환산점수 = calculator.calculateCollegeScore(
   반영비율,
   rule.반영규칙,
   rule.반영과목수,
-  그룹정보
+  그룹정보,
+  school.총점기준
 );
 
 const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
