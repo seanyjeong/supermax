@@ -93,6 +93,7 @@ app.get('/college/calculate-all', async (req, res) => {
 
       const result = await response.json();
       results.push({
+       대학학과ID: school.대학학과ID, // ✅ 이거 추가해야 함
         대학명: school.대학명,
         학과명: school.학과명,
         totalScore: result.totalScore ?? '에러'
