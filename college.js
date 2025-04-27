@@ -28,6 +28,37 @@ db.connect(err => {
 });
 const calculator = require('./collegeCalculator');
 
+// 체크 저장
+app.post('/college/save-debug-check', async (req, res) => {
+  const { 대학학과ID, 체크여부 } = req.body;
+  if (!대학학과ID) return res.status(400).json({ message: '대학학과ID 필요' });
+
+  try {
+    await dbQuery(`
+      INSERT INTO 디버깅체크 (대학학과ID, 체크여부)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE 체크여부 = ?, updated_at = NOW()
+    `, [대학학과ID, 체크여부, 체크여부]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ 디버깅 체크 저장 에러:', err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// 체크 상태 불러오기
+app.get('/college/get-debug-check', async (req, res) => {
+  try {
+    const results = await dbQuery('SELECT 대학학과ID, 체크여부 FROM 디버깅체크');
+    res.json({ success: true, data: results });
+  } catch (err) {
+    console.error('❌ 디버깅 체크 조회 에러:', err);
+    res.status(500).json({ success: false });
+  }
+});
+
+
 // 서버 college.js
 app.get('/college/calculate-all', async (req, res) => {
   try {
