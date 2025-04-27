@@ -408,7 +408,7 @@ const 점수셋 = {
         const t2 = studentScore.탐구2.변환점수 || 0;
         const avg = (t1 + t2) / 2;
   
-        return avg / 100;  // 💥 여기 나누기 100
+        return avg ;  // 💥 여기 나누기 100
       } else {
         // ✨ 기본
         const t1 = studentScore.탐구1.변환점수 || 0;
