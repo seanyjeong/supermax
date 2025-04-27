@@ -28,17 +28,17 @@ db.connect(err => {
 });
 const calculator = require('./collegeCalculator');
 
-// 체크 저장
+// 체크 저장 + 메모 저장
 app.post('/college/save-debug-check', async (req, res) => {
-  const { 대학학과ID, 체크여부 } = req.body;
+  const { 대학학과ID, 체크여부, 메모 } = req.body;
   if (!대학학과ID) return res.status(400).json({ message: '대학학과ID 필요' });
 
   try {
     await dbQuery(`
-      INSERT INTO 디버깅체크 (대학학과ID, 체크여부)
-      VALUES (?, ?)
-      ON DUPLICATE KEY UPDATE 체크여부 = ?, updated_at = NOW()
-    `, [대학학과ID, 체크여부, 체크여부]);
+      INSERT INTO 디버깅체크 (대학학과ID, 체크여부, 메모)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE 체크여부 = ?, 메모 = ?, updated_at = NOW()
+    `, [대학학과ID, 체크여부, 메모, 체크여부, 메모]);
 
     res.json({ success: true });
   } catch (err) {
@@ -47,10 +47,10 @@ app.post('/college/save-debug-check', async (req, res) => {
   }
 });
 
-// 체크 상태 불러오기
+// 체크+메모 조회
 app.get('/college/get-debug-check', async (req, res) => {
   try {
-    const results = await dbQuery('SELECT 대학학과ID, 체크여부 FROM 디버깅체크');
+    const results = await dbQuery('SELECT 대학학과ID, 체크여부, 메모 FROM 디버깅체크');
     res.json({ success: true, data: results });
   } catch (err) {
     console.error('❌ 디버깅 체크 조회 에러:', err);
