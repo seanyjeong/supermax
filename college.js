@@ -369,14 +369,14 @@ const 점수셋 = {
     rule.국수영반영지표,
     rule.표준점수반영기준,
     studentScore.국어과목명,
-    null
+    표준점수최고점데이터
   )),
   수학: normalize(calculator.normalizeScore(
     calculator.getSubjectScore(studentScore.수학, rule.국수영반영지표),
     rule.국수영반영지표,
     rule.표준점수반영기준,
     studentScore.수학과목명,
-    null
+    표준점수최고점데이터
   )),
   영어: normalize(calculator.normalizeEnglishScore(
     studentScore.영어등급,
