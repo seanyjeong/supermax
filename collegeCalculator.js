@@ -109,7 +109,8 @@ function calculateSuneungScore(studentScore, collegeRule) {
 }
 
 // ✨ default 방식 수능합산 계산
-function calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반영비율) {
+// ✨ default 방식 수능합산 계산
+function calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반영비율, 총점기준) {
   let total = 0;
   for (let i = 0; i < 반영과목리스트.length; i++) {
     const subject = 반영과목리스트[i];
@@ -117,13 +118,14 @@ function calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반�
     const score = 과목점수셋[subject] ?? 0;
     total += score * (ratio / 100);
   }
-  return total;
+  return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
 }
 
 
 
+
 // ✨ rank 방식 수능합산 계산
-function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영비율, 반영과목수) {
+function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영비율, 반영과목수,총점기준) {
   const scores = [];
 
   for (const subject of 반영과목리스트) {
@@ -141,10 +143,10 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
     total += score * (ratio / 100);
   }
 
-  return total;
+  return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
 }
 
-function calculateMixTotalScore(과목점수셋, 그룹정보) {
+function calculateMixTotalScore(과목점수셋, 그룹정보,총점기준) {
   let total = 0;
   const usedSubjects = new Set();
 
@@ -176,11 +178,11 @@ function calculateMixTotalScore(과목점수셋, 그룹정보) {
     total += averageScore * (반영비율 / 100);
   }
 
-  console.log('🔥 [Mix] 누적 Total:', total);
-  return total;
+  console.log('🔥 [Mix] 누적 Total:', total * (총점기준 / 100));
+  return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
 }
 
-function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보) {
+function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보, 총점기준) {
   let 수능환산 = 0;
 
   if (반영규칙 === 'default') {
@@ -228,4 +230,3 @@ function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반�
   };
   
   
-
