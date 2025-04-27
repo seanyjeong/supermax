@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('./college'); 
 
+function dbQuery(sql, params) {
+    return new Promise((resolve, reject) => {
+      db.query(sql, params, (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
+    });
+  }
+  
+
 
 router.post('/school', (req, res) => {
     const { 군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율 , 총점기준} = req.body;
