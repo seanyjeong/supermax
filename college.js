@@ -30,7 +30,7 @@ const calculator = require('./collegeCalculator');
 
 
 app.post('/college/school', (req, res) => {
-  const { 군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율, 총점기준 } = req.body;
+  const { 군명, 대학명, 학과명, 수능비율, 내신비율, 실기비율, 기타비율 } = req.body;
 
   if (!군명 || !대학명 || !학과명) {
     return res.status(400).json({ message: '군명, 대학명, 학과명 모두 입력하세요.' });
@@ -156,6 +156,66 @@ function safeJson(input) {
   }
 }
 
+// ✨ 1. 백자표 학교 리스트 뽑기
+app.get('/college/tanguback-create-list', async (req, res) => {
+  try {
+    const results = await dbQuery(`
+      SELECT DISTINCT 학교.대학학과ID, 학교.대학명, 학교.학과명
+      FROM 학교
+      INNER JOIN 반영비율규칙 ON 학교.대학학과ID = 반영비율규칙.대학학과ID
+      WHERE 반영비율규칙.탐구반영지표 = '백자표'
+      ORDER BY 학교.대학명, 학교.학과명
+    `);
+    res.json({ success: true, schools: results });
+  } catch (err) {
+    console.error('❌ 백자표 학교리스트 에러:', err);
+    res.status(500).json({ message: '서버 에러' });
+  }
+});
+
+// ✨ 2. 백자표 변환점수 저장
+app.post('/college/tanguback-save', async (req, res) => {
+  const { 대학학과ID, 구분, 변환표 } = req.body;
+  
+  if (!대학학과ID || !구분 || !변환표 || !Array.isArray(변환표)) {
+    return res.status(400).json({ message: '필수 데이터 부족' });
+  }
+
+  try {
+    // 기존 데이터 삭제
+    await dbQuery('DELETE FROM 탐구백자표변환점수 WHERE 대학학과ID = ? AND 구분 = ?', [대학학과ID, 구분]);
+
+    // 새 데이터 삽입
+    for (const item of 변환표) {
+      const { 백분위, 변환점수 } = item;
+      await dbQuery('INSERT INTO 탐구백자표변환점수 (대학학과ID, 구분, 백분위, 변환점수) VALUES (?, ?, ?, ?)', 
+        [대학학과ID, 구분, 백분위, 변환점수]);
+    }
+
+    res.json({ success: true, message: '✅ 변환표 저장 완료' });
+  } catch (err) {
+    console.error('❌ 변환표 저장 에러:', err);
+    res.status(500).json({ message: '서버 에러' });
+  }
+});
+
+// ✨ 3. 백자표 변환점수 불러오기
+app.get('/college/tanguback-get/:대학학과ID/:구분', async (req, res) => {
+  const { 대학학과ID, 구분 } = req.params;
+
+  try {
+    const results = await dbQuery(
+      'SELECT 백분위, 변환점수 FROM 탐구백자표변환점수 WHERE 대학학과ID = ? AND 구분 = ? ORDER BY 백분위 DESC',
+      [대학학과ID, 구분]
+    );
+    res.json({ success: true, 변환표: results });
+  } catch (err) {
+    console.error('❌ 변환표 조회 에러:', err);
+    res.status(500).json({ message: '서버 에러' });
+  }
+});
+
+
 
 app.post('/college/korean-history-score', (req, res) => {
   const { 대학학과ID, 등급, 점수 } = req.body;
@@ -223,6 +283,8 @@ app.get('/college/korean-history-score/:id', (req, res) => {
     });
   });
 });
+
+
 
 app.get('/college/english-score/:id', (req, res) => {
   const 대학학과ID = req.params.id;
