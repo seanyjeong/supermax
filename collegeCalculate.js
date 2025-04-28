@@ -176,19 +176,18 @@ router.post('/calculate', async (req, res) => {
   // 한국사 처리 방식 분기
   if (koreanHistoryResult) {
     if (koreanHistoryResult.처리방식 === '수능환산') {
-      // 수능환산이면 ➔ 그냥 수능환산점수 + (한국사 점수 × 수능비율 / 100)
       finalScore = 수능환산점수 + (koreanHistoryResult.점수 * (school.수능비율 / 100));
     } else if (koreanHistoryResult.처리방식 === '직접더함') {
-      // 직접더함이면 ➔ 그냥 수능환산점수 + 한국사 점수
       finalScore = 수능환산점수 + koreanHistoryResult.점수;
+    } else if (koreanHistoryResult.처리방식 === '믹스') {
+      finalScore = 수능환산점수; // 믹스는 추가 더하기 없음
     } else {
-      // 다른 경우는 그냥 수능환산점수만
       finalScore = 수능환산점수;
     }
   } else {
-    // 한국사 아예 없으면 그냥 수능환산점수
     finalScore = 수능환산점수;
   }
+  
   
   
   // 최종 결과 반환
