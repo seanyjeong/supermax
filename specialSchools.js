@@ -81,6 +81,7 @@ async function calculate강원대스포츠과학과(studentScore, schoolInfo, en
 
   const 합산 = 국어 + 탐구1 + 높은수영;
   const 수능점수 = 합산 * (schoolInfo.수능비율 / 100);
+  console.log('📚 [스포츠과학과]', { 국어, 탐구1, 수학, 영어, 높은수영, 합산, 수능점수, 한국사 });
 
   return 수능점수 + 한국사;
 }
