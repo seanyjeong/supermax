@@ -10,17 +10,18 @@ function dbQuery(sql, params) {
   });
 }
 
-// ✨ 등급배열 → 점수 매칭 함수
-function getScoreFromTable(등급, 등급배열, 점수배열) {
+// ✨ 등급배열 → 점수 매칭 함수 (배열에서 등급에 해당하는 점수를 가져옴)
+function getScoreFromTable(등급, 등급배열 = [], 점수배열 = []) {
+  if (!Array.isArray(등급배열) || !Array.isArray(점수배열)) return 0; // 배열이 아니면 기본값 0
   const index = 등급배열.indexOf(등급);
-  if (index === -1) return 0;
-  return 점수배열[index];
+  if (index === -1) return 0; // 해당 등급이 없으면 0점 반환
+  return 점수배열[index]; // 해당 인덱스의 점수 반환
 }
 
 // ✨ 학교별 특수 계산 함수 모음
 const specialSchoolCalculators = {
   47: calculate강원대체육교육과,   // 강원대 체육교육과
-  1: calculate강원대스포츠과학과, // 강원대 스포츠과학과
+  48: calculate강원대스포츠과학과, // 강원대 스포츠과학과
   49: calculate강원대휴먼스포츠학부 // 강원대 휴먼스포츠학부
 };
 
