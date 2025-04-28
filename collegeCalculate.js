@@ -61,6 +61,9 @@ router.post('/calculate', async (req, res) => {
   
   
   // 6. 점수셋 만들기
+
+  const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
+
   const is기본 = rule.표준점수반영기준 === '기본';
   
   const normalize = (score) => is기본 ? score : score * 100;
@@ -118,9 +121,9 @@ router.post('/calculate', async (req, res) => {
           khistoryRule.탐구과목반영수
         );
       }
-    })()
+    })(),
     
-    
+    한국사: koreanHistoryResult?.점수 || 0 
   };
   
   
@@ -163,8 +166,7 @@ router.post('/calculate', async (req, res) => {
     school.총점기준
   );
   
-  const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
-  
+
   // 수능비율 가져오기
   const 수능비율 = school.수능비율 || 0;
   
