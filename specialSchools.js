@@ -81,7 +81,7 @@ async function calculate강원대체육교육과(studentScore, schoolInfo, engli
 
 async function calculate강원대스포츠과학과(studentScore, schoolInfo, englishData, koreanHistoryData) {
   const 국어 = studentScore.국어?.백분위 || 0;
-  const 탐구1 = studentScore.탐구1?.백분위 || 0;
+  const 탐구1 = Math.max(studentScore.탐구1?.백분위 || 0, studentScore.탐구2?.백분위 || 0);
   const 수학 = studentScore.수학?.백분위 || 0;
   const 영어 = englishData[studentScore.영어등급 - 1] || 0;  // 영어 점수 계산
   const 높은수영 = Math.max(수학, 영어);
@@ -97,22 +97,27 @@ async function calculate강원대스포츠과학과(studentScore, schoolInfo, en
 }
 
 async function calculate강원대휴먼스포츠학부(studentScore, schoolInfo, englishData, koreanHistoryData) {
-  const 후보 = [
-    studentScore.국어?.백분위 || 0,
-    studentScore.수학?.백분위 || 0,
-    englishData[studentScore.영어등급 - 1] || 0,  // 영어 점수 계산
-    studentScore.탐구1?.백분위 || 0
-  ];
-  후보.sort((a, b) => b - a); // 높은거 2개
-
-  const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;  // 한국사 점수 계산
-
-  const 합산 = 후보[0] + 후보[1];
-  const 수능점수 = 합산 * (schoolInfo.수능비율 / 100);
-
-  console.log('📚 [휴먼스포츠학부]', { 후보, 합산, 수능점수, 한국사 });
-
-  return 수능점수 + 한국사;
-}
+    // 후보 점수 계산: 국어, 수학, 영어, 탐구1, 탐구2
+    const 후보 = [
+      studentScore.국어?.백분위 || 0,
+      studentScore.수학?.백분위 || 0,
+      englishData[studentScore.영어등급 - 1] || 0,  // 영어 점수 계산
+      Math.max(studentScore.탐구1?.백분위 || 0, studentScore.탐구2?.백분위 || 0)  // 탐구1, 탐구2 중 큰 값 선택
+    ];
+  
+    후보.sort((a, b) => b - a); // 높은 점수 2개 선택
+  
+    // 한국사 점수 계산
+    const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;
+  
+    // 합산 점수 계산
+    const 합산 = 후보[0] + 후보[1];
+    const 수능점수 = 합산 * (schoolInfo.수능비율 / 100);
+  
+    console.log('📚 [휴먼스포츠학부]', { 후보, 합산, 수능점수, 한국사 });
+  
+    return 수능점수 + 한국사;
+  }
+  
 
 module.exports = { calculateSpecialSchool };
