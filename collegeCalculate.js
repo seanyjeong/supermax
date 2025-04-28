@@ -4,15 +4,20 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('./college');
 const calculator = require('./collegeCalculator');
+const { calculateSpecialSchool } = require('./specialSchools'); //특수학교계산
 
 router.post('/calculate', async (req, res) => {
-    const { 대학학과ID, studentScore } = req.body;
-  
-    if (!대학학과ID || !studentScore) {
-      return res.status(400).json({ message: '대학학과ID, studentScore는 필수입니다.' });
+  const { 대학학과ID, studentScore } = req.body;
+  if (!대학학과ID || !studentScore) {
+    return res.status(400).json({ message: '대학학과ID, studentScore는 필수입니다.' });
+  }
+
+  try {
+    const specialSchoolIDs = [47, 48, 49];
+    if (specialSchoolIDs.includes(대학학과ID)) {
+      const finalScore = await calculateSpecialSchool(대학학과ID, studentScore);
+      return res.json({ success: true, totalScore: finalScore });
     }
-  
-    try {
       // 1. 학교 비율 불러오기
   const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율, 기타비율,총점기준 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
   
