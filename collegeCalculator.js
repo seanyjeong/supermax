@@ -1,3 +1,4 @@
+
 // collegeCalculator.js
 
 function 과목구분(과목명) {
@@ -71,7 +72,13 @@ function applyKoreanHistoryScore(studentData, koreanHistoryRule, koreanHistorySc
 
   const 한국사반영 = koreanHistoryRule.한국사반영;
 
+  // 🔥 1. 필수응시 먼저 체크
   if (한국사반영 === '필수응시') return { 점수: 0, 처리방식: '필수응시' };
+
+  // 🔥 2. 여기 바로 추가 (믹스 처리)
+  if (한국사반영 === '믹스') return { 점수: 0, 처리방식: '믹스' };
+
+  // 🔥 3. 가산점 체크
   if (한국사반영 === '가산점') {
     if (koreanHistoryRule.한국사가산처리 === '수능환산') {
       return { 점수: 한국사점수, 처리방식: '수능환산' };
@@ -79,13 +86,17 @@ function applyKoreanHistoryScore(studentData, koreanHistoryRule, koreanHistorySc
       return { 점수: 한국사점수, 처리방식: '직접더함' };
     }
   }
+
+  // 🔥 4. 퍼센트 (30%, 50%) 반영은 이 밑에
   if (!isNaN(parseInt(한국사반영))) {
     const 비율 = parseInt(한국사반영);
     return { 점수: 한국사점수 * (비율 / 100), 처리방식: `${비율}퍼센트` };
   }
 
+  // 모르면 unknown 처리
   return { 점수: 0, 처리방식: 'unknown' };
 }
+
 
 // ✨ 탐구 점수 처리
 function processScienceScore(t1, t2, 탐구과목반영수) {
