@@ -116,8 +116,8 @@ async function calculate관동대학교일반({ 국어백, 수학백, 탐구1백
   const 탐구평균 = (탐구1백+탐구2백)/2;
   const 후보 = [국어백, 수학백, 탐구평균];
   후보.sort((a, b) => b - a);
-  const 반영점수 = 후보[0]*0.4 + 후보[1] *0.4 + 영어 ;
-  const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100);
+  const 반영점수 = 후보[0]*4 + 후보[1] *4  ;
+  const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100) + 영어;
 
   console.log('학생점수 완료:', { 국어백, 수학백, 탐구1백, 탐구2백,영어,한국사 });
   console.log('🏫 SpecialSchool 계산 완료:', { 반영점수,수능점수 });
