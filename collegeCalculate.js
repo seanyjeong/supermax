@@ -13,7 +13,7 @@ router.post('/calculate', async (req, res) => {
   }
 
   try {
-    const specialSchoolIDs = [1];
+    const specialSchoolIDs = [1,30,31];
     if (specialSchoolIDs.includes(대학학과ID)) {
       const finalScore = await calculateSpecialSchool(대학학과ID, studentScore);
       return res.json({ success: true, totalScore: finalScore });
