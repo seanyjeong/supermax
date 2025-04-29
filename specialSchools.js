@@ -31,7 +31,9 @@ const specialSchoolCalculators = {
   31: calculate강원대휴먼스포츠학부, // 강원대 휴먼스포츠학부
   36: calculate공주대학교,         // 공주대 생체 농어촌
   37: calculate공주대학교,         // 공주대 생체 일반
-  38: calculate공주대학교          // 공주대 체육교육과
+  38: calculate공주대학교,          // 공주대 체육교육과
+  28: calculate관동대학교일반,
+  29: calculate관동대학교일반
 };
 
 // ✨ 메인 SpecialSchool 계산기
@@ -108,5 +110,15 @@ async function calculate공주대학교({ 국어백, 수학백, 탐구1백, 탐�
   const 수능점수 = (반영점수 * 8.5 + 150) * (schoolInfo.수능비율 / 100);
   return 수능점수 + 한국사;
 }
+
+//관동대학교(일반)
+async function calculate관동대학교일반({ 국어백, 수학백, 탐구1백, 탐구2백, 영어, 한국사, schoolInfo }) {
+  const 탐구평균 = (탐구1백+탐구2백)/2;
+  const 후보 = [국어백, 수학백, 탐구평균];
+  후보.sort((a, b) => b - a);
+  const 반영점수 = 후보[0]*0.4 + 후보[1] *0.4 + 영어 ;
+  const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100);
+  return 수능점수 + 한국사;
+}   
 
 module.exports = { calculateSpecialSchool };
