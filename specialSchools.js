@@ -24,9 +24,9 @@ async function getKoreanHistoryData(대학학과ID) {
 
 // ✨ 학교별 특수 계산 함수 모음
 const specialSchoolCalculators = {
-  47: calculate강원대체육교육과,   // 강원대 체육교육과
+  30: calculate강원대체육교육과,   // 강원대 체육교육과
   1: calculate강원대스포츠과학과, // 강원대 스포츠과학과
-  49: calculate강원대휴먼스포츠학부 // 강원대 휴먼스포츠학부
+  31: calculate강원대휴먼스포츠학부 // 강원대 휴먼스포츠학부
 };
 
 // ✨ 메인 SpecialSchool 계산기
