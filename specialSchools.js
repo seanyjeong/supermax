@@ -122,8 +122,8 @@ async function calculate강원대휴먼스포츠학부(studentScore, schoolInfo,
 
   후보.sort((a, b) => b - a); // 높은 점수 2개 선택
 
-  // 각 과목에 대해 반영 비율 계산
-  const 반영점수 = 후보[0] * (schoolInfo.수능비율 / 100) + 후보[1] * ((100 - schoolInfo.수능비율) / 100);
+  // 두 개의 높은 점수는 60% 반영, 나머지는 60% 반영
+  const 반영점수 = 후보[0] * 0.6 + 후보[1] * 0.6;
 
   // 한국사 점수 계산
   const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;
@@ -135,6 +135,7 @@ async function calculate강원대휴먼스포츠학부(studentScore, schoolInfo,
 
   return 수능점수 + 한국사;  // 최종 점수
 }
+
 
 
 
