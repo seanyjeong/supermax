@@ -146,7 +146,7 @@ async function calculate공주대학교(studentScore, schoolInfo, englishData, k
   ];
  후보.sort((a, b) => b - a); // 높은 점수 2개 선택
 // 세개.
-  const 반영점수 = 후보[0]  + 후보[1] + 후보[2];
+  const 반영점수 = (후보[0]  + 후보[1] + 후보[2])/3;
 // 한국사 점수 계산
   const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;
  // 최종 점수 계산: 반영된 점수 + 한국사 점수
