@@ -62,7 +62,7 @@ async function calculateSpecialSchool(대학학과ID, studentScore) {
 //
 // 🔥 강원대 전용 계산 함수들
 //
-
+//국,수영택1 150으로 
 async function calculate강원대체육교육과(studentScore, schoolInfo, englishData, koreanHistoryData) {
   const 국어 = studentScore.국어?.백분위 || 0;
   const 수학 = studentScore.수학?.백분위 || 0;
@@ -72,13 +72,13 @@ async function calculate강원대체육교육과(studentScore, schoolInfo, engli
   const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;  // 한국사 점수 계산
 
   const 합산 = 국어 + 높은수영;
-  const 수능점수 = 합산 * (schoolInfo.수능비율 *2 / 100);
+  const 수능점수 = 합산 * 1.5;
 
   console.log('📚 [체육교육과]', { 국어, 수학, 영어, 높은수영, 합산, 수능점수, 한국사 });
 
   return 수능점수 + 한국사;
 }
-
+//수영택1국탐(2) 60비율
 async function calculate강원대스포츠과학과(studentScore, schoolInfo, englishData, koreanHistoryData) {
   const 국어 = studentScore.국어?.백분위 || 0;
   const 수학 = studentScore.수학?.백분위 || 0;
@@ -93,14 +93,14 @@ async function calculate강원대스포츠과학과(studentScore, schoolInfo, en
   const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;  // 한국사 점수 계산
 
   const 합산 = 국어 + 탐구평균 + 높은수영;
-  const 수능점수 = 합산 * (schoolInfo.수능비율 / 100);
+  const 수능점수 = 합산 * 0.6;
 
   console.log('📚 [스포츠과학과]', { 국어, 탐구1, 탐구2, 탐구평균, 수학, 영어, 높은수영, 합산, 수능점수, 한국사 });
 
   return 수능점수 + 한국사;  // 최종 점수
 }
 
-
+//국수영탐(2) 비율60씩 두개 합산후 한국사.
 async function calculate강원대휴먼스포츠학부(studentScore, schoolInfo, englishData, koreanHistoryData) {
   // 국어, 수학, 영어, 탐구 점수 계산
   const 국어 = studentScore.국어?.백분위 || 0;
