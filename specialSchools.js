@@ -80,7 +80,7 @@ const 영어 = englishData[studentScore.영어등급 - 1] || 0;
 // 강원대 전용 계산 함수들
 //
 //국,수영택1 150으로 
-async function calculate강원대체육교육과(studentScore, schoolInfo, englishData, koreanHistoryData) {
+async function calculate강원대체육교육과() {
 
   const 영어 = englishData[studentScore.영어등급 - 1] || 0;  // 영어 점수 계산
   const 높은수영 = Math.max(수학백, 영어);
@@ -89,7 +89,7 @@ async function calculate강원대체육교육과(studentScore, schoolInfo, engli
   return 수능점수 + 한국사;
 }
 //수영택1국탐(2) 60비율
-async function calculate강원대스포츠과학과(studentScore, schoolInfo, englishData, koreanHistoryData) {
+async function calculate강원대스포츠과학과() {
   const 높은수영 = Math.max(수학백, 영어);  // 수학과 영어 중 더 높은 값
   const 탐구평균 = (탐구1백 + 탐구2백) / 2; // 두 과목 점수 평균
   const 합산 = 국어백 + 탐구평균 + 높은수영;
@@ -97,7 +97,7 @@ async function calculate강원대스포츠과학과(studentScore, schoolInfo, en
   return 수능점수 + 한국사;  // 최종 점수
 }
 //국수영탐(2) 비율60씩 두개 합산후 한국사.
-async function calculate강원대휴먼스포츠학부(studentScore, schoolInfo, englishData, koreanHistoryData) {
+async function calculate강원대휴먼스포츠학부() {
   // 국어, 수학, 영어, 탐구 점수 계산
   const 탐구평균 = (탐구2백 + 탐구2백) / 2;
 // 국수영탐 중 잘 본 2개 과목을 선택
@@ -116,7 +116,7 @@ async function calculate강원대휴먼스포츠학부(studentScore, schoolInfo,
 return 수능점수 + 한국사;  // 최종 점수
 }
 //국수영탐(2) 비율60씩 두개 합산후 한국사.
-async function calculate공주대학교(studentScore, schoolInfo, englishData, koreanHistoryData) {
+async function calculate공주대학교() {
   // 국어, 수학, 영어, 탐구 점수 계산
   const 탐구MAX = Math.max(탐구1백,탐구2백);
 // 국수영탐 중 잘 본 2개 과목을 선택
