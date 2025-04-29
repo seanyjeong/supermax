@@ -72,7 +72,7 @@ async function calculate강원대체육교육과(studentScore, schoolInfo, engli
   const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0;  // 한국사 점수 계산
 
   const 합산 = 국어 + 높은수영;
-  const 수능점수 = 합산 * (schoolInfo.수능비율 / 100);
+  const 수능점수 = 합산 * (schoolInfo.수능비율 *2 / 100);
 
   console.log('📚 [체육교육과]', { 국어, 수학, 영어, 높은수영, 합산, 수능점수, 한국사 });
 
