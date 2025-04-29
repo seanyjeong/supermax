@@ -48,20 +48,7 @@ async function calculateSpecialSchool(대학학과ID, studentScore) {
 
     // 한국사 점수 배열 DB에서 가져오기
     const koreanHistoryData = await getKoreanHistoryData(대학학과ID);
-
-    // 계산 호출
-    const totalScore = await specialSchoolCalculators[대학학과ID](studentScore, schoolInfo, englishData, koreanHistoryData);
-
-    console.log('🏫 SpecialSchool 계산 완료:', { 대학학과ID, totalScore });
-
-    return totalScore;
-
-  } catch (err) {
-    console.error('❌ specialSchool 계산 실패:', err);
-    throw err;
-  }
-}
-//학생점수 끌어오기
+    //학생점수 끌어오기
 const 국어백 = studentScore.국어?.백분위 || 0;
 const 국어표 = studentScore.국어?.표준점수 || 0;
 const 국어등 = studentScore.국어?.등급 || 0;
@@ -76,6 +63,20 @@ const 탐구1등 = studentScore.탐구1?.등급 || 0;
 const 탐구2등 = studentScore.탐구2?.등급 || 0;
 const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0; 
 const 영어 = englishData[studentScore.영어등급 - 1] || 0; 
+
+    // 계산 호출
+    const totalScore = await specialSchoolCalculators[대학학과ID](studentScore, schoolInfo, englishData, koreanHistoryData);
+
+    console.log('🏫 SpecialSchool 계산 완료:', { 대학학과ID, totalScore });
+
+    return totalScore;
+
+  } catch (err) {
+    console.error('❌ specialSchool 계산 실패:', err);
+    throw err;
+  }
+}
+
 // 강원대 전용 계산 함수들
 //
 //국,수영택1 150으로 
