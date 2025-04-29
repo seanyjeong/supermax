@@ -33,7 +33,9 @@ const specialSchoolCalculators = {
   37: calculate공주대학교,         // 공주대 생체 일반
   38: calculate공주대학교,          // 공주대 체육교육과
   28: calculate관동대학교일반,
-  29: calculate관동대학교일반
+  29: calculate관동대학교일반,
+  65: calculate관동대학교일반
+
 };
 
 // ✨ 메인 SpecialSchool 계산기
