@@ -34,7 +34,9 @@ const specialSchoolCalculators = {
   38: calculate공주대학교,          // 공주대 체육교육과
   28: calculate관동대학교일반,
   29: calculate관동대학교일반,
-  65: calculate관동대학교일반
+  65: calculate관동대학교일반,
+   2:calculate계명대학교,
+   3:calculate계명대학교
 
 };
 
@@ -124,9 +126,19 @@ async function calculate관동대학교일반({ 국어백, 수학백, 탐구1백
   console.log('학생점수 완료:', { 국어백, 수학백, 탐구1백, 탐구2백,영어,한국사 });
   console.log('🏫 SpecialSchool 계산 완료:', { 반영점수,수능점수 });
   return 수능점수 + 한국사;
+}
 
+//계명대학교(통합)
+async function calculate계명대학교({국어백,수학백,탐구1백,탐구2백,영어,한국사,schoolInfo}) {
+  const 탐구평균 =(탐구1백+탐구2백)/2;
+  const 후보 = [국어백, 수학백];
+  후보.sort((a,b) => b - a);
+  const 반영점수 = 후보[0]*8 + 영어*6 + 탐구평균*6;
+  const 수능점수 = 반영점수 * (schoolInfo.수능비율 /100);
+  return 수능점수 + 한국사
   
-}   
+}
+
 
 
 
