@@ -1,8 +1,239 @@
-// 📂 specialSchools.js
+// 📂 collegeCalculate.js
 
+const express = require('express');
+const router = express.Router();
 const { db } = require('./college');
+const calculator = require('./collegeCalculator');
+const { calculateSpecialSchool } = require('./specialSchools'); //특수학교계산
 
-// ✨ 공통 DB 쿼리 함수
+router.post('/calculate', async (req, res) => {
+  const { 대학학과ID, studentScore } = req.body;
+  if (!대학학과ID || !studentScore) {
+    return res.status(400).json({ message: '대학학과ID, studentScore는 필수입니다.' });
+  }
+
+  try {
+    const specialSchoolIDs = [1,2,3,30,31,36,37,38,29,28,65];  //특수계산 학교들 id 다 써야함
+    if (specialSchoolIDs.includes(대학학과ID)) {
+      const finalScore = await calculateSpecialSchool(대학학과ID, studentScore);
+      return res.json({ success: true, totalScore: finalScore });
+    }
+      // 1. 학교 비율 불러오기
+  const [school] = await dbQuery('SELECT 수능비율, 내신비율, 실기비율, 기타비율,총점기준 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
+
+      if (!school) return res.status(404).json({ message: '학교 정보 없음' });
+      // ✨ [추가] 표준점수 최고점 불러오기
+  // 최고점 데이터 가져오기
+  const 최고점데이터 = await dbQuery('SELECT * FROM 표준점수최고점 LIMIT 1');
+
+  const 표준점수최고점데이터 = {};
+  if (최고점데이터.length > 0) {
+    const row = 최고점데이터[0];
+    for (const key in row) {
+      if (key !== 'created_at') {  // created_at 컬럼은 제외
+        표준점수최고점데이터[key.trim()] = row[key];
+      }
+    }
+  }
+
+
+      // 2. 반영비율 규칙 불러오기
+      const [rule] = await dbQuery('SELECT * FROM 반영비율규칙 WHERE 대학학과ID = ?', [대학학과ID]);
+      if (!rule) return res.status(404).json({ message: '반영비율 규칙 없음' });
+
+      // 3. 탐구/한국사 규칙 불러오기
+      const [khistoryRule] = await dbQuery('SELECT * FROM 탐구한국사 WHERE 대학학과ID = ?', [대학학과ID]);
+      if (!khistoryRule) return res.status(404).json({ message: '탐구한국사 규칙 없음' });
+
+      // 4. 한국사 등급별 점수
+      const [khistoryScore] = await dbQuery('SELECT 등급, 점수 FROM 한국사등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
+      const koreanHistoryScoreRule = khistoryScore ? JSON.parse(khistoryScore.점수) : [];
+
+      // 5. 영어 등급별 점수
+      const [englishScore] = await dbQuery('SELECT 등급, 점수 FROM 영어등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
+      const englishScoreRule = englishScore ? JSON.parse(englishScore.점수) : [];
+      // 5번 영어등급별 점수까지 다 불러온 후
+  // ✨ 탐구 백자표 변환점수 미리 추가
+  if (rule.탐구반영지표 === '백자표') {
+    const 탐구1구분 = calculator.과목구분(studentScore.subject1Name);
+    const 탐구2구분 = calculator.과목구분(studentScore.subject2Name);
+
+    studentScore.탐구1.변환점수 = await get백자표변환점수(대학학과ID, 탐구1구분, studentScore.탐구1.백분위);
+    studentScore.탐구2.변환점수 = await get백자표변환점수(대학학과ID, 탐구2구분, studentScore.탐구2.백분위);
+    console.log(`🧪 탐구1 변환점수 (${studentScore.subject1Name} - ${탐구1구분}):`, studentScore.탐구1.변환점수);
+    console.log(`🧪 탐구2 변환점수 (${studentScore.subject2Name} - ${탐구2구분}):`, studentScore.탐구2.변환점수);
+  }
+
+
+  // 6. 점수셋 만들기
+
+  const koreanHistoryResult = calculator.applyKoreanHistoryScore(studentScore, khistoryRule, koreanHistoryScoreRule);
+
+  const is기본 = rule.표준점수반영기준 === '기본';
+
+  const normalize = (score) => is기본 ? score : score * 100;
+
+  const 점수셋 = {
+    국어: normalize(calculator.normalizeScore(
+      calculator.getSubjectScore(studentScore.국어, rule.국수영반영지표),
+      rule.국수영반영지표,
+      rule.표준점수반영기준,
+      studentScore.국어과목명,
+      표준점수최고점데이터
+    )),
+    수학: normalize(calculator.normalizeScore(
+      calculator.getSubjectScore(studentScore.수학, rule.국수영반영지표),
+      rule.국수영반영지표,
+      rule.표준점수반영기준,
+      studentScore.수학과목명,
+      표준점수최고점데이터
+    )),
+    영어: normalize(calculator.normalizeEnglishScore(
+      studentScore.영어등급,
+      englishScoreRule,
+      rule.영어표준점수만점
+    )),
+    탐구: (() => {
+      if (rule.탐구반영지표 === '백자표') {
+        const 탐구1최고점 = studentScore.탐구1_백자표변환표?.[100] ?? 70;
+        const 탐구2최고점 = studentScore.탐구2_백자표변환표?.[100] ?? 70;
+
+        let t1 = 0;
+        let t2 = 0;
+
+        if (rule.표준점수반영기준 === '최고점') {
+          t1 = (studentScore.탐구1.변환점수 || 0) / 탐구1최고점;
+          t2 = (studentScore.탐구2.변환점수 || 0) / 탐구2최고점;
+        } else if (rule.표준점수반영기준 === '200') {
+          t1 = (studentScore.탐구1.변환점수 || 0) / 100;
+          t2 = (studentScore.탐구2.변환점수 || 0) / 100;
+        } else {
+          t1 = (studentScore.탐구1.변환점수 || 0);
+          t2 = (studentScore.탐구2.변환점수 || 0);
+        }
+
+        if (khistoryRule.탐구과목반영수 === 1) {
+          // 1개 반영이면 큰 값만
+          return Math.max(t1, t2) * 100;
+        } else {
+          // 2개 반영이면 평균
+          return ((t1 + t2) / 2) * 100;
+        }
+      } else {
+        return calculator.processScienceScore(
+          calculator.getSubjectScore(studentScore.탐구1, rule.탐구반영지표),
+          calculator.getSubjectScore(studentScore.탐구2, rule.탐구반영지표),
+          khistoryRule.탐구과목반영수
+        );
+      }
+    })(),
+
+    한국사: koreanHistoryResult?.점수 || 0 
+  };
+
+
+
+
+
+      // 7. 계산
+      const 반영과목리스트 = JSON.parse(rule.과목 || '[]');
+      const 반영비율 = JSON.parse(rule.반영비율 || '[]');
+
+      const 그룹정보 = [
+        {
+          과목리스트: JSON.parse(rule.그룹1_과목 || '[]'),
+          선택개수: rule.그룹1_선택개수 || 0,
+          반영비율: Array.isArray(rule.그룹1_반영비율) ? rule.그룹1_반영비율 : JSON.parse(rule.그룹1_반영비율 || '0')
+        },
+        {
+          과목리스트: JSON.parse(rule.그룹2_과목 || '[]'),
+          선택개수: rule.그룹2_선택개수 || 0,
+          반영비율: Array.isArray(rule.그룹2_반영비율) ? rule.그룹2_반영비율 : JSON.parse(rule.그룹2_반영비율 || '0')
+        },
+        {
+          과목리스트: JSON.parse(rule.그룹3_과목 || '[]'),
+          선택개수: rule.그룹3_선택개수 || 0,
+          반영비율: Array.isArray(rule.그룹3_반영비율) ? rule.그룹3_반영비율 : JSON.parse(rule.그룹3_반영비율 || '0')
+        }
+      ];
+
+
+      // ✨ 수능 점수 계산
+  const 수능환산점수 = calculator.calculateCollegeScore(
+    studentScore,
+    { ...school, 국수영반영지표: rule.국수영반영지표, 탐구반영지표: rule.탐구반영지표 },
+    점수셋,
+    반영과목리스트,
+    반영비율,
+    rule.반영규칙,
+    rule.반영과목수,
+    그룹정보,
+    school.총점기준
+  );
+
+
+  // 수능비율 가져오기
+  const 수능비율 = school.수능비율 || 0;
+
+  // 최종 점수
+  let finalScore = 0;
+
+  // 한국사 처리 방식 분기
+  if (koreanHistoryResult) {
+    if (koreanHistoryResult.처리방식 === '수능환산') {
+      finalScore = 수능환산점수 + (koreanHistoryResult.점수 * (school.수능비율 / 100));
+    } else if (koreanHistoryResult.처리방식 === '직접더함') {
+      finalScore = 수능환산점수 + koreanHistoryResult.점수;
+    } else if (koreanHistoryResult.처리방식 === '믹스') {
+      finalScore = 수능환산점수; // 믹스는 추가 더하기 없음
+    } else {
+      finalScore = 수능환산점수;
+    }
+  } else {
+    finalScore = 수능환산점수;
+  }
+
+
+
+  // 최종 결과 반환
+  res.json({ success: true, totalScore: finalScore });
+
+
+
+          console.log('🏫 school:', school);
+  console.log('📏 rule:', rule);
+  console.log('🧮 점수셋:', 점수셋);
+  console.log('📚 반영과목리스트:', 반영과목리스트);
+  console.log('📊 반영비율:', 반영비율);
+  console.log('🔥 최종합산점수:', finalScore);
+      console.log('🔥 수능환산점수:', 수능환산점수);
+  console.log('🔥 수능비율:', 수능비율);
+  console.log('🏛 한국사 처리결과:', koreanHistoryResult);
+
+
+    } catch (err) {
+      console.error('❌ 계산 에러:', err);
+      res.status(500).json({ message: '계산 실패' });
+    }
+  });
+
+  // ✨ 탐구 백자표 변환점수 가져오는 함수
+  async function get백자표변환점수(대학학과ID, 구분, 백분위) {
+    const sql = `
+      SELECT 변환점수 
+      FROM 탐구백자표변환점수 
+      WHERE 대학학과ID = ? AND 구분 = ? AND 백분위 = ?
+    `;
+    try {
+      const [result] = await dbQuery(sql, [대학학과ID, 구분, 백분위]);
+      return result ? parseFloat(result.변환점수) : 0;
+    } catch (err) {
+      console.error('❌ 백자표 변환점수 조회 실패:', err);
+      return 0;
+    }
+  }
+
+// ✨ DB query promise 버전
 function dbQuery(sql, params) {
   return new Promise((resolve, reject) => {
     db.query(sql, params, (err, results) => {
@@ -12,134 +243,5 @@ function dbQuery(sql, params) {
   });
 }
 
-// ✨ 영어 점수 배열 가져오기
-async function getEnglishData(대학학과ID) {
-  const [englishInfo] = await dbQuery('SELECT 등급, 점수 FROM 영어등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
-  return englishInfo ? JSON.parse(englishInfo.점수) : [];
-}
 
-// ✨ 한국사 점수 배열 가져오기
-async function getKoreanHistoryData(대학학과ID) {
-  const [koreanHistoryInfo] = await dbQuery('SELECT 등급, 점수 FROM 한국사등급별점수 WHERE 대학학과ID = ?', [대학학과ID]);
-  return koreanHistoryInfo ? JSON.parse(koreanHistoryInfo.점수) : [];
-}
-
-// ✨ 학교별 특수 계산 함수 모음
-const specialSchoolCalculators = {
-  30: calculate강원대체육교육과,   // 강원대 체육교육과
-  1: calculate강원대스포츠과학과,  // 강원대 스포츠과학과
-  31: calculate강원대휴먼스포츠학부, // 강원대 휴먼스포츠학부
-  36: calculate공주대학교,         // 공주대 생체 농어촌
-  37: calculate공주대학교,         // 공주대 생체 일반
-  38: calculate공주대학교,          // 공주대 체육교육과
-  28: calculate관동대학교일반,
-  29: calculate관동대학교일반,
-  65: calculate관동대학교일반,
-   2:calculate계명대학교,
-   3:calculate계명대학교
-
-};
-
-// ✨ 메인 SpecialSchool 계산기
-async function calculateSpecialSchool(대학학과ID, studentScore) {
-  try {
-    if (!specialSchoolCalculators[대학학과ID]) throw new Error('❌ 이 대학은 SpecialSchools 대상이 아님');
-
-    const [schoolInfo] = await dbQuery('SELECT 수능비율 FROM 학교 WHERE 대학학과ID = ?', [대학학과ID]);
-    if (!schoolInfo) throw new Error('❌ 학교 정보 없음');
-
-    const englishData = await getEnglishData(대학학과ID);
-    const koreanHistoryData = await getKoreanHistoryData(대학학과ID);
-
-    // ✨ 학생 점수 풀어놓기
-    const 국어백 = studentScore.국어?.백분위 || 0;
-    const 국어표 = studentScore.국어?.표준점수 || 0;
-    const 국어등 = studentScore.국어?.등급 || 0;
-    const 수학백 = studentScore.수학?.백분위 || 0;
-    const 수학표 = studentScore.수학?.표준점수 || 0;
-    const 수학등 = studentScore.수학?.등 || 0;
-    const 탐구1백 = studentScore.탐구1?.백분위 || 0;
-    const 탐구2백 = studentScore.탐구2?.백분위 || 0;
-    const 탐구1표 = studentScore.탐구1?.표준점수 || 0;
-    const 탐구2표 = studentScore.탐구2?.표준점수 || 0;
-    const 탐구1등 = studentScore.탐구1?.등급 || 0;
-    const 탐구2등 = studentScore.탐구2?.등급 || 0;
-    const 한국사 = koreanHistoryData[studentScore.한국사등급 - 1] || 0; 
-    const 영어 = englishData[studentScore.영어등급 - 1] || 0; 
-
-    // ✨ 계산 함수 호출 (풀어놓은 값 넘기기)
-    const totalScore = await specialSchoolCalculators[대학학과ID]({ 국어백, 수학백, 탐구1백, 탐구2백, 영어, 한국사, schoolInfo });
-
-    console.log('🏫 SpecialSchool 계산 완료:', { 대학학과ID, totalScore });
-
-    return totalScore;
-  } catch (err) {
-    console.error('❌ specialSchool 계산 실패:', err);
-    throw err;
-  }
-}
-
-// ✨ 강원대 체육교육과
-async function calculate강원대체육교육과({ 국어백, 수학백, 영어, 한국사 }) {
-  const 높은수영 = Math.max(수학백, 영어);
-  const 합산 = 국어백 + 높은수영;
-  const 수능점수 = 합산 * 1.5;
-  return 수능점수 + 한국사;
-}
-
-// ✨ 강원대 스포츠과학과
-async function calculate강원대스포츠과학과({ 국어백, 수학백, 탐구1백, 탐구2백, 영어, 한국사 }) {
-  const 높은수영 = Math.max(수학백, 영어);
-  const 탐구평균 = (탐구1백 + 탐구2백) / 2;
-  const 합산 = 국어백 + 높은수영 + 탐구평균;
-  const 수능점수 = 합산 * 0.6;
-  return 수능점수 + 한국사;
-}
-
-// ✨ 강원대 휴먼스포츠학부
-async function calculate강원대휴먼스포츠학부({ 국어백, 수학백, 탐구1백, 탐구2백, 영어, 한국사 }) {
-  const 탐구평균 = (탐구1백 + 탐구2백) / 2;
-  const 후보 = [국어백, 수학백, 영어, 탐구평균];
-  후보.sort((a, b) => b - a);
-  const 반영점수 = 후보[0] * 0.6 + 후보[1] * 0.6;
-  return 반영점수 + 한국사;
-}
-
-// ✨ 공주대학교 (공통)
-async function calculate공주대학교({ 국어백, 수학백, 탐구1백, 탐구2백, 영어, 한국사, schoolInfo }) {
-  const 탐구MAX = Math.max(탐구1백, 탐구2백);
-  const 후보 = [국어백, 수학백, 영어, 탐구MAX];
-  후보.sort((a, b) => b - a);
-  const 반영점수 = (후보[0] + 후보[1] + 후보[2]) / 3;
-  const 수능점수 = (반영점수 * 8.5 + 150) * (schoolInfo.수능비율 / 100);
-  return 수능점수 + 한국사;
-}
-
-//관동대학교(일반)
-async function calculate관동대학교일반({ 국어백, 수학백, 탐구1백, 탐구2백, 영어, 한국사, schoolInfo }) {
-  const 탐구평균 = (탐구1백+탐구2백)/2;
-  const 후보 = [국어백, 수학백, 탐구평균];
-  후보.sort((a, b) => b - a);
-  const 반영점수 = 후보[0]*4 + 후보[1] *4  ;
-  const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100) + 영어;
-
-  console.log('학생점수 완료:', { 국어백, 수학백, 탐구1백, 탐구2백,영어,한국사 });
-  console.log('🏫 SpecialSchool 계산 완료:', { 반영점수,수능점수 });
-  return 수능점수 + 한국사;
-}
-
-//계명대학교(통합)
-async function calculate계명대학교({국어백,수학백,탐구1백,탐구2백,영어,한국사,schoolInfo}) {
-  const 탐구평균 =(탐구1백+탐구2백)/2;
-  const 후보 = [국어백, 수학백];
-  후보.sort((a,b) => b - a);
-  const 반영점수 = 후보[0]*0.4 + 영어*0.3 + 탐구평균*0.3;
-  const 수능점수 = 반영점수 * (schoolInfo.수능비율 /100);
-  return 수능점수 + 한국사
-  
-}
-
-
-
-
-module.exports = { calculateSpecialSchool };
+module.exports = router;
