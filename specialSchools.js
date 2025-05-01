@@ -38,8 +38,9 @@ const specialSchoolCalculators = {
    2:calculate계명대학교,
    3:calculate계명대학교,
    42:calcualte대가대,
-   52:calculate세명대
-
+   52:calculate세명대,
+  35 :calcualte경남대,
+  55 :calcualte영남대
 };
 
 // ✨ 메인 SpecialSchool 계산기
@@ -157,6 +158,27 @@ async function calculate세명대({국어백,수학백,탐구1백,탐구2백,sch
   const 반영점수 = 후보[0]*5 + 후보[1]*5
   const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100)  ;
   return 수능점수
+  
+}
+
+//경남대학교
+async function calcualte경남대({국어백,수학백,탐구1백,탐구2백,영어}) {
+  const 탐구MAX = Math.max(탐구1백, 탐구2백); 
+  const 반영점수 =국어백+수학백+영어+탐구MAX;
+  const 수능점수 = 480 + (600-480) * 반영점수 /400;
+  return 수능점수
+}
+
+
+//영남대학교
+async function calcualte영남대({국어백,수학백,영어,탐구1백,탐구2백,한국사,schoolInfo}) {
+  const 탐구평균 = (탐구1백 + 탐구2백) / 2;
+  const 후보 =[국어백,수학백,영어,탐구평균];
+  후보.sort((a,b) => b - a);
+  const 반영점수 = 후보[0] + 후보[1] + 후보[2];
+  const 수능점수 = 반영점수 / 3 * 4.8;
+
+return 수능점수 + 한국사;
   
 }
 
