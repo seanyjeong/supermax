@@ -37,7 +37,8 @@ const specialSchoolCalculators = {
   65: calculate관동대학교일반,
    2:calculate계명대학교,
    3:calculate계명대학교,
-   42:calcualte대가대
+   42:calcualte대가대,
+   52:calculate세명대
 
 };
 
@@ -144,8 +145,16 @@ async function calculate계명대학교({국어백,수학백,탐구1백,탐구2�
 //대구가톨릭대학교
 async function calcualte대가대({국어백,수학백,탐구1백,탐구2백,영어,한국사,schoolInfo}) {
   const 탐구MAX = Math.max(탐구1백, 탐구2백); 
-  const 반영점수 = 국어백*0.3+수학백*0.3+영어*0.1+(탐구MAX+한국사)*0.3;
+  const 반영점수 = 국어백*0.3+수학백*0.3+영어*0.1+(탐구MAx+한국사)*0.3;
   const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 10);
+  return 수능점수
+  
+}
+//세명대학교 
+async function calculate세명대({국어백,수학백,탐구1백,탐구2백,영어,schoolInfo}) {
+  const 후보 = [국어백,수학백,영어,탐구1백,탐구2백];
+  const 반영점수 = 후보[0]*0.5+후보[1]*0.5
+  const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100)  ;
   return 수능점수
   
 }
