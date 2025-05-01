@@ -105,7 +105,7 @@
     input[type="text"], 
     input[type="number"], 
     select {
-      width: 90%0%;
+      width: 90%;
       padding: 12px;
       border: 1px solid #ddd;
       border-radius: 6px;
@@ -476,7 +476,6 @@ function fillZero() {
       input.value = 0;
     }
   });
-  document.getElementById('detailInputForm').requestSubmit();
 }
 
 // 반영규칙 설정 함수 (mix 선택시 관련 필드 0으로 설정)
@@ -485,7 +484,7 @@ function setRule(rule) {
   반영규칙Input.value = rule;
   
   if (rule === 'mix') {
-
+    document.getElementById('탐구과목반영수').value = '0';
     document.getElementById('반영과목수').value = '0';
     document.getElementById('과목').value = '[]';
     document.getElementById('반영비율').value = '[]';
@@ -496,17 +495,26 @@ function setRule(rule) {
 function createRatioButtons(containerId, targetInputId) {
   const container = document.getElementById(containerId);
   container.innerHTML = '';
-  
-  // 10부터 90까지 10단위로 버튼 생성
-  for (let i = 10; i <= 90; i += 10) {
+
+  // 5부터 90까지 5단위로 버튼 생성
+  for (let i = 5; i <= 90; i += 5) {
     const btn = document.createElement('button');
-    btn.type = 'button'; // ✅ 이 줄 추가
+    btn.type = 'button';
     btn.className = 'ratio-btn';
     btn.textContent = i;
     btn.onclick = () => addRatio(targetInputId, i);
     container.appendChild(btn);
   }
+
+  // ✨ 33.333 버튼 추가
+  const btn333 = document.createElement('button');
+  btn333.type = 'button';
+  btn333.className = 'ratio-btn';
+  btn333.textContent = '33.333';
+  btn333.onclick = () => addRatio(targetInputId, 33.333);
+  container.appendChild(btn333);
 }
+
 
 // 비율 추가 함수 (JSON 배열 형식으로 처리)
 function addRatio(inputId, ratio) {
