@@ -153,6 +153,7 @@ async function calcualte대가대({국어백,수학백,탐구1백,탐구2백,영
 //세명대학교
 async function calculate세명대({국어백,수학백,탐구1백,탐구2백,schoolInfo}) {
   const 후보 = [국어백,수학백,탐구1백,탐구2백];
+  후보.sort((a,b) => b - a);
   const 반영점수 = 후보[0]*5 + 후보[1]*5
   const 수능점수 = 반영점수 * (schoolInfo.수능비율 / 100)  ;
   return 수능점수
