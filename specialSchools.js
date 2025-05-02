@@ -27,21 +27,20 @@ async function getKoreanHistoryData(대학학과ID) {
 // ✨ 학교별 특수 계산 함수 모음
 const specialSchoolCalculators = {
   30: calculate강원대체육교육과,   // 강원대 체육교육과
-  1: calculate강원대스포츠과학과,  // 강원대 스포츠과학과
-  31: calculate강원대휴먼스포츠학부, // 강원대 휴먼스포츠학부
-  36: calculate공주대학교,         // 공주대 생체 농어촌
-  37: calculate공주대학교,         // 공주대 생체 일반
-  38: calculate공주대학교,          // 공주대 체육교육과
-  28: calculate관동대학교일반,
-  29: calculate관동대학교일반,
-  65: calculate관동대학교일반,
-   2:calculate계명대학교,
-   3:calculate계명대학교,
-   42:calcualte대가대,
-   52:calculate세명대,
-  35 :calcualte경남대,
-  55 :calcualte영남대,
-  22 :calcualte교원대
+  81: calculate강원대스포츠과학과,  // 강원대 스포츠과학과
+  82: calculate강원대휴먼스포츠학부, // 강원대 휴먼스포츠학부
+  9: calculate공주대학교,         // 공주대 생체 농어촌
+   10: calculate공주대학교,          // 공주대 체육교육과
+  79: calculate관동대학교일반,
+  80: calculate관동대학교일반,
+  153: calculate관동대학교일반,
+   161:calculate계명대학교,
+   164:calculate계명대학교,
+   103:calcualte대가대,
+   123:calculate세명대,
+  88 :calcualte경남대,
+  128 :calcualte영남대,
+  48 :calcualte교원대
 };
 
 // ✨ 메인 SpecialSchool 계산기
