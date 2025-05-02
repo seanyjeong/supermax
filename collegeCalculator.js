@@ -57,6 +57,8 @@ function normalizeEnglishScore(영어등급, englishScoreRule, 영어표준점�
   }
   if (String(영어표준점수만점) === '200') {
     return rawScore / 200;
+    console.log('✅ normalizeEnglishScore 호출됨!');
+
   }
   if (String(영어표준점수만점) === '기본') {
     return rawScore;
