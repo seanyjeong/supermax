@@ -88,11 +88,15 @@ router.post('/calculate', async (req, res) => {
       studentScore.수학과목명,
       표준점수최고점데이터
     )),
-    영어: normalize(calculator.normalizeEnglishScore(
-      studentScore.영어등급,
-      englishScoreRule,
-      rule.영어표준점수만점
-    )),
+영어: (() => {
+  const raw = calculator.normalizeEnglishScore(
+    studentScore.영어등급,
+    englishScoreRule,
+    rule.영어표준점수만점
+  );
+  return is기본 ? raw : raw * 100;
+})(),
+
     탐구: (() => {
       if (rule.탐구반영지표 === '백자표') {
         const 탐구1최고점 = studentScore.탐구1_백자표변환표?.[100] ?? 70;
