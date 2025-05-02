@@ -194,7 +194,7 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
 
   return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
 }
-
+//mix 방식임//
 function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
   let total = 0;
   const usedSubjects = new Set();
@@ -203,40 +203,56 @@ function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
     const { 과목리스트, 선택개수, 반영비율 } = 그룹;
     if (!과목리스트 || 과목리스트.length === 0) continue;
 
-    const availableScores = 과목리스트
-      .filter(subject => !usedSubjects.has(subject))
-      .map(subject => ({
-        subject,
-        score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
-      }))
-      .filter(({ score }) => score >= 0);
+    const scores = 과목리스트.map(subject => ({
+      subject,
+      score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
+    })).filter(({ score }) => score >= 0);
 
-    if (availableScores.length === 0) continue;
+    if (scores.length === 0) continue;
 
-    availableScores.sort((a, b) => b.score - a.score);
+    let selected = [];
 
-    const selected = availableScores.slice(0, 선택개수);
+    const is정확히일치 = (
+      scores.length === 선택개수 &&
+      Array.isArray(반영비율) &&
+      반영비율.length === 선택개수
+    );
 
-    console.log('📋 [Mix] 그룹 대상:', availableScores);
-    console.log('🏆 [Mix] 그룹 선택:', selected);
-
-    selected.forEach(({ subject }) => usedSubjects.add(subject));
-
-    if (Array.isArray(반영비율)) {
-      // 반영비율이 배열이면 과목마다 따로 계산
-      selected.forEach((item, idx) => {
-        const ratio = 반영비율[idx] || 0;
-        total += (item.score * (ratio / 100));
-      });
+    if (is정확히일치) {
+      // 순서대로 반영
+      selected = scores.map((item, idx) => ({
+        ...item,
+        ratio: 반영비율[idx] || 0
+      }));
     } else {
-      // 반영비율이 숫자면 평균낸 다음에 곱하기
-      const averageScore = selected.reduce((sum, val) => sum + val.score, 0) / (선택개수 || 1);
-      total += averageScore * (반영비율 / 100);
+      // 점수 높은 순으로 선택
+      scores.sort((a, b) => b.score - a.score);
+      selected = scores.slice(0, 선택개수);
+
+      if (Array.isArray(반영비율)) {
+        selected = selected.map((item, idx) => ({
+          ...item,
+          ratio: 반영비율[idx] || 0
+        }));
+      } else {
+        const 평균점수 = selected.reduce((sum, s) => sum + s.score, 0) / 선택개수;
+        total += 평균점수 * (반영비율 / 100);
+        continue; // 이 그룹 끝
+      }
     }
+
+    selected.forEach(({ subject, score, ratio }) => {
+      usedSubjects.add(subject);
+      total += score * (ratio / 100);
+    });
+
+    console.log('📋 [Mix] 그룹 대상:', scores);
+    console.log('🏆 [Mix] 그룹 선택:', selected);
   }
 
-  console.log('🔥 [Mix] 누적 Total:', total * (총점기준 / 100));
-  return total * (총점기준 / 100);
+  const 환산 = total * (총점기준 / 100);
+  console.log('🔥 [Mix] 누적 Total:', 환산);
+  return 환산;
 }
 
 
