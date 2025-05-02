@@ -40,7 +40,8 @@ const specialSchoolCalculators = {
    42:calcualte대가대,
    52:calculate세명대,
   35 :calcualte경남대,
-  55 :calcualte영남대
+  55 :calcualte영남대,
+  22 :calcualte교원대
 };
 
 // ✨ 메인 SpecialSchool 계산기
@@ -179,8 +180,20 @@ async function calcualte영남대({국어백,수학백,영어,탐구1백,탐구2
   const 수능점수 = 반영점수 / 3 * 4.8;
 
 return 수능점수 + 한국사;
+}
+
+//교원대
+async function calcualte교원대({국어백,수학백,영어,탐구1백,탐구2백}){
+  const 탐구평균 = (탐구1백 + 탐구2백)/2;
+  const 반영점수 = 국어백*1.1 + 수학백 *1.1 + 영어 + 탐구평균 *0.9
+  const 수능점수 = 반영점수  * 260 /300
+  
+return 수능점수   
   
 }
+
+
+
 
 
 module.exports = { calculateSpecialSchool };
