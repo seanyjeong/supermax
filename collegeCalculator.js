@@ -51,18 +51,20 @@ function normalizeEnglishScore(영어등급, englishScoreRule, 영어표준점�
 
   const rawScore = englishScoreRule[영어등급 - 1] ?? 0;
 
-  if (영어표준점수만점 === '최고점') {
+  if (String(영어표준점수만점) === '최고점') {
     const 최고점 = englishScoreRule[0] || 100;
     return rawScore / 최고점;
   }
-  if (영어표준점수만점 === '200') {
+  if (String(영어표준점수만점) === '200') {
     return rawScore / 200;
   }
-  if (영어표준점수만점 === '기본') {
-    return rawScore; // ✨ 기본이면 변환 없이 rawScore 그대로
+  if (String(영어표준점수만점) === '기본') {
+    return rawScore;
   }
-  return rawScore / 100; // 나머지는 기존처럼 100으로 나눔
+
+  return rawScore / 100;
 }
+
 
 
 // ✨ 한국사 점수 처리
