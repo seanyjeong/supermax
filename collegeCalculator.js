@@ -156,6 +156,8 @@ function calculateDefaultTotalScore(과목점수셋, 반영과목리스트, 반�
     const subject = 반영과목리스트[i];
     const ratio = 반영비율[i] ?? 0;
     const score = 과목점수셋[subject] ?? 0;
+
+      console.log(`✅ 과목: ${subject}, 비율: ${ratio}, 점수: ${score}, 반영값: ${score * (ratio / 100)}`);
     total += score * (ratio / 100);
   }
   return total * (총점기준 / 100);  // ✨ 수정: 총점기준 반영
