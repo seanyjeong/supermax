@@ -476,6 +476,7 @@ function fillZero() {
       input.value = 0;
     }
   });
+  document.getElementById('detailInputForm').requestSubmit(); // ✅ form 직접 제출
 }
 
 // 반영규칙 설정 함수 (mix 선택시 관련 필드 0으로 설정)
@@ -484,7 +485,7 @@ function setRule(rule) {
   반영규칙Input.value = rule;
   
   if (rule === 'mix') {
-    document.getElementById('탐구과목반영수').value = '0';
+
     document.getElementById('반영과목수').value = '0';
     document.getElementById('과목').value = '[]';
     document.getElementById('반영비율').value = '[]';
