@@ -94,8 +94,11 @@ router.post('/calculate', async (req, res) => {
     englishScoreRule,
     rule.영어표준점수만점
   );
-  return is기본 ? raw : raw * 100;
+  const result = is기본 ? raw : raw * 100;
+  console.log('🔥 영어 normalize 결과:', result);
+  return result;
 })(),
+
 
     탐구: (() => {
       if (rule.탐구반영지표 === '백자표') {
