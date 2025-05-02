@@ -94,10 +94,10 @@ router.post('/calculate', async (req, res) => {
     englishScoreRule,
     rule.영어표준점수만점
   );
-  const result = is기본 ? raw : raw * 100;
-  console.log('🔥 영어 normalize 결과:', result);
-  return result;
+  console.log('🔥 영어 normalize 결과:', raw);
+  return raw;
 })(),
+
 
 
     탐구: (() => {
