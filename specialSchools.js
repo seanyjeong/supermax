@@ -26,8 +26,8 @@ async function getKoreanHistoryData(대학학과ID) {
 
 // ✨ 학교별 특수 계산 함수 모음
 const specialSchoolCalculators = {
-  30: calculate강원대체육교육과,   // 강원대 체육교육과
-  81: calculate강원대스포츠과학과,  // 강원대 스포츠과학과
+  81: calculate강원대체육교육과,   // 강원대 체육교육과
+  2: calculate강원대스포츠과학과,  // 강원대 스포츠과학과
   82: calculate강원대휴먼스포츠학부, // 강원대 휴먼스포츠학부
   9: calculate공주대학교,         // 공주대 생체 농어촌
    10: calculate공주대학교,          // 공주대 체육교육과
