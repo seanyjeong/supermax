@@ -55,12 +55,15 @@ function normalizeEnglishScore(영어등급, englishScoreRule, 영어표준점�
     const 최고점 = englishScoreRule[0] || 100;
     return rawScore / 최고점;
   }
+  console.log('🎯 영어표준점수만점:', 영어표준점수만점, typeof 영어표준점수만점);
+
   if (String(영어표준점수만점) === '200') {
         console.log('✅ normalizeEnglishScore 호출됨!');
     return rawScore / 200;
 
 
   }
+
   if (String(영어표준점수만점) === '기본') {
     return rawScore;
   }
