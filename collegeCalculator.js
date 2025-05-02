@@ -49,27 +49,26 @@ function getSubjectScore(subjectData, 반영지표) {
 function normalizeEnglishScore(영어등급, englishScoreRule, 영어표준점수만점) {
   if (!englishScoreRule || 영어등급 < 1 || 영어등급 > 9) return 0;
 
-  const rawScore = englishScoreRule[영어등급 - 1] ?? 0;
+  const raw = englishScoreRule[영어등급 - 1];
+  const rawScore = typeof raw === 'string' ? parseFloat(raw) : raw;
 
+  console.log('📦 rawScore:', rawScore);
+  console.log('🎯 영어표준점수만점:', 영어표준점수만점, typeof 영어표준점수만점);
+
+  if (String(영어표준점수만점) === '200') {
+    return rawScore / 200;
+  }
   if (String(영어표준점수만점) === '최고점') {
     const 최고점 = englishScoreRule[0] || 100;
     return rawScore / 최고점;
   }
-  console.log('🎯 영어표준점수만점:', 영어표준점수만점, typeof 영어표준점수만점);
-
-  if (String(영어표준점수만점) === '200') {
-        console.log('✅ normalizeEnglishScore 호출됨!');
-    return rawScore / 200;
-
-
-  }
-
   if (String(영어표준점수만점) === '기본') {
     return rawScore;
   }
 
   return rawScore / 100;
 }
+
 
 
 
