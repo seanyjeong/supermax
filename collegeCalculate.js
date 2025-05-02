@@ -94,9 +94,11 @@ router.post('/calculate', async (req, res) => {
     englishScoreRule,
     rule.영어표준점수만점
   );
-  console.log('🔥 영어 normalize 결과:', raw);
-  return raw;
+  const final = raw * 100; // ← 여기가 핵심!!
+  console.log('🔥 영어 normalize 결과:', final);
+  return final;
 })(),
+
 
 
 
