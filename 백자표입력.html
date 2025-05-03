@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>탐구 백자표 변환점수 입력</title>
+  <style>
+    table { border-collapse: collapse; margin-top: 10px; }
+    td, th { border: 1px solid #ccc; padding: 5px; text-align: center; }
+    td[contenteditable] { background: #f0f8ff; }
+    select, button { margin: 10px 10px 0 0; font-size: 16px; padding: 6px 12px; }
+    h3 { margin-top: 30px; margin-bottom: 10px; }
+    .table-wrapper { display: flex; gap: 50px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>탐구 백자표 변환점수 입력</h1>
+
+  <label>학교 선택:</label>
+  <select id="schoolSelect"></select>
+  <button id="saveBtn">✅ 저장</button>
+
+  <div class="table-wrapper">
+    <div>
+      <h3>📘 사탐 변환표</h3>
+      <div id="satableContainer"></div>
+    </div>
+
+    <div>
+      <h3>📗 과탐 변환표</h3>
+      <div id="gwatableContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    async function loadSchools() {
+      const res = await fetch('https://supermax.kr/college/tanguback-create-list');
+      const data = await res.json();
+      const select = document.getElementById('schoolSelect');
+      select.innerHTML = '<option value="">학교 선택</option>';
+      data.schools.forEach(school => {
+        const option = document.createElement('option');
+        option.value = school.대학학과ID;
+        option.textContent = `${school.대학명} - ${school.학과명}`;
+        select.appendChild(option);
+      });
+    }
+
+    function createTable(containerId) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      const table = document.createElement('table');
+      table.id = containerId + '_table';
+
+      let html = '<tr><th>백분위</th><th>변환점수</th></tr>';
+      for (let i = 100; i >= 0; i--) {
+        html += `<tr><td>${i}</td><td contenteditable="true"></td></tr>`;
+      }
+
+      table.innerHTML = html;
+      container.appendChild(table);
+
+      // ✅ 붙여넣기 이벤트
+      table.addEventListener('paste', function (e) {
+        e.preventDefault();
+        const clipboardData = (e.clipboardData || window.clipboardData).getData('text');
+        const rows = clipboardData.split('\n').filter(r => r.trim() !== '');
+        const tableRows = table.querySelectorAll('tr');
+
+        rows.forEach((rowData, index) => {
+          if (index >= tableRows.length - 1) return;
+          const cells = rowData.split('\t');
+          const targetCell = tableRows[index + 1].querySelectorAll('td')[1];
+          if (targetCell && cells[0]) {
+            targetCell.innerText = cells[0].trim();
+          }
+        });
+      });
+    }
+
+    function setTableValues(tableId, 변환표) {
+      const table = document.getElementById(tableId);
+      변환표.forEach(row => {
+        const target = table.querySelector(`tr:nth-child(${101 - row.백분위 + 1}) td:nth-child(2)`);
+        if (target) target.innerText = row.변환점수;
+      });
+    }
+
+    async function loadTableData(id) {
+      for (const type of ['사탐', '과탐']) {
+        try {
+          const res = await fetch(`https://supermax.kr/college/tanguback-get/${id}/${type}`);
+          const data = await res.json();
+          if (data.success) {
+            const tableId = (type === '사탐' ? 'satableContainer_table' : 'gwatableContainer_table');
+            setTableValues(tableId, data.변환표);
+          }
+        } catch (e) {
+          console.error(`${type} 불러오기 실패`, e);
+        }
+      }
+    }
+
+    function extractTableData(tableId) {
+      const table = document.getElementById(tableId);
+      const rows = table.querySelectorAll('tr');
+      const result = [];
+      rows.forEach((row, i) => {
+        if (i === 0) return;
+        const tds = row.querySelectorAll('td');
+        const 백분위 = parseInt(tds[0].innerText.trim());
+        const 변환점수 = parseFloat(tds[1].innerText.trim()) || 0;
+        result.push({ 백분위, 변환점수 });
+      });
+      return result;
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      const 대학학과ID = document.getElementById('schoolSelect').value;
+      if (!대학학과ID) return alert('학교를 선택하세요.');
+
+      const 사탐표 = extractTableData('satableContainer_table');
+      const 과탐표 = extractTableData('gwatableContainer_table');
+
+      const req1 = fetch('https://supermax.kr/college/tanguback-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 대학학과ID, 구분: '사탐', 변환표: 사탐표 })
+      });
+
+      const req2 = fetch('https://supermax.kr/college/tanguback-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 대학학과ID, 구분: '과탐', 변환표: 과탐표 })
+      });
+
+      const [res1, res2] = await Promise.all([req1, req2]);
+      const r1 = await res1.json();
+      const r2 = await res2.json();
+      alert(`사탐: ${r1.message} / 과탐: ${r2.message}`);
+
+      // 초기화
+      createTable('satableContainer');
+      createTable('gwatableContainer');
+    });
+
+    document.getElementById('schoolSelect').addEventListener('change', (e) => {
+      const id = e.target.value;
+      createTable('satableContainer');
+      createTable('gwatableContainer');
+      if (id) loadTableData(id);
+    });
+
+    // 초기 실행
+    loadSchools();
+    createTable('satableContainer');
+    createTable('gwatableContainer');
+  </script>
+</body>
+</html>
