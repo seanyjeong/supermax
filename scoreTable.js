@@ -58,6 +58,8 @@ function getScore(event, gender, value) {
   const list = scoreTable[event]?.[gender];
   if (!list) {
     console.log('❌ 점수표 없음:', event, gender);
+    console.log('🎯 점수 리스트:', scoreTable[event]?.[gender]);
+
     return 24;
   }
 
