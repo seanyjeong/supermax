@@ -218,6 +218,8 @@ for (const r of records) {
 
       // 총점 업데이트
       const [updatedRow] = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [user_id, test_month]);
+  console.log('📦 updatedRow:', updatedRow);
+
       const total = [updatedRow.jump_score, updatedRow.run20m_score, updatedRow.sit_score, updatedRow.situp_score, updatedRow.back_score, updatedRow.medball_score, updatedRow.run10m_score]
         .filter(v => typeof v === 'number')
         .reduce((a, b) => a + b, 0);
