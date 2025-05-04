@@ -172,8 +172,10 @@ router.post('/save-test-records', async (req, res) => {
   const { records } = req.body;
   let updated = 0;
   try {
-    for (const r of records) {
-      const { user_id, event, record, test_month } = r;
+for (const r of records) {
+  const { user_id, event, record, test_month } = r;
+  if (!record || isNaN(parseFloat(record))) continue; // ✅ 기록 없으면 무시
+
       const [student] = await dbQuery('SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [user_id, test_month]);
       if (!student) continue;
 
