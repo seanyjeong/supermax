@@ -197,16 +197,19 @@ function calculateRankTotalScore(과목점수셋, 반영과목리스트, 반영�
 //mix 방식임//
 function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
   let total = 0;
-  const usedSubjects = new Set();
+  const usedSubjects = new Set();  // ✅ 이미 선택된 과목 저장
 
   for (const 그룹 of 그룹정보) {
     const { 과목리스트, 선택개수, 반영비율 } = 그룹;
     if (!과목리스트 || 과목리스트.length === 0) continue;
 
-    const scores = 과목리스트.map(subject => ({
-      subject,
-      score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
-    })).filter(({ score }) => score >= 0);
+    const scores = 과목리스트
+      .filter(subject => !usedSubjects.has(subject))  // ✅ 중복 제거
+      .map(subject => ({
+        subject,
+        score: 과목점수셋[subject] !== undefined ? 과목점수셋[subject] : -1
+      }))
+      .filter(({ score }) => score >= 0);
 
     if (scores.length === 0) continue;
 
@@ -219,13 +222,11 @@ function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
     );
 
     if (is정확히일치) {
-      // 순서대로 반영
       selected = scores.map((item, idx) => ({
         ...item,
         ratio: 반영비율[idx] || 0
       }));
     } else {
-      // 점수 높은 순으로 선택
       scores.sort((a, b) => b.score - a.score);
       selected = scores.slice(0, 선택개수);
 
@@ -237,12 +238,12 @@ function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
       } else {
         const 평균점수 = selected.reduce((sum, s) => sum + s.score, 0) / 선택개수;
         total += 평균점수 * (반영비율 / 100);
-        continue; // 이 그룹 끝
+        continue;
       }
     }
 
     selected.forEach(({ subject, score, ratio }) => {
-      usedSubjects.add(subject);
+      usedSubjects.add(subject); // ✅ 이 과목은 다음 그룹에서 제외됨
       total += score * (ratio / 100);
     });
 
@@ -254,6 +255,7 @@ function calculateMixTotalScore(과목점수셋, 그룹정보, 총점기준) {
   console.log('🔥 [Mix] 누적 Total:', 환산);
   return 환산;
 }
+
 
 
 function calculateCollegeScore(studentScore, collegeRule, 과목점수셋, 반영과목리스트, 반영비율, 반영규칙, 반영과목수, 그룹정보, 총점기준) {
