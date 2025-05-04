@@ -11,6 +11,15 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
+function dbQuery(sql, params) {
+  return new Promise((resolve, reject) => {
+    db.query(sql, params, (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
+}
+
 const scoreTable = {
   "제자리멀리뛰기": {
     남: [300, 298, 296, 294, 292, 290, 288, 286, 284, 282, 280, 278, 276, 274, 272, 270, 268, 266, 264, 262, 260, 258, 256, 254, 252, 250, 248, 246, 244, 242, 240, 238, 236, 234, 232, 230, 228, 226, 225],
@@ -59,58 +68,70 @@ function getScore(event, gender, value) {
   return 24;
 }
 
-router.post('/test-record', async (req, res) => {
-  const {
-    exam_number, name, grade, gender, branch, test_month,
-    jump, run20m, sit_reach, situp, back, medball, run10m
-  } = req.body;
-
-  const scores = {
-    jump_score: getScore('제자리멀리뛰기', gender, jump),
-    run20m_score: getScore('20m왕복달리기', gender, run20m),
-    sit_score: getScore('좌전굴', gender, sit_reach),
-    situp_score: getScore('윗몸일으키기', gender, situp),
-    back_score: getScore('배근력', gender, back),
-    medball_score: getScore('메디신볼던지기', gender, medball),
-    run10m_score: getScore('10m왕복달리기', gender, run10m)
-  };
-
-  const total_score = Object.values(scores).reduce((a, b) => a + b, 0);
-
-  await db.query(
-    `INSERT INTO 실기기록_테스트 (
-      exam_number, name, grade, gender, branch, test_month,
-      jump_cm, jump_score, run20m_sec, run20m_score,
-      sit_reach_cm, sit_score, situp_count, situp_score,
-      back_strength, back_score, medball_m, medball_score,
-      run10m_sec, run10m_score, total_score
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [exam_number, name, grade, gender, branch, test_month,
-     jump, scores.jump_score, run20m, scores.run20m_score,
-     sit_reach, scores.sit_score, situp, scores.situp_score,
-     back, scores.back_score, medball, scores.medball_score,
-     run10m, scores.run10m_score, total_score]
-  );
-
-  res.json({ success: true, total_score });
+// ✅ 명단 선등록
+router.post('/test-students', async (req, res) => {
+  const { name, school, grade, gender, test_month } = req.body;
+  try {
+    const [max] = await dbQuery('SELECT MAX(CAST(SUBSTRING(exam_number, 7) AS UNSIGNED)) AS maxNum FROM 실기기록_테스트 WHERE test_month = ?', [test_month]);
+    const nextNumber = (max.maxNum || 0) + 1;
+    const exam_number = `${test_month.replace('-', '')}${String(nextNumber).padStart(2, '0')}`;
+    await dbQuery('INSERT INTO 실기기록_테스트 (exam_number, name, grade, gender, school, test_month) VALUES (?, ?, ?, ?, ?, ?)',
+      [exam_number, name, grade, gender, school, test_month]);
+    res.json({ success: true, exam_number });
+  } catch (err) {
+    console.error('❌ 명단 저장 오류:', err);
+    res.json({ success: false, error: err });
+  }
 });
 
+// ✅ 종목별 개별 기록 저장
+router.patch('/test-record', async (req, res) => {
+  const { exam_number, test_month, event, value } = req.body;
+  const columnMap = {
+    '제자리멀리뛰기': ['jump_cm', 'jump_score'],
+    '20m왕복달리기': ['run20m_sec', 'run20m_score'],
+    '좌전굴': ['sit_reach_cm', 'sit_score'],
+    '윗몸일으키기': ['situp_count', 'situp_score'],
+    '배근력': ['back_strength', 'back_score'],
+    '메디신볼던지기': ['medball_m', 'medball_score'],
+    '10m왕복달리기': ['run10m_sec', 'run10m_score']
+  };
+
+  try {
+    const [student] = await dbQuery('SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [exam_number, test_month]);
+    if (!student) return res.json({ success: false, error: '학생 없음' });
+
+    const gender = student.gender;
+    const score = getScore(event, gender, value);
+    const [valCol, scoreCol] = columnMap[event];
+
+    await dbQuery(`UPDATE 실기기록_테스트 SET ${valCol} = ?, ${scoreCol} = ? WHERE exam_number = ? AND test_month = ?`,
+      [value, score, exam_number, test_month]);
+
+    // 총점 다시 계산
+    const [updated] = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [exam_number, test_month]);
+    const sum = [updated.jump_score, updated.run20m_score, updated.sit_score, updated.situp_score, updated.back_score, updated.medball_score, updated.run10m_score]
+      .filter(v => typeof v === 'number')
+      .reduce((a, b) => a + b, 0);
+    await dbQuery('UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?', [sum, exam_number, test_month]);
+
+    res.json({ success: true, score, total_score: sum });
+  } catch (err) {
+    console.error('❌ 기록 저장 오류:', err);
+    res.json({ success: false, error: err });
+  }
+});
+
+// ✅ 해당 월 전체 명단 + 기록 조회
 router.get('/test-records', async (req, res) => {
   const { test_month } = req.query;
-  let sql = 'SELECT * FROM 실기기록_테스트';
-  const params = [];
-  if (test_month) {
-    sql += ' WHERE test_month = ?';
-    params.push(test_month);
+  try {
+    const rows = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE test_month = ? ORDER BY exam_number', [test_month]);
+    res.json({ success: true, records: rows });
+  } catch (err) {
+    console.error('❌ 명단 조회 오류:', err);
+    res.json({ success: false, error: err });
   }
-  sql += ' ORDER BY total_score DESC';
-  const [rows] = await new Promise((resolve, reject) => {
-    db.query(sql, params, (err, results) => {
-      if (err) reject(err);
-      else resolve([results]);
-    });
-  });
-  res.json({ success: true, records: rows });
 });
 
 module.exports = router;
