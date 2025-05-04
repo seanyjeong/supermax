@@ -54,7 +54,13 @@ const scoreTable = {
 };
 
 function getScore(event, gender, value) {
-  const list = scoreTable[event][gender];
+  console.log('💬 getScore 호출:', event, gender, value);
+  const list = scoreTable[event]?.[gender];
+  if (!list) {
+    console.log('❌ 점수표 없음:', event, gender);
+    return 24;
+  }
+
   const isReverse = scoreTable[event].reverse || false;
   for (let i = 0; i < list.length; i++) {
     const score = 100 - i * 2;
@@ -67,6 +73,7 @@ function getScore(event, gender, value) {
   }
   return 24;
 }
+
 
 // ✅ 명단 선등록 또는 업데이트
 router.post('/test-students', async (req, res) => {
