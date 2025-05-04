@@ -86,8 +86,8 @@ router.get('/calculate-all', async (req, res) => {
           탐구2: { 표준점수: 63, 백분위: 85, 등급: 1 },
           내신: 0,
           실기: 0,
-          subject1Name: "사회문화",
-          subject2Name: "생활과윤리",
+          subject1Name: "세계사",
+          subject2Name: "정치와법",
           국어과목명: "화법과작문",
           수학과목명: "확률과통계"
         }
