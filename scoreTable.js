@@ -204,12 +204,12 @@ for (const r of records) {
       const score = getScore(event, gender, parseFloat(record));
       const columnMap = {
         '제자리멀리뛰기': ['jump_cm', 'jump_score'],
-        '20M왕복달리기': ['run20m_sec', 'run20m_score'],
+        '20m왕복달리기': ['run20m_sec', 'run20m_score'],
         '좌전굴': ['sit_reach_cm', 'sit_score'],
         '윗몸일으키기': ['situp_count', 'situp_score'],
         '배근력': ['back_strength', 'back_score'],
         '메디신볼던지기': ['medball_m', 'medball_score'],
-        '10M왕복달리기': ['run10m_sec', 'run10m_score']
+        '10m왕복달리기': ['run10m_sec', 'run10m_score']
       };
       const [valCol, scoreCol] = columnMap[event];
 
