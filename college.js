@@ -40,6 +40,10 @@ const calculator = require('./collegeCalculator');
 const collegeCalculate = require('./collegeCalculate');
 app.use('/college', collegeCalculate);
 
+const scoreTable = require('./scoreTable');
+app.use('/college', scoreTable);
+
+
 
 
 
