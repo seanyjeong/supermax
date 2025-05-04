@@ -152,4 +152,62 @@ router.get('/test-records', async (req, res) => {
   }
 });
 
+// ✅ 전체 월별 명단만 불러오기 (기록 제외)
+router.get('/students-by-month', async (req, res) => {
+  const { month } = req.query;
+  try {
+    const rows = await dbQuery(
+      'SELECT exam_number AS id, name, school, grade, gender FROM 실기기록_테스트 WHERE test_month = ? ORDER BY exam_number',
+      [month]
+    );
+    res.json({ success: true, students: rows });
+  } catch (err) {
+    console.error('❌ 월별 명단 조회 오류:', err);
+    res.json({ success: false, error: err });
+  }
+});
+
+// ✅ 개별 기록 저장 API (기록 + 점수 자동 계산)
+router.post('/save-test-records', async (req, res) => {
+  const { records } = req.body;
+  let updated = 0;
+  try {
+    for (const r of records) {
+      const { user_id, event, record, test_month } = r;
+      const [student] = await dbQuery('SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [user_id, test_month]);
+      if (!student) continue;
+
+      const gender = student.gender;
+      const score = getScore(event, gender, parseFloat(record));
+      const columnMap = {
+        '제자리멀리뛰기': ['jump_cm', 'jump_score'],
+        '20M왕복달리기': ['run20m_sec', 'run20m_score'],
+        '좌전굴': ['sit_reach_cm', 'sit_score'],
+        '윗몸일으키기': ['situp_count', 'situp_score'],
+        '배근력': ['back_strength', 'back_score'],
+        '메디신볼던지기': ['medball_m', 'medball_score'],
+        '10M왕복달리기': ['run10m_sec', 'run10m_score']
+      };
+      const [valCol, scoreCol] = columnMap[event];
+
+      await dbQuery(`UPDATE 실기기록_테스트 SET ${valCol} = ?, ${scoreCol} = ? WHERE exam_number = ? AND test_month = ?`,
+        [record, score, user_id, test_month]);
+
+      // 총점 업데이트
+      const [updatedRow] = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [user_id, test_month]);
+      const total = [updatedRow.jump_score, updatedRow.run20m_score, updatedRow.sit_score, updatedRow.situp_score, updatedRow.back_score, updatedRow.medball_score, updatedRow.run10m_score]
+        .filter(v => typeof v === 'number')
+        .reduce((a, b) => a + b, 0);
+
+      await dbQuery('UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?', [total, user_id, test_month]);
+      updated++;
+    }
+
+    res.json({ success: true, updated });
+  } catch (err) {
+    console.error('❌ 기록 저장 오류:', err);
+    res.json({ success: false, error: err });
+  }
+});
+
 module.exports = router;
