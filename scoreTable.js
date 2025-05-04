@@ -54,26 +54,28 @@ const scoreTable = {
 };
 
 function getScore(event, gender, value) {
-  console.log('💬 getScore 호출:', event, gender, value);
-  const list = scoreTable[event]?.[gender];
-  if (!list) {
-    console.log('❌ 점수표 없음:', event, gender);
+  const genderKey = gender === '남자' ? '남' : gender === '여자' ? '여' : gender;
+  const list = scoreTable[event]?.[genderKey];
 
+  console.log('💬 getScore 호출:', event, genderKey, value);
+  console.log('🎯 점수 리스트:', list);
 
-    return 24;
-  }
+  if (!list) return 24;
 
-  const isReverse = scoreTable[event].reverse || false;
+  const numericValue = parseFloat(value);
+  const isReverse = scoreTable[event]?.reverse || false;
+
   for (let i = 0; i < list.length; i++) {
     const score = 100 - i * 2;
-    const standard = list[i];
+    const standard = parseFloat(list[i]);
     if (isReverse) {
-      if (value <= standard) return score;
+      if (numericValue <= standard) return score;
     } else {
-      if (value >= standard) return score;
-          console.log('🎯 점수 리스트:', scoreTable[event]?.[gender]);
+      if (numericValue >= standard) return score;
     }
   }
+
+  console.log('⚠️ 기준 만족 못해서 default 24점 리턴:', value);
   return 24;
 }
 
