@@ -58,7 +58,7 @@ function getScore(event, gender, value) {
   const list = scoreTable[event]?.[gender];
   if (!list) {
     console.log('❌ 점수표 없음:', event, gender);
-    console.log('🎯 점수 리스트:', scoreTable[event]?.[gender]);
+
 
     return 24;
   }
@@ -71,6 +71,7 @@ function getScore(event, gender, value) {
       if (value <= standard) return score;
     } else {
       if (value >= standard) return score;
+          console.log('🎯 점수 리스트:', scoreTable[event]?.[gender]);
     }
   }
   return 24;
