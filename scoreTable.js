@@ -56,28 +56,37 @@ const scoreTable = {
 function getScore(event, gender, value) {
   const genderKey = gender === '남자' ? '남' : gender === '여자' ? '여' : gender;
   const list = scoreTable[event]?.[genderKey];
-
-  console.log('💬 getScore 호출:', event, genderKey, value);
-  console.log('🎯 점수 리스트:', list);
-
-  if (!list) return 24;
+  if (!list) {
+    console.log('❌ 점수 리스트 없음:', event, genderKey);
+    return 24;
+  }
 
   const numericValue = parseFloat(value);
+  console.log('💬 getScore 호출:', event, genderKey, '입력값:', value, '→ 숫자:', numericValue);
+  console.log('🎯 점수 리스트:', list);
+
   const isReverse = scoreTable[event]?.reverse || false;
 
   for (let i = 0; i < list.length; i++) {
     const score = 100 - i * 2;
-    const standard = parseFloat(list[i]);
+    const standard = list[i];
     if (isReverse) {
-      if (numericValue <= standard) return score;
+      if (numericValue <= standard) {
+        console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${standard})`);
+        return score;
+      }
     } else {
-      if (numericValue >= standard) return score;
+      if (numericValue >= standard) {
+        console.log(`✅ 리턴점수: ${score} (기준: ${standard})`);
+        return score;
+      }
     }
   }
 
-  console.log('⚠️ 기준 만족 못해서 default 24점 리턴:', value);
+  console.log('⚠️ 조건 만족하는 값 없음 → 24점 리턴');
   return 24;
 }
+
 
 
 // ✅ 명단 선등록 또는 업데이트
