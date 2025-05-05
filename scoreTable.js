@@ -67,39 +67,32 @@ function getScore(event, gender, value) {
 
   const numericValue = parseFloat(value);
   if (isNaN(numericValue)) {
-    console.log('❌ 숫자로 변환 실패:', event, genderKey, 'value:', value);
+    console.log('❌ 숫자로 변환 실패:', event, genderKey, value);
     return 24;
   }
 
-  console.log('💬 getScore 호출:', event, genderKey, '입력값:', value, '→ 숫자:', numericValue);
-  console.log('🎯 점수 리스트:', list);
-
   const isReverse = scoreTable[event]?.reverse || false;
 
-  // ✅ 수정된 부분: reverse일 때는 현재 값이 기준값보다 작지만, 다음 기준값보다는 크거나 같아야 함
+  // ✅ 핵심 수정: reverse 종목은 현재 값이 기준값과 다음 기준값 사이에 있는지 확인
   if (isReverse) {
     for (let i = 0; i < list.length; i++) {
-      const currentStandard = list[i];
-      const nextStandard = list[i + 1] || -Infinity; // 마지막 항목일 경우 무한대로 처리
-      if (numericValue >= nextStandard && numericValue < currentStandard) {
-        const score = 100 - i * 2;
-        console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${currentStandard})`);
-        return score;
+      const current = list[i];
+      const next = list[i + 1] || -Infinity; // 마지막 항목 처리
+      if (numericValue >= next && numericValue < current) {
+        return 100 - i * 2;
       }
     }
   } else {
-    // 일반 경우 (클수록 좋은 기록, 예: 멀리뛰기)
+    // 일반 종목 (값이 클수록 좋음)
     for (let i = 0; i < list.length; i++) {
-      const standard = list[i];
-      if (numericValue >= standard) {
-        const score = 100 - i * 2;
-        console.log(`✅ 리턴점수: ${score} (기준: ${standard})`);
-        return score;
+      if (numericValue >= list[i]) {
+        return 100 - i * 2;
       }
     }
   }
 
-  console.log('⚠️ 조건 만족하는 값 없음 → 24점 리턴');
+  // 기준을 벗어난 경우 (너무 느리거나/적음)
+  console.log('⚠️ 기록이 기준 범위 밖:', event, genderKey, numericValue);
   return 24;
 }
 
