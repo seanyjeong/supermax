@@ -76,16 +76,23 @@ function getScore(event, gender, value) {
 
   const isReverse = scoreTable[event]?.reverse || false;
 
-  for (let i = 0; i < list.length; i++) {
-    const score = 100 - i * 2;
-    const standard = list[i];
-    if (isReverse) {
-      if (numericValue <= standard) {
-        console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${standard})`);
+  // ✅ 수정된 부분: reverse일 때는 현재 값이 기준값보다 작지만, 다음 기준값보다는 크거나 같아야 함
+  if (isReverse) {
+    for (let i = 0; i < list.length; i++) {
+      const currentStandard = list[i];
+      const nextStandard = list[i + 1] || -Infinity; // 마지막 항목일 경우 무한대로 처리
+      if (numericValue >= nextStandard && numericValue < currentStandard) {
+        const score = 100 - i * 2;
+        console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${currentStandard})`);
         return score;
       }
-    } else {
+    }
+  } else {
+    // 일반 경우 (클수록 좋은 기록, 예: 멀리뛰기)
+    for (let i = 0; i < list.length; i++) {
+      const standard = list[i];
       if (numericValue >= standard) {
+        const score = 100 - i * 2;
         console.log(`✅ 리턴점수: ${score} (기준: ${standard})`);
         return score;
       }
