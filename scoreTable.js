@@ -59,41 +59,69 @@ const scoreTable = {
 
 function getScore(event, gender, value) {
   const genderKey = gender === '남자' ? '남' : gender === '여자' ? '여' : gender;
-  const list = scoreTable[event]?.[genderKey];
+  const eventData = scoreTable[event];
+  if (!eventData) {
+    console.log('❌ 종목 없음:', event);
+    return 24;
+  }
+
+  const list = eventData[genderKey];
   if (!list) {
-    console.log('❌ 점수 리스트 없음:', event, genderKey);
+    console.log('❌ 성별 데이터 없음:', event, genderKey);
     return 24;
   }
 
   const numericValue = parseFloat(value);
   if (isNaN(numericValue)) {
-    console.log('❌ 숫자로 변환 실패:', event, genderKey, value);
+    console.log('❌ 숫자 변환 실패:', value);
     return 24;
   }
 
-  const isReverse = scoreTable[event]?.reverse || false;
+  console.log('🔍 검색 조건:', { event, gender, value: numericValue });
+  console.log('📊 점수 테이블:', list);
 
-  // ✅ 핵심 수정: reverse 종목은 현재 값이 기준값과 다음 기준값 사이에 있는지 확인
-  if (isReverse) {
-    for (let i = 0; i < list.length; i++) {
-      const current = list[i];
-      const next = list[i + 1] || -Infinity; // 마지막 항목 처리
-      if (numericValue >= next && numericValue < current) {
-        return 100 - i * 2;
+  const isReverse = eventData.reverse || false;
+  const precision = 100; // 소수점 둘째자리까지 정확히 비교
+
+  // 모든 값을 정밀하게 비교할 수 있게 조정
+  const adjustedValue = Math.round(numericValue * precision) / precision;
+
+  for (let i = 0; i < list.length; i++) {
+    const current = Math.round(list[i] * precision) / precision;
+    const next = i < list.length - 1 ? Math.round(list[i + 1] * precision) / precision : null;
+    const score = 100 - i * 2;
+
+    if (isReverse) {
+      // Reverse 종목 (값이 작을수록 좋음)
+      if (next === null) {
+        // 마지막 항목: current보다 작거나 같으면 점수 부여
+        if (adjustedValue <= current) {
+          console.log(`🏆 Reverse 종목 최하위 점수: ${score} (${adjustedValue} <= ${current})`);
+          return score;
+        }
+      } else if (adjustedValue <= current && adjustedValue > next) {
+        console.log(`🎯 Reverse 종목 점수: ${score} (${next} < ${adjustedValue} <= ${current})`);
+        return score;
       }
-    }
-  } else {
-    // 일반 종목 (값이 클수록 좋음)
-    for (let i = 0; i < list.length; i++) {
-      if (numericValue >= list[i]) {
-        return 100 - i * 2;
+    } else {
+      // 일반 종목 (값이 클수록 좋음)
+      if (next === null) {
+        // 마지막 항목: current보다 크거나 같으면 점수 부여
+        if (adjustedValue >= current) {
+          console.log(`🏆 일반 종목 최하위 점수: ${score} (${adjustedValue} >= ${current})`);
+          return score;
+        }
+      } else if (adjustedValue >= current && adjustedValue < next) {
+        console.log(`🎯 일반 종목 점수: ${score} (${current} <= ${adjustedValue} < ${next})`);
+        return score;
       }
     }
   }
 
-  // 기준을 벗어난 경우 (너무 느리거나/적음)
-  console.log('⚠️ 기록이 기준 범위 밖:', event, genderKey, numericValue);
-  return 24;
+  // 모든 조건에 맞지 않는 경우 (이론상 발생하지 않아야 함)
+  const minScore = 100 - (list.length - 1) * 2;
+  console.log(`⚠️ 범위 밖 기록: 최소 점수 반환 (${minScore})`);
+  return minScore;
 }
 
 
