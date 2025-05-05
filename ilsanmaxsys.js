@@ -329,95 +329,40 @@ router.patch('/update-student/:id', (req, res) => {
   });
   router.get('/payment-status-summary', (req, res) => {
     const { month } = req.query;
-    if (!month) return res.status(400).json({ message: 'month 쿼리 필요' });
+    if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
   
-    const query = `
-      SELECT 
-        s.id AS student_id,
-        s.name, s.school, s.grade, s.phone,
-        s.first_registered_at,
-        COALESCE(m.status, s.status) AS status,
-        COALESCE(m.weekdays, s.weekdays) AS weekdays,
-        p.amount, p.paid_at, p.payment_method
+    const sql = `
+      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone,
+             s.weekdays, m.status, p.amount, p.paid_at
       FROM students s
-      LEFT JOIN student_monthly m
-        ON s.id = m.student_id AND m.month = ?
-      LEFT JOIN payments p
-        ON s.id = p.student_id AND p.month = ?
-      WHERE s.first_registered_at <= ?
-      ORDER BY s.grade, s.name
+      LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
+      LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
     `;
   
-    dbAcademy.query(query, [month, month, `${month}-31`], (err, rows) => {
+    dbAcademy.query(sql, [month, month], (err, rows) => {
       if (err) {
-        console.error('❌ 결제 요약 조회 실패:', err);
+        console.error('❌ 결제 상태 요약 실패:', err);
         return res.status(500).json({ message: 'DB 오류' });
       }
   
-      const filtered = rows.filter(row => row.status !== '휴식' && row.status !== '퇴원');
+      // ✅ 여기서 expected_amount 계산 추가
+      const enriched = rows.map(r => {
+        const weeklyCount = r.weekdays ? r.weekdays.replace(/,/g, '').length : 0;
   
-      let paid = 0;
-      let unpaid = 0;
-      let total = 0;
-      let card = 0;
-      let account = 0;
-      let expected_total = 0;
-      const unpaidList = [];
+        const expected_amount = weeklyCount >= 5 ? 550000
+                              : weeklyCount === 4 ? 500000
+                              : weeklyCount === 3 ? 400000
+                              : weeklyCount === 2 ? 300000
+                              : weeklyCount === 1 ? 150000 : 0;
   
-      const weekdayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
-      const countSessionsInMonth = (monthStr, weekdaysStr) => {
-        if (!monthStr || !weekdaysStr) return 0;
-        const daysInMonth = new Date(monthStr.split('-')[0], monthStr.split('-')[1], 0).getDate();
-        const targetDays = weekdaysStr.split('').map(d => weekdayMap[d]);
-        let count = 0;
-        for (let i = 1; i <= daysInMonth; i++) {
-          const date = new Date(`${monthStr}-${String(i).padStart(2, '0')}`);
-          if (targetDays.includes(date.getDay())) count++;
-        }
-        return count;
-      };
-  
-      for (const row of filtered) {
-        total++;
-  
-        const weekCount = row.weekdays ? row.weekdays.length : 0;
-        const sessionCount = countSessionsInMonth(month, row.weekdays);
-        let expected = 0;
-        if (weekCount >= 5) expected = 550000;
-        else if (weekCount === 4) expected = 500000;
-        else if (weekCount === 3) expected = 400000;
-        else if (weekCount === 2) expected = 300000;
-        else if (weekCount === 1) expected = 150000;
-  
-        expected_total += expected;
-  
-        if (row.paid_at) {
-          paid++;
-          if (row.payment_method === '카드') card += row.amount;
-          else if (row.payment_method === '계좌') account += row.amount;
-        } else {
-          unpaid++;
-          unpaidList.push({
-            name: row.name,
-            school: row.school,
-            grade: row.grade,
-            phone: row.phone,
-            expected_amount: expected
-          });
-        }
-      }
-  
-      res.json({
-        total,
-        paid,
-        unpaid,
-        rate: total ? ((paid / total) * 100).toFixed(1) + '%' : '-',
-        card,
-        account,
-        total_paid: card + account,
-        expected_total,
-        unpaid_list: unpaidList
+        return {
+          ...r,
+          expected_amount,
+          status: r.paid_at ? '납부완료' : (r.status === '재원' ? '미납' : r.status)
+        };
       });
+  
+      res.json(enriched);
     });
   });
   
