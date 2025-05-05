@@ -55,12 +55,18 @@ const scoreTable = {
 };
 
 function getScore(event, gender, value) {
-  const genderKey = (gender + '').trim();
-  console.log(`🔎 getScore() 호출 → event: ${event}, gender(raw): "${gender}", genderKey: "${genderKey}", value: ${value}`);
-
+  const genderKey = gender === '남자' ? '남' : gender === '여자' ? '여' : gender;
   const list = scoreTable[event]?.[genderKey];
+
+  // 🎯 예외 처리: 점수 리스트가 아예 없는 경우
   if (!list) {
     console.log('❌ 점수 리스트 없음:', event, genderKey);
+    return 24;
+  }
+
+  // 🎯 'F' 입력 시 기본 점수 처리
+  if (typeof value === 'string' && value.trim().toUpperCase() === 'F') {
+    console.log('⚠️ "F" 입력 감지 → 기본점수 24점 반환');
     return 24;
   }
 
@@ -73,6 +79,7 @@ function getScore(event, gender, value) {
   for (let i = 0; i < list.length; i++) {
     const score = 100 - i * 2;
     const standard = list[i];
+
     if (isReverse) {
       if (numericValue <= standard) {
         console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${standard})`);
@@ -89,6 +96,7 @@ function getScore(event, gender, value) {
   console.log('⚠️ 조건 만족하는 값 없음 → 24점 리턴');
   return 24;
 }
+
 
 
 
