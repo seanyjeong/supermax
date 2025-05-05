@@ -66,6 +66,11 @@ function getScore(event, gender, value) {
   }
 
   const numericValue = parseFloat(value);
+  if (isNaN(numericValue)) {
+    console.log('❌ 숫자로 변환 실패:', event, genderKey, 'value:', value);
+    return 24;
+  }
+
   console.log('💬 getScore 호출:', event, genderKey, '입력값:', value, '→ 숫자:', numericValue);
   console.log('🎯 점수 리스트:', list);
 
@@ -232,8 +237,26 @@ const total = [
   updatedRow.back_score,
   updatedRow.medball_score,
   updatedRow.run10m_score
-].filter(v => v !== null && !isNaN(v))
- .reduce((a, b) => a + b, 0);
+].map(v => {
+  const num = Number(v);
+  return isNaN(num) ? 0 : num;
+}).reduce((a, b) => a + b, 0);
+
+console.log(`🧮 총점 계산:`, {
+  exam_number: user_id,
+  test_month,
+  scores: {
+    jump: updatedRow.jump_score,
+    run20m: updatedRow.run20m_score,
+    sit: updatedRow.sit_score,
+    situp: updatedRow.situp_score,
+    back: updatedRow.back_score,
+    medball: updatedRow.medball_score,
+    run10m: updatedRow.run10m_score
+  },
+  total
+});
+
 
 
       await dbQuery('UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?', [total, user_id, test_month]);
