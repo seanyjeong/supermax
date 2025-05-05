@@ -66,11 +66,6 @@ function getScore(event, gender, value) {
   }
 
   const numericValue = parseFloat(value);
-  if (isNaN(numericValue)) {
-    console.log('❌ 숫자로 변환 실패:', event, genderKey, 'value:', value);
-    return 24;
-  }
-
   console.log('💬 getScore 호출:', event, genderKey, '입력값:', value, '→ 숫자:', numericValue);
   console.log('🎯 점수 리스트:', list);
 
@@ -78,15 +73,17 @@ function getScore(event, gender, value) {
 
   for (let i = 0; i < list.length; i++) {
     const score = 100 - i * 2;
-    const standard = list[i];
+    const current = list[i];
+    const next = list[i + 1] ?? (isReverse ? -Infinity : Infinity);
+
     if (isReverse) {
-      if (numericValue <= standard) {
-        console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${standard})`);
+      if (numericValue <= current && numericValue > next) {
+        console.log(`✅ 리턴점수 (reverse): ${score} (범위: ${current} ~ ${next})`);
         return score;
       }
     } else {
-      if (numericValue >= standard) {
-        console.log(`✅ 리턴점수: ${score} (기준: ${standard})`);
+      if (numericValue >= current && numericValue < next) {
+        console.log(`✅ 리턴점수: ${score} (범위: ${current} ~ ${next})`);
         return score;
       }
     }
@@ -95,6 +92,7 @@ function getScore(event, gender, value) {
   console.log('⚠️ 조건 만족하는 값 없음 → 24점 리턴');
   return 24;
 }
+
 
 
 
