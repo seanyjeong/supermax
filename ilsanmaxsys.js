@@ -327,11 +327,12 @@ router.patch('/update-student/:id', (req, res) => {
       res.json({ message: '✅ 수강생 수정 완료' });
     });
   });
-  router.get('/payment-status-summary', (req, res) => {
-    const { month } = req.query;
-    if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
-  
-    const sql = `
+
+router.get('/payment-status-summary', (req, res) => {
+  const month = req.query.month;
+  if (!month) return res.status(400).json({ message: 'month 파라미터 누락' });
+
+  const sql = `
     SELECT 
       s.id AS student_id,
       s.name, s.grade, s.gender, s.phone, s.school,
@@ -345,36 +346,32 @@ router.patch('/update-student/:id', (req, res) => {
     LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
     WHERE DATE_FORMAT(s.first_registered_at, '%Y-%m') <= ?
   `;
-  
-  
-  
-  
-  
-    dbAcademy.query(sql, [month, month], (err, rows) => {
-      if (err) {
-        console.error('❌ 결제 상태 요약 실패:', err);
-        return res.status(500).json({ message: 'DB 오류' });
-      }
-  
-      const enriched = rows.map(r => {
-        const weeklyCount = r.weekdays ? r.weekdays.replace(/,/g, '').length : 0;
-  
-        const expected_amount = weeklyCount >= 5 ? 550000
-                              : weeklyCount === 4 ? 500000
-                              : weeklyCount === 3 ? 400000
-                              : weeklyCount === 2 ? 300000
-                              : weeklyCount === 1 ? 150000 : 0;
-  
-        return {
-          ...r,
-          expected_amount,
-          status: r.paid_at ? '납부완료' : (r.status === '재원' ? '미납' : r.status)
-        };
-      });
-  
-      res.json(enriched);
+
+  dbAcademy.query(sql, [month, month, month], (err, rows) => {
+    if (err) {
+      console.error('❌ 결제 상태 요약 실패:', err);
+      return res.status(500).json({ message: 'DB 오류', error: err });
+    }
+
+    const enriched = rows.map(r => {
+      const weeklyCount = r.weekdays ? r.weekdays.replace(/,/g, '').length : 0;
+      const expected_amount =
+        weeklyCount >= 5 ? 550000 :
+        weeklyCount === 4 ? 500000 :
+        weeklyCount === 3 ? 400000 :
+        weeklyCount === 2 ? 300000 :
+        weeklyCount === 1 ? 150000 : 0;
+
+      return {
+        ...r,
+        expected_amount,
+        status: r.paid_at ? '납부완료' : (r.status === '재원' ? '미납' : r.status)
+      };
     });
+
+    res.json(enriched);
   });
+});
   
   
   
