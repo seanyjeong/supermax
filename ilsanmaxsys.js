@@ -233,8 +233,9 @@ router.post('/register-payment', (req, res) => {
     const { month } = req.query;
   
     const sql = `
-      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone,
-             p.id AS payment_id, p.session_count, p.amount, p.paid_at, p.is_manual
+SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone, s.weekdays,
+       p.id AS payment_id, p.session_count, p.amount, p.paid_at, p.is_manual
+
       FROM students s
       LEFT JOIN payments p
         ON s.id = p.student_id AND p.month = ?
