@@ -233,42 +233,31 @@ router.post('/register-payment', (req, res) => {
     const { month } = req.query;
   
     const sql = `
-    SELECT 
-      s.id AS student_id,
-      s.name, s.grade, s.school, s.gender, s.first_registered_at,
-      COALESCE(m.status, s.status) AS status,
-      COALESCE(m.weekdays, s.weekdays) AS weekdays,
-      COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
-      p.amount, p.paid_at
-    FROM students s
-    LEFT JOIN student_monthly m
-      ON s.id = m.student_id AND m.month = ?
-    LEFT JOIN payments p
-      ON s.id = p.student_id AND p.month = ?
-    ORDER BY s.grade, s.name
+      SELECT 
+        s.id AS student_id,
+        s.name, s.grade, s.school, s.gender, s.first_registered_at,
+        COALESCE(m.status, s.status) AS status,
+        COALESCE(m.weekdays, s.weekdays) AS weekdays,
+        COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+        p.amount, p.paid_at
+      FROM students s
+      LEFT JOIN student_monthly m
+        ON s.id = m.student_id AND m.month = ?
+      LEFT JOIN payments p
+        ON s.id = p.student_id AND p.month = ?
+      ORDER BY s.grade, s.name
     `;
   
-    dbAcademy.query(sql, [month], (err, rows) => {
-      if (err) return res.status(500).json({ message: 'DB 오류' });
+    dbAcademy.query(sql, [month, month], (err, rows) => {
+      if (err) {
+        console.error('❌ 결제 목록 조회 실패:', err);
+        return res.status(500).json({ message: 'DB 오류' });
+      }
   
-      const enriched = rows.map(r => {
-        const defaultAmount = !r.is_manual
-          ? (r.session_count >= 5 ? 550000
-            : r.session_count === 4 ? 500000
-            : r.session_count === 3 ? 400000
-            : r.session_count === 2 ? 300000
-            : 150000)
-          : r.amount;
-  
-        return {
-          ...r,
-          expected_amount: defaultAmount
-        };
-      });
-  
-      res.json(enriched);
+      res.json(rows);
     });
   });
+  
 
   router.post('/save-payment', (req, res) => {
     const {
