@@ -332,11 +332,8 @@ router.patch('/update-student/:id', (req, res) => {
     if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
   
     const sql = `
-      SELECT s.id AS student_id, s.name, s.grade, s.school, s.gender, s.phone,
-             COALESCE(m.status, s.status) AS status,
-             COALESCE(m.weekdays, s.weekdays) AS weekdays,
-             COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
-             p.amount, p.paid_at
+      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone,
+             s.weekdays, m.status, p.amount, p.paid_at
       FROM students s
       LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
       LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
@@ -348,14 +345,27 @@ router.patch('/update-student/:id', (req, res) => {
         return res.status(500).json({ message: 'DB 오류' });
       }
   
-      const enriched = rows.map(r => ({
-        ...r,
-        status: r.paid_at ? '납부완료' : (r.status === '재원' ? '미납' : r.status)
-      }));
+      // ✅ 여기서 expected_amount 계산 추가
+      const enriched = rows.map(r => {
+        const weeklyCount = r.weekdays ? r.weekdays.replace(/,/g, '').length : 0;
+  
+        const expected_amount = weeklyCount >= 5 ? 550000
+                              : weeklyCount === 4 ? 500000
+                              : weeklyCount === 3 ? 400000
+                              : weeklyCount === 2 ? 300000
+                              : weeklyCount === 1 ? 150000 : 0;
+  
+        return {
+          ...r,
+          expected_amount,
+          status: r.paid_at ? '납부완료' : (r.status === '재원' ? '미납' : r.status)
+        };
+      });
   
       res.json(enriched);
     });
   });
+  
   
   
   // ✅ 납부 수단별 합계 API
