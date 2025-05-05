@@ -184,34 +184,23 @@ router.post('/register-payment', (req, res) => {
 
   router.post('/register-student', (req, res) => {
     const {
-      name,
-      grade,
-      gender,
-      school,
-      phone,
-      parent_phone,
-      tshirt_size,
-      register_source,
-      first_registered_at,
-      lesson_type,
-      status,
-      payment_day = 1   // ✅ 기본 1일
-    } = req.body;
-  
-    if (!name || !grade || !gender || !first_registered_at) {
-      return res.status(400).json({ message: '❗ 필수 항목 누락' });
-    }
-  
-    const sql = `
-      INSERT INTO students 
-      (name, grade, gender, school, phone, parent_phone, tshirt_size, register_source, first_registered_at, lesson_type, status, payment_day)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-  
-    const values = [
-      name, grade, gender, school, phone, parent_phone,
-      tshirt_size, register_source, first_registered_at, lesson_type, status, payment_day
-    ];
+        name, grade, gender, school, phone, parent_phone,
+        tshirt_size, register_source, first_registered_at,
+        lesson_type, status, payment_day, weekdays  // ✅ 요일 추가
+      } = req.body;
+      
+      if (!name || !grade || !gender || !first_registered_at) {
+        return res.status(400).json({ message: '❗ 필수 항목 누락' });
+      }
+      
+      const sql = `
+        INSERT INTO students
+        (name, grade, gender, school, phone, parent_phone, tshirt_size, register_source, first_registered_at, lesson_type, status, payment_day, weekdays)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      const values = [name, grade, gender, school, phone, parent_phone, tshirt_size, register_source, first_registered_at, lesson_type, status, payment_day, weekdays];
+      
   
     dbAcademy.query(sql, values, (err, result) => {
       if (err) {
@@ -317,27 +306,23 @@ router.post('/register-payment', (req, res) => {
   
 // ✅ 수강생 수정 API
 router.patch('/update-student/:id', (req, res) => {
-    const student_id = req.params.id;
+    const { id } = req.params;
     const {
-      name, grade, gender, school, phone,
-      parent_phone, tshirt_size, register_source,
-      first_registered_at, lesson_type, status, payment_day
+      name, grade, gender, school, phone, parent_phone,
+      tshirt_size, register_source, first_registered_at,
+      lesson_type, status, payment_day, weekdays  // ✅ 요일 추가
     } = req.body;
-  
+    
     const sql = `
-      UPDATE students SET 
-        name = ?, grade = ?, gender = ?, school = ?, phone = ?,
-        parent_phone = ?, tshirt_size = ?, register_source = ?, 
-        first_registered_at = ?, lesson_type = ?, status = ?, payment_day = ?
+      UPDATE students SET
+        name = ?, grade = ?, gender = ?, school = ?, phone = ?, parent_phone = ?,
+        tshirt_size = ?, register_source = ?, first_registered_at = ?,
+        lesson_type = ?, status = ?, payment_day = ?, weekdays = ?
       WHERE id = ?
     `;
-  
-    const values = [
-      name, grade, gender, school, phone,
-      parent_phone, tshirt_size, register_source,
-      first_registered_at, lesson_type, status, payment_day,
-      student_id
-    ];
+    
+    const values = [name, grade, gender, school, phone, parent_phone, tshirt_size, register_source, first_registered_at, lesson_type, status, payment_day, weekdays, id];
+    
   
     dbAcademy.query(sql, values, (err, result) => {
       if (err) {
