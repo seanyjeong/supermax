@@ -22,11 +22,30 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-db.connect(err => {
-  if (err) console.error('❌ DB 연결 실패:', err);
-  else console.log('✅ MySQL 연결 성공');
+// 새 DB (학원관리)
+const dbAcademy = mysql.createConnection({
+  host: '211.37.174.218',
+  user: 'maxilsan',
+  password: 'q141171616!',
+  database: '학원관리',
+  charset: 'utf8mb4'
 });
-exports.db = db;
+
+// 연결
+db.connect(err => {
+  if (err) console.error('❌ 정시엔진 DB 연결 실패:', err);
+  else console.log('✅ 정시엔진 DB 연결 성공');
+});
+
+dbAcademy.connect(err => {
+  if (err) console.error('❌ 학원관리 DB 연결 실패:', err);
+  else console.log('✅ 학원관리 DB 연결 성공');
+});
+
+// 외부로 내보내기
+module.exports = { db, dbAcademy };
+
+
 const collegeManage = require('./collegeManage');
 app.use('/college', collegeManage);
 
