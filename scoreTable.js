@@ -89,9 +89,12 @@ function getScore(event, gender, value) {
     }
   }
 
-  console.log('⚠️ 조건 만족하는 값 없음 → 24점 리턴');
-  return 24;
+  // ✅ 리스트의 마지막보다 작거나 크면 마지막 점수 리턴
+  const finalScore = 100 - (list.length - 1) * 2;
+  console.log(`✅ 범위 밖 기록 → 마지막 점수 리턴: ${finalScore}`);
+  return finalScore;
 }
+
 
 
 
