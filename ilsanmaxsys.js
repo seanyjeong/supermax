@@ -332,17 +332,20 @@ router.patch('/update-student/:id', (req, res) => {
     if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
   
     const sql = `
-      SELECT 
-        s.id AS student_id,
-        s.name, s.grade, s.gender, s.phone, s.school,
-        COALESCE(m.status, s.status) AS status,
-        COALESCE(m.weekdays, s.weekdays) AS weekdays,
-        COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
-        p.amount, p.paid_at
-      FROM students s
-      LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
-      LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
-    `;
+    SELECT 
+      s.id AS student_id,
+      s.name, s.grade, s.gender, s.phone, s.school,
+      COALESCE(m.status, s.status) AS status,
+      COALESCE(m.weekdays, s.weekdays) AS weekdays,
+      COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+      p.amount, p.paid_at,
+      s.first_registered_at
+    FROM students s
+    LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
+    LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
+    WHERE STR_TO_DATE(?, '%Y-%m') >= STR_TO_DATE(s.first_registered_at, '%Y-%m-%d')
+  `;
+  
   
     dbAcademy.query(sql, [month, month], (err, rows) => {
       if (err) {
