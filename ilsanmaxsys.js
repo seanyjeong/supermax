@@ -327,35 +327,50 @@ router.patch('/update-student/:id', (req, res) => {
       res.json({ message: '✅ 수강생 수정 완료' });
     });
   });
-// ✅ 월별 결제 상태 요약 API (납부 여부 확인)
-router.get('/payment-status-summary', (req, res) => {
+  router.get('/payment-status-summary', (req, res) => {
     const { month } = req.query;
     if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
   
     const sql = `
-      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone,
-             p.amount, p.paid_at
+      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone, s.first_registered_at,
+             COALESCE(m.status, s.status) AS monthly_status,
+             COALESCE(m.weekdays, s.weekdays) AS monthly_weekdays,
+             p.amount, p.paid_at, p.payment_method
       FROM students s
+      LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
       LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
-      WHERE s.status = '재원'
       ORDER BY s.grade, s.name
     `;
   
-    dbAcademy.query(sql, [month], (err, rows) => {
+    dbAcademy.query(sql, [month, month], (err, rows) => {
       if (err) {
         console.error('❌ 결제 상태 요약 실패:', err);
         return res.status(500).json({ message: 'DB 오류' });
       }
   
-      const enriched = rows.map(r => ({
-        ...r,
-        status: r.paid_at ? '납부완료' : '미납'
-      }));
+      const filtered = rows.filter(r => r.first_registered_at <= `${month}-31`);
+  
+      const enriched = filtered.map(r => {
+        const weekdayCount = r.monthly_weekdays ? r.monthly_weekdays.length : 0;
+        const expected_amount = weekdayCount >= 5 ? 550000
+                              : weekdayCount === 4 ? 500000
+                              : weekdayCount === 3 ? 400000
+                              : weekdayCount === 2 ? 300000
+                              : weekdayCount === 1 ? 150000 : 0;
+  
+        return {
+          ...r,
+          expected_amount,
+          status: r.monthly_status || '재원',
+          paid_status: r.paid_at ? '납부완료' : '미납'
+        };
+      });
   
       res.json(enriched);
     });
   });
-
+  
+  // ✅ 납부 수단별 합계 API
   router.get('/payment-summary-by-method', (req, res) => {
     const { month } = req.query;
     if (!month) return res.status(400).json({ message: 'month 쿼리 필요' });
@@ -382,6 +397,7 @@ router.get('/payment-status-summary', (req, res) => {
       res.json(result);
     });
   });
+  
   
   // ilsanmaxsys.js
 router.post('/set-student-monthly', (req, res) => {
