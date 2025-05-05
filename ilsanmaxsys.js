@@ -348,6 +348,7 @@ router.patch('/update-student/:id', (req, res) => {
   
   
   
+  
     dbAcademy.query(sql, [month, month], (err, rows) => {
       if (err) {
         console.error('❌ 결제 상태 요약 실패:', err);
