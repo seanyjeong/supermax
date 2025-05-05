@@ -55,7 +55,9 @@ const scoreTable = {
 };
 
 function getScore(event, gender, value) {
-  const genderKey = (gender + '').trim(); // 공백 제거해서 정확하게 비교
+  const genderKey = (gender + '').trim();
+  console.log(`🔎 getScore() 호출 → event: ${event}, gender(raw): "${gender}", genderKey: "${genderKey}", value: ${value}`);
+
   const list = scoreTable[event]?.[genderKey];
   if (!list) {
     console.log('❌ 점수 리스트 없음:', event, genderKey);
