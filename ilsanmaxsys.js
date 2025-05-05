@@ -233,25 +233,19 @@ router.post('/register-payment', (req, res) => {
     const { month } = req.query;
   
     const sql = `
-SELECT 
-  s.id AS student_id,
-  s.name, s.grade, s.school, s.gender, s.first_registered_at,
-  COALESCE(m.status, s.status) AS status,
-  COALESCE(m.weekdays, s.weekdays) AS weekdays,
-  COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
-  p.amount, p.paid_at
-FROM students s
-LEFT JOIN student_monthly m
-  ON s.id = m.student_id AND m.month = ?
-LEFT JOIN payments p
-  ON s.id = p.student_id AND p.month = ?
-
-
-      FROM students s
-      LEFT JOIN payments p
-        ON s.id = p.student_id AND p.month = ?
-      WHERE s.status = '재원'
-      ORDER BY s.grade, s.name
+    SELECT 
+      s.id AS student_id,
+      s.name, s.grade, s.school, s.gender, s.first_registered_at,
+      COALESCE(m.status, s.status) AS status,
+      COALESCE(m.weekdays, s.weekdays) AS weekdays,
+      COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+      p.amount, p.paid_at
+    FROM students s
+    LEFT JOIN student_monthly m
+      ON s.id = m.student_id AND m.month = ?
+    LEFT JOIN payments p
+      ON s.id = p.student_id AND p.month = ?
+    ORDER BY s.grade, s.name
     `;
   
     dbAcademy.query(sql, [month], (err, rows) => {
