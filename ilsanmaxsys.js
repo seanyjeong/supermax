@@ -332,8 +332,13 @@ router.patch('/update-student/:id', (req, res) => {
     if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
   
     const sql = `
-      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone,
-             s.weekdays, m.status, p.amount, p.paid_at
+      SELECT 
+        s.id AS student_id,
+        s.name, s.grade, s.gender, s.phone, s.school,
+        COALESCE(m.status, s.status) AS status,
+        COALESCE(m.weekdays, s.weekdays) AS weekdays,
+        COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+        p.amount, p.paid_at
       FROM students s
       LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
       LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
@@ -345,7 +350,6 @@ router.patch('/update-student/:id', (req, res) => {
         return res.status(500).json({ message: 'DB 오류' });
       }
   
-      // ✅ 여기서 expected_amount 계산 추가
       const enriched = rows.map(r => {
         const weeklyCount = r.weekdays ? r.weekdays.replace(/,/g, '').length : 0;
   
@@ -365,6 +369,7 @@ router.patch('/update-student/:id', (req, res) => {
       res.json(enriched);
     });
   });
+  
   
   
   
