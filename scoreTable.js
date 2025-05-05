@@ -198,21 +198,37 @@ router.get('/students-by-month', async (req, res) => {
     res.json({ success: false, error: err });
   }
 });
-
-// ✅ 개별 기록 저장 API (기록 + 점수 자동 계산)
+//기록 저장
 router.post('/save-test-records', async (req, res) => {
   const { records } = req.body;
   let updated = 0;
   try {
-for (const r of records) {
-  const { user_id, event, record, test_month } = r;
-  if (!record || isNaN(parseFloat(record))) continue; // ✅ 기록 없으면 무시
+    for (const r of records) {
+      const { user_id, event, record, test_month } = r;
 
-      const [student] = await dbQuery('SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [user_id, test_month]);
+      // ✅ F 처리 먼저
+      let rawValue = record;
+      let score = 24;
+
+      const isDisqualified = typeof record === 'string' && record.trim().toUpperCase() === 'F';
+
+      if (!record || (!isDisqualified && isNaN(parseFloat(record)))) continue;
+
+      const [student] = await dbQuery(
+        'SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?',
+        [user_id, test_month]
+      );
       if (!student) continue;
 
       const gender = student.gender;
-      const score = getScore(event, gender, parseFloat(record));
+
+      if (!isDisqualified) {
+        score = getScore(event, gender, parseFloat(record));
+      } else {
+        rawValue = 'F'; // 기록은 문자 F로 저장
+        console.log(`⚠️ 실격 처리: ${user_id}, 종목: ${event} → 기록: F, 점수: 24`);
+      }
+
       const columnMap = {
         '제자리멀리뛰기': ['jump_cm', 'jump_score'],
         '20m왕복달리기': ['run20m_sec', 'run20m_score'],
@@ -224,44 +240,36 @@ for (const r of records) {
       };
       const [valCol, scoreCol] = columnMap[event];
 
-      await dbQuery(`UPDATE 실기기록_테스트 SET ${valCol} = ?, ${scoreCol} = ? WHERE exam_number = ? AND test_month = ?`,
-        [record, score, user_id, test_month]);
+      await dbQuery(
+        `UPDATE 실기기록_테스트 SET ${valCol} = ?, ${scoreCol} = ? WHERE exam_number = ? AND test_month = ?`,
+        [rawValue, score, user_id, test_month]
+      );
 
-      // 총점 업데이트
-      const [updatedRow] = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [user_id, test_month]);
-  console.log('📦 updatedRow:', updatedRow);
+      const [updatedRow] = await dbQuery(
+        'SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?',
+        [user_id, test_month]
+      );
 
-const total = [
-  updatedRow.jump_score,
-  updatedRow.run20m_score,
-  updatedRow.sit_score,
-  updatedRow.situp_score,
-  updatedRow.back_score,
-  updatedRow.medball_score,
-  updatedRow.run10m_score
-].map(v => {
-  const num = Number(v);
-  return isNaN(num) ? 0 : num;
-}).reduce((a, b) => a + b, 0);
+      const total = [
+        updatedRow.jump_score,
+        updatedRow.run20m_score,
+        updatedRow.sit_score,
+        updatedRow.situp_score,
+        updatedRow.back_score,
+        updatedRow.medball_score,
+        updatedRow.run10m_score
+      ]
+        .map(v => {
+          const num = Number(v);
+          return isNaN(num) ? 0 : num;
+        })
+        .reduce((a, b) => a + b, 0);
 
-console.log(`🧮 총점 계산:`, {
-  exam_number: user_id,
-  test_month,
-  scores: {
-    jump: updatedRow.jump_score,
-    run20m: updatedRow.run20m_score,
-    sit: updatedRow.sit_score,
-    situp: updatedRow.situp_score,
-    back: updatedRow.back_score,
-    medball: updatedRow.medball_score,
-    run10m: updatedRow.run10m_score
-  },
-  total
-});
+      await dbQuery(
+        'UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?',
+        [total, user_id, test_month]
+      );
 
-
-
-      await dbQuery('UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?', [total, user_id, test_month]);
       updated++;
     }
 
@@ -271,5 +279,6 @@ console.log(`🧮 총점 계산:`, {
     res.json({ success: false, error: err });
   }
 });
+
 
 module.exports = router;
