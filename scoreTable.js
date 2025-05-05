@@ -59,39 +59,33 @@ const scoreTable = {
 
 function getScore(event, gender, value) {
   const genderKey = gender === '남자' ? '남' : gender === '여자' ? '여' : gender;
-  const list = scoreTable[event]?.[genderKey];
-  if (!list) {
-    console.log('❌ 점수 리스트 없음:', event, genderKey);
-    return 24;
-  }
- const numericValue = parseFloat(value);
-console.log('💬 getScore 호출:', event, genderKey, '입력값:', value, '→ 숫자:', numericValue);
-  console.log('🎯 점수 리스트:', list);
+  const eventData = scoreTable[event];
+  if (!eventData || !eventData[genderKey]) return 24;
 
-  const isReverse = scoreTable[event]?.reverse || false;
+  const numericValue = parseFloat(value);
+  if (isNaN(numericValue)) return 24;
 
-  for (let i = 0; i < list.length; i++) {
-    const score = 100 - i * 2;
-    const current = list[i];
-    const next = list[i + 1] ?? (isReverse ? -Infinity : Infinity);
+  const list = eventData[genderKey];
+  const isReverse = eventData.reverse || false;
 
-    if (isReverse) {
-      if (numericValue <= current && numericValue > next) {
-        console.log(`✅ 리턴점수 (reverse): ${score} (범위: ${current} ~ ${next})`);
-        return score;
+  // LOOKUP 함수 방식 적용
+  if (isReverse) {
+    // 내림차순 검색 (값이 작을수록 점수 높음)
+    for (let i = 0; i < list.length; i++) {
+      if (numericValue <= list[i]) {
+        return 100 - i * 2;
       }
-    } else {
-      if (numericValue >= current && numericValue < next) {
-        console.log(`✅ 리턴점수: ${score} (범위: ${current} ~ ${next})`);
-        return score;
+    }
+  } else {
+    // 오름차순 검색 (값이 클수록 점수 높음)
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (numericValue >= list[i]) {
+        return 100 - (list.length - 1 - i) * 2;
       }
     }
   }
 
-  // ✅ 리스트의 마지막보다 작거나 크면 마지막 점수 리턴
-  const finalScore = 100 - (list.length - 1) * 2;
-  console.log(`✅ 범위 밖 기록 → 마지막 점수 리턴: ${finalScore}`);
-  return finalScore;
+  return 24; // 기본값
 }
 
 
