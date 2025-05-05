@@ -332,14 +332,14 @@ router.patch('/update-student/:id', (req, res) => {
     if (!month) return res.status(400).json({ message: 'month 쿼리 필요 (예: 2025-05)' });
   
     const sql = `
-      SELECT s.id AS student_id, s.name, s.grade, s.gender, s.phone, s.first_registered_at,
-             COALESCE(m.status, s.status) AS monthly_status,
-             COALESCE(m.weekdays, s.weekdays) AS monthly_weekdays,
-             p.amount, p.paid_at, p.payment_method
+      SELECT s.id AS student_id, s.name, s.grade, s.school, s.gender, s.phone,
+             COALESCE(m.status, s.status) AS status,
+             COALESCE(m.weekdays, s.weekdays) AS weekdays,
+             COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+             p.amount, p.paid_at
       FROM students s
       LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
       LEFT JOIN payments p ON s.id = p.student_id AND p.month = ?
-      ORDER BY s.grade, s.name
     `;
   
     dbAcademy.query(sql, [month, month], (err, rows) => {
@@ -348,27 +348,15 @@ router.patch('/update-student/:id', (req, res) => {
         return res.status(500).json({ message: 'DB 오류' });
       }
   
-      const filtered = rows.filter(r => r.first_registered_at <= `${month}-31`);
-  
-      const enriched = filtered.map(r => {
-        const weekdayCount = r.monthly_weekdays ? r.monthly_weekdays.length : 0;
-        const expected_amount = weekdayCount >= 5 ? 550000
-                              : weekdayCount === 4 ? 500000
-                              : weekdayCount === 3 ? 400000
-                              : weekdayCount === 2 ? 300000
-                              : weekdayCount === 1 ? 150000 : 0;
-  
-        return {
-          ...r,
-          expected_amount,
-          status: r.monthly_status || '재원',
-          paid_status: r.paid_at ? '납부완료' : '미납'
-        };
-      });
+      const enriched = rows.map(r => ({
+        ...r,
+        status: r.paid_at ? '납부완료' : (r.status === '재원' ? '미납' : r.status)
+      }));
   
       res.json(enriched);
     });
   });
+  
   
   // ✅ 납부 수단별 합계 API
   router.get('/payment-summary-by-method', (req, res) => {
