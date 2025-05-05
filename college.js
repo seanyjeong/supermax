@@ -62,6 +62,9 @@ app.use('/college', collegeCalculate);
 const scoreTable = require('./scoreTable');
 app.use('/college', scoreTable);
 
+const ilsanmaxsys = require('./ilsanmaxsys'); 
+app.use('/college', ilsanmaxsys);             
+
 
 
 
