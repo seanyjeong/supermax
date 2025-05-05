@@ -389,6 +389,57 @@ router.get('/payment-status-summary', (req, res) => {
     });
   });
   
+  // ilsanmaxsys.js
+router.post('/set-student-monthly', (req, res) => {
+    const { student_id, month, status, lesson_type, weekdays } = req.body;
+  
+    if (!student_id || !month) {
+      return res.status(400).json({ message: '❗ student_id, month는 필수' });
+    }
+  
+    const sql = `
+      INSERT INTO student_monthly (student_id, month, status, lesson_type, weekdays)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 
+        status = VALUES(status),
+        lesson_type = VALUES(lesson_type),
+        weekdays = VALUES(weekdays)
+    `;
+  
+    const values = [student_id, month, status || null, lesson_type || null, weekdays || null];
+  
+    dbAcademy.query(sql, values, (err, result) => {
+      if (err) {
+        console.error('❌ 월별 상태 저장 실패:', err);
+        return res.status(500).json({ message: 'DB 오류' });
+      }
+      res.json({ message: '✅ 월별 상태 저장 완료' });
+    });
+  });
+  
+  router.get('/get-student-monthly', (req, res) => {
+    const { month } = req.query;
+    if (!month) return res.status(400).json({ message: '❗ month 누락' });
+  
+    const sql = `
+      SELECT s.id AS student_id, s.name, s.grade, s.school, s.gender,
+             COALESCE(m.status, s.status) AS status,
+             COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+             COALESCE(m.weekdays, s.weekdays) AS weekdays
+      FROM students s
+      LEFT JOIN student_monthly m
+        ON s.id = m.student_id AND m.month = ?
+    `;
+  
+    dbAcademy.query(sql, [month], (err, rows) => {
+      if (err) {
+        console.error('❌ 월별 상태 조회 실패:', err);
+        return res.status(500).json({ message: 'DB 오류' });
+      }
+      res.json(rows);
+    });
+  });
+  
     
 
 module.exports = router;
