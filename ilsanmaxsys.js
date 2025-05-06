@@ -560,7 +560,7 @@ router.get('/dashboardsummary', async (req, res) => {
         sm.student_id,
         sm.status AS monthly_status,
         s.name, s.school, s.grade, s.gender, s.tshirt_size,
-        COALESCE(sm.status, s.status) AS final_status
+        COALESCE(sm.status, s.status) AS final_status,
         COALESCE(sm.lesson_type, s.lesson_type) AS final_lesson_type
       FROM students s
       LEFT JOIN student_monthly sm
