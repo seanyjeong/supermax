@@ -533,12 +533,15 @@ router.get('/dashboardsummary', async (req, res) => {
   `;
 
   const sqlMonthlyRevenue = `
-    SELECT DATE_FORMAT(paid_at, '%Y-%m') AS month, SUM(amount) AS total
-    FROM payments
-    WHERE paid_at IS NOT NULL
-    GROUP BY month
-    ORDER BY month DESC
-  `;
+  SELECT
+    DATE_FORMAT(paid_at, '%Y-%m') AS month,
+    SUM(amount) AS total
+  FROM payments
+  WHERE paid_at IS NOT NULL
+  GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
+  ORDER BY month DESC
+`;
+
 
   const sqlStudentCounts = `
     SELECT 
