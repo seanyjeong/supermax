@@ -526,6 +526,48 @@ router.post('/register-multi-payment', (req, res) => {
   }
 });
 
+router.get('/payment/summary-stats', async (req, res) => {
+  try {
+    const sqlTotal = `SELECT SUM(amount) AS total_revenue FROM payments WHERE paid_at IS NOT NULL`;
+    const sqlMonth = `SELECT DATE_FORMAT(NOW(), '%Y-%m') AS current_month`;
+    const sqlCurrentMonth = `
+      SELECT SUM(amount) AS current_month_revenue 
+      FROM payments 
+      WHERE DATE_FORMAT(applied_month, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') AND paid_at IS NOT NULL
+    `;
+    const sqlStudents = `SELECT COUNT(*) AS total_students FROM students`;
+    const sqlResting = `SELECT COUNT(*) AS resting_students FROM students WHERE status = '휴식'`;
+
+    const [total] = await dbQuery(sqlTotal);
+    const [month] = await dbQuery(sqlMonth);
+    const [thisMonth] = await dbQuery(sqlCurrentMonth);
+    const [students] = await dbQuery(sqlStudents);
+    const [resting] = await dbQuery(sqlResting);
+
+    res.json({
+      total_revenue: total.total_revenue || 0,
+      current_month: month.current_month,
+      current_month_revenue: thisMonth.current_month_revenue || 0,
+      total_students: students.total_students,
+      resting_students: resting.resting_students
+    });
+  } catch (err) {
+    console.error('❌ 통계 요약 실패:', err);
+    res.status(500).json({ message: 'DB 오류', error: err });
+  }
+});
+
+// 유틸성 DB Promise
+function dbQuery(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    dbAcademy.query(sql, params, (err, results) => {
+      if (err) return reject(err);
+      resolve(results);
+    });
+  });
+}
+
+
   
   
     
