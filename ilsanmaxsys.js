@@ -511,7 +511,7 @@ router.post('/register-multi-payment', (req, res) => {
       VALUES ?
     `;
     console.log('🛠 INSERT 실행 준비 완료');
-    db.query(sql, [valuesList], (err, result) => {
+    dbAcademy.query(sql, [valuesList], (err, result) => {
       if (err) {
         console.error('❌ DB 오류:', err);
         return res.status(500).json({ message: 'DB 오류', error: err });
