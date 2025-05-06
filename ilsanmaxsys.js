@@ -458,39 +458,43 @@ router.post('/set-student-monthly', (req, res) => {
   });
 
   // ✅ 다개월 선납 결제 등록 API
-  router.post('/register-multi-payment', (req, res) => {
-    const {
-      student_id,
-      start_month,
-      month_count,
-      total_amount,
-      paid_at,
-      payment_method,
-      session_count,
-      note
-    } = req.body;
-  
-    console.log('💬 요청 데이터:', req.body);
-  
-    if (!student_id || !start_month || !month_count || !total_amount || !paid_at || !payment_method) {
-      return res.status(400).json({ message: '❗ 필수 항목 누락' });
-    }
-  
-    const unit_amount = Math.floor(total_amount / month_count); // 나눠서 분배
-    const valuesList = [];
-  
+router.post('/register-multi-payment', (req, res) => {
+  const {
+    student_id,
+    start_month,
+    month_count,
+    total_amount,
+    paid_at,
+    payment_method,
+    session_count,
+    note
+  } = req.body;
+
+  console.log('✅ [register-multi-payment] 호출됨');
+  console.log('💬 요청 데이터:', req.body);
+
+  // 필수 항목 검사
+  if (!student_id || !start_month || !month_count || !total_amount || !paid_at || !payment_method) {
+    console.log('❌ 필수 항목 누락');
+    return res.status(400).json({ message: '❗ 필수 항목 누락' });
+  }
+
+  const unit_amount = Math.floor(total_amount / month_count);
+  const valuesList = [];
+
+  try {
     for (let i = 0; i < month_count; i++) {
-      const baseDate = new Date(start_month + '-01');  // ex) '2025-02-01'
-      baseDate.setMonth(baseDate.getMonth() + i);      // 안전하게 i개월 더하기
+      const baseDate = new Date(`${start_month}-01`);
+      baseDate.setMonth(baseDate.getMonth() + i);
       const applied_month = baseDate.toISOString().slice(0, 7);
-      
-      console.log(`➡️ ${i + 1}번째 month: ${applied_month}`);
-    
+
+      console.log(`➡️ ${i + 1}번째 적용월: ${applied_month}`);
+
       valuesList.push([
         student_id,
-        start_month,          // 결제한 달 (month 컬럼)
-        applied_month,        // 적용되는 달
-        session_count,
+        start_month,
+        applied_month,
+        session_count || 12,
         unit_amount,
         1,
         '정상',
@@ -499,29 +503,29 @@ router.post('/set-student-monthly', (req, res) => {
         note || ''
       ]);
     }
-    
-  
-    console.log('🧾 최종 insert values:', valuesList);
-  
+
+    // 👉 예시 insert 코드 (너 실제 insert 구문으로 대체해)
     const sql = `
-      INSERT INTO payments 
+      INSERT INTO payments
       (student_id, month, applied_month, session_count, amount, is_manual, status, paid_at, payment_method, note)
       VALUES ?
-      ON DUPLICATE KEY UPDATE
-        amount = VALUES(amount),
-        paid_at = VALUES(paid_at),
-        payment_method = VALUES(payment_method),
-        note = VALUES(note)
     `;
-  
-    dbAcademy.query(sql, [valuesList], (err, result) => {
+    console.log('🛠 INSERT 실행 준비 완료');
+    db.query(sql, [valuesList], (err, result) => {
       if (err) {
-        console.error('❌ 선납 결제 등록 실패:', err);
-        return res.status(500).json({ message: 'DB 오류' });
+        console.error('❌ DB 오류:', err);
+        return res.status(500).json({ message: 'DB 오류', error: err });
       }
-      res.json({ message: '✅ 선납 결제 완료', inserted: result.affectedRows });
+      console.log('✅ DB 저장 완료:', result);
+      res.json({ message: '납부 등록 성공', inserted: result.affectedRows });
     });
-  });
+
+  } catch (e) {
+    console.error('❌ 처리 중 에러:', e);
+    res.status(500).json({ message: '서버 오류', error: e });
+  }
+});
+
   
   
     
