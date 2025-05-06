@@ -528,20 +528,22 @@ router.post('/register-multi-payment', (req, res) => {
 
 // ✅ 전체 매출, 월별 매출, 총 등록자 수, 휴식자 수 포함
 router.get('/dashboardsummary', async (req, res) => {
+  const { month } = req.query;
+  if (!month) return res.status(400).json({ message: 'month 쿼리 파라미터가 필요합니다 (YYYY-MM)' });
+
   const sqlTotalRevenue = `
     SELECT SUM(amount) AS total FROM payments WHERE paid_at IS NOT NULL
   `;
 
   const sqlMonthlyRevenue = `
-  SELECT
-    DATE_FORMAT(paid_at, '%Y-%m') AS month,
-    SUM(amount) AS total
-  FROM payments
-  WHERE paid_at IS NOT NULL
-  GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
-  ORDER BY month DESC
-`;
-
+    SELECT
+      DATE_FORMAT(paid_at, '%Y-%m') AS month,
+      SUM(amount) AS total
+    FROM payments
+    WHERE paid_at IS NOT NULL
+    GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
+    ORDER BY month DESC
+  `;
 
   const sqlStudentCounts = `
     SELECT 
@@ -552,15 +554,42 @@ router.get('/dashboardsummary', async (req, res) => {
     FROM students
   `;
 
+  const sqlMonthlyStudentStats = `
+    SELECT
+      SUM(p.paid_at IS NOT NULL) AS paid_count,
+      COUNT(DISTINCT s.id) AS total_students,
+      SUM(s.status = '휴식') AS resting_students
+    FROM students s
+    LEFT JOIN payments p
+      ON s.id = p.student_id AND DATE_FORMAT(p.month, '%Y-%m') = ?
+    WHERE s.status IN ('재원', '휴식')
+  `;
+
+  const sqlStudentList = `
+    SELECT
+      name, school, grade, gender, status, tshirt_size
+    FROM students
+    WHERE status IN ('재원', '휴식')
+  `;
+
   try {
     const [totalRevenueRows] = await dbQuery(sqlTotalRevenue);
-    const [monthlyRevenueRows] = await dbQuery(sqlMonthlyRevenue);
+    const monthlyRevenueRows = await dbQuery(sqlMonthlyRevenue);
     const [studentCounts] = await dbQuery(sqlStudentCounts);
+    const [monthlyStats] = await dbQuery(sqlMonthlyStudentStats, [month]);
+    const studentList = await dbQuery(sqlStudentList);
 
     res.json({
       totalRevenue: totalRevenueRows.total || 0,
       monthlyRevenue: monthlyRevenueRows,
-      studentStats: studentCounts
+      studentStats: studentCounts,
+      selectedMonthStats: {
+        month,
+        revenue: monthlyRevenueRows.find(r => r.month === month)?.total || 0,
+        registered: monthlyStats.total_students || 0,
+        resting: monthlyStats.resting_students || 0
+      },
+      studentList: studentList
     });
   } catch (err) {
     console.error('❌ 대시보드 요약 통계 실패:', err);
