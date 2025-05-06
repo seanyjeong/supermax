@@ -573,7 +573,8 @@ router.get('/dashboardsummary', async (req, res) => {
       grade: row.grade,
       gender: row.gender,
       status: row.final_status,
-      tshirt_size: row.tshirt_size
+      tshirt_size: row.tshirt_size,
+      lesson_type: row.final_lesson_type 
     }));
 
     // ✅ 해당 월 매출
