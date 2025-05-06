@@ -249,7 +249,8 @@ LEFT JOIN payments p
       ORDER BY s.grade, s.name
     `;
   
-    dbAcademy.query(sql, [month, month], (err, rows) => {
+    dbAcademy.query(sql, [month, month, month], (err, rows) => {
+
       if (err) {
         console.error('❌ 결제 목록 조회 실패:', err);
         return res.status(500).json({ message: 'DB 오류' });
