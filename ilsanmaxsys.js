@@ -526,36 +526,45 @@ router.post('/register-multi-payment', (req, res) => {
   }
 });
 
-router.get('/payment/summary-stats', async (req, res) => {
-  try {
-    const sqlTotal = `SELECT SUM(amount) AS total_revenue FROM payments WHERE paid_at IS NOT NULL`;
-    const sqlMonth = `SELECT DATE_FORMAT(NOW(), '%Y-%m') AS current_month`;
-    const sqlCurrentMonth = `
-      SELECT SUM(amount) AS current_month_revenue 
-      FROM payments 
-      WHERE DATE_FORMAT(applied_month, '%Y-%m') = DATE_FORMAT(NOW(), '%Y-%m') AND paid_at IS NOT NULL
-    `;
-    const sqlStudents = `SELECT COUNT(*) AS total_students FROM students`;
-    const sqlResting = `SELECT COUNT(*) AS resting_students FROM students WHERE status = '휴식'`;
+// ✅ 전체 매출, 월별 매출, 총 등록자 수, 휴식자 수 포함
+router.get('/dashboardsummary', async (req, res) => {
+  const sqlTotalRevenue = `
+    SELECT SUM(amount) AS total FROM payments WHERE paid_at IS NOT NULL
+  `;
 
-    const [total] = await dbQuery(sqlTotal);
-    const [month] = await dbQuery(sqlMonth);
-    const [thisMonth] = await dbQuery(sqlCurrentMonth);
-    const [students] = await dbQuery(sqlStudents);
-    const [resting] = await dbQuery(sqlResting);
+  const sqlMonthlyRevenue = `
+    SELECT DATE_FORMAT(paid_at, '%Y-%m') AS month, SUM(amount) AS total
+    FROM payments
+    WHERE paid_at IS NOT NULL
+    GROUP BY month
+    ORDER BY month DESC
+  `;
+
+  const sqlStudentCounts = `
+    SELECT 
+      COUNT(*) AS total_students,
+      SUM(status = '재원') AS active_students,
+      SUM(status = '휴식') AS resting_students,
+      SUM(status = '퇴원') AS withdrawn_students
+    FROM students
+  `;
+
+  try {
+    const [totalRevenueRows] = await dbQuery(sqlTotalRevenue);
+    const [monthlyRevenueRows] = await dbQuery(sqlMonthlyRevenue);
+    const [studentCounts] = await dbQuery(sqlStudentCounts);
 
     res.json({
-      total_revenue: total.total_revenue || 0,
-      current_month: month.current_month,
-      current_month_revenue: thisMonth.current_month_revenue || 0,
-      total_students: students.total_students,
-      resting_students: resting.resting_students
+      totalRevenue: totalRevenueRows.total || 0,
+      monthlyRevenue: monthlyRevenueRows,
+      studentStats: studentCounts
     });
   } catch (err) {
-    console.error('❌ 통계 요약 실패:', err);
+    console.error('❌ 대시보드 요약 통계 실패:', err);
     res.status(500).json({ message: 'DB 오류', error: err });
   }
 });
+
 
 // 유틸성 DB Promise
 function dbQuery(sql, params = []) {
