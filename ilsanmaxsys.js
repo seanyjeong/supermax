@@ -243,8 +243,9 @@ router.post('/register-payment', (req, res) => {
       FROM students s
       LEFT JOIN student_monthly m
         ON s.id = m.student_id AND m.month = ?
-      LEFT JOIN payments p
-        ON s.id = p.student_id AND p.month = ?
+LEFT JOIN payments p
+  ON s.id = p.student_id 
+  AND (p.applied_month = ? OR (p.applied_month IS NULL AND p.month = ?))
       ORDER BY s.grade, s.name
     `;
   
