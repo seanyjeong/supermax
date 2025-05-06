@@ -243,14 +243,12 @@ router.post('/register-payment', (req, res) => {
       FROM students s
       LEFT JOIN student_monthly m
         ON s.id = m.student_id AND m.month = ?
-LEFT JOIN payments p
-  ON s.id = p.student_id 
-  AND (p.applied_month = ? OR (p.applied_month IS NULL AND p.month = ?))
+      LEFT JOIN payments p
+        ON s.id = p.student_id AND p.applied_month = ?
       ORDER BY s.grade, s.name
     `;
   
-    dbAcademy.query(sql, [month, month, month], (err, rows) => {
-
+    dbAcademy.query(sql, [month, month], (err, rows) => {
       if (err) {
         console.error('❌ 결제 목록 조회 실패:', err);
         return res.status(500).json({ message: 'DB 오류' });
@@ -259,6 +257,7 @@ LEFT JOIN payments p
       res.json(rows);
     });
   });
+  
   
 
   router.post('/save-payment', (req, res) => {
