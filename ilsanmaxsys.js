@@ -303,20 +303,33 @@ ORDER BY s.grade, s.name
       return res.status(400).json({ message: '❗ 필수 항목 누락' });
     }
   
-    const sql = `
-      INSERT INTO payments 
-      (student_id, month, weekdays, session_count, amount, is_manual, status, paid_at, payment_method)
-      VALUES (?, ?, '', ?, ?, ?, '정상', ?, ?)
-      ON DUPLICATE KEY UPDATE 
-        session_count = VALUES(session_count),
-        amount = VALUES(amount),
-        is_manual = VALUES(is_manual),
-        paid_at = VALUES(paid_at),
-        payment_method = VALUES(payment_method),
-        status = '정상'
-    `;
-  
-    const values = [student_id, month, session_count, amount, is_manual, paid_at, payment_method];
+const {
+  student_id,
+  month,
+  applied_month,
+  session_count,
+  amount,
+  is_manual,
+  paid_at,
+  payment_method
+} = req.body;
+
+const sql = `
+  INSERT INTO payments 
+  (student_id, month, applied_month, weekdays, session_count, amount, is_manual, status, paid_at, payment_method)
+  VALUES (?, ?, ?, '', ?, ?, ?, '정상', ?, ?)
+  ON DUPLICATE KEY UPDATE 
+    session_count = VALUES(session_count),
+    amount = VALUES(amount),
+    is_manual = VALUES(is_manual),
+    paid_at = VALUES(paid_at),
+    payment_method = VALUES(payment_method),
+    applied_month = VALUES(applied_month),  -- ✅ 이 부분 추가
+    status = '정상'
+`;
+
+const values = [student_id, month, applied_month, session_count, amount, is_manual, paid_at, payment_method];
+
   
     dbAcademy.query(sql, values, (err, result) => {
       if (err) {
