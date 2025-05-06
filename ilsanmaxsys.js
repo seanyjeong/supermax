@@ -531,53 +531,56 @@ router.get('/dashboardsummary', async (req, res) => {
   const { month } = req.query;
   if (!month) return res.status(400).json({ message: 'month 쿼리 파라미터가 필요합니다 (YYYY-MM)' });
 
-  const sqlTotalRevenue = `
-    SELECT SUM(amount) AS total FROM payments WHERE paid_at IS NOT NULL
-  `;
-
-  const sqlMonthlyRevenue = `
-    SELECT
-      DATE_FORMAT(paid_at, '%Y-%m') AS month,
-      SUM(amount) AS total
-    FROM payments
-    WHERE paid_at IS NOT NULL
-    GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
-    ORDER BY month DESC
-  `;
-
-  const sqlStudentCounts = `
-    SELECT 
-      COUNT(*) AS total_students,
-      SUM(status = '재원') AS active_students,
-      SUM(status = '휴식') AS resting_students,
-      SUM(status = '퇴원') AS withdrawn_students
-    FROM students
-  `;
-
-  const sqlMonthlyStudentStats = `
-    SELECT
-      SUM(p.paid_at IS NOT NULL) AS paid_count,
-      COUNT(DISTINCT s.id) AS total_students,
-      SUM(s.status = '휴식') AS resting_students
-    FROM students s
-    LEFT JOIN payments p
-      ON s.id = p.student_id AND DATE_FORMAT(p.month, '%Y-%m') = ?
-    WHERE s.status IN ('재원', '휴식')
-  `;
-
-  const sqlStudentList = `
-    SELECT
-      name, school, grade, gender, status, tshirt_size
-    FROM students
-    WHERE status IN ('재원', '휴식')
-  `;
-
   try {
-    const [totalRevenueRows] = await dbQuery(sqlTotalRevenue);
-    const monthlyRevenueRows = await dbQuery(sqlMonthlyRevenue);
-    const [studentCounts] = await dbQuery(sqlStudentCounts);
-    const [monthlyStats] = await dbQuery(sqlMonthlyStudentStats, [month]);
-    const studentList = await dbQuery(sqlStudentList);
+    // ✅ 총 매출
+    const [totalRevenueRows] = await dbQuery(`SELECT SUM(amount) AS total FROM payments WHERE paid_at IS NOT NULL`);
+
+    // ✅ 월별 매출
+    const monthlyRevenueRows = await dbQuery(`
+      SELECT DATE_FORMAT(paid_at, '%Y-%m') AS month, SUM(amount) AS total
+      FROM payments
+      WHERE paid_at IS NOT NULL
+      GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
+      ORDER BY month DESC
+    `);
+
+    // ✅ 전체 학생 통계
+    const [studentCounts] = await dbQuery(`
+      SELECT 
+        COUNT(*) AS total_students,
+        SUM(status = '재원') AS active_students,
+        SUM(status = '휴식') AS resting_students,
+        SUM(status = '퇴원') AS withdrawn_students
+      FROM students
+    `);
+
+    // ✅ 이번 달 기준 재원자/휴식자 계산 (student_monthly 우선, 없으면 students 참고)
+    const monthlyStats = await dbQuery(`
+      SELECT 
+        sm.student_id,
+        sm.status AS monthly_status,
+        s.name, s.school, s.grade, s.gender, s.tshirt_size,
+        COALESCE(sm.status, s.status) AS final_status
+      FROM students s
+      LEFT JOIN student_monthly sm
+        ON s.id = sm.student_id AND sm.month = ?
+      WHERE s.status IN ('재원', '휴식')
+    `, [month]);
+
+    const studentList = monthlyStats.map(row => ({
+      name: row.name,
+      school: row.school,
+      grade: row.grade,
+      gender: row.gender,
+      status: row.final_status,
+      tshirt_size: row.tshirt_size
+    }));
+
+    // ✅ 해당 월 매출
+    const selectedMonthRevenue = monthlyRevenueRows.find(r => r.month === month)?.total || 0;
+
+    const registered = studentList.length;
+    const resting = studentList.filter(s => s.status === '휴식').length;
 
     res.json({
       totalRevenue: totalRevenueRows.total || 0,
@@ -585,17 +588,19 @@ router.get('/dashboardsummary', async (req, res) => {
       studentStats: studentCounts,
       selectedMonthStats: {
         month,
-        revenue: monthlyRevenueRows.find(r => r.month === month)?.total || 0,
-        registered: monthlyStats.total_students || 0,
-        resting: monthlyStats.resting_students || 0
+        revenue: selectedMonthRevenue,
+        registered,
+        resting
       },
-      studentList: studentList
+      studentList
     });
+
   } catch (err) {
     console.error('❌ 대시보드 요약 통계 실패:', err);
     res.status(500).json({ message: 'DB 오류', error: err });
   }
 });
+
 
 
 // 유틸성 DB Promise
