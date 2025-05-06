@@ -479,23 +479,24 @@ router.post('/register-multi-payment', (req, res) => {
   const valuesList = [];
 
   for (let i = 0; i < month_count; i++) {
-    const d = new Date(start_month + '-01');
-    d.setMonth(d.getMonth() + i);
-    const applied_month = d.toISOString().slice(0, 7);
-
+    const [year, monthStr] = start_month.split('-');
+    const baseDate = new Date(Number(year), Number(monthStr) - 1 + i); // 🔥 매번 새로운 Date 생성
+    const applied_month = baseDate.toISOString().slice(0, 7);
+  
     valuesList.push([
       student_id,
-      paid_at.slice(0, 7),   // 결제한 달
+      paid_at.slice(0, 7),
       applied_month,
       session_count,
       unit_amount,
-      1,                    // is_manual = true
+      1,
       '정상',
       paid_at,
       payment_method,
       note || ''
     ]);
   }
+  
 
   const sql = `
     INSERT INTO payments 
