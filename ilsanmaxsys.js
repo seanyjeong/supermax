@@ -456,6 +456,67 @@ router.post('/set-student-monthly', (req, res) => {
       res.json(rows);
     });
   });
+
+  // ✅ 다개월 선납 결제 등록 API
+router.post('/register-multi-payment', (req, res) => {
+  const {
+    student_id,
+    start_month,     // '2025-03'
+    month_count,     // 6
+    total_amount,    // 2100000
+    paid_at,         // '2025-02-10'
+    payment_method,  // '카드' or '계좌'
+    session_count,   // 3~5 정도
+    note             // '6개월 선납 할인'
+  } = req.body;
+
+  // 필수값 체크
+  if (!student_id || !start_month || !month_count || !total_amount || !paid_at || !payment_method) {
+    return res.status(400).json({ message: '❗ 필수 항목 누락' });
+  }
+
+  const unit_amount = Math.floor(total_amount / month_count); // 나눠서 분배
+  const valuesList = [];
+
+  for (let i = 0; i < month_count; i++) {
+    const d = new Date(start_month + '-01');
+    d.setMonth(d.getMonth() + i);
+    const applied_month = d.toISOString().slice(0, 7);
+
+    valuesList.push([
+      student_id,
+      paid_at.slice(0, 7),   // 결제한 달
+      applied_month,
+      session_count,
+      unit_amount,
+      1,                    // is_manual = true
+      '정상',
+      paid_at,
+      payment_method,
+      note || ''
+    ]);
+  }
+
+  const sql = `
+    INSERT INTO payments 
+    (student_id, month, applied_month, session_count, amount, is_manual, status, paid_at, payment_method, note)
+    VALUES ?
+    ON DUPLICATE KEY UPDATE
+      amount = VALUES(amount),
+      paid_at = VALUES(paid_at),
+      payment_method = VALUES(payment_method),
+      note = VALUES(note)
+  `;
+
+  dbAcademy.query(sql, [valuesList], (err, result) => {
+    if (err) {
+      console.error('❌ 선납 결제 등록 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ 선납 결제 완료', inserted: result.affectedRows });
+  });
+});
+
   
     
 
