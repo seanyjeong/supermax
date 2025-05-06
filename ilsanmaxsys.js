@@ -289,19 +289,7 @@ ORDER BY s.grade, s.name
   
 
   router.post('/save-payment', (req, res) => {
-    const {
-      student_id,
-      month,
-      session_count,
-      amount,
-      is_manual,
-      paid_at,
-      payment_method   // ✅ '카드' 또는 '계좌'
-    } = req.body;
-  
-    if (!student_id || !month || !session_count || !amount || !paid_at || !payment_method) {
-      return res.status(400).json({ message: '❗ 필수 항목 누락' });
-    }
+
   
 const {
   student_id,
