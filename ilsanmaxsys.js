@@ -480,16 +480,16 @@ router.post('/set-student-monthly', (req, res) => {
     const valuesList = [];
   
     for (let i = 0; i < month_count; i++) {
-      const [year, monthStr] = start_month.split('-');
-      const baseDate = new Date(Number(year), Number(monthStr) - 1 + i); // ✅ 매번 새로운 Date 생성
+      const baseDate = new Date(start_month + '-01');  // ex) '2025-02-01'
+      baseDate.setMonth(baseDate.getMonth() + i);      // 안전하게 i개월 더하기
       const applied_month = baseDate.toISOString().slice(0, 7);
-  
+      
       console.log(`➡️ ${i + 1}번째 month: ${applied_month}`);
-  
+    
       valuesList.push([
         student_id,
-        paid_at.slice(0, 7),
-        applied_month,
+        start_month,          // 결제한 달 (month 컬럼)
+        applied_month,        // 적용되는 달
         session_count,
         unit_amount,
         1,
@@ -499,6 +499,7 @@ router.post('/set-student-monthly', (req, res) => {
         note || ''
       ]);
     }
+    
   
     console.log('🧾 최종 insert values:', valuesList);
   
