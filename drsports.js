@@ -647,6 +647,53 @@ router.post('/drsend-custom-sms', async (req, res) => {
   }
 });
 
+// ✅ 학년 자동 승급 API
+const express = require('express');
+const router = express.Router();
+const { db_drsports } = require('./college');
+
+function getUpgradedGrade(currentGrade, schoolName) {
+  const stage = schoolName.includes('초등') ? '초등'
+              : schoolName.includes('중') ? '중'
+              : schoolName.includes('고') ? '고'
+              : null;
+
+  const num = parseInt(currentGrade.replace(/[^0-9]/g, ''));
+  if (isNaN(num)) return currentGrade;
+
+  if (stage === '초등') return num < 6 ? `${num + 1}학년` : '중1';
+  if (stage === '중') return num < 3 ? `${num + 1}학년` : '고1';
+  if (stage === '고') return num < 3 ? `${num + 1}학년` : '졸업';
+
+  return currentGrade; // 그대로 유지
+}
+
+router.post('/drupgrade-grades', (req, res) => {
+  const sql = 'SELECT id, grade, school FROM members WHERE grade IS NOT NULL AND school IS NOT NULL';
+  db_drsports.query(sql, (err, members) => {
+    if (err) {
+      console.error('❌ 학년 승급 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+
+    let updatedCount = 0;
+    members.forEach(m => {
+      const newGrade = getUpgradedGrade(m.grade, m.school);
+      if (newGrade !== m.grade) {
+        const updateSql = 'UPDATE members SET grade = ? WHERE id = ?';
+        db_drsports.query(updateSql, [newGrade, m.id], err2 => {
+          if (!err2) updatedCount++;
+        });
+      }
+    });
+
+    res.json({ message: `✅ 학년 자동 승급 완료`, updated: updatedCount });
+  });
+});
+
+module.exports = router;
+
+
 
 
 
