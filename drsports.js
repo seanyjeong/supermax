@@ -710,6 +710,52 @@ router.post('/drupgrade-grades', (req, res) => {
   });
 });
 
+router.post('/drclasses', (req, res) => {
+  const { title, weekday, time, instructor, description } = req.body;
+
+  if (!title || !weekday || !time) {
+    return res.status(400).json({ message: '❗ 필수 항목 누락' });
+  }
+
+  const sql = `
+    INSERT INTO classes (title, weekday, time, instructor, description)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+
+  db_drsports.query(sql, [title, weekday, time, instructor || '', description || ''], (err, result) => {
+    if (err) {
+      console.error('❌ 수업 등록 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ 수업 등록 완료', id: result.insertId });
+  });
+});
+
+router.get('/drclasses', (req, res) => {
+  const sql = `SELECT * FROM classes ORDER BY FIELD(weekday, '월', '화', '수', '목', '금', '토', '일'), time`;
+
+  db_drsports.query(sql, (err, rows) => {
+    if (err) {
+      console.error('❌ 수업 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
+  });
+});
+
+router.delete('/drclasses/:id', (req, res) => {
+  const { id } = req.params;
+
+  const sql = `DELETE FROM classes WHERE id = ?`;
+  db_drsports.query(sql, [id], (err, result) => {
+    if (err) {
+      console.error('❌ 수업 삭제 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '🗑️ 수업 삭제 완료' });
+  });
+});
+
 
 
 
