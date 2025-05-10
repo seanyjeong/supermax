@@ -67,19 +67,22 @@ router.post('/drregister-members', (req, res) => {
     return res.status(400).json({ message: '❗ 등록할 회원 정보가 없습니다' });
   }
 
-  const values = members.map(m => [
-    m.name,
-    m.birth,
-    m.phone || '',
-    m.parent_phone || '',
-    m.gender,
-    m.status || '재원'
-  ]);
+const values = members.map(m => [
+  m.name,
+  m.birth,
+  m.phone || '',
+  m.parent_phone || '',
+  m.gender,
+  m.status || '재원',
+  m.school || '',
+  m.grade || ''
+]);
 
-  const sql = `
-    INSERT INTO members (name, birth, phone, parent_phone, gender, status)
-    VALUES ?
-  `;
+const sql = `
+  INSERT INTO members (name, birth, phone, parent_phone, gender, status, school, grade)
+  VALUES ?
+`;
+
 
   db_drsports.query(sql, [values], (err, result) => {
     if (err) {
@@ -93,14 +96,17 @@ router.post('/drregister-members', (req, res) => {
 
 router.put('/drupdate-member/:id', (req, res) => {
   const { id } = req.params;
-  const { name, birth, phone, parent_phone, gender, status } = req.body;
+const { name, birth, phone, parent_phone, gender, status, school, grade } = req.body;
 
-  const sql = `
-    UPDATE members
-    SET name = ?, birth = ?, phone = ?, parent_phone = ?, gender = ?, status = ?
-    WHERE id = ?
-  `;
-  db_drsports.query(sql, [name, birth, phone, parent_phone, gender, status, id], (err, result) => {
+const sql = `
+  UPDATE members
+  SET name = ?, birth = ?, phone = ?, parent_phone = ?, gender = ?, status = ?, school = ?, grade = ?
+  WHERE id = ?
+`;
+
+
+
+  db_drsports.query( [sql, [name, birth, phone, parent_phone, gender, status, school, grade, id], (err, result) => {
     if (err) {
       console.error('❌ 회원 수정 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
