@@ -70,9 +70,12 @@ router.post('/drregister-members', async (req, res) => {
 
   for (const row of rows) {
     const {
-      name, birth, phone = '', parent_phone = '', gender, status = '재원', school = '', grade = '', weekday, time
+      name, birth, phone = '', parent_phone = '', gender,
+      status = '재원', school = '', grade = '',
+      weekday, time
     } = row;
 
+    // 1. 기존 회원 검색
     const memberSearch = await new Promise(resolve => {
       db_drsports.query(
         'SELECT id FROM members WHERE name = ? AND birth = ?',
@@ -83,36 +86,55 @@ router.post('/drregister-members', async (req, res) => {
 
     let memberId = memberSearch?.id;
 
-    // 신규 등록
+    // 2. 신규 회원 등록
     if (!memberId) {
-      const insertMember = await new Promise(resolve => {
+      const insertResult = await new Promise(resolve => {
         db_drsports.query(
-          'INSERT INTO members (name, birth, phone, parent_phone, gender, status, school, grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          `INSERT INTO members 
+            (name, birth, phone, parent_phone, gender, status, school, grade)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [name, birth, phone, parent_phone, gender, status, school, grade],
           (err, result) => resolve(result)
         );
       });
-      memberId = insertMember?.insertId;
+      memberId = insertResult?.insertId;
       inserted++;
     } else {
       updated++;
     }
 
-    // 스케줄 등록 (요일+시간 있으면)
+    // 3. 수업이 지정되었을 경우 클래스 조회 → lesson_schedule 등록
     if (weekday && time) {
-      await new Promise(resolve => {
+      const classRow = await new Promise(resolve => {
         db_drsports.query(
-          'INSERT INTO lesson_schedule (member_id, weekday, time, lesson_type) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE time = time',
-          [memberId, weekday, time, '그룹'],
-          (err, result) => resolve()
+          'SELECT id FROM classes WHERE weekday = ? AND time = ? LIMIT 1',
+          [weekday, time],
+          (err, rows) => resolve(rows?.[0])
         );
       });
-      scheduleInserted++;
+
+      if (classRow?.id) {
+        await new Promise(resolve => {
+          db_drsports.query(
+            `INSERT INTO lesson_schedule (member_id, class_id)
+             VALUES (?, ?) ON DUPLICATE KEY UPDATE class_id = class_id`,
+            [memberId, classRow.id],
+            (err, result) => resolve()
+          );
+        });
+        scheduleInserted++;
+      }
     }
   }
 
-  res.json({ message: '✅ 등록 완료', inserted, updated, scheduleInserted });
+  res.json({
+    message: '✅ 등록 완료',
+    inserted,
+    updated,
+    scheduleInserted
+  });
 });
+
 
 
 router.put('/drupdate-member/:id', (req, res) => {
@@ -159,22 +181,14 @@ router.post('/drregister-schedules', (req, res) => {
 
   data.forEach(entry => {
     const member_id = entry.member_id;
-    const schedules = entry.schedules || [];
-
-    schedules.forEach(s => {
-      values.push([
-        member_id,
-        s.weekday,
-        s.time,
-        s.lesson_type || '그룹'
-      ]);
+    const class_ids = entry.class_ids || [];
+  
+    class_ids.forEach(class_id => {
+      values.push([member_id, class_id]);
     });
   });
-
-  const sql = `
-    INSERT INTO lesson_schedule (member_id, weekday, time, lesson_type)
-    VALUES ?
-  `;
+  
+  const sql = `INSERT INTO lesson_schedule (member_id, class_id) VALUES ? ON DUPLICATE KEY UPDATE class_id = class_id`;
 
   db_drsports.query(sql, [values], (err, result) => {
     if (err) {
@@ -193,11 +207,13 @@ router.get('/drschedules', (req, res) => {
   }
 
   const sql = `
-    SELECT weekday, time, lesson_type
-    FROM lesson_schedule
-    WHERE member_id = ?
-    ORDER BY FIELD(weekday, '월', '화', '수', '목', '금', '토', '일'), time
-  `;
+  SELECT c.id AS class_id, c.weekday, c.time, c.title
+  FROM lesson_schedule ls
+  JOIN classes c ON ls.class_id = c.id
+  WHERE ls.member_id = ?
+  ORDER BY FIELD(c.weekday, '월', '화', '수', '목', '금', '토', '일'), c.time
+`;
+
 
   db_drsports.query(sql, [member_id], (err, rows) => {
     if (err) {
@@ -216,12 +232,14 @@ router.get('/drschedules-by-time', (req, res) => {
   }
 
   const sql = `
-    SELECT m.id, m.name, m.gender, m.phone, m.parent_phone
-    FROM lesson_schedule ls
-    JOIN members m ON ls.member_id = m.id
-    WHERE ls.weekday = ? AND ls.time = ?
-    ORDER BY m.name
-  `;
+  SELECT m.id, m.name, m.gender, m.phone, m.parent_phone
+  FROM lesson_schedule ls
+  JOIN classes c ON ls.class_id = c.id
+  JOIN members m ON ls.member_id = m.id
+  WHERE c.weekday = ? AND c.time = ?
+  ORDER BY m.name
+`;
+
 
   db_drsports.query(sql, [weekday, time], (err, rows) => {
     if (err) {
