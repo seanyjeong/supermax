@@ -103,28 +103,41 @@ router.post('/drregister-members', async (req, res) => {
       updated++;
     }
 
-    // 3. 수업이 지정되었을 경우 클래스 조회 → lesson_schedule 등록
-    if (weekday && time) {
-      const classRow = await new Promise(resolve => {
-        db_drsports.query(
-          'SELECT id FROM classes WHERE weekday = ? AND time = ? LIMIT 1',
-          [weekday, time],
-          (err, rows) => resolve(rows?.[0])
-        );
-      });
+    // 3. 수업이 지정되었을 경우 → lesson_schedule 등록
+if (row.class_id) {
+  // 👉 개별 등록 (class_id 직접 지정된 경우)
+  await new Promise(resolve => {
+    db_drsports.query(
+      `INSERT INTO lesson_schedule (member_id, class_id)
+       VALUES (?, ?) ON DUPLICATE KEY UPDATE class_id = class_id`,
+      [memberId, row.class_id],
+      () => resolve()
+    );
+  });
+  scheduleInserted++;
+} else if (row.weekday && row.time) {
+  // 👉 단체 등록 (요일/시간으로 클래스 찾는 경우)
+  const classRow = await new Promise(resolve => {
+    db_drsports.query(
+      'SELECT id FROM classes WHERE weekday = ? AND time = ? LIMIT 1',
+      [row.weekday, row.time],
+      (err, rows) => resolve(rows?.[0])
+    );
+  });
 
-      if (classRow?.id) {
-        await new Promise(resolve => {
-          db_drsports.query(
-            `INSERT INTO lesson_schedule (member_id, class_id)
-             VALUES (?, ?) ON DUPLICATE KEY UPDATE class_id = class_id`,
-            [memberId, classRow.id],
-            (err, result) => resolve()
-          );
-        });
-        scheduleInserted++;
-      }
-    }
+  if (classRow?.id) {
+    await new Promise(resolve => {
+      db_drsports.query(
+        `INSERT INTO lesson_schedule (member_id, class_id)
+         VALUES (?, ?) ON DUPLICATE KEY UPDATE class_id = class_id`,
+        [memberId, classRow.id],
+        () => resolve()
+      );
+    });
+    scheduleInserted++;
+  }
+}
+
   }
 
   res.json({
