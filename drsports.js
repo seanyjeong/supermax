@@ -860,6 +860,79 @@ router.get('/drstudent-monthly', (req, res) => {
   });
 });
 
+router.get('/drtuition-auto', (req, res) => {
+  const { member_id, year_month } = req.query;
+  if (!member_id || !year_month) return res.status(400).json({ message: '❗ member_id, year_month 누락' });
+
+  const [year, month] = year_month.split('-').map(Number);
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+  const weekdayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+
+  const getScheduleSql = `
+    SELECT DISTINCT c.weekday, c.time
+    FROM lesson_schedule ls
+    JOIN classes c ON ls.class_id = c.id
+    WHERE ls.member_id = ?
+  `;
+
+  db_drsports.query(getScheduleSql, [member_id], (err, schedules) => {
+    if (err || schedules.length === 0) {
+      return res.status(404).json({ message: '❗ 수업 스케줄 없음' });
+    }
+
+    // 형제 할인 판별
+    const getSiblingSql = `
+      SELECT parent_phone FROM members WHERE id = ?
+    `;
+    db_drsports.query(getSiblingSql, [member_id], (err2, phoneRow) => {
+      const parent_phone = phoneRow?.[0]?.parent_phone;
+      if (!parent_phone) return respond(1, '기본'); // fallback
+
+      db_drsports.query(`
+        SELECT COUNT(*) AS sibling_count
+        FROM members
+        WHERE parent_phone = ? AND status = '재원'
+      `, [parent_phone], (err3, countRow) => {
+        const siblingCount = countRow?.[0]?.sibling_count || 1;
+        const discount_type = siblingCount >= 2 ? '형제' : '기본';
+
+        // 실제 수업일수 계산
+        let lessonDates = [];
+        schedules.forEach(({ weekday }) => {
+          const day = weekdayMap[weekday];
+          let d = new Date(startDate);
+          while (d <= endDate) {
+            if (d.getDay() === day) {
+              lessonDates.push(d.toISOString().slice(0, 10));
+            }
+            d.setDate(d.getDate() + 1);
+          }
+        });
+
+        const lesson_count = Math.round(lessonDates.length / 4) || 1;
+
+        // 가격 조회
+        db_drsports.query(`
+          SELECT price FROM tuition_policy WHERE lesson_count = ? AND discount_type = ? LIMIT 1
+        `, [lesson_count, discount_type], (err4, priceRow) => {
+          const price = priceRow?.[0]?.price || 70000;
+
+          res.json({
+            member_id,
+            year_month,
+            lesson_count,
+            discount_type,
+            price,
+            due_date: `${year_month}-28`,
+            class_dates: lessonDates
+          });
+        });
+      });
+    });
+  });
+});
+
 
 
 
