@@ -786,6 +786,33 @@ router.delete('/drclasses/:id', (req, res) => {
   });
 });
 
+router.get('/drpayment-summary', (req, res) => {
+  const { year_month } = req.query;
+  if (!year_month) return res.status(400).json({ message: '❗ year_month 누락' });
+
+  const sql = `
+    SELECT 
+      COUNT(m.id) AS total_students,
+      SUM(CASE WHEN sm.status != '휴식' THEN 1 ELSE 0 END) AS active_students,
+      SUM(ph.expected_amount) AS total_expected,
+      SUM(CASE WHEN ph.method = '카드' THEN ph.paid_amount ELSE 0 END) AS total_card,
+      SUM(CASE WHEN ph.method = '계좌' THEN ph.paid_amount ELSE 0 END) AS total_bank,
+      SUM(ph.paid_amount) AS total_paid,
+      SUM(CASE WHEN ph.paid_amount IS NULL OR ph.paid_amount < ph.expected_amount THEN 1 ELSE 0 END) AS unpaid_count
+    FROM members m
+    LEFT JOIN student_monthly sm ON sm.member_id = m.id AND sm.month = ?
+    LEFT JOIN payment_history ph ON ph.member_id = m.id AND ph.year_month = ?
+  `;
+
+  db_drsports.query(sql, [year_month, year_month], (err, rows) => {
+    if (err) {
+      console.error('❌ 결제 요약 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows[0]);
+  });
+});
+
 
 
 
