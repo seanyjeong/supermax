@@ -60,37 +60,58 @@ router.get('/drmembers', (req, res) => {
   });
 });
 
-router.post('/drregister-members', (req, res) => {
-  const members = req.body;
-
-  if (!Array.isArray(members) || members.length === 0) {
-    return res.status(400).json({ message: '❗ 등록할 회원 정보가 없습니다' });
+router.post('/drregister-members', async (req, res) => {
+  const rows = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return res.status(400).json({ message: '❗ 등록할 데이터 없음' });
   }
 
-const values = members.map(m => [
-  m.name,
-  m.birth,
-  m.phone || '',
-  m.parent_phone || '',
-  m.gender,
-  m.status || '재원',
-  m.school || '',
-  m.grade || ''
-]);
+  let inserted = 0, updated = 0, scheduleInserted = 0;
 
-const sql = `
-  INSERT INTO members (name, birth, phone, parent_phone, gender, status, school, grade)
-  VALUES ?
-`;
+  for (const row of rows) {
+    const {
+      name, birth, phone = '', parent_phone = '', gender, status = '재원', school = '', grade = '', weekday, time
+    } = row;
 
+    const memberSearch = await new Promise(resolve => {
+      db_drsports.query(
+        'SELECT id FROM members WHERE name = ? AND birth = ?',
+        [name, birth],
+        (err, result) => resolve(result?.[0])
+      );
+    });
 
-  db_drsports.query(sql, [values], (err, result) => {
-    if (err) {
-      console.error('❌ 일괄 등록 실패:', err);
-      return res.status(500).json({ message: 'DB 오류' });
+    let memberId = memberSearch?.id;
+
+    // 신규 등록
+    if (!memberId) {
+      const insertMember = await new Promise(resolve => {
+        db_drsports.query(
+          'INSERT INTO members (name, birth, phone, parent_phone, gender, status, school, grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [name, birth, phone, parent_phone, gender, status, school, grade],
+          (err, result) => resolve(result)
+        );
+      });
+      memberId = insertMember?.insertId;
+      inserted++;
+    } else {
+      updated++;
     }
-    res.json({ message: `✅ ${result.affectedRows}명 등록 완료` });
-  });
+
+    // 스케줄 등록 (요일+시간 있으면)
+    if (weekday && time) {
+      await new Promise(resolve => {
+        db_drsports.query(
+          'INSERT INTO lesson_schedule (member_id, weekday, time, lesson_type) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE time = time',
+          [memberId, weekday, time, '그룹'],
+          (err, result) => resolve()
+        );
+      });
+      scheduleInserted++;
+    }
+  }
+
+  res.json({ message: '✅ 등록 완료', inserted, updated, scheduleInserted });
 });
 
 
