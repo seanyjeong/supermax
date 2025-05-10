@@ -96,17 +96,15 @@ const sql = `
 
 router.put('/drupdate-member/:id', (req, res) => {
   const { id } = req.params;
-const { name, birth, phone, parent_phone, gender, status, school, grade } = req.body;
+  const { name, birth, phone, parent_phone, gender, status, school, grade } = req.body;
 
-const sql = `
-  UPDATE members
-  SET name = ?, birth = ?, phone = ?, parent_phone = ?, gender = ?, status = ?, school = ?, grade = ?
-  WHERE id = ?
-`;
+  const sql = `
+    UPDATE members
+    SET name = ?, birth = ?, phone = ?, parent_phone = ?, gender = ?, status = ?, school = ?, grade = ?
+    WHERE id = ?
+  `;
 
-
-
-  db_drsports.query( [sql, [name, birth, phone, parent_phone, gender, status, school, grade, id], (err, result) => {
+  db_drsports.query(sql, [name, birth, phone, parent_phone, gender, status, school, grade, id], (err, result) => {
     if (err) {
       console.error('❌ 회원 수정 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
@@ -114,6 +112,7 @@ const sql = `
     res.json({ message: '✅ 회원 수정 완료' });
   });
 });
+
 
 router.delete('/drdelete-member/:id', (req, res) => {
   const { id } = req.params;
