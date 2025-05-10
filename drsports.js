@@ -303,23 +303,32 @@ router.get('/drattendance', (req, res) => {
 });
 
 router.post('/drpayment', (req, res) => {
-  const { member_id, year_month, expected_amount, paid_amount, payment_date, memo } = req.body;
+  const {
+    member_id, year_month,
+    expected_amount, paid_amount,
+    payment_date, memo,
+    method = '계좌'  // 기본값
+  } = req.body;
 
   if (!member_id || !year_month) {
     return res.status(400).json({ message: '❗ 필수 항목 누락' });
   }
 
   const sql = `
-    INSERT INTO payment_history (member_id, year_month, expected_amount, paid_amount, payment_date, memo)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO payment_history
+    (member_id, year_month, expected_amount, paid_amount, payment_date, memo, method)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       expected_amount = VALUES(expected_amount),
       paid_amount = VALUES(paid_amount),
       payment_date = VALUES(payment_date),
-      memo = VALUES(memo)
+      memo = VALUES(memo),
+      method = VALUES(method)
   `;
 
-  db_drsports.query(sql, [member_id, year_month, expected_amount, paid_amount, payment_date, memo], (err, result) => {
+  db_drsports.query(sql, [
+    member_id, year_month, expected_amount, paid_amount, payment_date, memo, method
+  ], (err, result) => {
     if (err) {
       console.error('❌ 결제 등록 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
@@ -327,6 +336,7 @@ router.post('/drpayment', (req, res) => {
     res.json({ message: '✅ 결제 등록 완료' });
   });
 });
+
 router.get('/drpayment', (req, res) => {
   const { year_month } = req.query;
 
@@ -347,9 +357,11 @@ router.get('/drpayment', (req, res) => {
       console.error('❌ 결제 조회 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
     }
-    res.json(rows);
+    res.json(rows); // 여기엔 method 필드 포함되어 있음
   });
 });
+
+
 
 
 router.get('/drtuition', (req, res) => {
