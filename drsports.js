@@ -648,9 +648,7 @@ router.post('/drsend-custom-sms', async (req, res) => {
 });
 
 // ✅ 학년 자동 승급 API
-const express = require('express');
-const router = express.Router();
-const { db_drsports } = require('./college');
+
 
 function getUpgradedGrade(currentGrade, schoolName) {
   const stage = schoolName.includes('초등') ? '초등'
