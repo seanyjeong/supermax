@@ -934,10 +934,53 @@ router.get('/drtuition-auto', (req, res) => {
 });
 
 
+router.get('/drtuition-policy', (req, res) => {
+  db_drsports.query('SELECT * FROM tuition_policy ORDER BY lesson_count, discount_type', (err, rows) => {
+    if (err) return res.status(500).json({ message: 'DB 오류' });
+    res.json(rows);
+  });
+});
+
+router.post('/drtuition-policy', (req, res) => {
+  const { lesson_count, price, description = '', discount_type = '기본' } = req.body;
+  if (!lesson_count || !price) return res.status(400).json({ message: '❗ 필수 항목 누락' });
+
+  const sql = `
+    INSERT INTO tuition_policy (lesson_count, price, description, discount_type)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      price = VALUES(price),
+      description = VALUES(description)
+  `;
+  db_drsports.query(sql, [lesson_count, price, description, discount_type], (err) => {
+    if (err) return res.status(500).json({ message: 'DB 오류' });
+    res.json({ message: '✅ 등록 완료' });
+  });
+});
+
+router.put('/drtuition-policy/:id', (req, res) => {
+  const { id } = req.params;
+  const { lesson_count, price, description, discount_type } = req.body;
+
+  const sql = `
+    UPDATE tuition_policy
+    SET lesson_count = ?, price = ?, description = ?, discount_type = ?
+    WHERE id = ?
+  `;
+  db_drsports.query(sql, [lesson_count, price, description, discount_type, id], (err) => {
+    if (err) return res.status(500).json({ message: 'DB 오류' });
+    res.json({ message: '✅ 수정 완료' });
+  });
+});
 
 
-
-
+router.delete('/drtuition-policy/:id', (req, res) => {
+  const { id } = req.params;
+  db_drsports.query('DELETE FROM tuition_policy WHERE id = ?', [id], (err) => {
+    if (err) return res.status(500).json({ message: 'DB 오류' });
+    res.json({ message: '🗑️ 삭제 완료' });
+  });
+});
 
 
 
