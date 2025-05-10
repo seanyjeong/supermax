@@ -22,7 +22,6 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 새 DB (학원관리)
 const dbAcademy = mysql.createConnection({
   host: '211.37.174.218',
   user: 'maxilsan',
@@ -31,7 +30,16 @@ const dbAcademy = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 연결
+// ✅ 닥터스포츠 DB 연결 추가
+const db_drsports = mysql.createConnection({
+  host: '211.37.174.218',
+  user: 'maxilsan',
+  password: 'q141171616!',
+  database: 'drsports',
+  charset: 'utf8mb4'
+});
+
+// 연결 로그
 db.connect(err => {
   if (err) console.error('❌ 정시엔진 DB 연결 실패:', err);
   else console.log('✅ 정시엔진 DB 연결 성공');
@@ -42,8 +50,14 @@ dbAcademy.connect(err => {
   else console.log('✅ 학원관리 DB 연결 성공');
 });
 
-// 외부로 내보내기
-module.exports = { db, dbAcademy };
+db_drsports.connect(err => {
+  if (err) console.error('❌ 닥터스포츠 DB 연결 실패:', err);
+  else console.log('✅ 닥터스포츠 DB 연결 성공');
+});
+
+// ✅ 외부로 모두 내보내기
+module.exports = { db, dbAcademy, db_drsports };
+
 
 
 const collegeManage = require('./collegeManage');
@@ -63,7 +77,11 @@ const scoreTable = require('./scoreTable');
 app.use('/college', scoreTable);
 
 const ilsanmaxsys = require('./ilsanmaxsys'); 
-app.use('/college', ilsanmaxsys);             
+app.use('/college', ilsanmaxsys); 
+
+const drsports = require('./drsports');
+app.use('/college', drsports);
+
 
 
 
