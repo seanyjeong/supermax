@@ -315,15 +315,15 @@ router.post('/drpayment', (req, res) => {
   }
 
   const sql = `
-    INSERT INTO payment_history
-    (member_id, year_month, expected_amount, paid_amount, payment_date, memo, method)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      expected_amount = VALUES(expected_amount),
-      paid_amount = VALUES(paid_amount),
-      payment_date = VALUES(payment_date),
-      memo = VALUES(memo),
-      method = VALUES(method)
+SELECT m.id AS member_id, m.name, m.phone, m.parent_phone, m.gender,
+       ph.expected_amount, ph.paid_amount, ph.payment_date, ph.memo, ph.method
+FROM members m
+JOIN lesson_schedule ls ON ls.member_id = m.id
+LEFT JOIN payment_history ph ON ph.member_id = m.id AND ph.year_month = ?
+WHERE m.status != '휴식'
+GROUP BY m.id
+ORDER BY m.name
+
   `;
 
   db_drsports.query(sql, [
@@ -796,15 +796,17 @@ router.get('/drpayment-summary', (req, res) => {
 
   const sql = `
 SELECT 
-  COUNT(sm.member_id) AS total_students,
+  COUNT(DISTINCT m.id) AS total_students,
   SUM(ph.expected_amount) AS total_expected,
   SUM(CASE WHEN ph.method = '카드' THEN ph.paid_amount ELSE 0 END) AS total_card,
   SUM(CASE WHEN ph.method = '계좌' THEN ph.paid_amount ELSE 0 END) AS total_bank,
   SUM(ph.paid_amount) AS total_paid,
   SUM(CASE WHEN ph.paid_amount IS NULL OR ph.paid_amount < ph.expected_amount THEN 1 ELSE 0 END) AS unpaid_count
-FROM student_monthly sm
-LEFT JOIN payment_history ph ON ph.member_id = sm.member_id AND ph.year_month = sm.month
-WHERE sm.month = ? AND sm.status != '휴식'
+FROM members m
+JOIN lesson_schedule ls ON ls.member_id = m.id
+LEFT JOIN payment_history ph ON ph.member_id = m.id AND ph.year_month = ?
+WHERE m.status != '휴식'
+
 
   `;
 
