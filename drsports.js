@@ -67,8 +67,6 @@ router.post('/drregister-members', async (req, res) => {
   }
 
   let inserted = 0, updated = 0, scheduleInserted = 0;
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   for (const row of rows) {
     const {
@@ -104,17 +102,6 @@ router.post('/drregister-members', async (req, res) => {
     } else {
       updated++;
     }
-
-    // ✅ student_monthly 등록 또는 업데이트
-    await new Promise(resolve => {
-      db_drsports.query(
-        `INSERT INTO student_monthly (member_id, month, status)
-         VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE status = VALUES(status)`,
-        [memberId, currentMonth, status],
-        (err, result) => resolve()
-      );
-    });
 
     // 3. 수업이 지정되었을 경우 클래스 조회 → lesson_schedule 등록
     if (weekday && time) {
