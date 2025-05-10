@@ -512,10 +512,11 @@ router.get('/drtuition-auto', (req, res) => {
   const weekdayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
 
   const getScheduleSql = `
-    SELECT DISTINCT weekday, time
-    FROM lesson_schedule
-    WHERE member_id = ?
-  `;
+SELECT DISTINCT c.weekday, c.time, c.start_date
+FROM lesson_schedule ls
+JOIN classes c ON ls.class_id = c.id
+WHERE ls.member_id = ?
+`;
 
   db_drsports.query(getScheduleSql, [member_id], (err, schedules) => {
     if (err) return res.status(500).json({ message: '❌ 수업 정보 조회 실패', err });
@@ -537,7 +538,7 @@ router.get('/drtuition-auto', (req, res) => {
 
       const actualClassDates = [];
 
-      schedules.forEach(({ weekday, time }) => {
+      + schedules.forEach(({ weekday, time, start_date }) => {
         const targetDay = weekdayMap[weekday];
         let d = new Date(startDate);
 
@@ -546,9 +547,11 @@ router.get('/drtuition-auto', (req, res) => {
             const dateStr = format(d, 'yyyy-MM-dd');
             const timeStr = time.slice(0, 5);
             const key = `${dateStr}_${timeStr}`;
+            if (new Date(dateStr) >= new Date(start_date)) {
             if (!closureKeys.includes(key)) {
               actualClassDates.push({ date: dateStr, time: timeStr });
             }
+          }
           }
           d.setDate(d.getDate() + 1);
         }
@@ -741,18 +744,18 @@ router.post('/drupgrade-grades', (req, res) => {
 });
 
 router.post('/drclasses', (req, res) => {
-  const { title, weekday, time, instructor, description } = req.body;
+   const { title, weekday, time, instructor, description, start_date } = req.body;
 
   if (!title || !weekday || !time) {
     return res.status(400).json({ message: '❗ 필수 항목 누락' });
   }
 
   const sql = `
-    INSERT INTO classes (title, weekday, time, instructor, description)
-    VALUES (?, ?, ?, ?, ?)
+   INSERT INTO classes (title, weekday, time, instructor, description, start_date)
+   VALUES (?, ?, ?, ?, ?, ?)
   `;
 
-  db_drsports.query(sql, [title, weekday, time, instructor || '', description || ''], (err, result) => {
+  db_drsports.query(sql, [title, weekday, time, instructor || '', description || '', start_date || null], (err, result) => {
     if (err) {
       console.error('❌ 수업 등록 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
@@ -762,7 +765,8 @@ router.post('/drclasses', (req, res) => {
 });
 
 router.get('/drclasses', (req, res) => {
-  const sql = `SELECT * FROM classes ORDER BY FIELD(weekday, '월', '화', '수', '목', '금', '토', '일'), time`;
+  const sql = `SELECT *, DATE_FORMAT(start_date, '%Y-%m-%d') AS start_date
+               FROM classes ORDER BY FIELD(weekday, '월', '화', '수', '목', '금', '토', '일'), time`;
 
   db_drsports.query(sql, (err, rows) => {
     if (err) {
