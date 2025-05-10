@@ -67,6 +67,8 @@ router.post('/drregister-members', async (req, res) => {
   }
 
   let inserted = 0, updated = 0, scheduleInserted = 0;
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   for (const row of rows) {
     const {
@@ -102,6 +104,17 @@ router.post('/drregister-members', async (req, res) => {
     } else {
       updated++;
     }
+
+    // ✅ student_monthly 등록 또는 업데이트
+    await new Promise(resolve => {
+      db_drsports.query(
+        `INSERT INTO student_monthly (member_id, month, status)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE status = VALUES(status)`,
+        [memberId, currentMonth, status],
+        (err, result) => resolve()
+      );
+    });
 
     // 3. 수업이 지정되었을 경우 클래스 조회 → lesson_schedule 등록
     if (weekday && time) {
@@ -795,17 +808,17 @@ router.get('/drpayment-summary', (req, res) => {
   if (!year_month) return res.status(400).json({ message: '❗ year_month 누락' });
 
   const sql = `
-    SELECT 
-      COUNT(m.id) AS total_students,
-      SUM(CASE WHEN sm.status != '휴식' THEN 1 ELSE 0 END) AS active_students,
-      SUM(ph.expected_amount) AS total_expected,
-      SUM(CASE WHEN ph.method = '카드' THEN ph.paid_amount ELSE 0 END) AS total_card,
-      SUM(CASE WHEN ph.method = '계좌' THEN ph.paid_amount ELSE 0 END) AS total_bank,
-      SUM(ph.paid_amount) AS total_paid,
-      SUM(CASE WHEN ph.paid_amount IS NULL OR ph.paid_amount < ph.expected_amount THEN 1 ELSE 0 END) AS unpaid_count
-    FROM members m
-    LEFT JOIN student_monthly sm ON sm.member_id = m.id AND sm.month = ?
-    LEFT JOIN payment_history ph ON ph.member_id = m.id AND ph.year_month = ?
+SELECT 
+  COUNT(sm.member_id) AS total_students,
+  SUM(ph.expected_amount) AS total_expected,
+  SUM(CASE WHEN ph.method = '카드' THEN ph.paid_amount ELSE 0 END) AS total_card,
+  SUM(CASE WHEN ph.method = '계좌' THEN ph.paid_amount ELSE 0 END) AS total_bank,
+  SUM(ph.paid_amount) AS total_paid,
+  SUM(CASE WHEN ph.paid_amount IS NULL OR ph.paid_amount < ph.expected_amount THEN 1 ELSE 0 END) AS unpaid_count
+FROM student_monthly sm
+LEFT JOIN payment_history ph ON ph.member_id = sm.member_id AND ph.year_month = sm.month
+WHERE sm.month = ? AND sm.status != '휴식'
+
   `;
 
   db_drsports.query(sql, [year_month, year_month], (err, rows) => {
@@ -816,6 +829,51 @@ router.get('/drpayment-summary', (req, res) => {
     res.json(rows[0]);
   });
 });
+router.post('/drstudent-monthly', (req, res) => {
+  const { member_id, month, status = '재원', lesson_type = '', weekdays = '' } = req.body;
+
+  if (!member_id || !month) {
+    return res.status(400).json({ message: '❗ member_id 또는 month 누락' });
+  }
+
+  const sql = `
+    INSERT INTO student_monthly (member_id, month, status, lesson_type, weekdays)
+    VALUES (?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      status = VALUES(status),
+      lesson_type = VALUES(lesson_type),
+      weekdays = VALUES(weekdays)
+  `;
+
+  db_drsports.query(sql, [member_id, month, status, lesson_type, weekdays], (err, result) => {
+    if (err) {
+      console.error('❌ student_monthly 등록 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ student_monthly 등록 완료' });
+  });
+});
+
+router.get('/drstudent-monthly', (req, res) => {
+  const { month } = req.query;
+
+  const sql = `
+    SELECT sm.*, m.name, m.phone, m.parent_phone, m.gender
+    FROM student_monthly sm
+    JOIN members m ON sm.member_id = m.id
+    WHERE (? IS NULL OR sm.month = ?)
+    ORDER BY m.name
+  `;
+
+  db_drsports.query(sql, [month, month], (err, rows) => {
+    if (err) {
+      console.error('❌ student_monthly 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
+  });
+});
+
 
 
 
