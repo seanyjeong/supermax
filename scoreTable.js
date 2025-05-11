@@ -103,6 +103,7 @@ function getScore(event, gender, value) {
 // ✅ 명단 선등록 또는 업데이트
 router.post('/test-students', async (req, res) => {
   const { name, school, grade, gender, test_month } = req.body;
+
   try {
     const [existing] = await dbQuery(
       'SELECT exam_number FROM 실기기록_테스트 WHERE name = ? AND school = ? AND grade = ? AND gender = ? AND test_month = ?',
@@ -112,19 +113,30 @@ router.post('/test-students', async (req, res) => {
     let exam_number;
 
     if (existing) {
-      // 이미 있는 경우: 정보만 업데이트
+      // 이미 등록된 경우, 정보만 업데이트
       exam_number = existing.exam_number;
       await dbQuery(
         'UPDATE 실기기록_테스트 SET school = ?, grade = ?, gender = ? WHERE exam_number = ? AND test_month = ?',
         [school, grade, gender, exam_number, test_month]
       );
     } else {
-      // 새로 등록
-      const [max] = await dbQuery('SELECT MAX(CAST(SUBSTRING(exam_number, 7) AS UNSIGNED)) AS maxNum FROM 실기기록_테스트 WHERE test_month = ?', [test_month]);
-      const nextNumber = (max.maxNum || 0) + 1;
-      exam_number = `${test_month.replace('-', '')}${String(nextNumber).padStart(2, '0')}`;
-      await dbQuery('INSERT INTO 실기기록_테스트 (exam_number, name, grade, gender, school, test_month) VALUES (?, ?, ?, ?, ?, ?)',
-        [exam_number, name, grade, gender, school, test_month]);
+      const isPretest = test_month === '예비반';
+      const prefix = isPretest ? 'YB' : test_month.replace('-', '');
+      const digitStart = prefix.length + 1;
+
+      // maxNum 계산
+      const [max] = await dbQuery(
+        `SELECT MAX(CAST(SUBSTRING(exam_number, ?) AS UNSIGNED)) AS maxNum FROM 실기기록_테스트 WHERE test_month = ?`,
+        [digitStart, test_month]
+      );
+
+      const nextNumber = (max?.maxNum || 0) + 1;
+      exam_number = `${prefix}${String(nextNumber).padStart(2, '0')}`;
+
+      await dbQuery(
+        'INSERT INTO 실기기록_테스트 (exam_number, name, grade, gender, school, test_month) VALUES (?, ?, ?, ?, ?, ?)',
+        [exam_number, name, grade, gender, school, test_month]
+      );
     }
 
     res.json({ success: true, exam_number });
@@ -133,6 +145,7 @@ router.post('/test-students', async (req, res) => {
     res.json({ success: false, error: err });
   }
 });
+
 
 // ✅ 종목별 개별 기록 저장
 router.patch('/test-record', async (req, res) => {
