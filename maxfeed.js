@@ -2263,17 +2263,19 @@ app.get('/feed/check-group-assigned', (req, res) => {
 app.get('/feed/group/:group', (req, res) => {
   const group = req.params.group;
   const sql = `
-    SELECT exam_number, 
+    SELECT exam_number, attended,
       jump_record, shuttle_record, sit_reach_record, 
-      back_strength_record, medicineball_record,record_group
+      back_strength_record, medicineball_record, record_group
     FROM 실기기록 
-    WHERE record_group = ? ORDER BY exam_number ASC
+    WHERE record_group = ? 
+    ORDER BY exam_number ASC
   `;
   db.query(sql, [group], (err, rows) => {
     if (err) return res.status(500).json({ error: 'DB 오류' });
     res.json(rows);
   });
 });
+
 
 
       app.get('/feed/get-student', (req, res) => {
