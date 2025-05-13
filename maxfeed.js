@@ -2119,13 +2119,15 @@ app.post('/feed/assign-groups', (req, res) => {
   }
 
   const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
-  db.query(selectSql, async (err, rows) => {
+
+  db.query(selectSql, (err, rows) => {
     if (err) return res.status(500).json({ error: '학생 조회 실패' });
 
     const shuffled = rows.sort(() => Math.random() - 0.5);
     const groupMap = {};
     const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
 
+    // 조 균등 배정
     shuffled.forEach((row, index) => {
       const group = (index % totalGroups) + 1;
       if (!groupMap[group]) groupMap[group] = [];
@@ -2133,40 +2135,40 @@ app.post('/feed/assign-groups', (req, res) => {
     });
 
     const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
-
     let updatedCount = 0;
 
-    // 순차적으로 쿼리 실행 (callback 중첩 없이)
     const runUpdates = async () => {
-      for (let group = 1; group <= totalGroups; group++) {
-        const ids = groupMap[group] || [];
-        const groupChar = groupLetters[group - 1];
+      try {
+        for (let group = 1; group <= totalGroups; group++) {
+          const ids = groupMap[group] || [];
+          const groupChar = groupLetters[group - 1];
 
-        for (let i = 0; i < ids.length; i++) {
-          const id = ids[i];
-          const examNumber = `${groupChar}-${i + 1}`;
+          for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            const examNumber = `${groupChar}-${i + 1}`;
 
-          await new Promise((resolve, reject) => {
-            db.query(updateSql, [group, examNumber, id], (err) => {
-              if (err) return reject(err);
-              updatedCount++;
-              resolve();
+            // 👉 비동기 실행 순서 보장 (mysql 콜백을 Promise로 래핑)
+            await new Promise((resolve, reject) => {
+              db.query(updateSql, [group, examNumber, id], (err) => {
+                if (err) return reject(err);
+                updatedCount++;
+                resolve();
+              });
             });
-          });
+          }
         }
+
+        // 모든 업데이트 완료 후 응답
+        res.json({ success: true, assigned: updatedCount });
+      } catch (e) {
+        console.error('❌ 조편성 중 에러:', e);
+        res.status(500).json({ error: '조편성 실패' });
       }
     };
 
-    try {
-      await runUpdates();
-      res.json({ success: true, assigned: updatedCount });
-    } catch (e) {
-      console.error('❌ 조편성 중 에러:', e);
-      res.status(500).json({ error: '조편성 실패' });
-    }
+    runUpdates();
   });
 });
-
 
 
 
