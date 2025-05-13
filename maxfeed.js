@@ -2111,6 +2111,40 @@ app.get('/feed/student-count', (req, res) => {
   });
 });
 
+
+// 새로운 학생 검색 API
+app.get('/feed/search-students', (req, res) => {
+  const { branch, grade, gender } = req.query;
+  const conditions = [];
+  const values = [];
+
+  if (branch) {
+    conditions.push('branch = ?');
+    values.push(branch);
+  }
+  if (grade) {
+    conditions.push('grade = ?');
+    values.push(grade);
+  }
+  if (gender) {
+    conditions.push('gender = ?');
+    values.push(gender);
+  }
+
+  let sql = 'SELECT id, name, school, branch, grade, gender FROM 실기기록';
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  sql += ' ORDER BY name ASC';
+
+  db.query(sql, values, (err, results) => {
+    if (err) return res.status(500).json({ error: 'DB 오류' });
+    res.json({ success: true, students: results });
+  });
+});
+
+//조편성
 app.post('/feed/assign-groups', (req, res) => {
   const { totalGroups } = req.body;
 
