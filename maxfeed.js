@@ -2111,47 +2111,51 @@ app.get('/feed/student-count', (req, res) => {
   });
 });
 
-// 2. 랜덤 조편성 API (조 이름: A-1, B-2, ..., J-N 형식으로 부여)
 app.post('/feed/assign-groups', (req, res) => {
   const { totalGroups } = req.body;
 
-  // ✅ 총 조 수는 반드시 10개로 고정
   if (!totalGroups || isNaN(totalGroups) || totalGroups !== 10) {
     return res.status(400).json({ error: '조 수는 반드시 10개여야 합니다' });
   }
 
+  // ✅ 전체 학생 모두 다시 배정 (기존 조 있어도 무시)
   const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
   db.query(selectSql, (err, rows) => {
     if (err) return res.status(500).json({ error: '학생 조회 실패' });
 
+    if (rows.length === 0) {
+      return res.json({ success: false, message: '등록된 학생이 없습니다.' });
+    }
+
     const shuffled = rows.sort(() => Math.random() - 0.5);
     const groupMap = {}; // {1: [id, id...], 2: [...], ...}
 
-    // ✅ 조별로 학생 배정
+    // ✅ 조별 균등 배정
     shuffled.forEach((row, index) => {
       const group = (index % totalGroups) + 1;
       if (!groupMap[group]) groupMap[group] = [];
       groupMap[group].push(row.id);
     });
 
-    // ✅ A~J 조 문자 매핑
     const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
     const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
 
-    // ✅ 조별로 수험번호 (예: A-1, A-2...) 부여
+    let updatedCount = 0;
+
     Object.entries(groupMap).forEach(([groupStr, idList]) => {
       const group = parseInt(groupStr); // 숫자 1~10
-      const groupChar = groupLetters[group - 1]; // 문자 A~J
+      const groupChar = groupLetters[group - 1]; // A~J
 
       idList.forEach((id, i) => {
-        const examNumber = `${groupChar}-${i + 1}`; // 예: A-1, B-2 ...
+        const examNumber = `${groupChar}-${i + 1}`; // 예: A-1, A-2, ..., J-n
         db.query(updateSql, [group, examNumber, id], (err) => {
           if (err) console.error(`❌ 조편성 실패 (id=${id})`, err);
         });
+        updatedCount++;
       });
     });
 
-    res.json({ success: true, assigned: shuffled.length });
+    res.json({ success: true, assigned: updatedCount });
   });
 });
 
