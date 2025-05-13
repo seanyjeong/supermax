@@ -2146,43 +2146,43 @@ app.get('/feed/search-students', (req, res) => {
 
 //조편성
 app.post('/feed/assign-groups', (req, res) => {
-  const { totalGroups } = req.body;
-
-  console.log('💬 요청받은 totalGroups:', totalGroups);
+  const { totalGroups, preAssigned = [] } = req.body;
 
   if (!totalGroups || isNaN(totalGroups) || totalGroups !== 10) {
     return res.status(400).json({ error: '조 수는 반드시 10개여야 합니다' });
   }
 
-  // ✅ 1. 먼저 기존 조와 수험번호를 초기화
   const resetSql = "UPDATE 실기기록 SET record_group = NULL, exam_number = NULL";
 
   db.query(resetSql, (resetErr) => {
-    if (resetErr) {
-      console.error('❌ 초기화 실패:', resetErr);
-      return res.status(500).json({ error: '조 초기화 실패' });
-    }
+    if (resetErr) return res.status(500).json({ error: '조 초기화 실패' });
 
-    // ✅ 2. 학생 조회
     const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
     db.query(selectSql, (err, rows) => {
-      if (err) {
-        console.error('❌ 학생 조회 실패:', err);
-        return res.status(500).json({ error: '학생 조회 실패' });
-      }
+      if (err || rows.length === 0) return res.status(500).json({ error: '학생 조회 실패' });
 
-      if (!rows || rows.length === 0) {
-        return res.status(400).json({ error: '학생 데이터가 없습니다.' });
-      }
+      const allIds = rows.map(r => r.id);
+      const assignedSet = new Set(preAssigned.map(Number));
 
-      const shuffled = rows.sort(() => Math.random() - 0.5);
-      const groupMap = {};
+      const preAB = preAssigned.map(Number); // A/B조 먼저 배치할 id들
+      const remaining = allIds.filter(id => !assignedSet.has(id));
+      const shuffled = remaining.sort(() => Math.random() - 0.5);
+
+      const groupMap = {}; // 1~10조
       const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
 
-      shuffled.forEach((row, index) => {
+      // ✅ 먼저 A/B조로 preAssigned 배정
+      preAB.forEach((id, i) => {
+        const group = (i % 2) + 1; // 1(A조), 2(B조)
+        if (!groupMap[group]) groupMap[group] = [];
+        groupMap[group].push(id);
+      });
+
+      // ✅ 남은 인원은 균등 분배
+      shuffled.forEach((id, index) => {
         const group = (index % totalGroups) + 1;
         if (!groupMap[group]) groupMap[group] = [];
-        groupMap[group].push(row.id);
+        groupMap[group].push(id);
       });
 
       const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
@@ -2191,19 +2191,16 @@ app.post('/feed/assign-groups', (req, res) => {
       const runUpdates = async () => {
         try {
           for (let group = 1; group <= totalGroups; group++) {
-            const ids = groupMap[group] || [];
             const groupChar = groupLetters[group - 1];
+            const ids = groupMap[group] || [];
 
             for (let i = 0; i < ids.length; i++) {
-              const id = ids[i];
               const examNumber = `${groupChar}-${i + 1}`;
+              const id = ids[i];
 
               await new Promise((resolve, reject) => {
                 db.query(updateSql, [group, examNumber, id], (err) => {
-                  if (err) {
-                    console.error(`❌ UPDATE 실패: id=${id}, exam=${examNumber}`, err);
-                    return reject(err);
-                  }
+                  if (err) return reject(err);
                   updatedCount++;
                   resolve();
                 });
@@ -2211,10 +2208,9 @@ app.post('/feed/assign-groups', (req, res) => {
             }
           }
 
-          console.log(`✅ 조편성 완료: 총 ${updatedCount}명`);
           res.json({ success: true, assigned: updatedCount });
         } catch (e) {
-          console.error('❌ 조편성 중 에러 (최종):', e);
+          console.error('❌ 조편성 에러:', e);
           res.status(500).json({ error: '조편성 실패', message: e.message });
         }
       };
