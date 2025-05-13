@@ -2402,10 +2402,9 @@ app.post('/feed/add-new', (req, res) => {
   const { new_name, new_school, new_grade, new_gender, branch } = req.body;
 
   if (!new_name || !new_school || !new_grade || !new_gender || !branch) {
-    return res.status(400).json({ error: '모든 필수값 누락' });
+    return res.status(400).json({ error: '❌ 필수값 누락' });
   }
 
-  // 1. 가장 인원이 적은 조 찾기
   const groupSql = `
     SELECT record_group, COUNT(*) AS count 
     FROM 실기기록 
@@ -2421,52 +2420,41 @@ app.post('/feed/add-new', (req, res) => {
     }
 
     const selectedGroup = groupRows[0].record_group;
+    const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
+    const groupChar = groupLetters[selectedGroup - 1];
 
-    // 2. 해당 조의 가장 큰 수험번호 조회
-    const maxExamSql = `
-      SELECT MAX(exam_number) AS max_exam 
-      FROM 실기기록 
-      WHERE record_group = ?
+    const maxSql = `
+      SELECT exam_number FROM 실기기록 
+      WHERE record_group = ? AND exam_number LIKE '${groupChar}-%'
+      ORDER BY LENGTH(exam_number) DESC, exam_number DESC LIMIT 1
     `;
 
-    db.query(maxExamSql, [selectedGroup], (err, maxRows) => {
-      if (err) {
-        console.error('❌ 수험번호 조회 실패:', err);
-        return res.status(500).json({ error: '수험번호 조회 실패' });
-      }
+    db.query(maxSql, [selectedGroup], (err, maxRows) => {
+      if (err) return res.status(500).json({ error: '수험번호 조회 실패' });
 
       let nextSeq = 1;
-      if (maxRows[0].max_exam) {
-        const maxExam = maxRows[0].max_exam;
-        nextSeq = parseInt(maxExam.slice(1)) + 1;
+      if (maxRows[0]?.exam_number) {
+        const parts = maxRows[0].exam_number.split('-');
+        if (parts.length === 2) nextSeq = parseInt(parts[1]) + 1;
       }
 
-      const newExamNumber = `${selectedGroup}${String(nextSeq).padStart(3, '0')}`;
+      const newExamNumber = `${groupChar}-${nextSeq}`;
 
-      // 3. 실기기록 테이블에 INSERT
-      const insertRecordSql = `
-        INSERT INTO 실기기록 (name, school, grade, gender, branch, record_group, exam_number, attended)
+      const insertSql = `
+        INSERT INTO 실기기록 
+        (name, school, grade, gender, branch, record_group, exam_number, attended)
         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
       `;
+      db.query(insertSql, [new_name, new_school, new_grade, new_gender, branch, selectedGroup, newExamNumber], (err) => {
+        if (err) return res.status(500).json({ error: '등록 실패', detail: err.message });
 
-      db.query(insertRecordSql, [new_name, new_school, new_grade, new_gender, branch, selectedGroup, newExamNumber], (err) => {
-        if (err) {
-          console.error('❌ 실기기록 등록 실패:', err);
-          return res.status(500).json({ error: '기록 등록 실패' });
-        }
-
-        // 4. 추가등록 테이블에 INSERT (type = '신규')
-        const insertExtraSql = `
-          INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
+        const insertExtra = `
+          INSERT INTO 추가등록 
+          (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
           VALUES (NULL, ?, ?, ?, ?, ?, '신규')
         `;
-
-        db.query(insertExtraSql, [new_name, new_school, new_grade, new_gender, branch], (err2) => {
-          if (err2) {
-            console.error('❌ 추가등록 테이블 실패:', err2);
-            return res.status(500).json({ error: '추가등록 실패' });
-          }
-
+        db.query(insertExtra, [new_name, new_school, new_grade, new_gender, branch], (err2) => {
+          if (err2) return res.status(500).json({ error: '추가등록 실패', detail: err2.message });
           res.json({ success: true, assigned_exam_number: newExamNumber });
         });
       });
