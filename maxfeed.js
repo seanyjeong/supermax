@@ -2286,6 +2286,16 @@ app.get('/feed/group/:group', (req, res) => {
   });
 });
 
+app.get('/feed/all-branches', (req, res) => {
+  const sql = 'SELECT DISTINCT branch FROM 실기기록 ORDER BY branch ASC';
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: '지점 목록 조회 실패' });
+    const branches = results.map(row => row.branch);
+    res.json({ branches });
+  });
+});
+
+
 // ✅ 특정 종목에 대해 이미 기록된 수험번호 조회 (그룹 기준)
 app.get('/feed_recorded', (req, res) => {
   const { event, group } = req.query;
