@@ -2116,72 +2116,79 @@ app.post('/feed/assign-groups', (req, res) => {
 
   console.log('💬 요청받은 totalGroups:', totalGroups);
 
-  // 조 수는 10으로 고정
   if (!totalGroups || isNaN(totalGroups) || totalGroups !== 10) {
     return res.status(400).json({ error: '조 수는 반드시 10개여야 합니다' });
   }
 
-  const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
-  db.query(selectSql, (err, rows) => {
-    if (err) {
-      console.error('❌ 학생 조회 실패:', err);
-      return res.status(500).json({ error: '학생 조회 실패' });
+  // ✅ 1. 먼저 기존 조와 수험번호를 초기화
+  const resetSql = "UPDATE 실기기록 SET record_group = NULL, exam_number = NULL";
+
+  db.query(resetSql, (resetErr) => {
+    if (resetErr) {
+      console.error('❌ 초기화 실패:', resetErr);
+      return res.status(500).json({ error: '조 초기화 실패' });
     }
 
-    if (!rows || rows.length === 0) {
-      return res.status(400).json({ error: '학생 데이터가 없습니다.' });
-    }
-
-    const shuffled = rows.sort(() => Math.random() - 0.5);
-    const groupMap = {};
-    const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
-
-    // 조 균등 분배
-    shuffled.forEach((row, index) => {
-      const group = (index % totalGroups) + 1;
-      if (!groupMap[group]) groupMap[group] = [];
-      groupMap[group].push(row.id);
-    });
-
-    const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
-    let updatedCount = 0;
-
-    const runUpdates = async () => {
-      try {
-        for (let group = 1; group <= totalGroups; group++) {
-          const ids = groupMap[group] || [];
-          const groupChar = groupLetters[group - 1]; // A~J
-
-          for (let i = 0; i < ids.length; i++) {
-            const id = ids[i];
-            const examNumber = `${groupChar}-${i + 1}`; // 예: A-1, A-2, ..., J-15
-
-            // 수험번호 중복 방지 (UNIQUE인 경우 에러 방지)
-            await new Promise((resolve, reject) => {
-              db.query(updateSql, [group, examNumber, id], (err) => {
-                if (err) {
-                  console.error(`❌ UPDATE 실패: id=${id}, exam=${examNumber}`, err);
-                  return reject(err);
-                }
-                updatedCount++;
-                resolve();
-              });
-            });
-          }
-        }
-
-        console.log(`✅ 조편성 완료: 총 ${updatedCount}명`);
-        res.json({ success: true, assigned: updatedCount });
-      } catch (e) {
-        console.error('❌ 조편성 중 에러 (최종):', e);
-        res.status(500).json({ error: '조편성 실패', message: e.message });
+    // ✅ 2. 학생 조회
+    const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
+    db.query(selectSql, (err, rows) => {
+      if (err) {
+        console.error('❌ 학생 조회 실패:', err);
+        return res.status(500).json({ error: '학생 조회 실패' });
       }
-    };
 
-    runUpdates();
+      if (!rows || rows.length === 0) {
+        return res.status(400).json({ error: '학생 데이터가 없습니다.' });
+      }
+
+      const shuffled = rows.sort(() => Math.random() - 0.5);
+      const groupMap = {};
+      const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
+
+      shuffled.forEach((row, index) => {
+        const group = (index % totalGroups) + 1;
+        if (!groupMap[group]) groupMap[group] = [];
+        groupMap[group].push(row.id);
+      });
+
+      const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
+      let updatedCount = 0;
+
+      const runUpdates = async () => {
+        try {
+          for (let group = 1; group <= totalGroups; group++) {
+            const ids = groupMap[group] || [];
+            const groupChar = groupLetters[group - 1];
+
+            for (let i = 0; i < ids.length; i++) {
+              const id = ids[i];
+              const examNumber = `${groupChar}-${i + 1}`;
+
+              await new Promise((resolve, reject) => {
+                db.query(updateSql, [group, examNumber, id], (err) => {
+                  if (err) {
+                    console.error(`❌ UPDATE 실패: id=${id}, exam=${examNumber}`, err);
+                    return reject(err);
+                  }
+                  updatedCount++;
+                  resolve();
+                });
+              });
+            }
+          }
+
+          console.log(`✅ 조편성 완료: 총 ${updatedCount}명`);
+          res.json({ success: true, assigned: updatedCount });
+        } catch (e) {
+          console.error('❌ 조편성 중 에러 (최종):', e);
+          res.status(500).json({ error: '조편성 실패', message: e.message });
+        }
+      };
+
+      runUpdates();
+    });
   });
 });
-
 
 
 
