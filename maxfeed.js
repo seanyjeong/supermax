@@ -2650,6 +2650,66 @@ app.get('/feed/all-records', (req, res) => {
   });
 });
 
+// 기록 오류 검사 API
+app.get('/feed/record-errors', (req, res) => {
+  const sql = `
+    SELECT 
+      exam_number, name,
+      jump_record, medicineball_record, shuttle_record, sit_reach_record, back_strength_record
+    FROM 실기기록
+  `;
+
+  db.query(sql, (err, rows) => {
+    if (err) {
+      console.error("❌ 오류 검사 조회 실패:", err);
+      return res.status(500).json({ error: "기록 오류 검사 실패" });
+    }
+
+    const recordRanges = {
+      jump: { min: 130, max: 350 },
+      medicineball: { min: 2, max: 20 },
+      shuttle: { min: 7.00, max: 18.00 },
+      sit_reach: { min: -5, max: 40 },
+      back_strength: { min: 0, max: 300 }
+    };
+
+    const errors = [];
+
+    rows.forEach(student => {
+      const errorFields = [];
+
+      function check(field, label, min, max) {
+        const value = student[field];
+        if (value && value.toUpperCase() !== 'F') {
+          const num = parseFloat(value);
+          if (isNaN(num)) {
+            errorFields.push(`${label}: ${value} (숫자 아님)`);
+          } else if (num < min || num > max) {
+            errorFields.push(`${label}: ${value} (허용범위 ${min}~${max})`);
+          }
+        }
+      }
+
+      check('jump_record', '제자리멀리뛰기', recordRanges.jump.min, recordRanges.jump.max);
+      check('medicineball_record', '메디신볼', recordRanges.medicineball.min, recordRanges.medicineball.max);
+      check('shuttle_record', '10m 왕복달리기', recordRanges.shuttle.min, recordRanges.shuttle.max);
+      check('sit_reach_record', '좌전굴', recordRanges.sit_reach.min, recordRanges.sit_reach.max);
+      check('back_strength_record', '배근력', recordRanges.back_strength.min, recordRanges.back_strength.max);
+
+      if (errorFields.length > 0) {
+        errors.push({
+          exam_number: student.exam_number,
+          name: student.name,
+          errors: errorFields
+        });
+      }
+    });
+
+    res.json(errors);
+  });
+});
+
+
 
 
 /* ======================================
