@@ -2578,6 +2578,7 @@ app.get('/feed/dashboard-summary', (req, res) => {
       // 지점별 누적
       const branchMap = {};
 
+      // 1. 실기기록 기반 통계
       const noteMap = {};
       addRows.forEach(row => {
         const key = row.origin_exam_number || row.new_name;
@@ -2595,10 +2596,7 @@ app.get('/feed/dashboard-summary', (req, res) => {
         branchMap[b].total++;
         total++;
 
-        if (note === '신규') {
-          branchMap[b].new_count++;
-          new_count++;
-        } else if (note === '대체') {
+        if (note === '대체') {
           branchMap[b].swap_count++;
           swap_count++;
         }
@@ -2609,6 +2607,18 @@ app.get('/feed/dashboard-summary', (req, res) => {
         } else if (s.attended === 0) {
           branchMap[b].absent++;
           absent++;
+        }
+      });
+
+      // 2. 진짜 신규(현장참여) 추가등록 테이블에서 찾아서 branch별/전체 new_count 누적
+      addRows.forEach(row => {
+        if (row.type === '신규' && (!row.origin_exam_number || row.origin_exam_number === '')) {
+          const b = row.branch || '기타';
+          if (!branchMap[b]) {
+            branchMap[b] = { total: 0, attended: 0, absent: 0, new_count: 0, swap_count: 0 };
+          }
+          branchMap[b].new_count++;
+          new_count++;
         }
       });
 
@@ -2624,6 +2634,7 @@ app.get('/feed/dashboard-summary', (req, res) => {
     });
   });
 });
+
 
 // 전체 기록 불러오기 API
 app.get('/feed/all-records', (req, res) => {
