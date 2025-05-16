@@ -2445,7 +2445,7 @@ app.post('/feed/add-new', (req, res) => {
       const insertSql = `
         INSERT INTO 실기기록 
         (name, school, grade, gender, branch, record_group, exam_number, attended)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        VALUES (?, ?, ?, ?, ?, ?, ?,null)
       `;
       db.query(insertSql, [new_name, new_school, new_grade, new_gender, branch, selectedGroup, newExamNumber], (err) => {
         if (err) return res.status(500).json({ error: '등록 실패', detail: err.message });
