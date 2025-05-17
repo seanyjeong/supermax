@@ -122,7 +122,9 @@ async function sendSMS(recipient, content) {
 
 
 // ✅ MySQL 데이터베이스 연결
-const db = mysql.createConnection({
+const mysql = require('mysql');
+const db = mysql.createPool({
+    connectionLimit: 20,
     host: "211.37.174.218",
     user: "maxilsan",
     password: "q141171616!",
@@ -130,14 +132,8 @@ const db = mysql.createConnection({
     charset: "utf8mb4"
 });
 
-db.connect(err => {
-    if (err) {
-        console.error("❌ MySQL 연결 실패:", err);
-        // MySQL이 연결되지 않아도 서버 실행 가능하도록 변경
-    } else {
-        console.log("✅ MySQL Connected!");
-    }
-});
+console.log("✅ MySQL Pool 연결(자동 관리) 세팅 완료!");
+
 
 // ✅ Firebase Storage 설정
 admin.initializeApp({
