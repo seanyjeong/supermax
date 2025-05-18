@@ -1,2004 +1,490 @@
-const express = require('express');
-const mysql = require('mysql');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const cors = require('cors');
-const multer = require('multer');
-const admin = require('firebase-admin');
-const crypto = require('crypto');
-const bodyParser = require('body-parser');
-const axios = require('axios');
-const serviceAccount = require('/root/supermax/firebase-key.json');
-
-
-
-const app = express();
-// 이 코드 위치: const app = express(); 선언 바로 아래에 추가
-app.use(express.json({ limit: '100mb' }));    // JSON 요청 용량 확대
-app.use(express.urlencoded({ limit: '100mb', extended: true }));  // URL 인코딩 요청 용량 확대
-
-const PORT = 5000;
-const JWT_SECRET = "your_secret_key";
-
-app.use(express.json());
-// // ✅ 정확하고 명확한 CORS 설정 (프론트엔드 도메인 허용)
-// const corsOptions = {
-//   origin: ['https://score.ilsanmax.com', 'https://seanyjeong.github.io'],
-//   methods: ['GET', 'POST', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization'],
-//   credentials: true  // ✅ 중요! credentials 사용 가능하도록 설정
-// };
-
-// app.use(cors(corsOptions));
-
-// 개발 중에는 CORS origin을 '*'로 열어줍니다.
-app.use(cors()); // 또는 아래처럼
-
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use(bodyParser.json());
-
-const verificationCodes = {}; // 🔥 인증번호 저장 객체
-
-const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB';
-const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
-const SERVICE_ID = 'ncp:sms:kr:284240549231:sean';
-const FROM_PHONE = '01021446765';
-function generateCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-// ✅ 1. 랜덤 인증번호 생성 함수
-function generateCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-
-// ✅ 인증번호 발송 API
-app.post('/feed/auth/send-verification', async (req, res) => { // 🔥 변경
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: "전화번호가 필요합니다." });
-
-    const code = generateCode();
-    verificationCodes[phone] = code;
-
-    const message = `[MaxLounge] 인증번호: ${code}`;
-
-    try {
-        await sendSMS(phone, message);
-        res.json({ success: true });
-    } catch (err) {
-        console.error("🔥 SMS 전송 실패:", err);
-        res.status(500).json({ error: "SMS 전송 실패" });
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>맥스실기테스트 기록 시스템</title>
+  <link href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #e2376a;
+      --primary-hover: #c92a5c;
+      --secondary: #2563eb;
+      --success: #10b981;
+      --light-gray: #f5f5f5;
+      --border-radius: 8px;
     }
-});
-
-
-
-// ✅ 인증번호 검증 API
-app.post('/feed/auth/verify-code', (req, res) => { // 🔥 변경
-    const { phone, code } = req.body;
-    if (!phone || !code) return res.status(400).json({ error: "전화번호와 인증번호가 필요합니다." });
-
-    if (verificationCodes[phone] === code) {
-        delete verificationCodes[phone]; // 인증 완료 후 삭제
-        res.json({ success: true });
-    } else {
-        res.status(400).json({ error: "인증번호 불일치" });
-    }
-});
-
-
-// ✅ 4. 네이버 클라우드 SMS 발송 함수
-async function sendSMS(recipient, content) {
-    const timestamp = Date.now().toString();
-    const url = `/sms/v2/services/${SERVICE_ID}/messages`;
-
-    const signature = crypto.createHmac('sha256', NAVER_SECRET_KEY)
-        .update(`POST ${url}\n${timestamp}\n${NAVER_ACCESS_KEY}`)
-        .digest('base64');
-
-    await axios.post(`https://sens.apigw.ntruss.com${url}`, {
-        type: "SMS",
-        contentType: "COMM",
-        countryCode: "82",
-        from: FROM_PHONE,
-        content,
-        messages: [{ to: recipient }]
-    }, {
-        headers: {
-            "x-ncp-apigw-timestamp": timestamp,
-            "x-ncp-iam-access-key": NAVER_ACCESS_KEY,
-            "x-ncp-apigw-signature-v2": signature,
-            "Content-Type": "application/json"
-        }
-    });
-}
-
-
-
-// ✅ MySQL 데이터베이스 연결
-// ✅ MySQL 데이터베이스 "커넥션풀" 연결 (추천 방식!)
-const db = mysql.createPool({
-    connectionLimit: 20,   // 동시 10명 → 20개 정도면 충분
-    host: "211.37.174.218",
-    user: "maxilsan",
-    password: "q141171616!",
-    database: "max",
-    charset: "utf8mb4"
-});
-
-// 따로 db.connect() 필요 없음! (pool은 자동 관리)
-console.log("✅ MySQL Pool 연결(자동 관리) 세팅 완료!");
-
-
-// ✅ Firebase Storage 설정
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-storageBucket: "ilsanmax.firebasestorage.app"
-
-});
-const bucket = admin.storage().bucket();
-
-// ✅ 파일 업로드 설정 (Firebase Storage 사용)
-const upload = multer({ storage: multer.memoryStorage() });
-
-/* ======================================
-   📌 1️⃣ 회원가입 & 로그인 & 로그아웃
-====================================== */
-
-// ✅ 회원가입 API
-app.post('/feed/register', async (req, res) => {
-    const { username, password, name, birth_date, phone, school, grade, gender, consent } = req.body;
-
-    if (!consent) return res.status(400).json({ error: "개인정보 제공 동의가 필요합니다." });
-
-    // 🔥 ✅ 중복 검사: 아이디(username), 전화번호(phone), 이름(name)
-    const checkSql = "SELECT id FROM users WHERE username = ? OR (name = ? AND phone = ?)";
-    db.query(checkSql, [username, name, phone], async (err, results) => {
-        if (err) return res.status(500).json({ error: "DB 조회 오류" });
-
-        if (results.length > 0) {
-            return res.status(400).json({ error: "이미 존재하는 아이디 또는 전화번호입니다." });
-        }
-
-        // ✅ 중복이 없으면 회원가입 진행
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const sql = "INSERT INTO users (username, password, name, birth_date, phone, school, grade, gender, consent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-        db.query(sql, [username, hashedPassword, name, birth_date, phone, school, grade, gender, consent], (err, result) => {
-            if (err) return res.status(500).json({ error: err });
-            res.json({ success: true, user_id: result.insertId });
-        });
-    });
-});
-
-// 비밀번호 재설정 요청 API
-// 비밀번호 재설정 요청 API (아이디와 전화번호 확인)
-app.post('/feed/reset-password-request', async (req, res) => {
-  const { username, phone } = req.body;
-
-  if (!username || !phone) return res.status(400).json({ error: '아이디와 전화번호를 입력해주세요.' });
-
-  // 아이디와 전화번호 일치 확인
-  const checkUserSql = "SELECT phone FROM users WHERE username = ?";
-  db.query(checkUserSql, [username], (err, results) => {
-    if (err) return res.status(500).json({ error: "DB 조회 오류" });
-
-    if (results.length === 0) {
-      return res.status(400).json({ error: "아이디가 존재하지 않습니다." });
-    }
-
-    const user = results[0];
-
-    // 전화번호 일치 여부 확인
-    if (user.phone !== phone) {
-      return res.status(400).json({ error: "전화번호가 일치하지 않습니다." });
-    }
-
-    const code = generateCode();
-    verificationCodes[phone] = code;
-
-    const message = `[MaxFeed] 비밀번호 재설정 인증번호: ${code}`;
-
-    try {
-      sendSMS(phone, message);
-      res.json({ success: "인증번호가 발송되었습니다." });
-    } catch (err) {
-      console.error("SMS 전송 실패:", err);
-      res.status(500).json({ error: 'SMS 전송 실패' });
-    }
-  });
-});
-
-// 비밀번호 재설정 API
-app.post('/feed/reset-password', async (req, res) => {
-  const { phone, code, newPassword } = req.body;
-
-  if (!phone || !code || !newPassword) {
-    return res.status(400).json({ error: '전화번호, 인증번호, 새 비밀번호가 필요합니다.' });
-  }
-
-  if (verificationCodes[phone] === code) {
-    delete verificationCodes[phone]; // 인증번호 사용 후 삭제
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    const sql = "UPDATE users SET password = ? WHERE phone = ?";
-    db.query(sql, [hashedPassword, phone], (err, result) => {
-      if (err) return res.status(500).json({ error: '비밀번호 재설정 실패' });
-
-      res.json({ success: '비밀번호가 성공적으로 변경되었습니다.' });
-    });
-  } else {
-    res.status(400).json({ error: '잘못된 인증번호' });
-  }
-});
-
-
-
-
-// 임시 관리자 토큰 생성 API
-app.post('/feed/adminresetgenerate-temp-token', (req, res) => {
-  const { username, password } = req.body;
-
-  // 관리자 비밀번호 확인
-  if (username === 'admin' && password === 'admin1234') {
-    const token = jwt.sign({ username: 'admin' }, JWT_SECRET, { expiresIn: '1h' });
-    res.json({ success: true, token });
-  } else {
-    res.status(403).json({ error: "관리자 비밀번호가 틀립니다." });
-  }
-});
-
-// /feed/all-students
-app.get('/feed/all-students', async (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "토큰 없음" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.is_admin) return res.status(403).json({ error: "관리자 권한 없음" });
-
-    const sql = `
-      SELECT id, username, name, school, grade, gender
-      FROM users
-      ORDER BY name ASC
-    `;
-    db.query(sql, (err, results) => {
-      if (err) return res.status(500).json({ error: "DB 오류" });
-      res.json(results);
-    });
-  } catch (e) {
-    return res.status(401).json({ error: "토큰 오류" });
-  }
-});
-// /feed/student-records?user_id=123
-app.get('/feed/student-records', (req, res) => {
-  const user_id = parseInt(req.query.user_id, 10);
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "토큰 없음" });
-  if (!user_id) return res.status(400).json({ error: "user_id 필요" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.is_admin) return res.status(403).json({ error: "관리자 권한 없음" });
-
-    const sql = `
-      SELECT f.event, f.record, f.created_at, u.name, u.school, u.grade, u.gender
-      FROM feeds f
-      JOIN users u ON f.user_id = u.id
-      WHERE f.user_id = ?
-      ORDER BY f.created_at ASC
-      LIMIT 100
-    `;
-    db.query(sql, [user_id], (err, results) => {
-      if (err) return res.status(500).json({ error: "DB 오류" });
-      if (results.length === 0) return res.status(404).json({ error: "기록 없음" });
-      res.json(results);
-    });
-  } catch (e) {
-    return res.status(401).json({ error: "토큰 오류" });
-  }
-});
-
-
-
-// 비밀번호 리셋 API
-app.post('/feed/adminresetreset-password', (req, res) => {
-  const { token, password } = req.body;
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    if (decoded.username === 'admin') {
-      const hashedPassword = bcrypt.hashSync(password, 10);
-      
-      const sql = "UPDATE users SET password = ? WHERE username = 'admin'";
-      db.query(sql, [hashedPassword], (err, result) => {
-        if (err) {
-          return res.status(500).json({ error: "비밀번호 변경 실패" });
-        }
-        res.json({ success: true, message: "비밀번호가 성공적으로 변경되었습니다." });
-      });
-    } else {
-      res.status(403).json({ error: "관리자만 비밀번호를 리셋할 수 있습니다." });
-    }
-  } catch (err) {
-    res.status(403).json({ error: "토큰이 만료되었거나 유효하지 않습니다." });
-  }
-});
-
-
-// ✅ 유저강제 삭제
-app.post('/feed/deleteuser', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '토큰 없음' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.is_admin) return res.status(403).json({ error: '관리자 권한 없음' });
-
-    const { user_id } = req.body;
-    if (!user_id) return res.status(400).json({ error: 'user_id 누락' });
-
-    // 🔥 여기서부터 삭제 로직
-    // feeds, comments, likes, notifications, achievements 등 삭제
-    // 마지막에 users 테이블에서 delete
-
-    db.beginTransaction(err => {
-      if (err) return res.status(500).json({ error: '트랜잭션 시작 실패' });
-
-      const queries = [
-        ["DELETE FROM comment_likes WHERE user_id = ?", [user_id]],
-        ["DELETE FROM comments WHERE user_id = ?", [user_id]],
-        ["DELETE FROM likes WHERE user_id = ?", [user_id]],
-        ["DELETE FROM feeds WHERE user_id = ?", [user_id]],
-        ["DELETE FROM notifications WHERE user_id = ?", [user_id]],
-        ["DELETE FROM user_achievements WHERE user_id = ?", [user_id]],
-        ["DELETE FROM user_goals WHERE user_id = ?", [user_id]],
-        ["DELETE FROM users WHERE id = ?", [user_id]],
-      ];
-
-      let idx = 0;
-      function next() {
-        if (idx >= queries.length) {
-          return db.commit(err => {
-            if (err) return db.rollback(() => res.status(500).json({ error: '커밋 실패' }));
-            res.json({ success: true });
-          });
-        }
-
-        const [sql, params] = queries[idx++];
-        db.query(sql, params, (err) => {
-          if (err) return db.rollback(() => res.status(500).json({ error: '쿼리 실패', sql }));
-          next();
-        });
-      }
-
-      next();
-    });
-
-  } catch (err) {
-    console.error("❌ 관리자 인증 실패:", err);
-    res.status(403).json({ error: '토큰 오류 또는 관리자 아님' });
-  }
-});
-
-//전체 초기화! 
-// ✅ 전체 데이터 초기화 API (관리자 전용)
-app.post('/feed/adminreset', (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "토큰 없음" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (decoded.username !== 'admin') {
-      return res.status(403).json({ error: "관리자만 접근 가능" });
-    }
-
-    const tables = [
-      "feeds", "comments", "likes", "comment_likes", "notifications",
-      "user_achievements", "user_goals"
-    ];
-
-    // 모든 테이블 삭제
-    const deletePromises = tables.map(table => {
-      return new Promise((resolve, reject) => {
-        db.query(`DELETE FROM ${table}`, (err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-    });
-
-    Promise.all(deletePromises)
-      .then(() => {
-        res.json({ success: true, message: "모든 데이터 초기화 완료" });
-      })
-      .catch(err => {
-        console.error("🔥 초기화 중 오류:", err);
-        res.status(500).json({ error: "초기화 실패" });
-      });
-
-  } catch (e) {
-    res.status(403).json({ error: "유효하지 않은 토큰" });
-  }
-});
-
-
-// 🔔 알림 목록 API
-// 🔔 알림 조회 API
-app.post('/feed/my-notifications', (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "토큰 없음" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const sql = `
-      SELECT id, type, message, feed_id, created_at
-      FROM notifications
-      WHERE user_id = ?
-      ORDER BY created_at DESC
-      LIMIT 10
-    `;
-
-    db.query(sql, [user_id], (err, rows) => {
-      if (err) {
-        console.error("❌ 알림 조회 실패:", err);
-        return res.status(500).json({ error: "알림 조회 실패" });
-      }
-
-      res.json(rows); // 이제 feed_id도 포함됨
-    });
-  } catch (e) {
-    console.error("❌ JWT 인증 실패:", e);
-    res.status(403).json({ error: "토큰 유효하지 않음" });
-  }
-});
-
-
-app.post('/feed/read-notification', (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "토큰 없음" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-    const { id } = req.body;
-
-    const sql = `DELETE FROM notifications WHERE id = ? AND user_id = ?`;
-
-    db.query(sql, [id, user_id], (err) => {
-      if (err) return res.status(500).json({ error: "삭제 실패" });
-      res.json({ success: true });
-    });
-  } catch (err) {
-    console.error("❌ JWT 오류:", err);
-    res.status(403).json({ error: "토큰 유효하지 않음" });
-  }
-});
-
-app.post('/feed/clear-notifications', (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "토큰 없음" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const sql = `DELETE FROM notifications WHERE user_id = ?`;
-    db.query(sql, [user_id], (err) => {
-      if (err) {
-        console.error("❌ 알림 삭제 실패:", err);
-        return res.status(500).json({ error: "삭제 실패" });
-      }
-
-      res.json({ success: true });
-    });
-  } catch (err) {
-    console.error("❌ JWT 오류:", err);
-    res.status(403).json({ error: "토큰 유효하지 않음" });
-  }
-});
-
-
-
-
-
-
-
-// ✅ 로그인 (JWT 발급)
-// ✅ 로그인 (JWT 발급)
-app.post('/feed/login', (req, res) => {
-  const { username, password } = req.body;
-
-  db.query("SELECT * FROM users WHERE username = ?", [username], async (err, results) => {
-    if (err || results.length === 0) {
-      console.error("❌ 로그인 실패: 아이디 또는 비밀번호가 틀림");
-      return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
-    }
-
-    const user = results[0];
-
-    // 비밀번호 해시 출력 (로그인 시 비교하는 해시 값)
-    console.log("🔐 입력된 비밀번호:", password);
-    console.log("🔐 DB에 저장된 해시된 비밀번호:", user.password);  // 이 값이 bcrypt 해시값입니다.
-
-    // 입력된 비밀번호와 DB에 저장된 해시 비밀번호 비교
-    const isMatch = await bcrypt.compare(password, user.password);
     
-    if (!isMatch) {
-      console.error("❌ 로그인 실패: 비밀번호 불일치");
-      console.log("🔐 비밀번호 불일치: 입력된 비밀번호와 해시된 비밀번호가 다릅니다.");
-      return res.status(400).json({ error: "아이디 또는 비밀번호가 틀렸습니다." });
+    body {
+      max-width: 800px;
+      margin: auto;
+      padding: 1em;
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #fafafa;
+    }
+    
+    h2 {
+      color: var(--primary);
+      margin-bottom: 1.5rem;
+      text-align: center;
+      font-weight: 700;
+    }
+    
+    .card {
+      background: white;
+      border-radius: var(--border-radius);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-controls {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    
+    .form-controls label {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      font-weight: 500;
+      min-width: 180px;
+    }
+    
+    .form-controls select {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: var(--border-radius);
+      font-size: 1rem;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+    }
+    
+    .exam-btn {
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      background: var(--light-gray);
+      border: none;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin: 0.3rem;
+      min-width: 60px;
     }
 
-    // 관리자 여부 판단
-    const isAdmin = user.username === 'admin'; // 'admin'인 경우에만 관리자 권한 부여
-
-    // JWT 토큰 생성, 관리자 정보 포함
-    const token = jwt.sign(
-      { user_id: user.id, username: user.username, is_admin: isAdmin }, // 관리자 정보 포함
-      JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    console.log("✅ 로그인 성공:", {
-      token,
-      user_id: user.id,
-      username: user.username,
-        gender: user.gender,  
-      is_admin: isAdmin
-    });
-
-    res.json({
-      success: true,
-      token,
-      user_id: user.id,
-      username: user.username,
-        gender: user.gender,  
-      is_admin: isAdmin // 프론트에 관리자 정보 전달
-    });
-  });
-});
-
-
-//목표기록
-app.get('/feed/my-goals', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '토큰 없음' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const sql = `SELECT event, goal_record FROM user_goals WHERE user_id = ?`;
-    db.query(sql, [user_id], (err, rows) => {
-      if (err) return res.status(500).json({ error: 'DB 오류' });
-      res.json(rows);
-    });
-
-  } catch (err) {
-    return res.status(403).json({ error: '토큰 유효하지 않음' });
-  }
-});
-//목표기록수정
-app.post('/feed/update-goals', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '토큰 없음' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-    const goals = req.body.goals; // [{event, goal_record}, ...]
-
-    const sql = `INSERT INTO user_goals (user_id, event, goal_record)
-                 VALUES ? 
-                 ON DUPLICATE KEY UPDATE goal_record = VALUES(goal_record)`;
-
-    const values = goals.map(g => [user_id, g.event, g.goal_record]);
-
-    db.query(sql, [values], (err) => {
-      if (err) return res.status(500).json({ error: 'DB 저장 오류' });
-      res.json({ success: true });
-    });
-
-  } catch (err) {
-    return res.status(403).json({ error: '토큰 유효하지 않음' });
-  }
-});
-
-app.get('/feed/user-goals/:userId', (req, res) => {
-  const userId = req.params.userId;
-
-  const sql = `SELECT event, goal_record FROM user_goals WHERE user_id = ?`;
-  db.query(sql, [userId], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    res.json(rows);
-  });
-});
-
-
-
-// ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함)
-// ✅ 현재 로그인한 사용자 정보 조회 (user_id 포함, 전화번호, 생년월일 추가!)
-// ✅ 특정 유저 정보 조회 (user_id 파라미터로 받음)
-app.post('/feed/user-info', (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-    const { user_id } = req.body;
-
-    if (!token || !user_id) return res.status(400).json({ error: "토큰 또는 user_id 누락" });
-
-    try {
-        jwt.verify(token, JWT_SECRET); // 유효성만 체크 (user_id는 직접 받음)
-
-        db.query("SELECT name, profile_image, phone, birth_date, intro, gender FROM users WHERE id = ?", [user_id], (err, results) => {
-            if (err) {
-                console.error("🔥 MySQL 조회 오류:", err);
-                return res.status(500).json({ error: "DB 조회 실패" });
-            }
-            if (results.length === 0) {
-                return res.status(404).json({ error: "사용자를 찾을 수 없음" });
-            }
-
-            const { name, profile_image, phone, birth_date, intro, gender } = results[0];
-            const profileImgUrl = profile_image || "https://placehold.co/100x100";
-
-            res.json({ 
-                success: true, 
-                user_id,
-                name, 
-                profile_image: profileImgUrl,
-                phone,
-                birth_date,
-                intro,
-                gender
-            });
-        });
-    } catch (error) {
-        console.error("🔥 JWT 오류:", error);
-        res.status(401).json({ error: "Invalid token", details: error.message });
-    }
-});
-
-/* ======================================
-   📌파이썬 연결AI (파일 업로드 포함)
-====================================== */
-
-app.post('/feed/ai-predict', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '토큰 없음' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const sql = `
-      SELECT event, record, created_at
-      FROM feeds
-      WHERE user_id = ? AND record IS NOT NULL
-      ORDER BY created_at ASC
-    `;
-
-    db.query(sql, [user_id], async (err, results) => {
-      if (err) {
-        console.error('🔥 DB 오류:', err);
-        return res.status(500).json({ error: '서버 오류' });
-      }
-
-      const grouped = {};
-for (let r of results) {
-  if (!grouped[r.event]) grouped[r.event] = [];
-  grouped[r.event].push({
-    record: parseFloat(r.record),
-    created_at: r.created_at  // ✅ 예측 서버용 raw 날짜 전달
-  });
+.exam-btn.absent {
+  background-color: #ffe5e5 !important;
+  color: #c62828 !important;
+  font-weight: bold !important;
+  border: 1px solid #c62828 !important;
 }
 
 
-      try {
-        const aiRes = await axios.post('http://localhost:5050/predict', { grouped });
-        res.json(aiRes.data);
-      } catch (err) {
-        console.error('❌ Python 예측 서버 응답 오류:', err.message);
-        res.status(500).json({ error: 'AI 예측 실패' });
+    
+    .exam-btn.saved {
+      background: #d1fae5;
+      color: #065f46;
+      font-weight: 500;
+    }
+    
+    .exam-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .exam-btn.saved:hover {
+      background: #a7f3d0;
+    }
+    
+    .student-info {
+      background: white;
+      border-radius: var(--border-radius);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    
+    .info-title {
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+    }
+    
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .info-table tr:not(:last-child) {
+      border-bottom: 1px solid #eee;
+    }
+    
+    .info-table th {
+      text-align: left;
+      padding: 0.75rem 0.5rem;
+      width: 30%;
+      font-weight: 500;
+    }
+    
+    .info-table td {
+      padding: 0.75rem 0.5rem;
+      font-weight: 400;
+    }
+    
+    .record-form {
+      background: white;
+      border-radius: var(--border-radius);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    
+    .foul-check {
+      display: flex;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    
+    .foul-check input {
+      margin-right: 0.5rem;
+      width: 18px;
+      height: 18px;
+    }
+    
+    .foul-check label {
+      font-weight: 500;
+    }
+    
+    .record-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    
+    #recordInput {
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ddd;
+      border-radius: var(--border-radius);
+      width: 150px;
+      text-align: center;
+      font-weight: 500;
+      -moz-appearance: textfield;
+    }
+    
+    /* 숫자 입력 화살표 제거 */
+    #recordInput::-webkit-outer-spin-button,
+    #recordInput::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    
+    .submit-btn {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+      font-weight: 500;
+    }
+    
+    .submit-btn:hover {
+      background-color: var(--primary-hover);
+    }
+    
+    .result-message {
+      padding: 1rem;
+      border-radius: var(--border-radius);
+      margin: 1rem 0;
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    .success {
+      background-color: #d1fae5;
+      color: #065f46;
+    }
+    
+    .error {
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+    
+    .pagination button {
+      margin: 0 0.3rem;
+      padding: 0.5rem 0.8rem;
+      font-size: 1rem;
+      background: var(--light-gray);
+      border: none;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+    }
+    
+    .pagination button.active {
+      background: var(--primary);
+      color: white;
+    }
+    
+    /* 모달 스타일 */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    
+    .modal-content {
+      background: white;
+      padding: 2rem;
+      border-radius: var(--border-radius);
+      max-width: 400px;
+      width: 90%;
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .modal-content h3 {
+      color: var(--primary);
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+    
+    .modal-content p {
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    
+    .modal-content form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .modal-content input[type="password"] {
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ddd;
+      border-radius: var(--border-radius);
+      margin-bottom: 0.5rem;
+    }
+    
+    .modal-content button {
+      padding: 0.75rem;
+      font-size: 1rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--border-radius);
+      cursor: pointer;
+      font-weight: 500;
+    }
+    
+    .modal-content button:hover {
+      background: var(--primary-hover);
+    }
+    
+    #password-error {
+      color: #b91c1c;
+      text-align: center;
+      margin-top: 1rem;
+      display: none;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    
+    /* 반응형 디자인 */
+    @media (max-width: 600px) {
+      .form-controls {
+        flex-direction: column;
+        gap: 1rem;
       }
-    });
-  } catch (err) {
-    res.status(403).json({ error: '토큰 유효하지 않음' });
-  }
-});
-
-// 맥스피드.js에서 Flask서버 연결
-app.post('/feed/get-ai-recommended-goal', async (req, res) => {
-  const { records } = req.body;
-
-  try {
-    const aiRes = await axios.post('http://localhost:5050/recommend-goal', { records });
-    console.log("🚩 Flask 응답 성공:", aiRes.data); // ✅ 응답 성공 시 출력
-    res.json(aiRes.data);
-  } catch (e) {
-    if (e.response) {
-      console.error("🚨 Flask 응답 실패 (상세 메시지):", e.response.data); // ✅ Flask에서 보낸 오류 내용 출력
-    } else {
-      console.error("🔥 Flask API 호출 실패:", e.message);
-    }
-    res.status(500).json({ error: "AI 서버 연결 실패" });
-  }
-});
-
-
-
-
-// 사용자의 종목별 기록 조회 (JWT decode로 user_id 가져오기)
-app.get('/feed/user-records', async (req, res) => {
-  const authHeader = req.headers['authorization'];
-  
-  if (!authHeader) {
-    return res.status(401).json({ error: "토큰 없음" });
-  }
-
-  const token = authHeader.split(' ')[1];
-  let user_id;
-
-  try {
-    const decoded = jwt.decode(token);
-    user_id = decoded.user_id; // ✅ 토큰에서 user_id 추출
-  } catch (err) {
-    return res.status(403).json({ error: "잘못된 토큰" });
-  }
-
-  const { event } = req.query;
-
-  if (!event) {
-    return res.status(400).json({ error: "event가 필요합니다." });
-  }
-
-  try {
-    const [records] = await db.query(`
-      SELECT record, eventDate as date FROM feeds
-      WHERE user_id = ? AND event = ? AND record IS NOT NULL
-      ORDER BY eventDate ASC
-    `, [user_id, event]);
-
-    res.json(records);
-  } catch (e) {
-    console.error("🔥 기록 조회 실패:", e);
-    res.status(500).json({ error: "기록 조회 실패" });
-  }
-});
-
-//목표기록 저장 api들
-app.post('/feed/save-achievement', (req, res) => {
-  const { user_id, event, goal_value, goal_record, goal_date, medal } = req.body;
-
-  // 목표 달성 기록 저장
-  const sql = `INSERT INTO user_ievements (user_id, event, goal_value, goal_record, goal_date, medal)
-               VALUES (?, ?, ?, ?, ?, ?)`;
-
-  db.query(sql, [user_id, event, goal_value, goal_record, goal_date, medal], (err, result) => {
-    if (err) {
-      console.error("🔥 DB 오류:", err);
-      return res.status(500).json({ error: 'DB 오류' });
-    }
-
-    res.json({ success: true });
-  });
-});
-
-// 서버측 간단 예시 코드 (maxfeed.js)
-app.post('/feed/delete-achievements-over-record', async (req, res) => {
-  const { user_id, event, record, isReverse } = req.body;
-
-  try {
-    await db.query(`
-      DELETE FROM user_achievements
-      WHERE user_id = ? AND event = ? AND
-      ${isReverse ? 'goal_value < ?' : 'goal_value > ?'}
-    `, [user_id, event, record]);
-
-    res.json({ success: true });
-  } catch (e) {
-    console.error("🔥 삭제 실패:", e);
-    res.status(500).json({ error: "삭제 실패" });
-  }
-});
-
-
-
-app.get('/feed/my-achievements', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '토큰 없음' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const sql = `SELECT * FROM user_achievements WHERE user_id = ? ORDER BY goal_date DESC`;
-    db.query(sql, [user_id], (err, results) => {
-      if (err) return res.status(500).json({ error: 'DB 오류' });
-      res.json(results);
-    });
-
-  } catch (err) {
-    return res.status(403).json({ error: '토큰 유효하지 않음' });
-  }
-});
-
-
-app.get('/feed/user-achievements/:userId', (req, res) => {
-  const userId = req.params.userId;
-
-  const sql = `SELECT event, goal_value, goal_record, goal_date, medal 
-               FROM user_achievements 
-               WHERE user_id = ? 
-               ORDER BY goal_date DESC`;
-
-  db.query(sql, [userId], (err, results) => {
-    if (err) {
-      console.error("🔥 유저 메달 조회 오류:", err);
-      return res.status(500).json({ error: 'DB 오류' });
-    }
-
-    res.json(results);
-  });
-});
-app.post('/feed/save-achievement-if-new', (req, res) => {
-  const { user_id, event, goal_value, goal_record, goal_date } = req.body;
-
-  console.log("📌 [메달 요청 도착]", { user_id, event, goal_value, goal_record, goal_date });
-
-  // ✅ 역방향 이벤트 체크 추가
-  const isReverse = ['20m왕복달리기', '100m달리기', '달리기'].includes(event);
-  
-  const sql = `
-    SELECT * FROM user_achievements 
-    WHERE user_id = ? AND event = ? 
-    ORDER BY goal_value ${isReverse ? 'ASC' : 'DESC'} LIMIT 1
-  `;
-
-  db.query(sql, [user_id, event], (err, rows) => {
-    if (err) {
-      console.error("❌ DB 조회 실패:", err);
-      return res.status(500).json({ error: 'DB 조회 실패' });
-    }
-
-    const alreadySaved = rows[0];
-    console.log("🔍 기존 메달:", alreadySaved);
-
-    // ✅ 정방향 vs 역방향 조건 명확히 체크
-    const shouldSave = !alreadySaved || (isReverse ? goal_value < alreadySaved.goal_value : goal_value > alreadySaved.goal_value);
-
-    if (shouldSave) {
-      const insertSql = `
-        INSERT INTO user_achievements 
-        (user_id, event, goal_value, goal_record, goal_date)
-        VALUES (?, ?, ?, ?, ?)
-      `;
-      db.query(insertSql, [user_id, event, goal_value, goal_record, goal_date], (err2) => {
-        if (err2) {
-          console.error("❌ DB 저장 실패:", err2);
-          return res.status(500).json({ error: 'DB 저장 실패' });
-        }
-
-        console.log("🏅 [메달 저장 성공]");
-
-        // 🔔 알림 추가
-        const message = `${event} 종목에서 새로운 메달을 달성했습니다!`;
-        const insertNoti = `
-          INSERT INTO notifications (user_id, type, message)
-          VALUES (?, 'medal', ?)
-        `;
-        db.query(insertNoti, [user_id, message], (err3) => {
-          if (err3) console.warn("❌ 메달 알림 저장 실패:", err3);
-          else console.log("✅ 메달 알림 저장 완료!");
-        });
-
-        return res.json({ saved: true });
-      });
-    } else {
-      console.log("⚠️ 메달 저장 조건 불충족: 기존보다 낮거나 동일");
-      return res.json({ saved: false });
-    }
-  });
-});
-
-
-
-
-
-
-
-
-
-
-/* ======================================
-   📌 2️⃣ 피드 기능 (파일 업로드 포함)
-====================================== */
-
-app.get('/feed/recommendation', async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
-  const offset = (page - 1) * limit;
-
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  let userId = null;
-  let user = null;
-  let mainEvent = '제자리멀리뛰기'; // 기본 종목
-
-  function handleQuery(userInfo, event = '제자리멀리뛰기') {
-    let query = '';
-    let params = [];
-
-    if (userInfo) {
-      // ✅ 로그인한 유저: 개인화 추천 점수 적용
-      query = `
-        SELECT f.*, u.name, u.profile_image, u.school, u.grade, u.gender,
-          (
-            f.like_count * 2 +
-            f.comment_count * 1.5 +
-            IF(f.event = ?, 3, 0) +
-            IF(u.school = ?, 2, 0) +
-            IF(u.gender = ?, 1, 0) +
-            IF(u.grade = ?, 1, 0) +
-            (
-              CASE 
-                WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 1 THEN 999
-                WHEN f.user_id = ? AND TIMESTAMPDIFF(HOUR, f.created_at, NOW()) < 3 THEN 20
-                ELSE 0
-              END
-            ) -
-            TIMESTAMPDIFF(HOUR, f.created_at, NOW()) * 0.2 +
-            (RAND() * 3)
-          ) AS score
-        FROM feeds f
-        JOIN users u ON f.user_id = u.id
-        ORDER BY score DESC
-        LIMIT ? OFFSET ?
-      `;
-      params = [
-        event,
-        userInfo.school,
-        userInfo.gender,
-        userInfo.grade,
-        userId,
-        userId,
-        limit,
-        offset
-      ];
-    } else {
-      // ✅ 비로그인 사용자: 단순 인기 + 무작위 기반 추천
-      query = `
-        SELECT f.*, u.name, u.profile_image, u.school, u.grade, u.gender,
-          (
-            f.like_count * 2 +
-            f.comment_count * 1.5 +
-            (RAND() * 3)
-          ) AS score
-        FROM feeds f
-        JOIN users u ON f.user_id = u.id
-        ORDER BY score DESC
-        LIMIT ? OFFSET ?
-      `;
-      params = [limit, offset];
-    }
-
-    console.log("📦 추천 쿼리 파라미터:", params);
-
-    db.query(query, params, (err, feeds) => {
-      if (err) {
-        console.error('🔥 추천 피드 쿼리 오류:', err);
-        return res.status(500).json({ success: false, message: '추천 피드 오류' });
-      }
-      console.log("✅ 추천 피드 개수:", feeds.length);
-      res.json({ success: true, feeds });
-    });
-  }
-
-  try {
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        userId = decoded.user_id;
-        console.log("✅ 토큰 인증됨:", decoded);
-
-        // 사용자 정보 가져오기
-        db.query(`SELECT school, grade, gender FROM users WHERE id = ?`, [userId], (err, userRows) => {
-          if (err || userRows.length === 0) {
-            console.warn("❗️사용자 정보 조회 실패 또는 없음");
-            return handleQuery(null); // 비로그인 추천으로
-          }
-
-          user = userRows[0];
-
-          // 주 종목 추출
-          db.query(
-            `SELECT event FROM feeds WHERE user_id = ? GROUP BY event ORDER BY COUNT(*) DESC LIMIT 1`,
-            [userId],
-            (err2, eventRows) => {
-              if (!err2 && eventRows.length > 0) {
-                mainEvent = eventRows[0].event;
-              }
-              console.log("🎯 주 종목:", mainEvent);
-              handleQuery(user, mainEvent);
-            }
-          );
-        });
-      } catch (err) {
-        console.warn("❌ 토큰 검증 실패:", err.message);
-        handleQuery(null); // 비로그인 추천
-      }
-    } else {
-      handleQuery(null); // 비로그인
-    }
-  } catch (err) {
-    console.error("🔥 서버 오류:", err);
-    res.status(500).json({ success: false, message: '서버 오류' });
-  }
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ✅ Firebase Storage에 파일 업로드 & URL 반환
-async function uploadToFirebase(file, folder = "uploads") {
-    try {
-        console.log(`🚀 Firebase 업로드 시작: ${file.originalname}`);
-
-        if (!file) throw new Error("파일이 없습니다!");
-
-        // 🔥 `folder` 매개변수 추가 → 프로필 이미지는 "profiles/", 일반 파일은 "uploads/"
-        const fileName = `${folder}/${Date.now()}_${file.originalname}`;
-        const fileUpload = bucket.file(fileName);
-
-        await fileUpload.save(file.buffer, {
-            metadata: { contentType: file.mimetype }
-        });
-
-        console.log(`✅ 파일 업로드 성공: ${fileName}`);
-
-        // 🔥 **파일을 공개로 설정 (`makePublic()`)**
-        await fileUpload.makePublic();
-
-        // ✅ **공개 URL 반환**
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
-        console.log(`🌍 공개 URL: ${publicUrl}`);
-
-        return publicUrl;
-    } catch (error) {
-        console.error("🔥 Firebase 업로드 오류:", error);
-        throw new Error("파일 업로드 실패: " + error.message);
-    }
-}
-
-
-const path = require('path');
-const fs = require('fs');
-const ffmpeg = require('fluent-ffmpeg');
-
-app.post('/feed/add-feed', upload.array('files'), async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-
-  let decoded;
-  try {
-    decoded = jwt.verify(token, JWT_SECRET);
-  } catch (e) {
-    console.error("❌ JWT 인증 실패:", e.message);
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-
-  const user_id = decoded.user_id;
- const { event, record, content, is_private } = req.body; // ✅ is_private 받아오기
-  const files = req.files;
-
-  // ✅ 빠른 응답
-  res.json({ uploading: true });
-
-  // ✅ 백그라운드 작업
-  (async () => {
-    try {
-      let media_urls = [];
-
-      if (files && files.length > 0) {
-        for (let file of files) {
-          const ext = path.extname(file.originalname).toLowerCase();
-          console.log("📂 업로드 파일:", file.originalname, "| 확장자:", ext, "| 크기:", file.buffer.length);
-
-          if (ext === '.mov') {
-            const inputPath = `/tmp/${Date.now()}_${file.originalname}`;
-            const outputPath = inputPath + '.mp4';
-
-            try {
-              fs.writeFileSync(inputPath, file.buffer);
-              console.log("✅ .mov 파일 임시 저장:", inputPath);
-            } catch (err) {
-              console.error("❌ mov 저장 실패:", err.message);
-              continue;
-            }
-
-            try {
-              await new Promise((resolve, reject) => {
-                ffmpeg(inputPath)
-                  .inputOptions('-fflags +genpts')
-                  .outputOptions([
-                    '-preset ultrafast',
-                    '-vf scale=720:-2',   // ✅ 해상도 제한
-                    '-r 24',              // ✅ 프레임 제한
-                    '-c:v libx264',
-                    '-c:a aac',
-                    '-movflags +faststart'
-                  ])
-                  .on('start', command => console.log('▶️ ffmpeg 시작:', command))
-                  .on('end', () => {
-                    console.log('✅ ffmpeg 변환 완료:', outputPath);
-                    resolve();
-                  })
-                  .on('error', err => {
-                    console.error('❌ ffmpeg 에러:', err.message);
-                    reject(err);
-                  })
-                  .save(outputPath);
-              });
-
-              const mp4Buffer = fs.readFileSync(outputPath);
-              const newFile = {
-                originalname: path.basename(outputPath),
-                buffer: mp4Buffer,
-                mimetype: 'video/mp4'
-              };
-
-              const url = await uploadToFirebase(newFile, "feeds");
-              media_urls.push(url);
-              console.log("🌍 mp4 업로드 성공:", url);
-
-              fs.unlinkSync(inputPath);
-              fs.unlinkSync(outputPath);
-              console.log("🧹 임시 파일 삭제 완료");
-
-            } catch (err) {
-              console.error("❌ 변환/업로드 실패:", err.message);
-            }
-
-          } else {
-            try {
-              const url = await uploadToFirebase(file, "feeds");
-              media_urls.push(url);
-              console.log("🌍 일반 파일 업로드 성공:", url);
-            } catch (err) {
-              console.error("❌ Firebase 업로드 실패:", err.message);
-            }
-          }
-        }
-      }
-
-
-const media = JSON.stringify(media_urls);
-
-const sql = `
-  INSERT INTO feeds (user_id, event, record, content, media_url, created_at, is_private)
-  VALUES (?, ?, ?, ?, ?, NOW(), ?)
-`;
-
-console.log("📝 SQL 실행 준비:", { user_id, event, record, content, media, is_private });
-
-const phoneNumbers = ["01021446765","01071511941","01082408417","01092898449","01055941838"]; // 원하는 번호들을 배열로 설정
-
-db.query(sql, [user_id, event, record, content, media, is_private || 0], async (err, result) => {
-  if (err) {
-    console.error("🔥 DB 저장 실패:", err);
-    return;
-  }
-
-  // 여러 전화번호로 문자 전송
-  for (const phone of phoneNumbers) {
-    try {
-      await sendSMS(phone, `[STAC] 새 피드가 등록되었습니다. 피드백 및 응원부탁해요.`);
-      console.log(`✅ 문자 전송 성공: ${phone}`);
-    } catch (err) {
-      console.warn(`📡 문자 전송 실패 (${phone}):`, err.message);
-    }
-  }
-
-  console.log("🎉 피드 DB 저장 성공! feed_id:", result.insertId);
-});
-
-
-    } catch (e) {
-      console.error("❌ 백그라운드 처리 실패:", e);
-    }
-  })();
-});
-
-
-
-
-
-
-// ✅ 피드 목록 (페이지네이션 추가!)
-// 기존 /feed/feeds API 확장
-app.get('/feed/feeds', (req, res) => {
-  const tag = req.query.tag;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
-  const offset = (page - 1) * limit;
-
-  let sql = `
-    SELECT feeds.*, users.name,
-           COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
-    FROM feeds
-    JOIN users ON feeds.user_id = users.id
-  `;
-  const params = [];
-
-  // ✅ tag가 있는 경우에만 필터링
-if (tag) {
-  sql += ` WHERE content LIKE ? OR event LIKE ? `;
-  params.push(`%#${tag}%`, `%${tag}%`);
-}
-
-
-  sql += ` ORDER BY feeds.created_at DESC LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  db.query(sql, params, (err, results) => {
-    if (err) {
-      console.error("🔥 피드 조회 오류:", err);
-      return res.status(500).json({ error: "피드 조회 실패" });
-    }
-    res.json(results);
-  });
-});
-//기록들 
-app.get('/feed/my-records', (req, res) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '토큰 없음' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user_id = decoded.user_id;
-
-    const sql = `
-      SELECT event, record, created_at
-      FROM feeds
-      WHERE user_id = ? AND record IS NOT NULL
-      ORDER BY created_at ASC
-    `;
-
-    db.query(sql, [user_id], (err, results) => {
-      if (err) {
-        console.error('🔥 기록 불러오기 실패:', err);
-        return res.status(500).json({ error: '서버 오류' });
-      }
-      res.json(results);
-    });
-
-  } catch (err) {
-    return res.status(403).json({ error: '토큰 유효하지 않음' });
-  }
-});
-
-// 내 피드만 조회 (로그인 사용자 전용)
-app.get('/feed/my-feeds', (req, res) => {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized: 토큰 없음" });
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const user_id = decoded.user_id;
-
-        const sql = `
-            SELECT feeds.*, users.username, users.profile_image
-            FROM feeds
-            JOIN users ON feeds.user_id = users.id
-            WHERE feeds.user_id = ?
-            ORDER BY feeds.created_at DESC
-        `;
-        db.query(sql, [user_id], (err, results) => {
-            if (err) {
-                console.error('❌ 내 피드 조회 오류:', err);
-                return res.status(500).json({ error: '내 피드 조회 실패' });
-            }
-            res.json(results);
-        });
-    } catch (error) {
-        console.error('❌ JWT 오류:', error);
-        res.status(401).json({ error: "Invalid token", details: error.message });
-    }
-});
-
-
-// ✅ Firebase 파일 삭제 함수
-function deleteFromFirebaseByUrl(url) {
-  try {
-    const filePath = decodeURIComponent(url.split(`/${bucket.name}/`)[1]);
-    return bucket.file(filePath).delete();
-  } catch (err) {
-    console.error("❌ Firebase 경로 추출 실패:", err);
-    return Promise.resolve(); // 실패해도 서버 죽지 않게
-  }
-}
-
-// ✅ 피드 삭제 API (Firebase 포함)
-app.post('/feed/delete-feed', (req, res) => {
-  const { feed_id } = req.body;
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    console.log("✅ [피드 삭제 요청] feed_id:", feed_id, "by user_id:", decoded.user_id);
-
-    // ✅ 피드 정보 조회
-    const checkSql = "SELECT * FROM feeds WHERE id = ? AND user_id = ?";
-    db.query(checkSql, [feed_id, decoded.user_id], async (err, results) => {
-      if (err || results.length === 0) {
-        return res.status(403).json({ error: "삭제 권한 없음 또는 피드 없음" });
-      }
-
-      const feed = results[0];
-      const mediaUrls = JSON.parse(feed.media_url || '[]');
-
-      // ✅ Firebase 파일 삭제
-      for (const url of mediaUrls) {
-        try {
-          await deleteFromFirebaseByUrl(url);
-          console.log("🗑️ Firebase 파일 삭제 완료:", url);
-        } catch (e) {
-          console.warn("⚠️ Firebase 삭제 실패 (무시):", url);
-        }
-      }
-
-      // ✅ DB에서 피드 삭제
-      db.query("DELETE FROM feeds WHERE id = ?", [feed_id], (err) => {
-        if (err) return res.status(500).json({ error: "피드 삭제 실패" });
-
-        res.json({ success: true, message: "피드와 Firebase 파일이 삭제되었습니다." });
-      });
-    });
-
-  } catch (error) {
-    console.error("❌ JWT 오류:", error);
-    res.status(401).json({ error: "Invalid token" });
-  }
-});
-
-// ✅ 특정 사용자의 피드 조회
-app.get('/feed/user-feeds/:userId', (req, res) => {
-  const userId = req.params.userId;
-
-  const sql = `
-    SELECT feeds.*, users.name, 
-           COALESCE(users.profile_image, 'https://placehold.co/40x40') AS profile_image
-    FROM feeds
-    JOIN users ON feeds.user_id = users.id 
-    WHERE feeds.user_id = ?
-    ORDER BY feeds.created_at DESC
-  `;
-
-  db.query(sql, [userId], (err, results) => {
-    if (err) {
-      console.error("🔥 [유저 피드] 조회 오류:", err);
-      return res.status(500).json({ error: "유저 피드 조회 실패" });
-    }
-
-    res.json(results);
-  });
-});
-
-
-// ✅ 내정보 수정관련 (이름 표시)
-app.post('/feed/update-profile', upload.single('profile_image'), async (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const {
-      current_password,
-      new_password,
-      confirm_password,
-      phone,
-      birth_date,
-      intro  // ✅ 소개글 추가
-    } = req.body;
-
-    console.log("✅ [내정보 수정 요청] user_id:", decoded.user_id);
-
-    // 비밀번호 변경 처리
-    if (current_password) {
-      db.query("SELECT password FROM users WHERE id = ?", [decoded.user_id], async (err, result) => {
-        if (err) return res.status(500).json({ error: "DB 조회 실패" });
-        if (result.length === 0) return res.status(400).json({ error: "유효하지 않은 사용자입니다." });
-
-        const isMatch = await bcrypt.compare(current_password, result[0].password);
-        if (!isMatch) return res.status(400).json({ error: "기존 비밀번호가 틀렸습니다." });
-
-        if (new_password && new_password !== confirm_password) {
-          return res.status(400).json({ error: "새 비밀번호가 일치하지 않습니다." });
-        }
-
-        const hashedPassword = new_password ? await bcrypt.hash(new_password, 10) : result[0].password;
-        updateUserProfile(decoded.user_id, hashedPassword);
-      });
-    } else {
-      updateUserProfile(decoded.user_id, null);
-    }
-
-    // ✅ 프로필 업데이트 함수
-    async function updateUserProfile(user_id, newPassword) {
-      let profile_url = null;
-
-      if (req.file) {
-        profile_url = await uploadToFirebase(req.file, "profiles");
-      }
-
-      const sql = `
-        UPDATE users SET 
-          password = COALESCE(?, password), 
-          phone = COALESCE(?, phone),
-          birth_date = COALESCE(?, birth_date),
-          profile_image = COALESCE(?, profile_image),
-          intro = COALESCE(?, intro)
-        WHERE id = ?
-      `;
-
-      const values = [newPassword, phone, birth_date, profile_url, intro, user_id];
-
-      db.query(sql, values, (err, result) => {
-        if (err) return res.status(500).json({ error: "프로필 수정 실패" });
-
-        console.log("✅ 프로필 수정 완료:", result);
-        res.json({ success: true, profile_url });
-      });
-    }
-
-  } catch (error) {
-    console.error("🔥 서버 오류 발생:", error);
-    res.status(500).json({ error: "Internal Server Error", details: error.message });
-  }
-});
-
-app.patch('/feed/update-feed', upload.array('files'), async (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const { feed_id, content, event, record, existing_media, is_private } = req.body;
-
-    db.query("SELECT * FROM feeds WHERE id = ? AND user_id = ?", [feed_id, decoded.user_id], async (err, results) => {
-      if (err || results.length === 0) {
-        return res.status(403).json({ error: "수정 권한 없음 또는 피드 없음" });
-      }
-
-      let mediaArray = [];
-      try {
-        mediaArray = JSON.parse(existing_media || '[]');
-      } catch (e) {
-        return res.status(400).json({ error: "기존 미디어 파싱 오류" });
-      }
-
-      if (req.files && req.files.length > 0) {
-        for (let file of req.files) {
-          const url = await uploadToFirebase(file, "feeds");
-          mediaArray.push(url);
-        }
-      }
-
-      const sql = `
-        UPDATE feeds
-        SET content = ?, event = ?, record = ?, is_private = ?, media_url = ?
-        WHERE id = ? AND user_id = ?
-      `;
-
-      db.query(sql, [
-        content,
-        event,
-        record,
-        is_private, // ✅ 여기에 추가!
-        JSON.stringify(mediaArray),
-        feed_id,
-        decoded.user_id
-      ], (err) => {
-        if (err) return res.status(500).json({ error: "피드 수정 실패" });
-        res.json({ success: true, updated: true });
-      });
-    });
-  } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
-  }
-});
-
-
-
-// ✅ 단일 피드 조회 (JOIN 없이 바로 feeds 테이블에서만)
-app.get('/feed/feeds/:id', (req, res) => {
-  const feedId = parseInt(req.params.id, 10);
-  if (isNaN(feedId)) return res.status(400).json({ error: '잘못된 피드 ID' });
-
-  const sql = `
-    SELECT 
-      id,
-      user_id,
-      content,
-      media_url,
-      created_at,
-      like_count,
-      comment_count,
-      event,
-      record,
-      is_private
       
-    FROM feeds
-    WHERE id = ?
-  `;
-  db.query(sql, [feedId], (err, result) => {
-    if (err) {
-      console.error('🔥 DB 오류:', err);
-      return res.status(500).json({ error: "피드 조회 실패" });
-    }
-    if (result.length === 0) {
-      return res.status(404).json({ error: "피드 없음" });
-    }
-
-    res.json(result[0]);
-  });
-});
-
-
-
-// 댓글 좋아요 토글 API
-app.post('/feed/like-comment', (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.user_id;
-    const { comment_id } = req.body;
-
-    if (!comment_id) return res.status(400).json({ error: "댓글 ID 누락" });
-
-    // 먼저 현재 좋아요 여부 확인
-    const checkSql = 'SELECT * FROM comment_likes WHERE user_id = ? AND comment_id = ?';
-    db.query(checkSql, [userId, comment_id], (err, rows) => {
-      if (err) return res.status(500).json({ error: "DB 오류 (조회)" });
-
-      if (rows.length > 0) {
-        // 이미 좋아요 눌렀으면 → 삭제
-        const delSql = 'DELETE FROM comment_likes WHERE user_id = ? AND comment_id = ?';
-        db.query(delSql, [userId, comment_id], (err) => {
-          if (err) return res.status(500).json({ error: "DB 오류 (삭제)" });
-
-          // 개수 다시 계산
-          const countSql = 'SELECT COUNT(*) AS count FROM comment_likes WHERE comment_id = ?';
-          db.query(countSql, [comment_id], (err, countRes) => {
-            if (err) return res.status(500).json({ error: "DB 오류 (카운트)" });
-            res.json({ liked: false, like_count: countRes[0].count });
-          });
-        });
-      } else {
-        // 좋아요 등록
-        const insSql = 'INSERT INTO comment_likes (user_id, comment_id) VALUES (?, ?)';
-        db.query(insSql, [userId, comment_id], (err) => {
-          if (err) return res.status(500).json({ error: "DB 오류 (삽입)" });
-
-          const countSql = 'SELECT COUNT(*) AS count FROM comment_likes WHERE comment_id = ?';
-          db.query(countSql, [comment_id], (err, countRes) => {
-            if (err) return res.status(500).json({ error: "DB 오류 (카운트)" });
-            res.json({ liked: true, like_count: countRes[0].count });
-          });
-        });
+      .form-controls label {
+        width: 100%;
       }
-    });
-
-  } catch (e) {
-    return res.status(401).json({ error: "토큰 인증 실패" });
-  }
-});
-
-// ✅ 댓글 조회 API (GET /feed/comments/:feedId)
-// ✅ /feed/comments/:feedId
-app.get('/feed/comments/:feedId', (req, res) => {
-  const feedId = req.params.feedId;
-  const token = req.headers.authorization?.split(" ")[1];
-  let user_id = null;
-
-  try {
-    if (token) {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      user_id = decoded.user_id;
+      
+      .record-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      #recordInput {
+        width: 100%;
+      }
+      
+      .submit-btn {
+        width: 100%;
+      }
     }
-  } catch (err) {
-    console.log("❌ 토큰 오류 - 좋아요 상태 미적용");
-  }
-
-  const sql = `
-    SELECT c.*, u.name,
-      (SELECT COUNT(*) FROM comment_likes WHERE comment_id = c.id) AS like_count,
-      (SELECT COUNT(*) FROM comment_likes WHERE comment_id = c.id AND user_id = ?) AS liked
-    FROM comments c
-    JOIN users u ON c.user_id = u.id
-    WHERE c.feed_id = ?
-    ORDER BY c.created_at ASC
-  `;
-
-  db.query(sql, [user_id, feedId], (err, results) => {
-    if (err) {
-      console.error("🔥 댓글 조회 오류:", err);
-      return res.status(500).json({ error: "댓글 불러오기 실패" });
+    
+    /* 키보드 단축키 안내 */
+    .shortcut-hint {
+      font-size: 0.85rem;
+      color: #666;
+      text-align: center;
+      margin-top: 1rem;
     }
+    
+    /* 종목별 색상 구분 */
+    .event-jump { color: #e2376a; }
+    .event-shuttle { color: #2563eb; }
+    .event-sit_reach { color: #10b981; }
+    .event-back_strength { color: #7c3aed; }
+    .event-medicineball { color: #f59e0b; }
+  </style>
+</head>
+<body>
+<!-- 비밀번호 모달 -->
+<div id="password-modal" class="modal-overlay">
+  <div class="modal-content">
+    <h3>기록 시스템 접근</h3>
+    <p>종목별 비밀번호를 입력해주세요</p>
+    <form id="password-form">
+      <input type="password" id="password-input" placeholder="비밀번호" required autofocus>
+      <button type="submit">접속하기</button>
+    </form>
+    <p id="password-error" class="error" style="display: none;">비밀번호가 올바르지 않습니다. 다시 시도해주세요.</p>
+    <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
 
-    // liked는 0 또는 1 → true/false로 변환
-    const mapped = results.map(r => ({
-      ...r,
-      liked: r.liked > 0,
-      like_count: r.like_count || 0
-    }));
+   
+    </div>
+  </div>
+</div>
 
-    res.json(mapped);
-  });
-});
+<!-- 메인 콘텐츠 -->
+<div id="main-content" style="display: none;">
+  <div class="card">
+    <h2 id="event-title">맥스실기테스트 기록 시스템</h2>
+    
+    <div class="form-controls">
+      <label>
+        조 선택
+        <select id="groupSelect"></select>
+      </label>
+      <label>
+        측정 종목
+        <select id="eventSelect">
+          <!-- 동적으로 생성 -->
+        </select>
+      </label>
+    </div>
+  </div>
 
+  <div class="card">
+    <div id="examList" class="row"></div>
+    <div class="pagination" id="pagination"></div>
+    <p class="shortcut-hint">빨간색 박스는 결시자</p>
+  </div>
+  
+  <div id="studentInfo" class="student-info" style="display: none;">
+    <div class="info-title">학생 정보</div>
+    <table class="info-table" id="studentTable"></table>
+  </div>
+  
+  <div id="recordForm" class="record-form" style="display: none;">
+    <div class="foul-check">
+      <input type="checkbox" id="foulCheck">
+      <label for="foulCheck">파울 (F) 처리</label>
+    </div>
+    <div class="record-row">
+      <input type="number" step="any" name="record" id="recordInput" placeholder="기록 입력" required autocomplete="off" />
+      <button type="submit" class="submit-btn" id="submitRecord">기록 저장</button>
+    </div>
+    <div id="result" class="result-message" style="display: none;"></div>
+  </div>
+</div>
 
-
-
-
-// ✅ 댓글 추가 API (문자 알림 기능 추가!)
-app.post('/feed/add-comment', upload.single('media'), async (req, res) => {
-    const { feed_id, content, parent_id } = req.body;
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-
-        let media_url = null;
-        if (req.file) {
-            media_url = await uploadToFirebase(req.file, "comments");
-        }
-
-        const sql = `
-            INSERT INTO comments (feed_id, user_id, content, parent_id, media_url)
-            VALUES (?, ?, ?, ?, ?)
-        `;
-        db.query(sql, [feed_id, decoded.user_id, content, parent_id || null, media_url], (err, result) => {
-          if (parent_id) {
-            const replyTargetSql = `
-              SELECT user_id FROM comments WHERE id = ?
-            `;
-            db.query(replyTargetSql, [parent_id], (err, replyTarget) => {
-              const parentUserId = replyTarget?.[0]?.user_id;
-              if (parentUserId && parentUserId !== decoded.user_id) {
-                const nameSql = "SELECT name FROM users WHERE id = ?";
-                db.query(nameSql, [decoded.user_id], (err, result) => {
-                  const replyerName = result?.[0]?.name || '누군가';
-                  const message = `${replyerName}님이 댓글에 답글을 남겼습니다.`;
-        
-                  const insertSql = `
-                    INSERT INTO notifications (user_id, type, message, feed_id)
-                    VALUES (?, 'reply', ?, ?)
-                  `;
-                  db.query(insertSql, [parentUserId, message, feed_id], (err) => {
-                    if (err) console.warn("❌ 대댓글 알림 저장 실패:", err);
-                    else console.log("✅ 대댓글 알림 저장 완료!");
-                  });
-                });
-              }
-            });
-          }
-        
-            if (err) {
-                console.error("🔥 댓글 추가 오류:", err);
-                return res.status(500).json({ error: "댓글 추가 실패" });
-            }
-
-            // 댓글 카운트 업데이트
-            db.query("UPDATE feeds SET comment_count = comment_count + 1 WHERE id = ?", [feed_id], () => {
-                db.query("SELECT comment_count FROM feeds WHERE id = ?", [feed_id], async (err, countResult) => {
-                    if (err) {
-                        return res.status(500).json({ error: "댓글 카운트 업데이트 실패" });
-                    }
-
-                    // 🔥 댓글 작성자의 user_id와 피드 주인의 user_id 비교
-                    const feedOwnerSql = `
-                        SELECT feeds.user_id, users.phone
-                        FROM feeds
-                        JOIN users ON feeds.user_id = users.id
-                        WHERE feeds.id = ?
-                    `;
-
-                    db.query(feedOwnerSql, [feed_id], async (err, feedOwnerResult) => {
-                        if (err || feedOwnerResult.length === 0) {
-                            console.error("🔥 피드 주인 조회 오류:", err);
-                        } else {
-                            const feedOwnerId = feedOwnerResult[0].user_id;
-                            const feedOwnerPhone = feedOwnerResult[0].phone;
-
-                            // 댓글 작성자가 피드 주인이 아니라면 문자 발송
-                            if (decoded.user_id !== feedOwnerId) {
-                                const smsMessage = `[일맥스타그램] 회원님의 피드에 댓글이 생성되었습니다.`;
-                                try {
-                                    await sendSMS(feedOwnerPhone, smsMessage);
-
-                                    console.log(`✅ 댓글 알림 문자 발송 완료 → ${feedOwnerPhone}`);
-
-                                    const commenterNameSql = "SELECT name FROM users WHERE id = ?";
-                                    db.query(commenterNameSql, [decoded.user_id], (err, result) => {
-                                      const commenterName = result?.[0]?.name || '누군가';
-                                      const insertSql = `
-                                        INSERT INTO notifications (user_id, type, message, feed_id)
-                                        VALUES (?, 'comment', ?, ?)
-                                      `;
-                                      const message = `${commenterName}님이 댓글을 남겼습니다.`;
-                                      db.query(insertSql, [feedOwnerId, message, feed_id], (err) => {
-                                        if (err) console.warn("❌ 댓글 알림 저장 실패:", err);
-                                        else console.log("✅ 댓글 알림 저장 완료!");
-                                      });
-                                    });
-                              
-                                } catch (smsErr) {
-                                    console.error(`🔥 댓글 알림 문자 발송 실패 → ${feedOwnerPhone}`, smsErr);
-                                }
-                            } else {
-                                console.log("🟡 본인의 댓글이라 문자 발송 없음");
-                            }
-                        }
-
-                        // ✅ 최종 응답 반환
-                        res.json({
-                            success: true,
-                            comment_id: result.insertId,
-                            comment_count: countResult[0].comment_count
-                        });
-                    });
-                });
-            });
-        });
-
-    } catch (error) {
-        console.error("🔥 JWT 오류:", error);
-        res.status(401).json({ error: "Invalid token" });
-    }
-});
-
-
-
-// ✅ 댓글 삭제 API (수정됨)
-app.post('/feed/delete-comment', (req, res) => {
-    const { comment_id } = req.body;
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-
-        // 1. 댓글 정보 조회
-        db.query(
-            `SELECT feed_id, media_url FROM comments WHERE id = ? AND user_id = ?`,
-            [comment_id, decoded.user_id],
-            (err, results) => {
-                if (err) {
-                    console.error("🔥 댓글 조회 실패:", err);
-                    return res.status(500).json({ error: "DB 조회 실패" });
-                }
-
-                if (results.length === 0) {
-                    return res.status(404).json({ error: "댓글을 찾을 수 없음" });
-                }
-
-                const { feed_id, media_url } = results[0];
-
-                // 2. 대댓글 존재 여부 확인
-                db.query(
-                    `SELECT COUNT(*) AS cnt FROM comments WHERE parent_id = ?`,
-                    [comment_id],
-                    (err, countResult) => {
-                        if (err) {
-                            console.error("🔥 대댓글 조회 오류:", err);
-                            return res.status(500).json({ error: "대댓글 조회 실패" });
-                        }
-
-                        const hasReplies = countResult[0].cnt > 0;
-
-                        if (hasReplies) {
-                            // 🔁 대댓글이 있으면 → soft delete 처리
-                            db.query(
-                                `UPDATE comments SET content = '', deleted = 1 WHERE id = ?`,
-                                [comment_id],
-                                (err) => {
-                                    if (err) return res.status(500).json({ error: "댓글 삭제 실패 (soft)" });
-
-                                    res.json({ success: true, softDeleted: true });
-                                }
-                            );
-                        } else {
-                            // ❌ 대댓글이 없으면 → 실제 삭제
-                            db.query(`DELETE FROM comments WHERE id = ?`, [comment_id], (err) => {
-                                if (err) return res.status(500).json({ error: "댓글 삭제 실패" });
-
-                                // 🔥 Firebase 스토리지 삭제
-                                if (media_url) {
-                                    try {
-                                        let filePath;
-                                        if (media_url.includes("firebasestorage.googleapis.com")) {
-                                            filePath = decodeURIComponent(media_url.split("/o/")[1].split("?")[0]);
-                                        } else {
-                                            filePath = decodeURIComponent(media_url.replace(`https://storage.googleapis.com/${bucket.name}/`, ""));
-                                        }
-
-                                        bucket.file(filePath).delete().then(() => {
-                                            console.log("✅ Firebase 댓글 파일 삭제 완료:", filePath);
-                                        }).catch(err => {
-                                            console.warn("⚠️ Firebase 댓글 파일 삭제 실패 (무시됨):", err.message);
-                                        });
-                                    } catch (e) {
-                                        console.warn("⚠️ Firebase 경로 파싱 실패:", e.message);
-                                    }
-                                }
-
-                                // 🔄 댓글 카운트 감소
-                                db.query(`UPDATE feeds SET comment_count = comment_count - 1 WHERE id = ?`, [feed_id], (err) => {
-                                    if (err) console.warn("⚠️ 댓글 카운트 업데이트 실패 (무시):", err);
-
-                                    res.json({ success: true, deleted: true });
-                                });
-                            });
-                        }
-                    }
-                );
-            }
-        );
-    } catch (err) {
-        console.error("🔥 댓글 삭제 오류:", err);
-        res.status(500).json({ error: "댓글 삭제 실패" });
-    }
-});
-
-
-
-
-// ✅ 좋아요 API
-app.post('/feed/like', (req, res) => {
-  const { feed_id } = req.body;
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    db.beginTransaction((err) => {
-      if (err) return res.status(500).json({ error: "DB 트랜잭션 시작 실패" });
-
-      // 1. 이미 좋아요 눌렀는지 확인
-      const checkSql = "SELECT * FROM likes WHERE feed_id = ? AND user_id = ?";
-      db.query(checkSql, [feed_id, decoded.user_id], (err, results) => {
-        if (err) return db.rollback(() => res.status(500).json({ error: "좋아요 확인 실패" }));
-
-        if (results.length > 0) {
-          // ✅ 좋아요 취소
-          const deleteSql = "DELETE FROM likes WHERE feed_id = ? AND user_id = ?";
-          db.query(deleteSql, [feed_id, decoded.user_id], (err) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: "좋아요 취소 실패" }));
-
-            updateLikeCount(false);
-          });
-        } else {
-          // ✅ 좋아요 추가
-          const insertSql = "INSERT INTO likes (feed_id, user_id) VALUES (?, ?)";
-          db.query(insertSql, [feed_id, decoded.user_id], (err) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: "좋아요 추가 실패" }));
-
-            updateLikeCount(true);
-          });
-        }
-
-        // 🔄 좋아요 수 갱신 + 알림 처리 함수
-        function updateLikeCount(isLiked) {
-          db.query("SELECT COUNT(*) AS like_count FROM likes WHERE feed_id = ?", [feed_id], (err, countResult) => {
-            if (err) return db.rollback(() => res.status(500).json({ error: "좋아요 수 조회 실패" }));
-
-            const likeCount = countResult[0].like_count;
-            db.query("UPDATE feeds SET like_count = ? WHERE id = ?", [likeCount, feed_id], (err) => {
-              if (err) return db.rollback(() => res.status(500).json({ error: "like_count 업데이트 실패" }));
-
-              if (isLiked) {
-                // 🔔 좋아요한 유저 이름 불러와서 알림 추가
-                const feedOwnerSql = `SELECT user_id FROM feeds WHERE id = ?`;
-                db.query(feedOwnerSql, [feed_id], (err, feedRes) => {
-                  const feedOwnerId = feedRes?.[0]?.user_id;
-                  if (feedOwnerId && feedOwnerId !== decoded.user_id) {
-                    const userSql = `SELECT name FROM users WHERE id = ?`;
-                    db.query(userSql, [decoded.user_id], (err, nameResult) => {
-                      const likerName = nameResult?.[0]?.name || '누군가';
-                      const message = `${likerName}님이 피드에 좋아요를 눌렀습니다.`;
-
-                      const notiSql = `
-                        INSERT INTO notifications (user_id, type, message, feed_id)
-                        VALUES (?, 'like', ?, ?)
-                      `;
-                      db.query(notiSql, [feedOwnerId, message, feed_id], (err) => {
-                        if (err) console.warn("❌ 좋아요 알림 저장 실패:", err);
-                        else console.log("✅ 좋아요 알림 저장 완료!");
-                      });
-                    });
-                  }
-                });
-              }
-
-              // 최종 응답
-              db.commit(() => res.json({ liked: isLiked, like_count: likeCount }));
-            });
-          });
-        }
-      });
-    });
-  } catch (e) {
-    console.error("❌ JWT 오류:", e);
-    return res.status(403).json({ error: "Invalid token" });
-  }
-});
-
-    // 기준표 정의(슈퍼맥스12&북부테스트)
-// 기준표 정의
-const 기준표 = {
-  '제멀': {
-    남: [300, 297, 294, 291, 288, 285, 282, 279, 276, 273, 270, 267, 264, 261, 258, 255, 252, 249, 246, 243, 240, 230, 220, 210, -Infinity],
-    여: [250, 247, 244, 241, 238, 235, 232, 229, 226, 223, 220, 217, 214, 211, 208, 205, 202, 199, 196, 193, 190, 170, 160, 150, -Infinity]
-  },
-  '10m': {
-    남: [8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.2, 10.4, 10.6, Infinity],
-    여: [9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0, 11.1, 11.2, 11.4, 11.6, 11.8, Infinity]
-  },
-  '좌전굴': {
-    남: [32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 10, 8, 6, -Infinity],
-    여: [34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 12, 10, 8, -Infinity]
-  },
-  '배근력': {
-    남: [220, 216, 212, 208, 204, 200, 196, 192, 188, 184, 180, 176, 172, 168, 164, 160, 156, 152, 148, 144, 140, 130, 120, 110, -Infinity],
-    여: [150, 146, 142, 138, 134, 130, 126, 122, 118, 114, 110, 106, 102, 98, 94, 90, 86, 82, 78, 74, 70, 60, 50, 40, -Infinity]
-  },
-  '메디신볼': {
-    남: [12.0, 11.7, 11.4, 11.1, 10.8, 10.5, 10.2, 9.9, 9.6, 9.3, 9.0, 8.7, 8.4, 8.1, 7.8, 7.5, 7.2, 6.9, 6.6, 6.3, 6.0, 5.7, 5.4, 5.1, -Infinity],
-    여: [ 9.0, 8.7, 8.4, 8.1, 7.8, 7.5, 7.2, 6.9, 6.6, 6.3, 6.0, 5.7, 5.4, 5.1, 4.8, 4.5, 4.2, 3.9, 3.6, 3.3, 3.0, 2.7, 2.4, 2.1, -Infinity]
-  }
+<script>
+// 비밀번호와 종목 매핑
+const PASSWORD_MAP = {
+  '2025max': 'all', // 전체 접근
+  'maxj2025': '제멀', // 제자리멀리뛰기
+  'maxr2025': '10m', // 10m 왕복달리기
+  'maxs2025': '좌전굴', // 좌전굴
+  'maxb2025': '배근력', // 배근력
+  'maxm2025': '메디신볼' // 메디신볼던지기
 };
 
-// 점수 계산 함수
-function calculateScore(event, gender, record) {
-  const 기준 = 기준표[event]?.[gender];
-  if (!기준) return 0;
+// 종목 목록
+const EVENTS = [
+  { value: '제멀', name: '제자리멀리뛰기', class: 'event-jump' },
+  { value: '10m', name: '10m 왕복달리기', class: 'event-shuttle' },
+  { value: '좌전굴', name: '좌전굴', class: 'event-sit_reach' },
+  { value: '배근력', name: '배근력', class: 'event-back_strength' },
+  { value: '메디신볼', name: '메디신볼던지기', class: 'event-medicineball' }
+];
 
-  let index = 기준.findIndex((v, i) => {
-    if (event === '10m') return record <= v;
-    else return record >= v;
-  });
+// 현재 허용된 종목 (비밀번호에 따라 결정)
+let allowedEvents = [...EVENTS];
+let currentEventType = 'all';
 
-  if (index === -1) index = 기준.length - 1;
-  return Math.max(100 - index * 2, 52);
+// 비밀번호 처리
+document.getElementById('password-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const password = document.getElementById('password-input').value;
+  
+  if (PASSWORD_MAP[password]) {
+  currentEventType = PASSWORD_MAP[password];
+
+  const eventSelect = document.getElementById('eventSelect');
+  eventSelect.innerHTML = '';
+
+  if (currentEventType === 'all') {
+    allowedEvents = [...EVENTS];
+    allowedEvents.forEach(event => {
+      const opt = document.createElement('option');
+      opt.value = event.value;
+      opt.textContent = event.name;
+      opt.className = event.class;
+      eventSelect.appendChild(opt);
+    });
+    currentEvent = allowedEvents[0].value; // ✅ 추가
+  } else {
+    allowedEvents = EVENTS.filter(event => event.value === currentEventType);
+    const opt = document.createElement('option');
+    const selectedEvent = EVENTS.find(event => event.value === currentEventType);
+    opt.value = selectedEvent.value;
+    opt.textContent = selectedEvent.name;
+    opt.className = selectedEvent.class;
+    eventSelect.appendChild(opt);
+    eventSelect.disabled = true;
+    currentEvent = selectedEvent.value; // ✅ 이 줄 추가!
+  }
+
+  document.getElementById('password-modal').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+  document.getElementById('event-title').textContent = `${allowedEvents[0].name} 기록 시스템`;
+  loadGroupList();
+  document.getElementById('recordInput').focus();
 }
 
-// DB 컬럼명 매핑
+});
+
+// 필드 매핑 함수
 function getField(event, type) {
   const map = {
     '제멀': 'jump',
@@ -2010,737 +496,305 @@ function getField(event, type) {
   return `${map[event]}_${type}`;
 }
 
-app.post('/feed/submit-record', (req, res) => {
-  console.log('📥 [submit-record] 요청:', req.body);
+// DOM 요소
+const groupSelect = document.getElementById('groupSelect');
+const eventSelect = document.getElementById('eventSelect');
+const examList = document.getElementById('examList');
+const pagination = document.getElementById('pagination');
+const studentInfo = document.getElementById('studentInfo');
+const studentTable = document.getElementById('studentTable');
+const form = document.getElementById('recordForm');
+const result = document.getElementById('result');
+const foulCheck = document.getElementById('foulCheck');
+const recordInput = document.getElementById('recordInput');
+const submitBtn = document.getElementById('submitRecord');
 
-  const { branch, exam_number, event, record, gender } = req.body;
-  if (!branch || !exam_number || !event || !record || !gender) {
-    return res.status(400).json({ error: '❌ 필수 항목 누락' });
+// 전역 변수
+let selectedExam = '';
+let currentBranch = '';
+let currentGender = '';
+let currentGroup = '';
+let currentEvent = allowedEvents[0]?.value || '제멀';
+let studentList = [];
+const pageSize = 30;
+let currentPage = 1;
+let searchInput = '';
+let searchTimeout = null;
+
+// 파울 체크박스 이벤트
+foulCheck.addEventListener('change', () => {
+  recordInput.disabled = foulCheck.checked;
+  if (foulCheck.checked) {
+    recordInput.value = '';
+    submitRecord(); // 파울 체크 시 자동 저장
+  } else {
+    recordInput.focus();
   }
+});
 
-  const isFoul = record === 'F' || record === 'f';
-  const savedRecord = isFoul ? 'F' : parseFloat(record);
-  const score = isFoul ? 52 : calculateScore(event, gender, parseFloat(record));
+// 조 선택 변경 이벤트
+groupSelect.addEventListener('change', async () => {
+  currentGroup = groupSelect.value;
+  if (!currentGroup) return;
+  await loadExams();
+});
 
-  const field_record = getField(event, 'record');
-  const field_score = getField(event, 'score');
+// 종목 선택 변경 이벤트
+eventSelect.addEventListener('change', async () => {
+  currentEvent = eventSelect.value;
 
-  const selectSql = 'SELECT * FROM 실기기록 WHERE branch = ? AND exam_number = ?';
-  db.query(selectSql, [branch, exam_number], (err, result) => {
-    if (err) {
-      console.error('❌ SELECT 실패:', err.message);
-      return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
+  const selected = EVENTS.find(e => e.value === currentEvent);
+  document.getElementById('event-title').textContent = `${selected.name} 기록 시스템`;
+
+  if (currentGroup) {
+    await loadExams();
+  }
+  if (selectedExam) {
+    loadStudent(selectedExam);
+  }
+});
+
+
+// 키보드 이벤트 핸들러 (검색 기능)
+document.addEventListener('keydown', (e) => {
+  // 숫자 입력으로 검색 (0-9)
+  if (e.key >= '0' && e.key <= '9') {
+    if (searchTimeout) clearTimeout(searchTimeout);
+    
+    searchInput += e.key;
+    searchTimeout = setTimeout(() => {
+      searchInput = '';
+    }, 1000);
+    
+    const foundStudent = studentList.find(s => s.exam_number.startsWith(searchInput));
+    if (foundStudent) {
+      loadStudent(foundStudent.exam_number);
+      recordInput.focus();
     }
-
-    if (result.length > 0) {
-      const row = result[0];
-      const total = 
-        (field_score === 'jump_score' ? score : (row.jump_score || 0)) +
-        (field_score === 'shuttle_score' ? score : (row.shuttle_score || 0)) +
-        (field_score === 'sit_reach_score' ? score : (row.sit_reach_score || 0)) +
-        (field_score === 'back_strength_score' ? score : (row.back_strength_score || 0)) +
-        (field_score === 'medicineball_score' ? score : (row.medicineball_score || 0));
-
-      const updateSql = `
-        UPDATE 실기기록 
-        SET ${field_record} = ?, ${field_score} = ?, total_score = ?
-        WHERE branch = ? AND exam_number = ?
-      `;
-      db.query(updateSql, [savedRecord, score, total, branch, exam_number], err => {
-        if (err) {
-          console.error('❌ UPDATE 실패:', err.message);
-          return res.status(500).json({ error: 'DB 업데이트 실패', detail: err.message });
-        }
-        console.log(`✅ 업데이트 완료 | ${event}: ${savedRecord} → ${score}점 | 총점: ${total}`);
-        res.json({ success: true, score, total });
-      });
-
-    } else {
-      const insertSql = `
-        INSERT INTO 실기기록 (branch, exam_number, gender, ${field_record}, ${field_score}, total_score)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `;
-      db.query(insertSql, [branch, exam_number, gender, savedRecord, score, score], err => {
-        if (err) {
-          console.error('❌ INSERT 실패:', err.message);
-          return res.status(500).json({ error: 'DB 삽입 실패', detail: err.message });
-        }
-        console.log(`🆕 삽입 완료 | ${event}: ${savedRecord} → ${score}점`);
-        res.json({ success: true, score, total: score });
-      });
-    }
-  });
-});
-
-
-
-// ✅ 수험번호로 학생 기본 정보 조회 API
-// 기존 버전 (branch까지 필요하게 되어 있었음)
-app.get('/feed/get-student', (req, res) => {
-  const { exam_number } = req.query;
-  if (!exam_number) return res.status(400).json({ error: 'exam_number 필요' });
-
-  const sql = `SELECT * FROM 실기기록 WHERE exam_number = ? LIMIT 1`;
-  db.query(sql, [exam_number], (err, results) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    if (results.length === 0) return res.status(404).json({ error: '학생 정보 없음' });
-
-    const student = results[0];
-    res.json({
-      success: true,
-      student: {
-        name: student.name,
-        school: student.school,
-        grade: student.grade,
-        branch: student.branch,
-        gender: student.gender
-      }
-    });
-  });
-});
-
-// 1. 전체 학생 수 조회 API
-app.get('/feed/student-count', (req, res) => {
-  const sql = 'SELECT COUNT(*) AS count FROM 실기기록';
-  db.query(sql, (err, result) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    res.json({ total: result[0].count });
-  });
-});
-
-
-// 새로운 학생 검색 API
-app.get('/feed/search-students', (req, res) => {
-  const { branch, grade, gender } = req.query;
-  const conditions = [];
-  const values = [];
-
-  if (branch) {
-    conditions.push('branch = ?');
-    values.push(branch);
   }
-  if (grade) {
-    conditions.push('grade = ?');
-    values.push(grade);
-  }
-  if (gender) {
-    conditions.push('gender = ?');
-    values.push(gender);
-  }
-
-  let sql = 'SELECT id, name, school, branch, grade, gender FROM 실기기록';
-  if (conditions.length > 0) {
-    sql += ' WHERE ' + conditions.join(' AND ');
-  }
-
-  sql += ' ORDER BY name ASC';
-
-  db.query(sql, values, (err, results) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    res.json({ success: true, students: results });
-  });
-});
-
-//조편성
-app.post('/feed/assign-groups', (req, res) => {
-  const { totalGroups, preAssigned = [] } = req.body;
-
-  if (!totalGroups || isNaN(totalGroups) || totalGroups !== 10) {
-    return res.status(400).json({ error: '조 수는 반드시 10개여야 합니다' });
-  }
-
-  // ✅ 1. 기존 조 및 수험번호 초기화
-  const resetSql = "UPDATE 실기기록 SET record_group = NULL, exam_number = NULL";
-
-  db.query(resetSql, (resetErr) => {
-    if (resetErr) return res.status(500).json({ error: '조 초기화 실패' });
-
-    // ✅ 2. 전체 학생 조회
-    const selectSql = 'SELECT id FROM 실기기록 ORDER BY id ASC';
-    db.query(selectSql, (err, rows) => {
-      if (err || rows.length === 0) {
-        return res.status(500).json({ error: '학생 조회 실패' });
-      }
-
-      const allIds = rows.map(r => r.id);
-      const assignedSet = new Set(preAssigned.map(Number));
-      const preAB = preAssigned.map(Number);
-      const remaining = allIds.filter(id => !assignedSet.has(id));
-      const shuffled = remaining.sort(() => Math.random() - 0.5);
-
-      const groupMap = {};
-      const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
-
-      // ✅ 3. 조 초기화
-      for (let i = 1; i <= totalGroups; i++) groupMap[i] = [];
-
-      // ✅ 4. A/B조에 선택된 인원 우선 배치
-      preAB.forEach((id, i) => {
-        const group = (i % 2) + 1; // A(1), B(2)
-        groupMap[group].push(id);
-      });
-
-      // ✅ 5. 나머지 인원은 "가장 인원 적은 조"에 분배
-      for (const id of shuffled) {
-        let minGroup = 1;
-        let minCount = groupMap[1].length;
-
-        for (let g = 2; g <= totalGroups; g++) {
-          if (groupMap[g].length < minCount) {
-            minGroup = g;
-            minCount = groupMap[g].length;
-          }
-        }
-
-        groupMap[minGroup].push(id);
-      }
-
-      // ✅ 6. 수험번호 부여 + DB 업데이트
-      const updateSql = 'UPDATE 실기기록 SET record_group = ?, exam_number = ? WHERE id = ?';
-      let updatedCount = 0;
-
-      const runUpdates = async () => {
-        try {
-          for (let group = 1; group <= totalGroups; group++) {
-            const groupChar = groupLetters[group - 1];
-            const ids = groupMap[group];
-
-            for (let i = 0; i < ids.length; i++) {
-              const id = ids[i];
-              const examNumber = `${groupChar}-${i + 1}`;
-
-              await new Promise((resolve, reject) => {
-                db.query(updateSql, [group, examNumber, id], (err) => {
-                  if (err) {
-                    console.error(`❌ UPDATE 실패: id=${id}, exam=${examNumber}`, err);
-                    return reject(err);
-                  }
-                  updatedCount++;
-                  resolve();
-                });
-              });
-            }
-          }
-
-          res.json({ success: true, assigned: updatedCount });
-        } catch (e) {
-          console.error('❌ 조편성 중 에러:', e);
-          res.status(500).json({ error: '조편성 실패', message: e.message });
-        }
-      };
-
-      runUpdates();
-    });
-  });
-});
-
-
-
-
-// 3. 조별 인원 수 통계 API
-app.get('/feed/group-summary', (req, res) => {
-  const sql = `SELECT record_group AS group_no, COUNT(*) AS count FROM 실기기록 GROUP BY record_group ORDER BY group_no ASC`;
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ error: '요약 조회 실패' });
-    res.json(results);
-  });
-});
-
-app.get('/feed/check-group-assigned', (req, res) => {
-  const sql = 'SELECT COUNT(*) AS count FROM 실기기록 WHERE record_group IS NOT NULL';
-  db.query(sql, (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    res.json({ assigned: rows[0].count > 0 });
-  });
-});
-
-
-// 해당 조의 수험번호 리스트
-// 백엔드 수정: 실기기록 전체 필드 포함
-app.get('/feed/group/:group', (req, res) => {
-  const group = req.params.group;
-  const sql = `
-    SELECT exam_number, attended,
-      jump_record, shuttle_record, sit_reach_record, 
-      back_strength_record, medicineball_record, record_group
-    FROM 실기기록 
-    WHERE record_group = ? 
-    ORDER BY exam_number ASC
-  `;
-  db.query(sql, [group], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    res.json(rows);
-  });
-});
-
-
-
-      app.get('/feed/get-student', (req, res) => {
-  const { exam_number } = req.query;
-  if (!exam_number) return res.status(400).json({ error: 'exam_number 누락' });
-
-  const sql = `
-    SELECT 
-      name, school, grade, gender, branch,
-      jump_record, shuttle_record, sit_reach_record, 
-      back_strength_record, medicineball_record
-    FROM 실기기록
-    WHERE exam_number = ?
-  `;
-
-  db.query(sql, [exam_number], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류', detail: err.message });
-    if (rows.length === 0) return res.status(404).json({ error: '학생 없음' });
-
-    res.json({
-      success: true,
-      student: rows[0]
-    });
-  });
-});
-
-app.get('/feed/all-branches', (req, res) => {
-  const sql = 'SELECT DISTINCT branch FROM 실기기록 ORDER BY branch ASC';
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ error: '지점 목록 조회 실패' });
-    const branches = results.map(row => row.branch);
-    res.json({ branches });
-  });
-});
-
-
-// ✅ 특정 종목에 대해 이미 기록된 수험번호 조회 (그룹 기준)
-app.get('/feed_recorded', (req, res) => {
-  const { event, group } = req.query;
-  if (!event || !group) {
-    return res.status(400).json({ error: 'event와 group 값이 필요합니다.' });
-  }
-
-  const field = getField(event, 'record');
-  const sql = `
-    SELECT exam_number 
-    FROM 실기기록 
-    WHERE record_group = ? AND ${field} IS NOT NULL AND ${field} != ''
-  `;
-  db.query(sql, [group], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류', detail: err.message });
-    res.json(rows.map(r => r.exam_number));
-  });
-});
-
-// 특정 조에서 특정 종목 기록 완료된 exam_number 리스트 조회
-app.get('/feed_recorded_check', (req, res) => {
-  const { group, event } = req.query;
-  if (!group || !event) return res.status(400).json({ error: 'group, event 필요' });
-
-  const field = getField(event, 'record');  // 예: jump_record
-  const sql = `SELECT exam_number FROM 실기기록 WHERE record_group = ? AND ${field} IS NOT NULL`;
-  db.query(sql, [group], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    res.json(rows.map(row => row.exam_number));
-  });
-});
-// 예시 GET 요청: /feed_recorded_one?group=1&event=제멀&exam_number=123456
-app.get('/feed_recorded_one', (req, res) => {
-  const { group, event, exam_number } = req.query;
-  if (!group || !event || !exam_number) return res.status(400).json({ error: '누락된 파라미터' });
-
-  const field = getField(event, 'record'); // 예: jump_record
-  const sql = `SELECT ${field} AS record FROM 실기기록 WHERE record_group = ? AND exam_number = ?`;
-
-  db.query(sql, [group, exam_number], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 오류' });
-    if (rows.length === 0) return res.json({ record: null });
-    res.json({ record: rows[0].record });
-  });
-});
-// ✅ 출석 체크 API
-app.post('/feed/attendance-check', (req, res) => {
-  const { exam_number, attended } = req.body;
-  if (!exam_number || typeof attended === 'undefined') {
-    return res.status(400).json({ error: 'exam_number 또는 attended 누락' });
-  }
-
-  const sql = 'UPDATE 실기기록 SET attended = ? WHERE exam_number = ?';
-  db.query(sql, [attended ? 1 : 0, exam_number], (err) => {
-    if (err) return res.status(500).json({ error: '출석 저장 실패' });
-    res.json({ success: true });
-  });
-});
-
-// ✅ 결시자 → 대체자 등록 API
-// ✅ 대체자 등록 및 실기기록 업데이트 로직
-app.post('/feed/add-swap', (req, res) => {
-  const { origin_exam_number, new_name, new_school, new_grade, new_gender, branch } = req.body;
-  if (!origin_exam_number || !new_name || !new_school || !new_grade || !new_gender || !branch) {
-    return res.status(400).json({ error: '모든 필수값 누락' });
-  }
-
-  // 1. 추가등록 테이블에 기록 (type = '대체')
-  const insertSwapSql = `
-    INSERT INTO 추가등록 (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
-    VALUES (?, ?, ?, ?, ?, ?, '대체')`;
-  db.query(insertSwapSql, [origin_exam_number, new_name, new_school, new_grade, new_gender, branch], (err) => {
-    if (err) return res.status(500).json({ error: '추가등록 저장 실패', detail: err.message });
-
-    // 2. 실기기록 테이블 수정
-    const updateStudentSql = `
-      UPDATE 실기기록
-      SET name = ?, school = ?, grade = ?, gender = ?, attended = 1
-      WHERE exam_number = ? AND branch = ?`;
-    db.query(updateStudentSql, [new_name, new_school, new_grade, new_gender, origin_exam_number, branch], (err2) => {
-      if (err2) return res.status(500).json({ error: '실기기록 대체 실패', detail: err2.message });
-      res.json({ success: true, exam_number: origin_exam_number });
-    });
-  });
-});
-
-
-// ✅ 신규 추가 등록 API
-app.post('/feed/add-new', (req, res) => {
-  const { new_name, new_school, new_grade, new_gender, branch } = req.body;
-
-  if (!new_name || !new_school || !new_grade || !new_gender || !branch) {
-    return res.status(400).json({ error: '❌ 필수값 누락' });
-  }
-
-  const groupSql = `
-    SELECT record_group, COUNT(*) AS count 
-    FROM 실기기록 
-    GROUP BY record_group 
-    ORDER BY count ASC 
-    LIMIT 1
-  `;
-
-  db.query(groupSql, (err, groupRows) => {
-    if (err || groupRows.length === 0) {
-      console.error('❌ 조 조회 실패:', err);
-      return res.status(500).json({ error: '조 조회 실패' });
-    }
-
-    const selectedGroup = groupRows[0].record_group;
-    const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
-    const groupChar = groupLetters[selectedGroup - 1];
-
-    const maxSql = `
-      SELECT exam_number FROM 실기기록 
-      WHERE record_group = ? AND exam_number LIKE '${groupChar}-%'
-      ORDER BY LENGTH(exam_number) DESC, exam_number DESC LIMIT 1
-    `;
-
-    db.query(maxSql, [selectedGroup], (err, maxRows) => {
-      if (err) return res.status(500).json({ error: '수험번호 조회 실패' });
-
-      let nextSeq = 1;
-      if (maxRows[0]?.exam_number) {
-        const parts = maxRows[0].exam_number.split('-');
-        if (parts.length === 2) nextSeq = parseInt(parts[1]) + 1;
-      }
-
-      const newExamNumber = `${groupChar}-${nextSeq}`;
-
-      const insertSql = `
-        INSERT INTO 실기기록 
-        (name, school, grade, gender, branch, record_group, exam_number, attended)
-        VALUES (?, ?, ?, ?, ?, ?, ?,null)
-      `;
-      db.query(insertSql, [new_name, new_school, new_grade, new_gender, branch, selectedGroup, newExamNumber], (err) => {
-        if (err) return res.status(500).json({ error: '등록 실패', detail: err.message });
-
-        const insertExtra = `
-          INSERT INTO 추가등록 
-          (origin_exam_number, new_name, new_school, new_grade, new_gender, branch, type)
-          VALUES (NULL, ?, ?, ?, ?, ?, '신규')
-        `;
-        db.query(insertExtra, [new_name, new_school, new_grade, new_gender, branch], (err2) => {
-          if (err2) return res.status(500).json({ error: '추가등록 실패', detail: err2.message });
-          res.json({ success: true, assigned_exam_number: newExamNumber });
-        });
-      });
-    });
-  });
-});
-
-
-
-
-// ✅ 지점별 학생 목록 조회 API
-app.get('/feed/branch-students', (req, res) => {
-  const { branch } = req.query;
-  if (!branch) return res.status(400).json({ error: 'branch 파라미터 필요' });
-
-  const sql = `SELECT * FROM 실기기록 WHERE branch = ? ORDER BY exam_number ASC`;
-  db.query(sql, [branch], (err, rows) => {
-    if (err) return res.status(500).json({ error: 'DB 조회 실패', detail: err.message });
-    res.json(rows);
-  });
-});
-
   
-app.get('/feed/dashboard', (req, res) => {
-  const { branch } = req.query;
-  if (!branch) return res.status(400).json({ error: 'branch 누락' });
-
-  // 1. 실기기록에서 출석정보 가져오기
-  const mainSql = `
-    SELECT exam_number, name, school, grade, gender, attended
-    FROM 실기기록
-    WHERE branch = ?
-  `;
-
-  db.query(mainSql, [branch], (err1, mainRows) => {
-    if (err1) return res.status(500).json({ error: '실기기록 조회 실패', detail: err1.message });
-
-    // 2. 추가등록 테이블에서 해당 지점의 신규/대체 등록 정보 가져오기
-    const addSql = `
-      SELECT origin_exam_number, new_name, new_school, new_grade, new_gender, type
-      FROM 추가등록
-      WHERE branch = ?
-    `;
-
-    db.query(addSql, [branch], (err2, addRows) => {
-      if (err2) return res.status(500).json({ error: '추가등록 조회 실패', detail: err2.message });
-
-      // 신규/대체 정보를 매핑
-      const noteMap = {};
-      addRows.forEach(row => {
-        if (row.origin_exam_number) {
-          // 대체자 → 기존 수험번호 사용
-          noteMap[row.origin_exam_number] = '대체';
-        } else {
-          // 신규자 → 실기기록에서 이름 매칭
-          noteMap[row.new_name] = '신규'; // name으로 매칭 (주의: 이름 중복 가능성 존재)
-        }
-      });
-
-      let total = 0;
-      let attended = 0;
-      let absent = 0;
-      let new_count = 0;
-      let swap_count = 0;
-
-      const students = mainRows.map(s => {
-        const note = noteMap[s.exam_number] || noteMap[s.name] || '';
-        if (note === '신규') new_count++;
-        if (note === '대체') swap_count++;
-
-        total++;
-        if (s.attended === 1) attended++;
-        else if (s.attended === 0) absent++;
-
-        return {
-          exam_number: s.exam_number,
-          name: s.name,
-          school: s.school,
-          grade: s.grade,
-          gender: s.gender,
-          attended: s.attended,
-          note
-        };
-      });
-
-      res.json({
-        total,
-        attended,
-        absent,
-        new_count,
-        swap_count,
-        students
-      });
-    });
-  });
+  // Enter 키로 기록 저장
+  if (e.key === 'Enter' && recordInput.value && !foulCheck.checked) {
+    submitRecord();
+  }
 });
 
-app.get('/feed/dashboard-summary', (req, res) => {
-  const mainSql = `
-    SELECT branch, exam_number, attended
-    FROM 실기기록
-  `;
+// 조 목록 로드
+async function loadGroupList() {
+  try {
+    const res = await fetch('https://supermax.kr/feed/group-summary');
+    const groups = await res.json();
+    groupSelect.innerHTML = '<option value="">조를 선택하세요</option>';
+groups.forEach(({ group_no }) => {
+  const opt = document.createElement('option');
+  opt.value = group_no;
+  const groupChar = String.fromCharCode(64 + group_no); // A~J
+  opt.textContent = `${groupChar}조`; // "A조", "B조" ...
+  groupSelect.appendChild(opt);
+});
 
-  db.query(mainSql, (err1, mainRows) => {
-    if (err1) return res.status(500).json({ error: '실기기록 조회 실패', detail: err1.message });
+  } catch (error) {
+    console.error('조 목록 로드 실패:', error);
+  }
+}
 
-    const addSql = `
-      SELECT origin_exam_number, new_name, branch, type
-      FROM 추가등록
-    `;
+// 학생 목록 로드
+async function loadExams() {
+  try {
+    const res = await fetch(`https://supermax.kr/feed/group/${currentGroup}`);
+    studentList = await res.json();
+    studentList.sort((a, b) => {
+  const [aGroup, aNum] = a.exam_number.split('-');
+  const [bGroup, bNum] = b.exam_number.split('-');
+  if (aGroup === bGroup) {
+    return parseInt(aNum) - parseInt(bNum);
+  }
+  return aGroup.localeCompare(bGroup);
+});
 
-    db.query(addSql, (err2, addRows) => {
-      if (err2) return res.status(500).json({ error: '추가등록 조회 실패', detail: err2.message });
+    console.log('학생 리스트 로드 완료:', studentList);
+    currentPage = 1;
+    renderExamList();
+  } catch (error) {
+    console.error('학생 목록 로드 실패:', error);
+  }
+}
 
-      // 전체 통계용
-      let total = 0, attended = 0, absent = 0;
-      let new_count = 0, swap_count = 0;
+// 학생 목록 렌더링
+function renderExamList() {
+  examList.innerHTML = '';
+  pagination.innerHTML = '';
+  const start = (currentPage - 1) * pageSize;
+  const paginated = studentList.slice(start, start + pageSize);
+  const recordField = getField(currentEvent, 'record');
 
-      // 지점별 누적
-      const branchMap = {};
+paginated.forEach(student => {
+  const btn = document.createElement('button');
+  btn.classList.add('exam-btn'); // 기본 클래스 먼저
 
-      // 1. 실기기록 기반 통계
-      const noteMap = {};
-      addRows.forEach(row => {
-        const key = row.origin_exam_number || row.new_name;
-        noteMap[key] = row.type; // '신규' or '대체'
-      });
+  const val = student[getField(currentEvent, 'record')];
+  if (val !== null && val !== undefined && val !== '' && val !== 'null') {
+    btn.classList.add('saved'); // 저장된 경우
+  }
 
-      mainRows.forEach(s => {
-        const note = noteMap[s.exam_number] || noteMap[s.exam_number?.toString()] || noteMap[s.exam_number?.toString().padStart(4, '0')] || '';
-        const b = s.branch || '기타';
+  if (student.attended === 0) {
+    btn.classList.add('absent'); // 결시자 표시
+    console.log('❗ 결시자 표시됨:', student.exam_number); // 확인용
+  }
 
-        if (!branchMap[b]) {
-          branchMap[b] = { total: 0, attended: 0, absent: 0, new_count: 0, swap_count: 0 };
-        }
+  if (student.exam_number == selectedExam) {
+    btn.style.border = '2px solid var(--primary)';
+  }
 
-        branchMap[b].total++;
-        total++;
+  btn.textContent = student.exam_number;
+  btn.title = `${student.name} (${student.school})`;
+  btn.onclick = () => {
+    selectedExam = student.exam_number;
+    loadStudent(student.exam_number);
+    renderExamList(); // 다시 렌더링
+  };
 
-        if (note === '대체') {
-          branchMap[b].swap_count++;
-          swap_count++;
-        }
-
-        if (s.attended === 1) {
-          branchMap[b].attended++;
-          attended++;
-        } else if (s.attended === 0) {
-          branchMap[b].absent++;
-          absent++;
-        }
-      });
-
-      // 2. 진짜 신규(현장참여) 추가등록 테이블에서 찾아서 branch별/전체 new_count 누적
-      addRows.forEach(row => {
-        if (row.type === '신규' && (!row.origin_exam_number || row.origin_exam_number === '')) {
-          const b = row.branch || '기타';
-          if (!branchMap[b]) {
-            branchMap[b] = { total: 0, attended: 0, absent: 0, new_count: 0, swap_count: 0 };
-          }
-          branchMap[b].new_count++;
-          new_count++;
-        }
-      });
-
-      const branches = Object.entries(branchMap).map(([branch, stats]) => ({
-        branch,
-        ...stats
-      }));
-
-      res.json({
-        total, attended, absent, new_count, swap_count,
-        branches
-      });
-    });
-  });
+  examList.appendChild(btn);
 });
 
 
-// 전체 기록 불러오기 API
-app.get('/feed/all-records', (req, res) => {
-  const sql = `
-    SELECT 
-      exam_number, branch, name, gender, grade,
-      jump_record, jump_score,
-      shuttle_record, shuttle_score,
-      sit_reach_record, sit_reach_score,
-      back_strength_record, back_strength_score,
-      medicineball_record, medicineball_score,
-      total_score
-    FROM 실기기록
-    ORDER BY total_score DESC
-  `;
-
-  db.query(sql, (err, rows) => {
-    if (err) {
-      console.error("❌ 전체 기록 조회 실패:", err);
-      return res.status(500).json({ error: "기록 조회 실패" });
+  // 페이지네이션 생성
+  const totalPages = Math.ceil(studentList.length / pageSize);
+  if (totalPages > 1) {
+    for (let i = 1; i <= totalPages; i++) {
+      const pBtn = document.createElement('button');
+      pBtn.textContent = i;
+      if (i === currentPage) pBtn.classList.add('active');
+      pBtn.onclick = () => {
+        currentPage = i;
+        renderExamList();
+      };
+      pagination.appendChild(pBtn);
     }
+  }
+}
 
-    res.json(rows);
-  });
-});
+// 학생 정보 로드
+async function loadStudent(exam_number) {
+  try {
+    const res = await fetch(`https://supermax.kr/feed/get-student?exam_number=${exam_number}`);
+    const json = await res.json();
 
-// 기록 오류 검사 API
-app.get('/feed/record-errors', (req, res) => {
-  const sql = `
-    SELECT 
-      exam_number, name,
-      jump_record, medicineball_record, shuttle_record, sit_reach_record, back_strength_record
-    FROM 실기기록
-  `;
+    if (json.success) {
+      const { name, school, grade, branch, gender } = json.student;
+      selectedExam = String(exam_number);
+      currentBranch = branch;
+      currentGender = gender;
 
-  db.query(sql, (err, rows) => {
-    if (err) {
-      console.error("❌ 오류 검사 조회 실패:", err);
-      return res.status(500).json({ error: "기록 오류 검사 실패" });
-    }
+      const student = studentList.find(s => s.exam_number == selectedExam);
+      const recordField = getField(currentEvent, 'record');
+      const prevRecord = student ? student[recordField] : null;
 
-    const recordRanges = {
-      jump: { min: 130, max: 350 },
-      medicineball: { min: 2, max: 20 },
-      shuttle: { min: 7.00, max: 18.00 },
-      sit_reach: { min: -5, max: 40 },
-      back_strength: { min: 0, max: 300 }
-    };
+      // 학생 정보 표시 (테이블 행을 개별적으로 생성)
+      studentTable.innerHTML = '';
+      
+      const addRow = (label, value) => {
+        const row = document.createElement('tr');
+        const th = document.createElement('th');
+        th.textContent = label;
+        const td = document.createElement('td');
+        td.textContent = value;
+        row.appendChild(th);
+        row.appendChild(td);
+        studentTable.appendChild(row);
+      };
+      
+      addRow('수험번호', exam_number);
+      addRow('이름', name);
+      addRow('학교', school);
+      addRow('학년', grade);
+      addRow('성별', gender);
+      addRow('지점', branch);
 
-    const errors = [];
-
-    rows.forEach(student => {
-      const errorFields = [];
-
-      function check(field, label, min, max) {
-        const value = student[field];
-        if (value && value.toUpperCase() !== 'F') {
-          const num = parseFloat(value);
-          if (isNaN(num)) {
-            errorFields.push(`${label}: ${value} (숫자 아님)`);
-          } else if (num < min || num > max) {
-            errorFields.push(`${label}: ${value} (허용범위 ${min}~${max})`);
-          }
-        }
+      // 기록 입력 필드 설정
+      if (prevRecord === 'F') {
+        foulCheck.checked = true;
+        recordInput.value = '';
+        recordInput.disabled = true;
+      } else {
+        foulCheck.checked = false;
+        recordInput.disabled = false;
+        recordInput.value = (prevRecord !== null && prevRecord !== undefined && prevRecord !== '' && prevRecord !== 'null') ? prevRecord : '';
       }
 
-      check('jump_record', '제자리멀리뛰기', recordRanges.jump.min, recordRanges.jump.max);
-      check('medicineball_record', '메디신볼', recordRanges.medicineball.min, recordRanges.medicineball.max);
-      check('shuttle_record', '10m 왕복달리기', recordRanges.shuttle.min, recordRanges.shuttle.max);
-      check('sit_reach_record', '좌전굴', recordRanges.sit_reach.min, recordRanges.sit_reach.max);
-      check('back_strength_record', '배근력', recordRanges.back_strength.min, recordRanges.back_strength.max);
+      studentInfo.style.display = 'block';
+      form.style.display = 'block';
+      result.style.display = 'none';
+      recordInput.focus();
+    }
+  } catch (error) {
+    console.error('학생 정보 로드 실패:', error);
+  }
+}
 
-      if (errorFields.length > 0) {
-        errors.push({
-          exam_number: student.exam_number,
-          name: student.name,
-          errors: errorFields
-        });
-      }
+// 기록 저장 함수
+async function submitRecord() {
+  if (!selectedExam) return;
+  
+  const record = foulCheck.checked ? 'F' : parseFloat(recordInput.value);
+  if (!foulCheck.checked && (isNaN(record) || record === '')) {
+    result.textContent = '올바른 기록을 입력해주세요';
+    result.className = 'error';
+    result.style.display = 'block';
+    return;
+  }
+
+  const data = {
+    exam_number: selectedExam,
+    branch: currentBranch,
+    gender: currentGender,
+    event: currentEvent,
+    record
+  };
+
+  try {
+    const res = await fetch('https://supermax.kr/feed/submit-record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
     });
 
-    res.json(errors);
-  });
-});
-
-
-
-
-/* ======================================
-   📌 서버 실행 (포트 충돌 방지 포함)
-====================================== */
-
-// ✅ 포트 충돌 방지 추가
-const server = app.listen(PORT, () => {
-    console.log(`🚀 server.js가 ${PORT} 포트에서 실행 중...`);
-}).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-        console.error(`❌ 오류: 포트 ${PORT}가 이미 사용 중입니다.`);
-        process.exit(1); // 서버 종료
+    const json = await res.json();
+    if (json.success) {
+      result.innerHTML = `<strong>저장 완료</strong><br>${currentEvent}: ${record} → ${json.score}점`;
+      result.className = 'success';
+      
+      // 학생 목록 업데이트
+      const recordField = getField(currentEvent, 'record');
+      const student = studentList.find(s => s.exam_number == selectedExam);
+      if (student) student[recordField] = record;
+      await loadExams();  
+      renderExamList();
     } else {
-        console.error(err);
+      result.textContent = '저장에 실패했습니다. 다시 시도해주세요.';
+      result.className = 'error';
     }
+    result.style.display = 'block';
+  } catch (error) {
+    console.error('기록 저장 실패:', error);
+    result.textContent = '네트워크 오류가 발생했습니다.';
+    result.className = 'error';
+    result.style.display = 'block';
+  }
+}
+
+// 폼 제출 이벤트
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  submitRecord();
+});
+submitBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  submitRecord();
 });
 
-// ✅ 서버 종료 시 포트 정리
-process.on('SIGINT', () => {
-    console.log('❌ 서버 종료 중...');
-    server.close(() => {
-        console.log('✅ 서버가 정상적으로 종료되었습니다.');
-        process.exit(0);
-    });
-});
+// 초기 포커스 설정
+document.getElementById('password-input').focus();
+</script>
+</body>
+</html>
