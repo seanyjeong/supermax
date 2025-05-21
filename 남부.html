@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>TOP50 랭킹 시스템</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css" rel="stylesheet"/>
+  <style>
+    body { max-width: 540px; margin: 24px auto; padding: 8px; background: #f9faff; }
+    h2 { text-align: center; margin-bottom: 0.7em;}
+    .tab-list { display: flex; overflow-x: auto; gap: 6px; margin-bottom: 8px; }
+    .tab-btn {
+      flex: 1 1 auto; white-space: nowrap; border: none;
+      padding: 8px 10px; border-radius: 8px; font-weight: 600;
+      background: #eee; color: #444; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .tab-btn.active { background: #2563eb; color: #fff; }
+    .index-list { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+    .index-btn {
+      border: none; background: #e0e7ff; color: #2747a3; font-weight: bold; padding: 3px 8px;
+      border-radius: 7px; cursor: pointer; font-size: 13px;
+      transition: background .2s, color .2s;
+    }
+    .index-btn.active { background: #2563eb; color: #fff; }
+    .search-wrap { display: flex; gap: 5px; margin: 10px 0 8px 0;}
+    .search-wrap input { flex: 1; padding: 7px; font-size: 1em;}
+    table { font-size: 0.98em; background: #fff; border-radius: 12px; box-shadow: 0 2px 6px #0001;}
+    th, td { text-align: center; padding: 6px 3px;}
+    @media (max-width: 600px) {
+      body { max-width: 100vw; padding: 3vw; }
+      table { font-size: 0.92em;}
+      th, td { padding: 4px 1px;}
+      .tab-list, .index-list { font-size: 13px;}
+    }
+  </style>
+</head>
+<body>
+  <h2>체대입시 TOP50 랭킹</h2>
+  <div class="tab-list" id="tabs"></div>
+  <div class="index-list" id="indexes"></div>
+  <div class="search-wrap">
+    <input type="text" id="search" placeholder="이름, 교육원, 수험번호 검색" />
+    <button id="clearSearch" style="display:none;">X</button>
+  </div>
+  <div style="overflow-x:auto;">
+    <table id="rankTable">
+      <thead>
+        <tr>
+          <th>순위</th><th>수험번호</th><th>교육원</th><th>이름</th><th>성별</th><th>학년</th><th>기록</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <script>
+    // 종목 및 인덱스 정의
+    const GROUPS = [
+      { label: "전체 TOP50", value: "전체TOP50" },
+      { label: "선행반 TOP50", value: "선행반TOP50" },
+      { label: "남자 TOP50", value: "남자TOP50" },
+      { label: "여자 TOP50", value: "여자TOP50" }
+    ];
+    const EVENTS = [
+      { name: "제멀", man: "제멀남자TOP50", woman: "제멀여자TOP50" },
+      { name: "10m왕복달리기", man: "10m왕복달리기남자TOP50", woman: "10m왕복달리기여자TOP50" },
+      { name: "메디신볼", man: "메디신볼던지기남자TOP50", woman: "메디신볼던지기여자TOP50" },
+      { name: "배근력", man: "배근력남자TOP50", woman: "배근력여자TOP50" },
+      { name: "Z런", man: "Z런남자TOP50", woman: "Z런여자TOP50" }
+    ];
+    const ALL_TABS = [
+      ...GROUPS,
+      ...EVENTS.flatMap(e => [
+        { label: `${e.name} 남자`, value: e.man },
+        { label: `${e.name} 여자`, value: e.woman }
+      ])
+    ];
+
+    // 인덱스 버튼 생성용
+    const INDEXES = [
+      { label: "전체", value: "전체TOP50" },
+      { label: "선행반", value: "선행반TOP50" },
+      { label: "남자", value: "남자TOP50" },
+      { label: "여자", value: "여자TOP50" },
+      ...EVENTS.flatMap(e => [
+        { label: e.name + "♂", value: e.man },
+        { label: e.name + "♀", value: e.woman }
+      ])
+    ];
+
+    const apiUrl = "https://script.google.com/macros/s/AKfycbzHZBBnkcbjc3Gcz1zkRZ3CrkF_grgSeWh9MAYNJpf5d_k7H27DxyX1Kq6_71y1emYQxw/exec?type=";
+
+    let currentTab = ALL_TABS[0].value;
+    let latestData = []; // API에서 받아온 데이터
+    let filteredData = []; // 검색 필터된 데이터
+
+    // 탭 그리기
+    function renderTabs() {
+      const $tabs = document.getElementById('tabs');
+      $tabs.innerHTML = '';
+      ALL_TABS.forEach(tab => {
+        const btn = document.createElement('button');
+        btn.textContent = tab.label;
+        btn.className = 'tab-btn' + (tab.value === currentTab ? ' active' : '');
+        btn.onclick = () => switchTab(tab.value);
+        $tabs.appendChild(btn);
+      });
+    }
+
+    // 인덱스 버튼 그리기
+    function renderIndexes() {
+      const $idx = document.getElementById('indexes');
+      $idx.innerHTML = '';
+      INDEXES.forEach(idx => {
+        const btn = document.createElement('button');
+        btn.textContent = idx.label;
+        btn.className = 'index-btn' + (idx.value === currentTab ? ' active' : '');
+        btn.onclick = () => {
+          switchTab(idx.value);
+          // 스크롤 이동 (탭 영역까지)
+          setTimeout(() => {
+            document.getElementById('tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 80);
+        };
+        $idx.appendChild(btn);
+      });
+    }
+
+    // 탭 선택(데이터 로드)
+    function switchTab(value) {
+      currentTab = value;
+      renderTabs();
+      renderIndexes();
+      document.getElementById('search').value = '';
+      document.getElementById('clearSearch').style.display = 'none';
+      fetchAndRender(currentTab);
+    }
+
+    // API 호출해서 표 뿌리기
+    function fetchAndRender(type) {
+      fetch(apiUrl + encodeURIComponent(type))
+        .then(res => res.json())
+        .then(data => {
+          latestData = data;
+          filteredData = data;
+          renderTable(filteredData);
+        });
+    }
+
+    // 테이블 뿌리기
+    function renderTable(rows) {
+      const tbody = document.querySelector('#rankTable tbody');
+      tbody.innerHTML = '';
+      if (rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7">데이터가 없습니다</td></tr>';
+        return;
+      }
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        ['rank','exam_no','academy','name','gender','grade','record'].forEach(key => {
+          const td = document.createElement('td');
+          td.textContent = row[key] || '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 검색 필터
+    function filterTable() {
+      const val = document.getElementById('search').value.trim();
+      if (!val) {
+        filteredData = latestData;
+        document.getElementById('clearSearch').style.display = 'none';
+      } else {
+        filteredData = latestData.filter(row =>
+          (row.name && row.name.includes(val)) ||
+          (row.academy && row.academy.includes(val)) ||
+          (row.exam_no && row.exam_no.toString().includes(val))
+        );
+        document.getElementById('clearSearch').style.display = '';
+      }
+      renderTable(filteredData);
+    }
+
+    document.getElementById('search').addEventListener('input', filterTable);
+    document.getElementById('clearSearch').addEventListener('click', function() {
+      document.getElementById('search').value = '';
+      filterTable();
+    });
+
+    // 최초 진입시
+    renderTabs();
+    renderIndexes();
+    fetchAndRender(currentTab);
+  </script>
+</body>
+</html>
