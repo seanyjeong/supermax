@@ -9,16 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #4361ee;
-      --primary-light: #4cc9f0;
-      --secondary: #3a0ca3;
-      --dark: #1a1a2e;
-      --light: #f8f9fa;
-      --gray: #6c757d;
-      --success: #4cc9f0;
-      --danger: #f72585;
-      --card-bg: rgba(255, 255, 255, 0.95);
-      --glass-effect: rgba(255, 255, 255, 0.15);
+      --primary: #5e72e4;
+      --primary-light: #825ee4;
+      --dark: #2d3748;
+      --light: #f8fafc;
+      --gray: #718096;
+      --card-bg: #ffffff;
     }
     
     * {
@@ -29,7 +25,7 @@
     
     body {
       font-family: 'Noto Sans KR', 'Roboto', sans-serif;
-      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      background: #f5f7fa;
       min-height: 100vh;
       padding: 20px;
       color: var(--dark);
@@ -44,29 +40,13 @@
     .header {
       text-align: center;
       margin-bottom: 30px;
-      position: relative;
     }
     
     .header h2 {
       font-size: 2rem;
       font-weight: 700;
       color: var(--dark);
-      margin-bottom: 10px;
-      position: relative;
-      display: inline-block;
-      padding-bottom: 8px;
-    }
-    
-    .header h2::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 80px;
-      height: 4px;
-      background: linear-gradient(90deg, var(--primary), var(--primary-light));
-      border-radius: 2px;
+      margin-bottom: 5px;
     }
     
     .header p {
@@ -76,96 +56,40 @@
     
     .card {
       background: var(--card-bg);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-      backdrop-filter: blur(8px);
-      padding: 25px;
-      margin-bottom: 25px;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    
-    .card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      padding: 20px;
+      margin-bottom: 20px;
     }
     
     .tab-list {
       display: flex;
-      overflow-x: auto;
-      gap: 10px;
+      flex-wrap: wrap;
+      gap: 8px;
       margin-bottom: 20px;
-      padding-bottom: 5px;
-      scrollbar-width: thin;
-    }
-    
-    .tab-list::-webkit-scrollbar {
-      height: 6px;
-    }
-    
-    .tab-list::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.05);
-      border-radius: 3px;
-    }
-    
-    .tab-list::-webkit-scrollbar-thumb {
-      background: rgba(0, 0, 0, 0.1);
-      border-radius: 3px;
     }
     
     .tab-btn {
-      flex: 0 0 auto;
       white-space: nowrap;
       border: none;
-      padding: 10px 18px;
-      border-radius: 50px;
+      padding: 10px 16px;
+      border-radius: 8px;
       font-weight: 600;
-      background: rgba(67, 97, 238, 0.1);
-      color: var(--primary);
+      background: #edf2f7;
+      color: var(--dark);
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
       font-size: 0.9rem;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
     }
     
     .tab-btn:hover {
-      background: rgba(67, 97, 238, 0.2);
-      transform: translateY(-2px);
+      background: #e2e8f0;
     }
     
     .tab-btn.active {
-      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      background: linear-gradient(90deg, var(--primary), var(--primary-light));
       color: white;
-      box-shadow: 0 4px 15px rgba(67, 97, 238, 0.3);
-    }
-    
-    .index-list {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
-    }
-    
-    .index-btn {
-      border: none;
-      background: rgba(67, 97, 238, 0.1);
-      color: var(--primary);
-      font-weight: 600;
-      padding: 6px 12px;
-      border-radius: 50px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      transition: all 0.3s ease;
-    }
-    
-    .index-btn:hover {
-      background: rgba(67, 97, 238, 0.2);
-      transform: translateY(-2px);
-    }
-    
-    .index-btn.active {
-      background: linear-gradient(90deg, var(--primary), var(--secondary));
-      color: white;
-      box-shadow: 0 4px 10px rgba(67, 97, 238, 0.2);
+      box-shadow: 0 2px 10px rgba(94, 114, 228, 0.3);
     }
     
     .search-wrap {
@@ -179,21 +103,20 @@
       flex: 1;
       padding: 12px 20px;
       font-size: 1rem;
-      border: none;
-      border-radius: 50px;
-      background: rgba(255, 255, 255, 0.8);
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-      transition: all 0.3s ease;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+      transition: all 0.2s ease;
     }
     
     .search-wrap input:focus {
       outline: none;
-      box-shadow: 0 4px 15px rgba(67, 97, 238, 0.2);
-      background: white;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.1);
     }
     
     .search-wrap input::placeholder {
-      color: #aaa;
+      color: #a0aec0;
     }
     
     #clearSearch {
@@ -212,9 +135,7 @@
     
     .table-container {
       overflow-x: auto;
-      border-radius: 12px;
-      box-shadow: 0 5px 25px rgba(0, 0, 0, 0.08);
-      background: white;
+      border-radius: 8px;
     }
     
     table {
@@ -222,18 +143,16 @@
       border-collapse: collapse;
       font-size: 0.95rem;
       background: white;
-      border-radius: 12px;
-      overflow: hidden;
     }
     
     th, td {
-      padding: 12px 8px;
+      padding: 12px 10px;
       text-align: center;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      border-bottom: 1px solid #edf2f7;
     }
     
     th {
-      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      background: linear-gradient(90deg, var(--primary), var(--primary-light));
       color: white;
       font-weight: 600;
       position: sticky;
@@ -241,27 +160,19 @@
     }
     
     tr:hover {
-      background-color: rgba(67, 97, 238, 0.03);
+      background-color: #f8fafc;
     }
     
-    tr:nth-child(even) {
-      background-color: rgba(0, 0, 0, 0.01);
+    .rank-1 td {
+      background-color: rgba(255, 215, 0, 0.1);
     }
     
-    tr:nth-child(even):hover {
-      background-color: rgba(67, 97, 238, 0.03);
+    .rank-2 td {
+      background-color: rgba(192, 192, 192, 0.1);
     }
     
-    .rank-1 {
-      background-color: rgba(255, 215, 0, 0.15) !important;
-    }
-    
-    .rank-2 {
-      background-color: rgba(192, 192, 192, 0.15) !important;
-    }
-    
-    .rank-3 {
-      background-color: rgba(205, 127, 50, 0.15) !important;
+    .rank-3 td {
+      background-color: rgba(205, 127, 50, 0.1);
     }
     
     @media (max-width: 768px) {
@@ -274,21 +185,17 @@
       }
       
       .card {
-        padding: 18px;
+        padding: 16px;
       }
       
       th, td {
-        padding: 10px 6px;
+        padding: 10px 8px;
         font-size: 0.85rem;
       }
       
       .tab-btn {
-        padding: 8px 14px;
-        font-size: 0.8rem;
-      }
-      
-      .search-wrap input {
-        padding: 10px 16px;
+        padding: 8px 12px;
+        font-size: 0.85rem;
       }
     }
     
@@ -298,36 +205,9 @@
       }
       
       th, td {
-        padding: 8px 4px;
+        padding: 8px 6px;
         font-size: 0.8rem;
       }
-    }
-    
-    /* 애니메이션 효과 */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .fade-in {
-      animation: fadeIn 0.5s ease forwards;
-    }
-    
-    /* 로딩 스피너 */
-    .loader {
-      display: none;
-      border: 4px solid rgba(67, 97, 238, 0.1);
-      border-radius: 50%;
-      border-top: 4px solid var(--primary);
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 30px auto;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
     }
   </style>
 </head>
@@ -340,7 +220,6 @@
     
     <div class="card">
       <div class="tab-list" id="tabs"></div>
-      <div class="index-list" id="indexes"></div>
       <div class="search-wrap">
         <input type="text" id="search" placeholder="이름, 교육원, 수험번호 검색" />
         <button id="clearSearch">✕</button>
@@ -348,12 +227,16 @@
     </div>
     
     <div class="card">
-      <div class="loader" id="loader"></div>
       <div class="table-container">
         <table id="rankTable">
           <thead>
             <tr>
-              <th>순위</th><th>수험번호</th><th>교육원</th><th>이름</th><th>성별</th><th>학년</th><th>기록</th>
+              <th>순위</th>
+              <th>수험번호</th>
+              <th>교육원</th>
+              <th>이름</th>
+              <th>성별</th>
+              <th>기록</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -364,74 +247,39 @@
 
   <script>
     // 종목 및 인덱스 정의
-    const GROUPS = [
-      { label: "전체 TOP50", value: "전체TOP50" },
-      { label: "선행반 TOP50", value: "선행반TOP50" },
-      { label: "남자 TOP50", value: "남자TOP50" },
-      { label: "여자 TOP50", value: "여자TOP50" }
-    ];
     const EVENTS = [
-      { name: "제멀", man: "제멀남자TOP50", woman: "제멀여자TOP50" },
-      { name: "10m왕복달리기", man: "10m왕복달리기남자TOP50", woman: "10m왕복달리기여자TOP50" },
-      { name: "메디신볼", man: "메디신볼던지기남자TOP50", woman: "메디신볼던지기여자TOP50" },
-      { name: "배근력", man: "배근력남자TOP50", woman: "배근력여자TOP50" },
-      { name: "Z런", man: "Z런남자TOP50", woman: "Z런여자TOP50" }
-    ];
-    const ALL_TABS = [
-      ...GROUPS,
-      ...EVENTS.flatMap(e => [
-        { label: `${e.name} 남자`, value: e.man },
-        { label: `${e.name} 여자`, value: e.woman }
-      ])
-    ];
-
-    // 인덱스 버튼 생성용
-    const INDEXES = [
-      { label: "전체", value: "전체TOP50" },
-      { label: "선행반", value: "선행반TOP50" },
-      { label: "남자", value: "남자TOP50" },
-      { label: "여자", value: "여자TOP50" },
-      ...EVENTS.flatMap(e => [
-        { label: e.name + "♂", value: e.man },
-        { label: e.name + "♀", value: e.woman }
-      ])
+      { name: "전체", value: "전체TOP50" },
+      { name: "선행반", value: "선행반TOP50" },
+      { name: "남자", value: "남자TOP50" },
+      { name: "여자", value: "여자TOP50" },
+      { name: "제멀 남자", value: "제멀남자TOP50" },
+      { name: "제멀 여자", value: "제멀여자TOP50" },
+      { name: "10m왕복달리기 남자", value: "10m왕복달리기남자TOP50" },
+      { name: "10m왕복달리기 여자", value: "10m왕복달리기여자TOP50" },
+      { name: "메디신볼 남자", value: "메디신볼던지기남자TOP50" },
+      { name: "메디신볼 여자", value: "메디신볼던지기여자TOP50" },
+      { name: "배근력 남자", value: "배근력남자TOP50" },
+      { name: "배근력 여자", value: "배근력여자TOP50" },
+      { name: "Z런 남자", value: "Z런남자TOP50" },
+      { name: "Z런 여자", value: "Z런여자TOP50" }
     ];
 
     const apiUrl = "https://script.google.com/macros/s/AKfycbzHZBBnkcbjc3Gcz1zkRZ3CrkF_grgSeWh9MAYNJpf5d_k7H27DxyX1Kq6_71y1emYQxw/exec?type=";
 
-    let currentTab = ALL_TABS[0].value;
-    let latestData = []; // API에서 받아온 데이터
-    let filteredData = []; // 검색 필터된 데이터
+    let currentTab = EVENTS[0].value;
+    let latestData = [];
+    let filteredData = [];
 
     // 탭 그리기
     function renderTabs() {
       const $tabs = document.getElementById('tabs');
       $tabs.innerHTML = '';
-      ALL_TABS.forEach(tab => {
+      EVENTS.forEach(tab => {
         const btn = document.createElement('button');
-        btn.textContent = tab.label;
+        btn.textContent = tab.name;
         btn.className = 'tab-btn' + (tab.value === currentTab ? ' active' : '');
         btn.onclick = () => switchTab(tab.value);
         $tabs.appendChild(btn);
-      });
-    }
-
-    // 인덱스 버튼 그리기
-    function renderIndexes() {
-      const $idx = document.getElementById('indexes');
-      $idx.innerHTML = '';
-      INDEXES.forEach(idx => {
-        const btn = document.createElement('button');
-        btn.textContent = idx.label;
-        btn.className = 'index-btn' + (idx.value === currentTab ? ' active' : '');
-        btn.onclick = () => {
-          switchTab(idx.value);
-          // 스크롤 이동 (탭 영역까지)
-          setTimeout(() => {
-            document.getElementById('tabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 80);
-        };
-        $idx.appendChild(btn);
       });
     }
 
@@ -439,16 +287,8 @@
     function switchTab(value) {
       currentTab = value;
       renderTabs();
-      renderIndexes();
       document.getElementById('search').value = '';
       document.getElementById('clearSearch').style.display = 'none';
-      
-      // 로딩 스피너 표시
-      const loader = document.getElementById('loader');
-      const tableContainer = document.querySelector('.table-container');
-      loader.style.display = 'block';
-      tableContainer.style.opacity = '0.5';
-      
       fetchAndRender(currentTab);
     }
 
@@ -460,15 +300,6 @@
           latestData = data;
           filteredData = data;
           renderTable(filteredData);
-          
-          // 로딩 스피너 숨기기
-          document.getElementById('loader').style.display = 'none';
-          document.querySelector('.table-container').style.opacity = '1';
-        })
-        .catch(error => {
-          console.error('Error fetching data:', error);
-          document.getElementById('loader').style.display = 'none';
-          document.querySelector('.table-container').style.opacity = '1';
         });
     }
 
@@ -479,17 +310,16 @@
       
       if (rows.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="7" style="text-align: center; padding: 30px; color: var(--gray);">데이터가 없습니다</td>';
+        tr.innerHTML = '<td colspan="6" style="text-align: center; padding: 30px; color: var(--gray);">데이터가 없습니다</td>';
         tbody.appendChild(tr);
         return;
       }
       
-      rows.forEach((row, index) => {
+      rows.forEach(row => {
         const tr = document.createElement('tr');
-        tr.className = `fade-in rank-${row.rank}`;
-        tr.style.animationDelay = `${index * 0.05}s`;
+        if(row.rank <= 3) tr.classList.add(`rank-${row.rank}`);
         
-        ['rank','exam_no','academy','name','gender','grade','record'].forEach(key => {
+        ['rank','exam_no','academy','name','gender','record'].forEach(key => {
           const td = document.createElement('td');
           td.textContent = row[key] || '';
           
@@ -535,7 +365,6 @@
 
     // 최초 진입시
     renderTabs();
-    renderIndexes();
     fetchAndRender(currentTab);
   </script>
 </body>
