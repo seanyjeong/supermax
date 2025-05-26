@@ -15,6 +15,20 @@ router.get('/students', (req, res) => {
   });
 });
 
+router.post('/save-expected-amount', (req, res) => {
+  const { student_id, month, expected_amount } = req.body;
+  const sql = `
+    INSERT INTO payments (student_id, month, applied_month, expected_amount)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE expected_amount = VALUES(expected_amount)
+  `;
+  dbAcademy.query(sql, [student_id, month, month, expected_amount], (err, result) => {
+    if (err) return res.status(500).json({ message: 'DB 오류' });
+    res.json({ message: '예정금액 저장 완료' });
+  });
+});
+
+
 // ✅ 개별 학생 상세 조회 API (추가 권장)
 router.get('/students/:id', (req, res) => {
   const { id } = req.params;
