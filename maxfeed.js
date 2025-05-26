@@ -2048,7 +2048,7 @@ const 기준표 = {
 
 };
 
-// 점수 계산 함수
+//  점수 계산 함수
 function calculateScore(event, gender, record) {
   const 기준 = 기준표[event]?.[gender];
   if (!기준) return 0;
@@ -2060,54 +2060,17 @@ function calculateScore(event, gender, record) {
 
   if (index === -1) index = 기준.length - 1;
   return Math.max(100 - index * 2, 52);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 // DB 컬럼명 매핑
-
-
 function getField(event, type) {
   const map = {
     '제멀': 'jump',
-@@ -2010,737 +496,305 @@ function getField(event, type) {
+    '10m': 'shuttle',
+    '좌전굴': 'sit_reach',
+    '배근력': 'back_strength',
+    '메디신볼': 'medicineball'
+  };
   return `${map[event]}_${type}`;
 }
 
@@ -2117,33 +2080,6 @@ app.post('/feed/submit-record', (req, res) => {
   const { branch, exam_number, event, record, gender } = req.body;
   if (!branch || !exam_number || !event || !record || !gender) {
     return res.status(400).json({ error: '❌ 필수 항목 누락' });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   }
 
   const isFoul = record === 'F' || record === 'f';
@@ -2237,9 +2173,6 @@ app.get('/feed/student-count', (req, res) => {
 });
 
 
-
-
-
 // 새로운 학생 검색 API
 app.get('/feed/search-students', (req, res) => {
   const { branch, grade, gender } = req.query;
@@ -2278,25 +2211,6 @@ app.post('/feed/assign-groups', (req, res) => {
 
   if (!totalGroups || isNaN(totalGroups) || totalGroups !== 10) {
     return res.status(400).json({ error: '조 수는 반드시 10개여야 합니다' });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   }
 
   // ✅ 1. 기존 조 및 수험번호 초기화
@@ -2456,11 +2370,6 @@ app.get('/feed/all-branches', (req, res) => {
     const branches = results.map(row => row.branch);
     res.json({ branches });
   });
-
-
-
-
-
 });
 
 
@@ -2470,7 +2379,6 @@ app.get('/feed_recorded', (req, res) => {
   if (!event || !group) {
     return res.status(400).json({ error: 'event와 group 값이 필요합니다.' });
   }
-
 
   const field = getField(event, 'record');
   const sql = `
@@ -2482,17 +2390,12 @@ app.get('/feed_recorded', (req, res) => {
     if (err) return res.status(500).json({ error: 'DB 오류', detail: err.message });
     res.json(rows.map(r => r.exam_number));
   });
-
-
 });
 
 // 특정 조에서 특정 종목 기록 완료된 exam_number 리스트 조회
 app.get('/feed_recorded_check', (req, res) => {
   const { group, event } = req.query;
   if (!group || !event) return res.status(400).json({ error: 'group, event 필요' });
-
-
-
 
   const field = getField(event, 'record');  // 예: jump_record
   const sql = `SELECT exam_number FROM 실기기록 WHERE record_group = ? AND ${field} IS NOT NULL`;
@@ -2508,7 +2411,6 @@ app.get('/feed_recorded_one', (req, res) => {
 
   const field = getField(event, 'record'); // 예: jump_record
   const sql = `SELECT ${field} AS record FROM 실기기록 WHERE record_group = ? AND exam_number = ?`;
-
 
   db.query(sql, [group, exam_number], (err, rows) => {
     if (err) return res.status(500).json({ error: 'DB 오류' });
@@ -2545,7 +2447,6 @@ app.post('/feed/add-swap', (req, res) => {
   db.query(insertSwapSql, [origin_exam_number, new_name, new_school, new_grade, new_gender, branch], (err) => {
     if (err) return res.status(500).json({ error: '추가등록 저장 실패', detail: err.message });
 
-
     // 2. 실기기록 테이블 수정
     const updateStudentSql = `
       UPDATE 실기기록
@@ -2581,13 +2482,9 @@ app.post('/feed/add-new', (req, res) => {
       return res.status(500).json({ error: '조 조회 실패' });
     }
 
-
-
     const selectedGroup = groupRows[0].record_group;
     const groupLetters = ['A','B','C','D','E','F','G','H','I','J'];
     const groupChar = groupLetters[selectedGroup - 1];
-
-
 
     const maxSql = `
       SELECT exam_number FROM 실기기록 
@@ -2598,37 +2495,10 @@ app.post('/feed/add-new', (req, res) => {
     db.query(maxSql, [selectedGroup], (err, maxRows) => {
       if (err) return res.status(500).json({ error: '수험번호 조회 실패' });
 
-
       let nextSeq = 1;
       if (maxRows[0]?.exam_number) {
         const parts = maxRows[0].exam_number.split('-');
         if (parts.length === 2) nextSeq = parseInt(parts[1]) + 1;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       }
 
       const newExamNumber = `${groupChar}-${nextSeq}`;
@@ -2669,9 +2539,6 @@ app.get('/feed/branch-students', (req, res) => {
     res.json(rows);
   });
 });
-
-
-
 
 
 app.get('/feed/dashboard', (req, res) => {
@@ -2821,14 +2688,10 @@ app.get('/feed/dashboard-summary', (req, res) => {
         ...stats
       }));
 
-
-
-
       res.json({
         total, attended, absent, new_count, swap_count,
         branches
       });
-
     });
   });
 });
@@ -2872,16 +2735,7 @@ app.get('/feed/record-errors', (req, res) => {
     if (err) {
       console.error("❌ 오류 검사 조회 실패:", err);
       return res.status(500).json({ error: "기록 오류 검사 실패" });
-
     }
-
-
-
-
-
-
-
-
 
     const recordRanges = {
       jump: { min: 130, max: 350 },
