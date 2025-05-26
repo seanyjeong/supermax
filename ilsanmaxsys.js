@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { dbAcademy } = require('./college');
 
+console.log("✅ ilsanmaxsys 라우터 적용됨!");
+
+
 
 
 // ✅ 수강생 전체 조회 API
