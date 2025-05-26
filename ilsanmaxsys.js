@@ -256,78 +256,77 @@ router.post('/register-payment', (req, res) => {
       res.json(rows);
     });
   });
-  
   router.get('/payment-list', (req, res) => {
-    const { month } = req.query;
-  
-const sql = `
-SELECT 
-  s.id AS student_id,
-  s.name, s.grade, s.school, s.gender, s.first_registered_at,
-  COALESCE(m.status, s.status) AS status,
-  COALESCE(m.weekdays, s.weekdays) AS weekdays,
-  COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
-  s.payment_day,
-  p.amount, p.paid_at, p.payment_method   -- ✅ 결제수단 추가
-FROM students s
-LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
-LEFT JOIN payments p ON s.id = p.student_id AND p.applied_month = ?
-ORDER BY s.grade, s.name
-`;
+  const { month } = req.query;
 
-  
-    dbAcademy.query(sql, [month, month], (err, rows) => {
-      if (err) {
-        console.error('❌ 결제 목록 조회 실패:', err);
-        return res.status(500).json({ message: 'DB 오류' });
-      }
-  
-      res.json(rows);
-    });
+  const sql = `
+    SELECT 
+      s.id AS student_id,
+      s.name, s.grade, s.school, s.gender, s.first_registered_at,
+      COALESCE(m.status, s.status) AS status,
+      COALESCE(m.weekdays, s.weekdays) AS weekdays,
+      COALESCE(m.lesson_type, s.lesson_type) AS lesson_type,
+      s.payment_day,
+      p.amount, p.paid_at, p.payment_method,
+      p.expected_amount      -- ⭐️ 이 줄만 추가!
+    FROM students s
+    LEFT JOIN student_monthly m ON s.id = m.student_id AND m.month = ?
+    LEFT JOIN payments p ON s.id = p.student_id AND p.applied_month = ?
+    ORDER BY s.grade, s.name
+  `;
+
+  dbAcademy.query(sql, [month, month], (err, rows) => {
+    if (err) {
+      console.error('❌ 결제 목록 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
   });
-  
-  
+});
 
-  router.post('/save-payment', (req, res) => {
+router.post('/save-payment', (req, res) => {
+  const {
+    student_id,
+    month,
+    applied_month,
+    session_count,
+    amount,
+    is_manual,
+    paid_at,
+    payment_method,
+    expected_amount // ⭐️ 추가!
+  } = req.body;
 
-  
-const {
-  student_id,
-  month,
-  applied_month,
-  session_count,
-  amount,
-  is_manual,
-  paid_at,
-  payment_method
-} = req.body;
+  const sql = `
+    INSERT INTO payments 
+    (student_id, month, applied_month, weekdays, session_count, amount, is_manual, status, paid_at, payment_method, expected_amount)
+    VALUES (?, ?, ?, '', ?, ?, ?, '정상', ?, ?, ?)
+    ON DUPLICATE KEY UPDATE 
+      session_count = VALUES(session_count),
+      amount = VALUES(amount),
+      is_manual = VALUES(is_manual),
+      paid_at = VALUES(paid_at),
+      payment_method = VALUES(payment_method),
+      applied_month = VALUES(applied_month),
+      expected_amount = VALUES(expected_amount), -- ⭐️ 이 줄도 추가!
+      status = '정상'
+  `;
 
-const sql = `
-  INSERT INTO payments 
-  (student_id, month, applied_month, weekdays, session_count, amount, is_manual, status, paid_at, payment_method)
-  VALUES (?, ?, ?, '', ?, ?, ?, '정상', ?, ?)
-  ON DUPLICATE KEY UPDATE 
-    session_count = VALUES(session_count),
-    amount = VALUES(amount),
-    is_manual = VALUES(is_manual),
-    paid_at = VALUES(paid_at),
-    payment_method = VALUES(payment_method),
-    applied_month = VALUES(applied_month),  -- ✅ 이 부분 추가
-    status = '정상'
-`;
+  const values = [
+    student_id, month, applied_month, session_count, amount,
+    is_manual, paid_at, payment_method,
+    expected_amount ?? null // 값이 없으면 null로!
+  ];
 
-const values = [student_id, month, applied_month, session_count, amount, is_manual, paid_at, payment_method];
-
-  
-    dbAcademy.query(sql, values, (err, result) => {
-      if (err) {
-        console.error('❌ 결제 저장 실패:', err);
-        return res.status(500).json({ message: 'DB 오류' });
-      }
-      res.json({ message: '✅ 결제 저장 완료' });
-    });
+  dbAcademy.query(sql, values, (err, result) => {
+    if (err) {
+      console.error('❌ 결제 저장 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ 결제 저장 완료' });
   });
-  
+});
+
   
 // ✅ 수강생 수정 API
 router.patch('/update-student/:id', (req, res) => {
