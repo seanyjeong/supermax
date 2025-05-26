@@ -16,6 +16,7 @@ router.get('/students', (req, res) => {
 });
 
 router.post('/save-expected-amount', (req, res) => {
+    console.log('✅ [save-expected-amount] POST 호출됨', req.body); 
   const { student_id, month, expected_amount } = req.body;
   const sql = `
     INSERT INTO payments (student_id, month, applied_month, expected_amount)
