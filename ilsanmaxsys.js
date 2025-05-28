@@ -592,12 +592,13 @@ router.get('/dashboardsummary', async (req, res) => {
 
     // ✅ 전체 학생 통계
     const [studentCounts] = await dbQuery(`
-      SELECT 
-        COUNT(*) AS total_students,
-        SUM(status = '재원') AS active_students,
-        SUM(status = '휴식') AS resting_students,
-        SUM(status = '퇴원') AS withdrawn_students
-      FROM students
+SELECT 
+  COUNT(*) AS total_students,
+  SUM(status = '재원') AS active_students,
+  SUM(status = '휴식') AS resting_students,
+  SUM(status = '퇴원') AS withdrawn_students
+FROM students
+WHERE status != '퇴원'
     `);
 
     // ✅ 이번 달 기준 재원자/휴식자 계산 (student_monthly 우선, 없으면 students 참고)
