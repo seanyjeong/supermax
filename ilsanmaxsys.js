@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
+const crypto = require('crypto');
+
 const { dbAcademy } = require('./college');
 
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
