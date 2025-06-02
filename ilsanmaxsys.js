@@ -5,7 +5,52 @@ const { dbAcademy } = require('./college');
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
 
 
+// 카카오/네이버 알림톡 세팅값
+const plusFriendId = '@일산맥스체대입시';
+const templateCode = 'A06';
+const accessKey = 'A8zINaiL6JjWUNbT1uDB';
+const secretKey = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
+const serviceId = 'ncp:kkobizmsg:kr:2842405:sean';
 
+router.post('/send-alimtalk', async (req, res) => {
+  const users = req.body; // [{name, phone, date}]
+  if (!Array.isArray(users) || !users.length) return res.status(400).json({ message: "명단 없음" });
+
+  const timestamp = Date.now().toString();
+  const uri = `/alimtalk/v2/services/${serviceId}/messages`;
+  const method = 'POST';
+  const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
+  const signature = crypto.createHmac('sha256', secretKey).update(hmac).digest('base64');
+
+  const messages = users.map(u => ({
+    to: u.phone.replace(/[^0-9]/g, ''),
+    content: `수강료 안내\n${u.name} 학생의 수강료 납부일이, ${u.date} 일입니다\n계좌 하나은행 432-890083-82807 정으뜸`
+  }));
+
+  const body = {
+    plusFriendId,
+    templateCode,
+    messages
+  };
+
+  try {
+    const response = await axios.post(
+      `https://sens.apigw.ntruss.com${uri}`,
+      body,
+      {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'x-ncp-apigw-timestamp': timestamp,
+          'x-ncp-iam-access-key': accessKey,
+          'x-ncp-apigw-signature-v2': signature
+        }
+      }
+    );
+    res.json({ message: `총 ${messages.length}건 발송 완료!`, response: response.data });
+  } catch (e) {
+    res.status(500).json({ message: '발송 실패', error: e.response?.data || e.message });
+  }
+});
 
 // ✅ 수강생 전체 조회 API
 router.get('/students', (req, res) => {
