@@ -6,6 +6,14 @@ const port = 8080;
 
 // CORS 허용
 app.use(cors());
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type']
+};
+
+app.use(cors(corsOptions));
+
 
 // DB 연결
 const db = mysql.createConnection({
