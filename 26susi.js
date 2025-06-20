@@ -20,7 +20,7 @@ const db = mysql.createConnection({
 const isReverseScoring = (eventName) => /(m|런|달리기)/i.test(eventName);
 
 // 점수 계산 API
-app.get('/26susi/score-check', (req, res) => {
+app.get('/score-check', (req, res) => {
   const { univ_id, event, gender, record } = req.query;
   const 대학ID = parseInt(univ_id);
   const 기록 = parseFloat(record);
