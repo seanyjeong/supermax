@@ -14,7 +14,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors(corsOptions));
+
 
 
 // DB 연결
