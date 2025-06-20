@@ -6,10 +6,12 @@ const port = 8080;
 
 // CORS 설정
 app.use(cors());
+app.use(express.json()); // JSON 바디 파싱
 
+// CORS preflight 처리
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, PUT, DELETE'); 
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, PUT, DELETE');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
@@ -24,19 +26,18 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 낮을수록 좋은 종목
+// 기록 낮을수록 좋은 종목 자동 판별
 const isReverseScoring = (eventName) => /(m|런|달리기)/i.test(eventName);
 
-// 점수 계산 API
-app.get('/26susi/score-check', (req, res) => {
-  const { univ_id, event, gender, record } = req.query;
-  console.log(`✅ 요청 들어옴: univ_id=${univ_id}, event=${event}, gender=${gender}, record=${record}`);
-
+// 점수 계산 API (POST 방식)
+app.post('/26susi/score-check', (req, res) => {
+  const { univ_id, event, gender, record } = req.body;
   const 대학ID = parseInt(univ_id);
   const 기록 = parseFloat(record);
 
+  console.log(`[요청] 대학ID: ${univ_id}, 종목: ${event}, 성별: ${gender}, 기록: ${record}`);
+
   if (!univ_id || !event || !gender || isNaN(기록)) {
-    console.warn("❌ 필수 파라미터 누락 또는 형식 오류");
     return res.status(400).json({ error: '필수 파라미터 누락' });
   }
 
@@ -55,23 +56,18 @@ app.get('/26susi/score-check', (req, res) => {
     LIMIT 1
   `;
 
-  console.log(`[쿼리 실행] ${query}`);
-  console.log(`[파라미터]`, [대학ID, event, gender, 기록]);
-
   db.query(query, [대학ID, event, gender, 기록], (err, results) => {
     if (err) {
-      console.error("❌ 쿼리 오류:", err.message);
+      console.error('[DB 오류]', err);
       return res.status(500).json({ error: err.message });
     }
 
     if (results.length > 0) {
-      console.log(`🎯 점수 결과: ${results[0].배점}`);
+      console.log(`[결과] 배점: ${results[0].배점}`);
       return res.json({ score: results[0].배점 });
     } else {
-      console.warn("⚠️ 범위 내 점수 없음, fallback 처리");
-
       if (대학ID === 1 || 대학ID === 3) {
-        console.log("→ fallback: 0점");
+        console.log(`[결과] 범위 밖 → 0점 처리`);
         return res.json({ score: 0 });
       } else if (대학ID === 2) {
         const altQuery = `
@@ -80,22 +76,20 @@ app.get('/26susi/score-check', (req, res) => {
           ORDER BY 기록 ${order === 'DESC' ? 'ASC' : 'DESC'}
           LIMIT 1
         `;
-        console.log(`[fallback 쿼리] ${altQuery}`);
-
         db.query(altQuery, [대학ID, event, gender], (err2, rows) => {
           if (err2) {
-            console.error("❌ fallback 쿼리 오류:", err2.message);
+            console.error('[보정 쿼리 오류]', err2);
             return res.status(500).json({ error: err2.message });
           }
           if (rows.length > 0) {
-            console.log("→ fallback 점수:", rows[0].배점);
+            console.log(`[결과] 범위 밖 → 최하점: ${rows[0].배점}`);
             return res.json({ score: rows[0].배점 });
           }
-          console.log("→ fallback도 결과 없음: 0점");
+          console.log(`[결과] 범위 밖 → 점수 없음 (0점)`);
           return res.json({ score: 0 });
         });
       } else {
-        console.log("→ fallback: 0점");
+        console.log(`[결과] 범위 밖 → 기본 처리 (0점)`);
         return res.json({ score: 0 });
       }
     }
