@@ -12,7 +12,7 @@ const db = mysql.createConnection({
   host: '211.37.174.218',
   user: 'maxilsan',
   password: 'q141171616!',
-  database: 'supermax',
+  database: '26susi',
   charset: 'utf8mb4'
 });
 
