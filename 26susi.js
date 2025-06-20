@@ -4,6 +4,7 @@ const mysql = require('mysql2');
 const app = express();
 const port = 8080;
 
+// CORS 설정
 app.use(cors());
 
 app.use((req, res, next) => {
@@ -14,9 +15,6 @@ app.use((req, res, next) => {
   next();
 });
 
-
-
-
 // DB 연결
 const db = mysql.createConnection({
   host: '211.37.174.218',
@@ -26,16 +24,19 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 기록 낮을수록 좋은 종목 자동 판별
+// 낮을수록 좋은 종목
 const isReverseScoring = (eventName) => /(m|런|달리기)/i.test(eventName);
 
 // 점수 계산 API
 app.get('/26susi/score-check', (req, res) => {
   const { univ_id, event, gender, record } = req.query;
+  console.log(`✅ 요청 들어옴: univ_id=${univ_id}, event=${event}, gender=${gender}, record=${record}`);
+
   const 대학ID = parseInt(univ_id);
   const 기록 = parseFloat(record);
 
   if (!univ_id || !event || !gender || isNaN(기록)) {
+    console.warn("❌ 필수 파라미터 누락 또는 형식 오류");
     return res.status(400).json({ error: '필수 파라미터 누락' });
   }
 
@@ -54,29 +55,47 @@ app.get('/26susi/score-check', (req, res) => {
     LIMIT 1
   `;
 
+  console.log(`[쿼리 실행] ${query}`);
+  console.log(`[파라미터]`, [대학ID, event, gender, 기록]);
+
   db.query(query, [대학ID, event, gender, 기록], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      console.error("❌ 쿼리 오류:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
 
     if (results.length > 0) {
+      console.log(`🎯 점수 결과: ${results[0].배점}`);
       return res.json({ score: results[0].배점 });
     } else {
-      // 기록 범위 밖 처리
+      console.warn("⚠️ 범위 내 점수 없음, fallback 처리");
+
       if (대학ID === 1 || 대학ID === 3) {
-        return res.json({ score: 0 }); // 파울 or 0점
+        console.log("→ fallback: 0점");
+        return res.json({ score: 0 });
       } else if (대학ID === 2) {
-        // 최하 점수 조회
         const altQuery = `
           SELECT 배점 FROM \`26수시실기배점\`
           WHERE 대학ID = ? AND 종목명 = ? AND 성별 = ?
           ORDER BY 기록 ${order === 'DESC' ? 'ASC' : 'DESC'}
           LIMIT 1
         `;
+        console.log(`[fallback 쿼리] ${altQuery}`);
+
         db.query(altQuery, [대학ID, event, gender], (err2, rows) => {
-          if (err2) return res.status(500).json({ error: err2.message });
-          if (rows.length > 0) return res.json({ score: rows[0].배점 });
+          if (err2) {
+            console.error("❌ fallback 쿼리 오류:", err2.message);
+            return res.status(500).json({ error: err2.message });
+          }
+          if (rows.length > 0) {
+            console.log("→ fallback 점수:", rows[0].배점);
+            return res.json({ score: rows[0].배점 });
+          }
+          console.log("→ fallback도 결과 없음: 0점");
           return res.json({ score: 0 });
         });
       } else {
+        console.log("→ fallback: 0점");
         return res.json({ score: 0 });
       }
     }
