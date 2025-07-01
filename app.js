@@ -1788,21 +1788,28 @@ app.get('/getSalaryList', (req, res) => {
     });
 });
 
-// ✅ 급여 확정 (인센티브 추가)
+// ✅ 급여 확정 (인센티브만 있는 경우도 허용)
 app.post('/confirmSalary', async (req, res) => {
     let { 
         year, month, teacherId, teacherName, totalSalary, taxAmount, salaryAmount,
         salaryType, totalHours, totalDays, hourlyWage, dailyWage, monthlyWage, applyTax,
-        incentive1, incentive2 // ✅ 인센티브 추가
+        incentive1, incentive2
     } = req.body;
 
-    console.log("📥 서버에서 받은 데이터:", req.body); // ✅ 디버깅용 로그
+    console.log("📥 서버에서 받은 데이터:", req.body);
 
-    if (!year || !month || !teacherId || !salaryAmount || !totalSalary || !salaryType || !teacherName) {
+    function isInvalid(val) {
+        return val === undefined || val === null || val === '';
+    }
+
+    if (
+        isInvalid(year) || isInvalid(month) || isInvalid(teacherId) ||
+        isInvalid(salaryType) || isInvalid(teacherName)
+    ) {
         return res.status(400).json({ message: '필수 정보가 부족합니다.' });
     }
 
-    // ✅ null 값 방어 처리
+    // 기본값 처리
     totalHours = totalHours || 0;
     totalDays = totalDays || 0;
     hourlyWage = hourlyWage || 0;
@@ -1810,7 +1817,8 @@ app.post('/confirmSalary', async (req, res) => {
     monthlyWage = monthlyWage || 0;
     totalSalary = totalSalary || 0;
     taxAmount = taxAmount || 0;
-    applyTax = applyTax ? 1 : 0; // ✅ MySQL BOOLEAN 값 변환 (1: true, 0: false)
+    salaryAmount = salaryAmount || 0;
+    applyTax = applyTax ? 1 : 0;
     incentive1 = incentive1 || 0;
     incentive2 = incentive2 || 0;
 
@@ -1843,6 +1851,7 @@ app.post('/confirmSalary', async (req, res) => {
         res.status(200).json({ message: '✅ 급여 정보 저장 완료!' });
     });
 });
+
 
 // ✅ 급여 조회 (인센티브 포함)
 app.get('/getSalary', async (req, res) => {
