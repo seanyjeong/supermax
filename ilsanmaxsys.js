@@ -779,6 +779,274 @@ router.get('/mock-score/:student_id', (req, res) => {
   });
 });
 
+router.post('/record-physical', (req, res) => {
+  const {
+    student_id,
+    record_date,
+    jump_cm,
+    medicine_m,
+    back_power_kg,
+    run10_btn_sec,
+    run10_cone_sec,
+    run20_btn_sec,
+    run20_cone_sec,
+    flexibility_cm
+  } = req.body;
+
+  const sql = `
+    INSERT INTO physical_records (
+      student_id, record_date,
+      jump_cm, medicine_m, back_power_kg,
+      run10_btn_sec, run10_cone_sec,
+      run20_btn_sec, run20_cone_sec,
+      flexibility_cm
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  dbAcademy.query(sql, [
+    student_id, record_date,
+    jump_cm, medicine_m, back_power_kg,
+    run10_btn_sec, run10_cone_sec,
+    run20_btn_sec, run20_cone_sec,
+    flexibility_cm
+  ], (err, result) => {
+    if (err) {
+      console.error('❌ 실기기록 입력 오류:', err);
+      return res.status(500).json({ message: 'DB 오류', error: err });
+    }
+
+    res.json({ message: '✅ 실기 기록 저장 완료', id: result.insertId });
+  });
+});
+
+
+router.get('/physical-record/:student_id', (req, res) => {
+  const { student_id } = req.params;
+
+  const sql = `
+    SELECT * FROM physical_records 
+    WHERE student_id = ?
+    ORDER BY recorded_at DESC, event_name
+  `;
+
+  dbAcademy.query(sql, [student_id], (err, rows) => {
+    if (err) {
+      console.error('❌ 실기기록 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
+  });
+});
+
+router.get('/physical-record/:student_id/:event_name', (req, res) => {
+  const { student_id, event_name } = req.params;
+
+  const sql = `
+    SELECT recorded_at, record_value 
+    FROM physical_records
+    WHERE student_id = ? AND event_name = ?
+    ORDER BY recorded_at ASC
+  `;
+
+  dbAcademy.query(sql, [student_id, event_name], (err, rows) => {
+    if (err) {
+      console.error('❌ 기록 추이 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);  // 프론트에서 날짜별 그래프용으로 사용 가능
+  });
+});
+
+router.delete('/physical-record/:id', (req, res) => {
+  const { id } = req.params;
+
+  const sql = `DELETE FROM physical_records WHERE id = ?`;
+
+  dbAcademy.query(sql, [id], (err, result) => {
+    if (err) {
+      console.error('❌ 실기기록 삭제 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ 실기기록 삭제 완료' });
+  });
+});
+
+router.get('/student-full-summary', async (req, res) => {
+  try {
+    // 1. 전체 학생 조회
+    const students = await dbQuery(`SELECT * FROM students ORDER BY grade, name`);
+
+    const results = [];
+
+    for (const student of students) {
+      const student_id = student.id;
+
+      // 2. 최신 모의고사 성적 1개 (가장 최근 시험)
+      const [latestScore] = await dbQuery(`
+        SELECT * FROM mock_scores 
+        WHERE student_id = ?
+        ORDER BY FIELD(exam_month, '9월', '6월', '3월') LIMIT 1
+      `, [student_id]);
+
+      // 3. 실기 종목별 최신 기록
+      const physicalRecords = await dbQuery(`
+        SELECT event_name, record_value, recorded_at 
+        FROM physical_records
+        WHERE student_id = ?
+        ORDER BY event_name, recorded_at DESC
+      `, [student_id]);
+
+      // 종목별로 최신 기록만 추리기
+      const latestPhysicalMap = {};
+      for (const record of physicalRecords) {
+        const e = record.event_name;
+        if (!latestPhysicalMap[e]) latestPhysicalMap[e] = record;
+      }
+
+      results.push({
+        ...student,
+        latest_mock_score: latestScore || null,
+        latest_physical: latestPhysicalMap
+      });
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error('❌ 학생 전체 성적 및 기록 조회 실패:', err);
+    res.status(500).json({ message: 'DB 오류', error: err });
+  }
+});
+
+router.post('/mental-check', (req, res) => {
+  const {
+    student_id, submitted_at,
+    sleep_hours, stress_level, motivation_level,
+    condition_level, pain_level, focus_level, study_level,
+    note
+  } = req.body;
+
+  if (!student_id || !submitted_at) {
+    return res.status(400).json({ message: '❗ student_id, submitted_at 필수' });
+  }
+
+  const sql = `
+    INSERT INTO mental_check (
+      student_id, submitted_at,
+      sleep_hours, stress_level, motivation_level,
+      condition_level, pain_level, focus_level, study_level,
+      note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const values = [
+    student_id, submitted_at,
+    sleep_hours, stress_level, motivation_level,
+    condition_level, pain_level, focus_level, study_level,
+    note
+  ];
+
+  dbAcademy.query(sql, values, (err, result) => {
+    if (err) {
+      console.error('❌ 멘탈 평가 등록 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+
+    // ✅ 슬럼프 감지 (간단한 기준 예시)
+    const alertNeeded =
+      (stress_level >= 4 && motivation_level <= 2) ||
+      (condition_level <= 2 && pain_level >= 3);
+
+    res.json({
+      message: '✅ 멘탈 평가 저장 완료',
+      slump_alert: alertNeeded ? '⚠️ 상담 필요' : '정상',
+      record_id: result.insertId
+    });
+  });
+});
+
+router.get('/mental-check/:student_id', (req, res) => {
+  const { student_id } = req.params;
+
+  const sql = `
+    SELECT * FROM mental_check
+    WHERE student_id = ?
+    ORDER BY submitted_at DESC
+  `;
+
+  dbAcademy.query(sql, [student_id], (err, rows) => {
+    if (err) {
+      console.error('❌ 멘탈 이력 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
+  });
+});
+
+router.patch('/assign-instructor/:student_id', (req, res) => {
+  const { student_id } = req.params;
+  const { instructor_id } = req.body;
+
+  if (!instructor_id) {
+    return res.status(400).json({ message: '❗ instructor_id 누락' });
+  }
+
+  const sql = `UPDATE students SET instructor_id = ? WHERE id = ?`;
+
+  dbAcademy.query(sql, [instructor_id, student_id], (err, result) => {
+    if (err) {
+      console.error('❌ 강사 지정 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+
+    res.json({ message: '✅ 강사 배정 완료', affectedRows: result.affectedRows });
+  });
+});
+
+router.get('/students-with-instructor', (req, res) => {
+  const sql = `
+    SELECT 
+      s.id AS student_id, s.name AS student_name, s.grade, s.gender, s.school,
+      i.id AS instructor_id, i.name AS instructor_name
+    FROM students s
+    LEFT JOIN instructors i ON s.instructor_id = i.id
+    ORDER BY i.name, s.name
+  `;
+
+  dbAcademy.query(sql, (err, rows) => {
+    if (err) {
+      console.error('❌ 학생 + 강사 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
+  });
+});
+
+router.post('/register-instructor', (req, res) => {
+  const { name, birth_year, position, gender, phone } = req.body;
+
+  if (!name) return res.status(400).json({ message: '강사 이름은 필수입니다.' });
+
+  const sql = `
+    INSERT INTO instructors (name, birth_year, position, gender, phone)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+
+  dbAcademy.query(sql, [name, birth_year, position, gender, phone], (err, result) => {
+    if (err) return res.status(500).json({ message: 'DB 오류', error: err });
+    res.json({ message: '✅ 강사 등록 완료', id: result.insertId });
+  });
+});
+
+router.get('/instructors', (req, res) => {
+  const sql = `SELECT * FROM instructors ORDER BY name`;
+
+  dbAcademy.query(sql, (err, rows) => {
+    if (err) return res.status(500).json({ message: 'DB 오류', error: err });
+    res.json(rows);
+  });
+});
+
 
 
 
