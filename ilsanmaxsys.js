@@ -5,10 +5,10 @@ const crypto = require('crypto');
 
 const { dbAcademy } = require('./college');
 const { OpenAI } = require('openai');
+require('dotenv').config();  // 👈 최상단에 추가!
 
-// 🔐 GPT API 키 설정
 const openai = new OpenAI({
-  apiKey: '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',
+  apiKey: process.env.OPENAI_API_KEY  // 👈 환경변수에서 가져오기
 });
 
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
