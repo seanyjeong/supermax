@@ -705,7 +705,8 @@ WHERE status != '퇴원'
   }
 });
 
-router.post('/mock-score', (req, res) => {
+// POST /college/submit-mock-exam
+router.post('/submit-mock-exam', (req, res) => {
   const {
     student_id, exam_month,
     korean_subject, korean_percentile, korean_standard_score, korean_grade,
@@ -715,39 +716,15 @@ router.post('/mock-score', (req, res) => {
     inquiry2_subject, inquiry2_percentile, inquiry2_standard_score, inquiry2_grade
   } = req.body;
 
-  if (!student_id || !exam_month || !korean_subject || !math_subject) {
-    return res.status(400).json({ message: '❗ 필수 항목 누락' });
-  }
-
   const sql = `
-    INSERT INTO mock_scores (
+    INSERT INTO mock_exam_scores (
       student_id, exam_month,
       korean_subject, korean_percentile, korean_standard_score, korean_grade,
       math_subject, math_percentile, math_standard_score, math_grade,
       english_grade, history_grade,
       inquiry1_subject, inquiry1_percentile, inquiry1_standard_score, inquiry1_grade,
       inquiry2_subject, inquiry2_percentile, inquiry2_standard_score, inquiry2_grade
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      korean_subject = VALUES(korean_subject),
-      korean_percentile = VALUES(korean_percentile),
-      korean_standard_score = VALUES(korean_standard_score),
-      korean_grade = VALUES(korean_grade),
-      math_subject = VALUES(math_subject),
-      math_percentile = VALUES(math_percentile),
-      math_standard_score = VALUES(math_standard_score),
-      math_grade = VALUES(math_grade),
-      english_grade = VALUES(english_grade),
-      history_grade = VALUES(history_grade),
-      inquiry1_subject = VALUES(inquiry1_subject),
-      inquiry1_percentile = VALUES(inquiry1_percentile),
-      inquiry1_standard_score = VALUES(inquiry1_standard_score),
-      inquiry1_grade = VALUES(inquiry1_grade),
-      inquiry2_subject = VALUES(inquiry2_subject),
-      inquiry2_percentile = VALUES(inquiry2_percentile),
-      inquiry2_standard_score = VALUES(inquiry2_standard_score),
-      inquiry2_grade = VALUES(inquiry2_grade)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const values = [
@@ -761,12 +738,13 @@ router.post('/mock-score', (req, res) => {
 
   dbAcademy.query(sql, values, (err, result) => {
     if (err) {
-      console.error('❌ 모의고사 성적 저장 실패:', err);
+      console.error('❌ 성적 입력 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
     }
-    res.json({ message: '✅ 모의고사 성적 저장 완료' });
+    res.json({ message: '✅ 성적 저장 완료' });
   });
 });
+
 
 router.get('/mock-score/:student_id', (req, res) => {
   const student_id = req.params.student_id;
