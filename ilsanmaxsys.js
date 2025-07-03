@@ -722,7 +722,7 @@ router.post('/submit-mock-exam', (req, res) => {
   }
 
   const sql = `
-    INSERT INTO mock_exam_scores (
+    INSERT INTO mock_scores (
       student_id, exam_month,
       korean_subject, korean_percentile, korean_standard_score, korean_grade,
       math_subject, math_percentile, math_standard_score, math_grade,
@@ -755,7 +755,7 @@ router.get('/mock-score/:student_id', (req, res) => {
   const student_id = req.params.student_id;
 
   const sql = `
-    SELECT * FROM mock_exam_scores 
+    SELECT * FROM mock_scores 
     WHERE student_id = ? 
     ORDER BY FIELD(exam_month, '3월', '6월', '9월')
   `;
