@@ -1038,7 +1038,6 @@ router.get('/instructors', (req, res) => {
   });
 });
 
-// ✅ 실기 기록 입력 API
 router.post('/submit-record', (req, res) => {
   const {
     student_id,
@@ -1079,9 +1078,45 @@ router.post('/submit-record', (req, res) => {
       console.error('❌ 기록 저장 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
     }
-    res.json({ message: '✅ 기록 저장 완료' });
+
+    // ✅ 추가: 종목별 개별 기록도 별도로 저장 (차트용)
+    const individualInserts = [];
+    const map = {
+      '제자리멀리뛰기': jump_cm,
+      '메디신볼던지기': medicine_m,
+      '배근력': back_power_kg,
+      '10m왕복(버튼)': run10_btn_sec,
+      '10m왕복(콘)': run10_cone_sec,
+      '20m왕복(버튼)': run20_btn_sec,
+      '20m왕복(콘)': run20_cone_sec,
+      '좌전굴': flexibility_cm
+    };
+
+    for (const [event_name, value] of Object.entries(map)) {
+      if (value !== undefined && value !== null && value !== '') {
+        individualInserts.push([student_id, event_name, value, record_date]);
+      }
+    }
+
+    if (individualInserts.length === 0) {
+      return res.json({ message: '✅ 기록 저장 완료' }); // 기록 없음
+    }
+
+    const insertSql = `
+      INSERT INTO physical_records (student_id, event_name, record_value, recorded_at)
+      VALUES ?
+    `;
+    dbAcademy.query(insertSql, [individualInserts], (err2) => {
+      if (err2) {
+        console.error('❌ 기록 세부 insert 실패:', err2);
+        return res.status(500).json({ message: '기록 저장 실패 (세부)' });
+      }
+
+      res.json({ message: '✅ 기록 저장 완료' });
+    });
   });
-}); // ✅ 이 닫는 괄호와 세미콜론이 중요함!!!
+});
+
 
 
 
