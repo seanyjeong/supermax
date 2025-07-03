@@ -4,6 +4,12 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 const { dbAcademy } = require('./college');
+const { OpenAI } = require('openai');
+
+// 🔐 GPT API 키 설정
+const openai = new OpenAI({
+  apiKey: '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',
+});
 
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
 
@@ -1144,7 +1150,58 @@ router.post('/submit-record', (req, res) => {
 
 
 
+// 🎯 실기기록 가져오기 + GPT 코멘트 생성 API
+router.post('/analyze-comment', async (req, res) => {
+  const { student_id } = req.body;
+  if (!student_id) return res.status(400).json({ message: 'student_id 필요' });
 
+  // 📦 실기기록 불러오기
+  const sql = `
+    SELECT event_name, record_value, recorded_at
+    FROM physical_records
+    WHERE student_id = ?
+    ORDER BY recorded_at DESC
+    LIMIT 100
+  `;
+  dbAcademy.query(sql, [student_id], async (err, rows) => {
+    if (err) {
+      console.error('DB 에러:', err);
+      return res.status(500).json({ message: 'DB 에러' });
+    }
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ message: '실기기록 없음' });
+    }
+
+    // 🎯 GPT에게 보낼 프롬프트 구성
+    const prompt = `
+학생의 실기 기록을 종합적으로 분석해줘.
+기록은 종목별로 날짜별 정리되어 있음.
+기록의 추세를 고려해서 현재 상태를 진단하고 간단한 종합 코멘트를 작성해줘.
+- 슬럼프/정체기/개선 등 판단
+- 너무 과장되거나 모호하지 않게
+- 문장은 2~3문장 이내
+기록 데이터:
+${JSON.stringify(rows, null, 2)}
+
+코멘트 (한국어):
+`;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+      });
+
+      const comment = completion.choices[0].message.content.trim();
+      res.json({ comment });
+    } catch (e) {
+      console.error('GPT 에러:', e);
+      res.status(500).json({ message: 'GPT 분석 실패' });
+    }
+  });
+});
 
 
 
