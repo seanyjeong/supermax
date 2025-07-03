@@ -1197,7 +1197,7 @@ const referenceStats = {
 
   // ✅ GPT 프롬프트 생성
 // 👇 성별 기준으로 기준표 가져오기
-const statByGender = performanceStats[gender];
+const statByGender = referenceStats[gender];
 
 // 📦 실기기록 중 유효한 기록만 추리고 종목별 최대 3개씩
 const validRows = rows.filter(r => !isNaN(parseFloat(r.record_value)));
