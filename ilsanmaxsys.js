@@ -705,7 +705,7 @@ WHERE status != '퇴원'
   }
 });
 
-// POST /college/submit-mock-exam
+// ✅ POST /college/submit-mock-exam
 router.post('/submit-mock-exam', (req, res) => {
   const {
     student_id, exam_month,
@@ -715,6 +715,11 @@ router.post('/submit-mock-exam', (req, res) => {
     inquiry1_subject, inquiry1_percentile, inquiry1_standard_score, inquiry1_grade,
     inquiry2_subject, inquiry2_percentile, inquiry2_standard_score, inquiry2_grade
   } = req.body;
+
+  // 빈 문자열이면 null로 처리
+  function clean(value) {
+    return value === '' ? null : value;
+  }
 
   const sql = `
     INSERT INTO mock_exam_scores (
@@ -728,12 +733,12 @@ router.post('/submit-mock-exam', (req, res) => {
   `;
 
   const values = [
-    student_id, exam_month,
-    korean_subject, korean_percentile, korean_standard_score, korean_grade,
-    math_subject, math_percentile, math_standard_score, math_grade,
-    english_grade, history_grade,
-    inquiry1_subject, inquiry1_percentile, inquiry1_standard_score, inquiry1_grade,
-    inquiry2_subject, inquiry2_percentile, inquiry2_standard_score, inquiry2_grade
+    clean(student_id), clean(exam_month),
+    clean(korean_subject), clean(korean_percentile), clean(korean_standard_score), clean(korean_grade),
+    clean(math_subject), clean(math_percentile), clean(math_standard_score), clean(math_grade),
+    clean(english_grade), clean(history_grade),
+    clean(inquiry1_subject), clean(inquiry1_percentile), clean(inquiry1_standard_score), clean(inquiry1_grade),
+    clean(inquiry2_subject), clean(inquiry2_percentile), clean(inquiry2_standard_score), clean(inquiry2_grade)
   ];
 
   dbAcademy.query(sql, values, (err, result) => {
@@ -745,12 +750,12 @@ router.post('/submit-mock-exam', (req, res) => {
   });
 });
 
-
+// ✅ GET /college/mock-score/:student_id (테이블명 수정)
 router.get('/mock-score/:student_id', (req, res) => {
   const student_id = req.params.student_id;
 
   const sql = `
-    SELECT * FROM mock_scores 
+    SELECT * FROM mock_exam_scores 
     WHERE student_id = ? 
     ORDER BY FIELD(exam_month, '3월', '6월', '9월')
   `;
@@ -763,6 +768,7 @@ router.get('/mock-score/:student_id', (req, res) => {
     res.json(rows);
   });
 });
+
 
 router.post('/record-physical', (req, res) => {
   const {
