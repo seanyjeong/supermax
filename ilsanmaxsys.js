@@ -1155,20 +1155,33 @@ router.post('/analyze-comment', async (req, res) => {
   const { student_id } = req.body;
   if (!student_id) return res.status(400).json({ message: 'student_id 필요' });
 
-  // 📦 실기기록 불러오기
-    const sql = `
-      SELECT event_name, record_value, recorded_at
-      FROM physical_records
-      WHERE student_id = ?
-      ORDER BY recorded_at DESC
-      LIMIT 100
-    `;
-    dbAcademy.query(sql, [student_id], async (err2, rows) => {
-      if (err2) return res.status(500).json({ message: 'DB 에러' });
-      if (!rows || rows.length === 0) return res.status(404).json({ message: '실기기록 없음' });
-    
-                    
-    // 🎯 GPT에게 보낼 프롬프트 구성
+  // ✅ 성별 먼저 가져오기
+  const genderQuery = `SELECT gender FROM students WHERE id = ?`;
+  let gender = '남';  // 기본값 설정
+
+  try {
+    const [row] = await dbQuery(genderQuery, [student_id]);
+    if (row && row.gender) {
+      gender = row.gender;
+    }
+  } catch (e) {
+    console.error('❌ 성별 조회 실패:', e);
+    return res.status(500).json({ message: '성별 조회 오류' });
+  }
+
+  // ✅ 실기기록 불러오기
+  const sql = `
+    SELECT event_name, record_value, recorded_at
+    FROM physical_records
+    WHERE student_id = ?
+    ORDER BY recorded_at DESC
+    LIMIT 100
+  `;
+  dbAcademy.query(sql, [student_id], async (err2, rows) => {
+    if (err2) return res.status(500).json({ message: 'DB 에러' });
+    if (!rows || rows.length === 0) return res.status(404).json({ message: '실기기록 없음' });
+
+    // ✅ GPT 프롬프트 구성
     const prompt = `
 다음은 학생의 실기기록 데이터입니다.
 
@@ -1205,6 +1218,7 @@ ${JSON.stringify(rows, null, 2)}
     }
   });
 });
+
 
 
 
