@@ -924,50 +924,64 @@ router.get('/student-full-summary', async (req, res) => {
 
 router.post('/mental-check', (req, res) => {
   const {
-    student_id, submitted_at,
+    student_id,
     sleep_hours, stress_level, motivation_level,
     condition_level, pain_level, focus_level, study_level,
     note
   } = req.body;
 
-  if (!student_id || !submitted_at) {
-    return res.status(400).json({ message: '❗ student_id, submitted_at 필수' });
+  if (!student_id) {
+    return res.status(400).json({ message: '❗ student_id는 필수입니다.' });
   }
 
-  const sql = `
-    INSERT INTO mental_check (
-      student_id, submitted_at,
-      sleep_hours, stress_level, motivation_level,
-      condition_level, pain_level, focus_level, study_level,
-      note
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  // ✅ 오늘 서버 기준 제출 여부 확인 (created_at 기준)
+  const checkSql = `
+    SELECT COUNT(*) AS count
+    FROM mental_check
+    WHERE student_id = ? AND DATE(created_at) = CURDATE()
   `;
 
-  const values = [
-    student_id, submitted_at,
-    sleep_hours, stress_level, motivation_level,
-    condition_level, pain_level, focus_level, study_level,
-    note
-  ];
-
-  dbAcademy.query(sql, values, (err, result) => {
+  dbAcademy.query(checkSql, [student_id], (err, rows) => {
     if (err) {
-      console.error('❌ 멘탈 평가 등록 실패:', err);
+      console.error('❌ 중복 확인 오류:', err);
       return res.status(500).json({ message: 'DB 오류' });
     }
 
-    // ✅ 슬럼프 감지 (간단한 기준 예시)
-    const alertNeeded =
-      (stress_level >= 4 && motivation_level <= 2) ||
-      (condition_level <= 2 && pain_level >= 3);
+    if (rows[0].count > 0) {
+      return res.status(400).json({ message: '🚫 오늘 이미 멘탈 체크를 제출했습니다.' });
+    }
 
-    res.json({
-      message: '✅ 멘탈 평가 저장 완료',
-      slump_alert: alertNeeded ? '⚠️ 상담 필요' : '정상',
-      record_id: result.insertId
+    // ✅ 제출 시간은 서버에서 자동 기록되므로 submitted_at 제거
+    const insertSql = `
+      INSERT INTO mental_check (
+        student_id,
+        sleep_hours, stress_level, motivation_level,
+        condition_level, pain_level, focus_level, study_level,
+        note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const values = [
+      student_id,
+      sleep_hours, stress_level, motivation_level,
+      condition_level, pain_level, focus_level, study_level,
+      note
+    ];
+
+    dbAcademy.query(insertSql, values, (err2, result) => {
+      if (err2) {
+        console.error('❌ 멘탈 평가 등록 실패:', err2);
+        return res.status(500).json({ message: 'DB 오류' });
+      }
+
+      res.json({
+        message: '✅ 멘탈 평가 저장 완료',
+        record_id: result.insertId
+      });
     });
   });
 });
+
 
 router.get('/mental-check/:student_id', (req, res) => {
   const { student_id } = req.params;
