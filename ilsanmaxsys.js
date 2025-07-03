@@ -1056,47 +1056,49 @@ router.get('/instructors', (req, res) => {
 
 // ✅ 실기 기록 입력 API
 router.post('/submit-record', (req, res) => {
-const {
-  student_id,
-  record_date,
-  jump_cm,
-  medicine_m,
-  back_power_kg,
-  run10_btn_sec,
-  run10_cone_sec,
-  run20_btn_sec,
-  run20_cone_sec,
-  flexibility_cm
-} = req.body;
-
-const sql = `
-  INSERT INTO physical_records (
-    student_id, record_date,
-    jump_cm, medicine_m, back_power_kg,
-    run10_btn_sec, run10_cone_sec,
-    run20_btn_sec, run20_cone_sec,
+  const {
+    student_id,
+    record_date,
+    jump_cm,
+    medicine_m,
+    back_power_kg,
+    run10_btn_sec,
+    run10_cone_sec,
+    run20_btn_sec,
+    run20_cone_sec,
     flexibility_cm
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
+  } = req.body;
 
-dbAcademy.query(sql, [
-  student_id,
-  record_date,
-  jump_cm,
-  medicine_m,
-  back_power_kg,
-  run10_btn_sec,
-  run10_cone_sec,
-  run20_btn_sec,
-  run20_cone_sec,
-  flexibility_cm
-], (err, result) => {
-  if (err) {
-    console.error('❌ 기록 저장 실패:', err);
-    return res.status(500).json({ message: 'DB 오류' });
-  }
-  res.json({ message: '✅ 기록 저장 완료' });
-});
+  const sql = `
+    INSERT INTO physical_records (
+      student_id, record_date,
+      jump_cm, medicine_m, back_power_kg,
+      run10_btn_sec, run10_cone_sec,
+      run20_btn_sec, run20_cone_sec,
+      flexibility_cm
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  dbAcademy.query(sql, [
+    student_id,
+    record_date,
+    jump_cm,
+    medicine_m,
+    back_power_kg,
+    run10_btn_sec,
+    run10_cone_sec,
+    run20_btn_sec,
+    run20_cone_sec,
+    flexibility_cm
+  ], (err, result) => {
+    if (err) {
+      console.error('❌ 기록 저장 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ 기록 저장 완료' });
+  });
+}); // ✅ 이 닫는 괄호와 세미콜론이 중요함!!!
+
 
 
 
