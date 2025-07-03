@@ -88,33 +88,40 @@ router.post('/save-expected-amount', (req, res) => {
 });
 
 
-// ✅ 개별 학생 상세 조회 API (추가 권장)
+// ✅ 개별 학생 상세 조회 API (강사 이름 포함 버전)
 router.get('/students/:id', (req, res) => {
   const { id } = req.params;
-  
-  // 학생 기본 정보 조회
-  dbAcademy.query('SELECT * FROM students WHERE id = ?', [id], (err, studentRows) => {
+
+  const sql = `
+    SELECT s.*, i.name AS instructor_name
+    FROM students s
+    LEFT JOIN instructors i ON s.instructor_id = i.id
+    WHERE s.id = ?
+  `;
+
+  dbAcademy.query(sql, [id], (err, studentRows) => {
     if (err || studentRows.length === 0) {
       return res.status(404).json({ message: '학생을 찾을 수 없습니다' });
     }
-    
+
     const student = studentRows[0];
-    
-    // 결제 내역 조회 (선택적)
+
+    // 결제 내역도 같이 가져오기
     dbAcademy.query(
-      'SELECT * FROM payments WHERE student_id = ? ORDER BY month DESC LIMIT 5', 
-      [id], 
-      (err, paymentRows) => {
-        if (err) {
-          console.error('결제 내역 조회 오류:', err);
+      'SELECT * FROM payments WHERE student_id = ? ORDER BY month DESC LIMIT 5',
+      [id],
+      (err2, paymentRows) => {
+        if (err2) {
+          console.error('결제 내역 조회 오류:', err2);
           return res.json({ ...student, payments: [] });
         }
-        
+
         res.json({ ...student, payments: paymentRows });
       }
     );
   });
 });
+
 
 // ✅ 강사 등록 API
 router.post('/register-instructor', (req, res) => {
