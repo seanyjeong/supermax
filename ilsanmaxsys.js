@@ -1204,7 +1204,7 @@ const validRows = rows.filter(r => !isNaN(parseFloat(r.record_value)));
 const grouped = {};
 for (const r of validRows) {
   if (!grouped[r.event_name]) grouped[r.event_name] = [];
-  if (grouped[r.event_name].length < 5) grouped[r.event_name].push(r);
+  if (grouped[r.event_name].length < 3) grouped[r.event_name].push(r);
 }
 const finalRecords = Object.values(grouped).flat();
 
@@ -1223,6 +1223,7 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 위 기준표와 기록을 비교해보며, 기록이 존재하는 종목에 대해서만 추세와 수준을 평가하고, 상위평균과도 비교를 하고,
 강점/약점을 분석하여 훈련 방향을 2~3문장 이내로 조언해줘.
+아 그리고 정확하게 기록을 불러와서 분석해줘야해 가끔 평균보다 높은데도 낮다고 하고 오류가 나오니깐. 달리기종목들은 기록이 낮을수록 좋은거야
 
 한국어로.
 `;
