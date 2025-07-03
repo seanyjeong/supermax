@@ -1073,14 +1073,13 @@ router.post('/submit-record', (req, res) => {
     run20_btn_sec,
     run20_cone_sec,
     flexibility_cm
-  ], (err, result) => {
+  ], async (err, result) => {
     if (err) {
       console.error('❌ 기록 저장 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
     }
 
-    // ✅ 추가: 종목별 개별 기록도 별도로 저장 (차트용)
-    const individualInserts = [];
+    // ✅ 차트용 insert
     const map = {
       '제자리멀리뛰기': jump_cm,
       '메디신볼던지기': medicine_m,
@@ -1092,30 +1091,46 @@ router.post('/submit-record', (req, res) => {
       '좌전굴': flexibility_cm
     };
 
+    const inserts = [];
+
     for (const [event_name, value] of Object.entries(map)) {
-      if (value !== undefined && value !== null && value !== '') {
-        individualInserts.push([student_id, event_name, value, record_date]);
+      if (value !== undefined && value !== null && value !== '' && !isNaN(value)) {
+        try {
+          await new Promise((resolve, reject) => {
+            dbAcademy.query(
+              `DELETE FROM physical_records WHERE student_id = ? AND event_name = ? AND recorded_at = ?`,
+              [student_id, event_name, record_date],
+              (err) => (err ? reject(err) : resolve())
+            );
+          });
+
+          inserts.push([student_id, event_name, parseFloat(value), record_date]);
+        } catch (e) {
+          console.error(`❌ DELETE 실패 (${event_name}):`, e);
+          return res.status(500).json({ message: `DELETE 실패 (${event_name})` });
+        }
       }
     }
 
-    if (individualInserts.length === 0) {
-      return res.json({ message: '✅ 기록 저장 완료' }); // 기록 없음
+    if (inserts.length === 0) {
+      return res.json({ message: '✅ 기록 저장 완료 (차트용 없음)' });
     }
 
     const insertSql = `
       INSERT INTO physical_records (student_id, event_name, record_value, recorded_at)
       VALUES ?
     `;
-    dbAcademy.query(insertSql, [individualInserts], (err2) => {
+
+    dbAcademy.query(insertSql, [inserts], (err2) => {
       if (err2) {
         console.error('❌ 기록 세부 insert 실패:', err2);
-        return res.status(500).json({ message: '기록 저장 실패 (세부)' });
+        return res.status(500).json({ message: '기록 저장 실패 (세부)', error: err2 });
       }
-
       res.json({ message: '✅ 기록 저장 완료' });
     });
   });
 });
+
 
 
 
