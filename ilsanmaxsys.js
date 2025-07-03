@@ -1118,10 +1118,14 @@ router.post('/submit-record', (req, res) => {
       return res.json({ message: '✅ 기록 저장 완료 (차트용 없음)' });
     }
 
-    const insertSql = `
-      INSERT INTO physical_records (student_id, event_name, record_value, recorded_at)
-      VALUES ?
-    `;
+const insertSql = `
+  INSERT INTO physical_records 
+  (student_id, event_name, record_value, recorded_at, record_date)
+  VALUES ?
+`;
+
+inserts.push([student_id, event_name, parseFloat(value), recorded_at, recorded_at]);
+
 
     dbAcademy.query(insertSql, [inserts], (err2) => {
       if (err2) {
