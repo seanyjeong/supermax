@@ -1163,11 +1163,11 @@ router.post('/analyze-comment', async (req, res) => {
       ORDER BY recorded_at DESC
       LIMIT 100
     `;
-    dbAcademy.query(sql, [student_id], async (err, rows) => {
-      if (err) return res.status(500).json({ message: 'DB 에러' });
+    dbAcademy.query(sql, [student_id], async (err2, rows) => {
+      if (err2) return res.status(500).json({ message: 'DB 에러' });
       if (!rows || rows.length === 0) return res.status(404).json({ message: '실기기록 없음' });
-    }
-
+    
+                    
     // 🎯 GPT에게 보낼 프롬프트 구성
     const prompt = `
 다음은 학생의 실기기록 데이터입니다.
