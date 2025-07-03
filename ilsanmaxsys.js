@@ -1215,7 +1215,7 @@ const prompt = `
 
 📊 종목별 평균/상위평균/만점 기준표:
 ${Object.entries(statByGender).map(([event, stats]) =>
-  `- ${event}: 평균 ${stats.average}, 상위 평균 ${stats.upper}, 만점수준 ${stats.max}`
+  `- ${event}: 평균 ${stats.avg}, 상위 평균 ${stats.top_avg}, 만점수준 ${stats.max}`
 ).join('\n')}
 
 📝 학생 기록:
