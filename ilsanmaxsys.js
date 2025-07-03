@@ -57,7 +57,13 @@ router.post('/send-alimtalk', async (req, res) => {
 
 // ✅ 수강생 전체 조회 API
 router.get('/students', (req, res) => {
-  dbAcademy.query('SELECT * FROM students ORDER BY created_at DESC', (err, rows) => {
+  const sql = `
+    SELECT s.*, i.name AS instructor_name
+    FROM students s
+    LEFT JOIN instructors i ON s.instructor_id = i.id
+    ORDER BY s.name ASC
+  `;
+  dbAcademy.query(sql, (err, rows) => {
     if (err) {
       console.error('❌ 수강생 조회 실패:', err);
       return res.status(500).json({ message: 'DB 오류' });
@@ -65,6 +71,7 @@ router.get('/students', (req, res) => {
     res.json(rows);
   });
 });
+
 
 router.post('/save-expected-amount', (req, res) => {
     console.log('✅ [save-expected-amount] POST 호출됨', req.body); 
