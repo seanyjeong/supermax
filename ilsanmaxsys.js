@@ -1150,73 +1150,85 @@ router.post('/submit-record', (req, res) => {
 
 
 
-// 🎯 실기기록 가져오기 + GPT 코멘트 생성 API
+// 🎯 실기기록 + GPT 코멘트 API
 router.post('/analyze-comment', async (req, res) => {
   const { student_id } = req.body;
   if (!student_id) return res.status(400).json({ message: 'student_id 필요' });
 
-  // ✅ 성별 먼저 가져오기
-  const genderQuery = `SELECT gender FROM students WHERE id = ?`;
-  let gender = '남';  // 기본값 설정
+  // ✅ 성별 조회
+  const genderRow = await dbQuery(`SELECT gender FROM students WHERE id = ?`, [student_id]);
+  const gender = genderRow[0]?.gender || '남';
 
-  try {
-    const [row] = await dbQuery(genderQuery, [student_id]);
-    if (row && row.gender) {
-      gender = row.gender;
-    }
-  } catch (e) {
-    console.error('❌ 성별 조회 실패:', e);
-    return res.status(500).json({ message: '성별 조회 오류' });
-  }
-
-  // ✅ 실기기록 불러오기
-  const sql = `
+  // ✅ 실기 기록 불러오기
+  const recordSql = `
     SELECT event_name, record_value, recorded_at
     FROM physical_records
     WHERE student_id = ?
-    ORDER BY recorded_at DESC
+    ORDER BY recorded_at ASC
     LIMIT 100
   `;
-  dbAcademy.query(sql, [student_id], async (err2, rows) => {
-    if (err2) return res.status(500).json({ message: 'DB 에러' });
-    if (!rows || rows.length === 0) return res.status(404).json({ message: '실기기록 없음' });
+  const rows = await dbQuery(recordSql, [student_id]);
+  if (!rows || rows.length === 0) return res.status(404).json({ message: '실기기록 없음' });
 
-    // ✅ GPT 프롬프트 구성
-    const prompt = `
-다음은 학생의 실기기록 데이터입니다.
+  // ✅ 기준 데이터
+const referenceStats = {
+  "남": {
+    "제자리멀리뛰기": { avg: 260, top_avg: 280, max: 300 },
+    "메디신볼던지기": { avg: 9.0, top_avg: 10.5, max: 12.5 },
+    "좌전굴": { avg: 15, top_avg: 23, max: 30 },
+    "배근력": { avg: 155, top_avg: 200, max: 240 },
+    "10m왕복(버튼)": { avg: 9.7, top_avg: 9.5, max: 9.0 },
+    "10m왕복(콘)": { avg: 9.9, top_avg: 9.6, max: 9.0 },
+    "20m왕복(버튼)": { avg: 14.8, top_avg: 14.2, max: 13.4 },
+    "20m왕복(콘)": { avg: 15.4, top_avg: 14.9, max: 14.5 }
+  },
+  "여": {
+    "제자리멀리뛰기": { avg: 200, top_avg: 220, max: 245 },
+    "메디신볼던지기": { avg: 6.5, top_avg: 8.5, max: 9.5 },
+    "좌전굴": { avg: 20, top_avg: 27, max: 35 },
+    "배근력": { avg: 110, top_avg: 135, max: 160 },
+    "10m왕복(버튼)": { avg: 8.8, top_avg: 8.3, max: 8.0 },
+    "10m왕복(콘)": { avg: 10.5, top_avg: 10.2, max: 9.8 },
+    "20m왕복(버튼)": { avg: 16.5, top_avg: 15.6, max: 15.0 },
+    "20m왕복(콘)": { avg: 17.8, top_avg: 16.8, max: 16.3 }
+  }
+};
 
-📌 종목별 만점 기준은 다음과 같습니다:
-(성별: ${gender})  
-- 제자리멀리뛰기: ${gender === '남' ? '300cm' : '240cm'}  
-- 메디신볼던지기: ${gender === '남' ? '12.5m' : '9.5m'}  
-- 배근력: ${gender === '남' ? '230kg' : '160kg'}  
-- 좌전굴: ${gender === '남' ? '30cm' : '35cm'}  
-- 10m왕복(버튼): ${gender === '남' ? '8.00초' : '9.20초'} 이하  
-- 10m왕복(콘): ${gender === '남' ? '9.00초' : '9.70초'} 이하  
-- 20m왕복(버튼): ${gender === '남' ? '13.4초' : '15.0초'} 이하  
-- 20m왕복(콘): ${gender === '남' ? '14.6초' : '16.2초'} 이하  
 
-이 기준을 참고하여 기록 추세를 분석하고, 현재 실기 상태에 대한 코멘트를 2~3문장 이내로 작성해줘.
-기록 데이터:
+  // ✅ GPT 프롬프트 생성
+  const prompt = `
+다음은 ${gender}학생의 실기기록 데이터입니다.
+- 기록은 최근 순이며, 단위는 종목에 따라 cm, m, 초, kg입니다.
+- 각 종목별 평균, 상위평균, 만점기준도 함께 제공합니다.
+
+🎯 목표: 기록의 **추세(향상/감소/유지)**, **평균과의 거리**, **만점까지 남은 거리**를 보고,
+- 어떤 종목이 강점인지
+- 어떤 종목은 보완이 필요한지
+- 전체 실기 역량 향상을 위해 어떤 방향으로 훈련하면 좋을지
+2~4문장으로 요약해줘.
+
+📊 기준 데이터:
+${JSON.stringify(referenceStats[gender], null, 2)}
+
+📈 기록 데이터:
 ${JSON.stringify(rows, null, 2)}
 
 🧠 분석 결과 (한국어):
 `;
 
-    try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-      });
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7
+    });
 
-      const comment = completion.choices[0].message.content.trim();
-      res.json({ comment });
-    } catch (e) {
-      console.error('GPT 에러:', e);
-      res.status(500).json({ message: 'GPT 분석 실패' });
-    }
-  });
+    const comment = completion.choices[0].message.content.trim();
+    res.json({ comment });
+  } catch (e) {
+    console.error('GPT 에러:', e);
+    res.status(500).json({ message: 'GPT 분석 실패' });
+  }
 });
 
 
