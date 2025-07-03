@@ -1079,8 +1079,7 @@ router.post('/submit-record', (req, res) => {
       return res.status(500).json({ message: 'DB 오류' });
     }
 
-    // ✅ 차트용 기록 삽입 로직
-    const recorded_at = record_date; // ✅ 반드시 추가!!
+    const recorded_at = record_date;
     const map = {
       '제자리멀리뛰기': jump_cm,
       '메디신볼던지기': medicine_m,
@@ -1097,7 +1096,6 @@ router.post('/submit-record', (req, res) => {
     for (const [event_name, value] of Object.entries(map)) {
       if (value !== undefined && value !== null && value !== '' && !isNaN(value)) {
         try {
-          // 중복 제거
           await new Promise((resolve, reject) => {
             dbAcademy.query(
               `DELETE FROM physical_records WHERE student_id = ? AND event_name = ? AND recorded_at = ?`,
@@ -1106,7 +1104,7 @@ router.post('/submit-record', (req, res) => {
             );
           });
 
-          inserts.push([student_id, event_name, parseFloat(value), recorded_at]);
+          inserts.push([student_id, event_name, parseFloat(value), recorded_at, recorded_at]);
         } catch (e) {
           console.error(`❌ DELETE 실패 (${event_name}):`, e);
           return res.status(500).json({ message: `DELETE 실패 (${event_name})` });
@@ -1118,14 +1116,11 @@ router.post('/submit-record', (req, res) => {
       return res.json({ message: '✅ 기록 저장 완료 (차트용 없음)' });
     }
 
-const insertSql = `
-  INSERT INTO physical_records 
-  (student_id, event_name, record_value, recorded_at, record_date)
-  VALUES ?
-`;
-
-inserts.push([student_id, event_name, parseFloat(value), recorded_at, recorded_at]);
-
+    const insertSql = `
+      INSERT INTO physical_records 
+      (student_id, event_name, record_value, recorded_at, record_date)
+      VALUES ?
+    `;
 
     dbAcademy.query(insertSql, [inserts], (err2) => {
       if (err2) {
@@ -1136,6 +1131,7 @@ inserts.push([student_id, event_name, parseFloat(value), recorded_at, recorded_a
     });
   });
 });
+
 
 
 
