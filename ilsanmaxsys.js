@@ -1054,6 +1054,51 @@ router.get('/instructors', (req, res) => {
   });
 });
 
+// ✅ 실기 기록 입력 API
+router.post('/submit-record', (req, res) => {
+  const {
+    student_id,
+    record_date,
+    standing_long_jump,
+    medicine_ball_throw,
+    back_strength,
+    shuttle_10m_button,
+    shuttle_10m_cone,
+    shuttle_20m_button,
+    shuttle_20m_cone,
+    sit_and_reach
+  } = req.body;
+
+  if (!student_id || !record_date) {
+    return res.status(400).json({ message: '❗ 필수 항목 누락' });
+  }
+
+  const sql = `
+    INSERT INTO physical_records (
+      student_id, record_date,
+      standing_long_jump, medicine_ball_throw, back_strength,
+      shuttle_10m_button, shuttle_10m_cone,
+      shuttle_20m_button, shuttle_20m_cone,
+      sit_and_reach
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  dbAcademy.query(sql, [
+    student_id, record_date,
+    standing_long_jump || null, medicine_ball_throw || null, back_strength || null,
+    shuttle_10m_button || null, shuttle_10m_cone || null,
+    shuttle_20m_button || null, shuttle_20m_cone || null,
+    sit_and_reach || null
+  ], (err, result) => {
+    if (err) {
+      console.error('❌ 기록 저장 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json({ message: '✅ 기록 저장 완료', record_id: result.insertId });
+  });
+});
+
+
 
 
 
