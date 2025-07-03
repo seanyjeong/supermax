@@ -975,7 +975,7 @@ router.get('/mental-check/:student_id', (req, res) => {
   const sql = `
     SELECT * FROM mental_check
     WHERE student_id = ?
-    ORDER BY submitted_at DESC
+    ORDER BY created_at DESC
   `;
 
   dbAcademy.query(sql, [student_id], (err, rows) => {
