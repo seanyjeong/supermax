@@ -1156,21 +1156,16 @@ router.post('/analyze-comment', async (req, res) => {
   if (!student_id) return res.status(400).json({ message: 'student_id 필요' });
 
   // 📦 실기기록 불러오기
-  const sql = `
-    SELECT event_name, record_value, recorded_at
-    FROM physical_records
-    WHERE student_id = ?
-    ORDER BY recorded_at DESC
-    LIMIT 100
-  `;
-  dbAcademy.query(sql, [student_id], async (err, rows) => {
-    if (err) {
-      console.error('DB 에러:', err);
-      return res.status(500).json({ message: 'DB 에러' });
-    }
-
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ message: '실기기록 없음' });
+    const sql = `
+      SELECT event_name, record_value, recorded_at
+      FROM physical_records
+      WHERE student_id = ?
+      ORDER BY recorded_at DESC
+      LIMIT 100
+    `;
+    dbAcademy.query(sql, [student_id], async (err, rows) => {
+      if (err) return res.status(500).json({ message: 'DB 에러' });
+      if (!rows || rows.length === 0) return res.status(404).json({ message: '실기기록 없음' });
     }
 
     // 🎯 GPT에게 보낼 프롬프트 구성
