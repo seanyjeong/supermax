@@ -1466,6 +1466,7 @@ function dbQuery(sql, params = []) {
 }
 
 
-  
+ module.exports = router;
+ 
   
     
