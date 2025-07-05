@@ -17,7 +17,9 @@ const openai = new OpenAI({
 
 // ✅ Notion 클라이언트 초기화
 const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
-console.log(process.env.NOTION_API_KEY);
+console.log(process.env.NOTION_API_KEY)
+console.log(process.env.NOTION_DATABASE_ID)
+
 
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
 
