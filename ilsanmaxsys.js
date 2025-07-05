@@ -931,86 +931,81 @@ router.get('/student-full-summary', async (req, res) => {
 });
 
 // 멘탈 체크 등록
-router.post('/mental-check', async (req, res) => {
+// 멘탈 체크 등록 (수정 완료)
+router.post('/mental-check', (req, res) => {
   const {
     student_id, student_name, sleep_hours = 0, stress_level = 3, motivation_level = 3,
     condition_level = 3, pain_level = 3, focus_level = 3, study_level = 3, note = ''
   } = req.body;
 
-  try {
-    // 중복 제출 방지
-    const [existing] = await db.execute(`
-      SELECT id FROM mental_check WHERE student_id = ? AND submitted_at = CURDATE()
-    `, [student_id]);
+  // 중복 제출 방지
+  const checkSql = `
+    SELECT id FROM mental_check WHERE student_id = ? AND submitted_at = CURDATE()
+  `;
+  dbAcademy.query(checkSql, [student_id], (err, existing) => {
+    if (err) {
+      console.error('❌ 중복 제출 확인 오류:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
 
     if (existing.length > 0) {
       return res.status(400).json({ message: '이미 오늘 체크를 완료했습니다.' });
     }
 
     // DB 저장
-    await db.execute(`
+    const insertSql = `
       INSERT INTO mental_check (
         student_id, sleep_hours, stress_level, motivation_level,
         condition_level, pain_level, focus_level, study_level, note, submitted_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
-    `, [
+    `;
+    const values = [
       student_id, sleep_hours, stress_level, motivation_level,
       condition_level, pain_level, focus_level, study_level, note
-    ]);
+    ];
 
-    // 총점 계산
-    const score =
-      (parseFloat(sleep_hours) || 0) +
-      (parseFloat(motivation_level) || 0) +
-      (parseFloat(condition_level) || 0) +
-      (parseFloat(focus_level) || 0) +
-      (parseFloat(study_level) || 0) -
-      (parseFloat(stress_level) || 0) -
-      (parseFloat(pain_level) || 0);
-    const totalScore = Math.round(score * 10) / 10;
-
-    // GPT 분석
-    const gptComment = await analyzeMentalWithGPT({
-      student_name, sleep_hours, stress_level, motivation_level,
-      condition_level, pain_level, focus_level, study_level, note
-    });
-
-    // Notion 연동
-    await sendToNotion({
-      student_name, sleep_hours, stress_level, motivation_level,
-      condition_level, pain_level, focus_level, study_level, note
-    }, gptComment, totalScore);
-
-    // 알림톡 (조건 충족 시) – 현재는 비활성화
-    /*
-    if (totalScore <= 9) {
-      const [rows] = await db.execute(`
-        SELECT i.phone FROM students s
-        JOIN instructors i ON s.instructor_id = i.id
-        WHERE s.id = ?
-      `, [student_id]);
-
-      if (rows.length > 0 && rows[0].phone) {
-        const phone = rows[0].phone;
-        await sendAlimTalk({
-          to: phone,
-          templateCode: 'm03',
-          content: `[멘탈케어 경고]
-${student_name} 학생이 오늘 멘탈 상태가 좋지 않습니다.
-
-AI 분석: ${gptComment}`
-        });
+    dbAcademy.query(insertSql, values, async (err2, result) => {
+      if (err2) {
+        console.error('❌ 멘탈 체크 저장 오류:', err2);
+        return res.status(500).json({ message: 'DB 오류' });
       }
-    }
-    */
 
-    res.json({ success: true, comment: gptComment });
+      // 총점 계산
+      const score =
+        (parseFloat(sleep_hours) || 0) +
+        (parseFloat(motivation_level) || 0) +
+        (parseFloat(condition_level) || 0) +
+        (parseFloat(focus_level) || 0) +
+        (parseFloat(study_level) || 0) -
+        (parseFloat(stress_level) || 0) -
+        (parseFloat(pain_level) || 0);
+      const totalScore = Math.round(score * 10) / 10;
 
-  } catch (err) {
-    console.error('멘탈 체크 저장 오류:', err);
-    res.status(500).json({ message: '서버 오류 발생' });
-  }
+      // GPT 분석
+      let gptComment = '';
+      try {
+        gptComment = await analyzeMentalWithGPT({
+          student_name, sleep_hours, stress_level, motivation_level,
+          condition_level, pain_level, focus_level, study_level, note
+        });
+
+        // Notion 연동
+        await sendToNotion({
+          student_name, sleep_hours, stress_level, motivation_level,
+          condition_level, pain_level, focus_level, study_level, note
+        }, gptComment, totalScore);
+
+      } catch (e) {
+        console.error('GPT/Notion 오류:', e);
+      }
+
+      // 알림톡은 주석처리 생략
+
+      res.json({ success: true, comment: gptComment });
+    });
+  });
 });
+
 
 
 
