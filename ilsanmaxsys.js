@@ -1195,10 +1195,28 @@ router.post('/analyze-mental', async (req, res) => {
     condition_level = 3, pain_level = 3, focus_level = 3, study_level = 3
   } = req.body;
 
-  const prompt = `
+  const totalScore =
+  Number(sleep_hours) +
+  Number(motivation_level) +
+  Number(condition_level) +
+  Number(focus_level) +
+  Number(study_level) -
+  Number(stress_level) -
+  Number(pain_level);
+
+  // 부정적 항목 체크 (하나라도 2 이하인지)
+const badCheck =
+  Number(sleep_hours) <= 5 ||
+  Number(motivation_level) <= 2 ||
+  Number(condition_level) <= 2 ||
+  Number(focus_level) <= 2 ||
+  Number(study_level) <= 1;
+
+
+const prompt = `
 너는 체대입시 멘탈 컨설턴트야.
 
-다음은 체대입시 진학하는  학생이 제출한 멘탈 체크 결과야:
+다음은 체대입시 진학하는 학생이 제출한 멘탈 체크 결과야:
 
 - 수면시간: ${sleep_hours}시간
 - 스트레스 정도: ${stress_level}/5
@@ -1208,8 +1226,11 @@ router.post('/analyze-mental', async (req, res) => {
 - 운동 집중도: ${focus_level}/5
 - 학습 집중도: ${study_level}/5
 
-🧮 총점 계산법:
-수면시간 + 의욕 + 컨디션 + 운동집중도 + 학습집중도 - 스트레스 - 통증
+🧮 총점: ${totalScore}점
+(계산식: 수면시간 + 의욕 + 컨디션 + 운동집중도 + 학습집중도 - 스트레스 - 통증)
+
+👉 반드시 위의 총점(${totalScore})을 그대로 사용해서 상태를 평가하고,
+총점은 직접 다시 계산하지 말고 위에 적힌 값을 그대로 학생에게 안내해줘.
 
 📊 총점 기준:
 - 14점 이상: 양호
@@ -1226,11 +1247,9 @@ router.post('/analyze-mental', async (req, res) => {
 - 운동/학습 집중도: 4~5 좋음, 1~2 위험
 
 👉 너의 역할:
-1. 총점 기준으로 전체 상태 평가
+1. 총점 기준으로 전체 상태 평가 (총점은 반드시 위에서 제공한 값만 사용!)
 2. 각 항목별로 "좋은 점은 칭찬", "문제 있는 항목은 명확하게 경고 및 조언"
 3. 전체 문장은 3~6줄 이내로, 따뜻하면서도 구체적으로 작성
-
-
 `;
 
   try {
@@ -1243,15 +1262,7 @@ router.post('/analyze-mental', async (req, res) => {
 // GPT 분석 후
 const comment = completion.choices[0].message.content.trim();
 
-// 🧮 총점 계산
-const totalScore =
-  Number(sleep_hours) +
-  Number(motivation_level) +
-  Number(condition_level) +
-  Number(focus_level) +
-  Number(study_level) -
-  Number(stress_level) -
-  Number(pain_level);
+
 
 // 🔗 학생 이름 가져오기 (학생 정보도 필요하므로)
 const [studentRow] = await dbQuery(`SELECT name FROM students WHERE id = ?`, [req.body.student_id]);
@@ -1262,7 +1273,10 @@ if (studentRow) {
   };
 
   // Notion 전송
-  await sendToNotion(studentData, comment, totalScore);
+
+  if (totalScore <= 13 || badCheck) {
+    await sendToNotion(studentData, comment, totalScore);
+  }
 }
 
 res.json({ comment });
