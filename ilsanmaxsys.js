@@ -7,9 +7,16 @@ const { dbAcademy } = require('./college');
 const { OpenAI } = require('openai');
 require('dotenv').config();  // 👈 최상단에 추가!
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY  // 👈 환경변수에서 가져오기
-});
+const { Configuration, OpenAIApi } = require("openai");
+const { Client: NotionClient } = require("@notionhq/client");
+
+const openai = new OpenAIApi(new Configuration({
+  apiKey: process.env.OPENAI_API_KEY
+}));
+
+const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
+
+
 
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
 
@@ -922,65 +929,88 @@ router.get('/student-full-summary', async (req, res) => {
   }
 });
 
-router.post('/mental-check', (req, res) => {
+// 멘탈 체크 등록
+router.post('/college/mental-check', async (req, res) => {
   const {
-    student_id,
-    sleep_hours, stress_level, motivation_level,
-    condition_level, pain_level, focus_level, study_level,
-    note
+    student_id, student_name, sleep_hours = 0, stress_level = 3, motivation_level = 3,
+    condition_level = 3, pain_level = 3, focus_level = 3, study_level = 3, note = ''
   } = req.body;
 
-  if (!student_id) {
-    return res.status(400).json({ message: '❗ student_id는 필수입니다.' });
-  }
+  try {
+    // 중복 제출 방지
+    const [existing] = await db.execute(`
+      SELECT id FROM mental_check WHERE student_id = ? AND submitted_at = CURDATE()
+    `, [student_id]);
 
-  // ✅ 오늘 서버 기준 제출 여부 확인 (created_at 기준)
-  const checkSql = `
-    SELECT COUNT(*) AS count
-    FROM mental_check
-    WHERE student_id = ? AND DATE(created_at) = CURDATE()
-  `;
-
-  dbAcademy.query(checkSql, [student_id], (err, rows) => {
-    if (err) {
-      console.error('❌ 중복 확인 오류:', err);
-      return res.status(500).json({ message: 'DB 오류' });
+    if (existing.length > 0) {
+      return res.status(400).json({ message: '이미 오늘 체크를 완료했습니다.' });
     }
 
-    if (rows[0].count > 0) {
-      return res.status(400).json({ message: '🚫 오늘 이미 멘탈 체크를 제출했습니다.' });
-    }
-
-    // ✅ 제출 시간은 서버에서 자동 기록되므로 submitted_at 제거
-    const insertSql = `
+    // DB 저장
+    await db.execute(`
       INSERT INTO mental_check (
-        student_id,
-        sleep_hours, stress_level, motivation_level,
-        condition_level, pain_level, focus_level, study_level,
-        note
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+        student_id, sleep_hours, stress_level, motivation_level,
+        condition_level, pain_level, focus_level, study_level, note, submitted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
+    `, [
+      student_id, sleep_hours, stress_level, motivation_level,
+      condition_level, pain_level, focus_level, study_level, note
+    ]);
 
-    const values = [
-      student_id,
-      sleep_hours, stress_level, motivation_level,
-      condition_level, pain_level, focus_level, study_level,
-      note
-    ];
+    // 총점 계산
+    const score =
+      (parseFloat(sleep_hours) || 0) +
+      (parseFloat(motivation_level) || 0) +
+      (parseFloat(condition_level) || 0) +
+      (parseFloat(focus_level) || 0) +
+      (parseFloat(study_level) || 0) -
+      (parseFloat(stress_level) || 0) -
+      (parseFloat(pain_level) || 0);
+    const totalScore = Math.round(score * 10) / 10;
 
-    dbAcademy.query(insertSql, values, (err2, result) => {
-      if (err2) {
-        console.error('❌ 멘탈 평가 등록 실패:', err2);
-        return res.status(500).json({ message: 'DB 오류' });
-      }
-
-      res.json({
-        message: '✅ 멘탈 평가 저장 완료',
-        record_id: result.insertId
-      });
+    // GPT 분석
+    const gptComment = await analyzeMentalWithGPT({
+      student_name, sleep_hours, stress_level, motivation_level,
+      condition_level, pain_level, focus_level, study_level, note
     });
-  });
+
+    // Notion 연동
+    await sendToNotion({
+      student_name, sleep_hours, stress_level, motivation_level,
+      condition_level, pain_level, focus_level, study_level, note
+    }, gptComment, totalScore);
+
+    // 알림톡 (조건 충족 시) – 현재는 비활성화
+    /*
+    if (totalScore <= 9) {
+      const [rows] = await db.execute(`
+        SELECT i.phone FROM students s
+        JOIN instructors i ON s.instructor_id = i.id
+        WHERE s.id = ?
+      `, [student_id]);
+
+      if (rows.length > 0 && rows[0].phone) {
+        const phone = rows[0].phone;
+        await sendAlimTalk({
+          to: phone,
+          templateCode: 'm03',
+          content: `[멘탈케어 경고]
+${student_name} 학생이 오늘 멘탈 상태가 좋지 않습니다.
+
+AI 분석: ${gptComment}`
+        });
+      }
+    }
+    */
+
+    res.json({ success: true, comment: gptComment });
+
+  } catch (err) {
+    console.error('멘탈 체크 저장 오류:', err);
+    res.status(500).json({ message: '서버 오류 발생' });
+  }
 });
+
 
 
 router.get('/mental-check/:student_id', (req, res) => {
@@ -1211,8 +1241,33 @@ router.post('/analyze-mental', async (req, res) => {
       temperature: 0.7
     });
 
-    const comment = completion.choices[0].message.content.trim();
-    res.json({ comment });
+// GPT 분석 후
+const comment = completion.choices[0].message.content.trim();
+
+// 🧮 총점 계산
+const totalScore =
+  Number(sleep_hours) +
+  Number(motivation_level) +
+  Number(condition_level) +
+  Number(focus_level) +
+  Number(study_level) -
+  Number(stress_level) -
+  Number(pain_level);
+
+// 🔗 학생 이름 가져오기 (학생 정보도 필요하므로)
+const [studentRow] = await dbQuery(`SELECT name FROM students WHERE id = ?`, [req.body.student_id]);
+if (studentRow) {
+  const studentData = {
+    ...req.body,
+    student_name: studentRow.name
+  };
+
+  // Notion 전송
+  await sendToNotion(studentData, comment, totalScore);
+}
+
+res.json({ comment });
+
   } catch (e) {
     console.error('멘탈 GPT 분석 실패:', e);
     res.status(500).json({ message: 'GPT 분석 실패' });
@@ -1220,6 +1275,70 @@ router.post('/analyze-mental', async (req, res) => {
 });
 
 
+
+// 📌 Notion 연동 함수
+async function sendToNotion(data, gptComment, totalScore) {
+  try {
+    await notion.pages.create({
+      parent: { database_id: process.env.NOTION_DATABASE_ID },
+      properties: {
+        이름: {
+          title: [{ text: { content: data.student_name } }]
+        },
+        총점: {
+          number: totalScore
+        },
+        수면: {
+          number: parseFloat(data.sleep_hours)
+        },
+        스트레스: {
+          number: parseFloat(data.stress_level)
+        },
+        대학진학의욕: {
+          number: parseFloat(data.motivation_level)
+        },
+        컨디션: {
+          number: parseFloat(data.condition_level)
+        },
+        부상정도: {
+          number: parseFloat(data.pain_level)
+        },
+        운동집중도: {
+          number: parseFloat(data.focus_level)
+        },
+        학습집중도: {
+          number: parseFloat(data.study_level)
+        },
+        제출일: {
+          date: {
+            start: new Date().toISOString().split('T')[0]
+          }
+        },
+        AI분석: { // ✅ 여기에 분석 결과 저장
+          rich_text: [{
+            type: 'text',
+            text: { content: gptComment }
+          }]
+        }
+      },
+      children: [  // ✅ 본문 블럭으로도 저장 (선택사항)
+        {
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{
+              type: 'text',
+              text: { content: gptComment }
+            }]
+          }
+        }
+      ]
+    });
+    console.log(`✅ Notion에 멘탈 체크 전송 완료`);
+  } catch (e) {
+    console.error('❌ Notion 전송 실패:', e.message);
+  }
+}
 
 
 // 🎯 실기기록 + GPT 코멘트 API
@@ -1349,5 +1468,3 @@ function dbQuery(sql, params = []) {
   
   
     
-
-module.exports = router;
