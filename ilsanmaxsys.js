@@ -931,7 +931,7 @@ router.get('/student-full-summary', async (req, res) => {
 });
 
 // 멘탈 체크 등록
-router.post('/college/mental-check', async (req, res) => {
+router.post('/mental-check', async (req, res) => {
   const {
     student_id, student_name, sleep_hours = 0, stress_level = 3, motivation_level = 3,
     condition_level = 3, pain_level = 3, focus_level = 3, study_level = 3, note = ''
