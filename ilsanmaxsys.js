@@ -5,20 +5,21 @@ const crypto = require('crypto');
 
 const { dbAcademy } = require('./college');
 const { OpenAI } = require('openai');
-require('dotenv').config();  // 👈 최상단에 추가!
+require('dotenv').config();  // 👈 최상단에 유지!
 
-const { Configuration, OpenAIApi } = require("openai");
-const { Client: NotionClient } = require("@notionhq/client");
+const OpenAI = require('openai');
+const { Client: NotionClient } = require('@notionhq/client');
 
-const openai = new OpenAIApi(new Configuration({
+// ✅ OpenAI 초기화 (v4 방식)
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
-}));
+});
 
+// ✅ Notion 클라이언트 초기화
 const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
 
-
-
 console.log("✅ ilsanmaxsys 라우터 적용됨!");
+
 
 
 // 카카오/네이버 알림톡 세팅값
