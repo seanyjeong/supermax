@@ -7,7 +7,7 @@ const { dbAcademy } = require('./college');
 const { OpenAI } = require('openai');
 require('dotenv').config();  // 👈 최상단에 유지!
 
-const OpenAI = require('openai');
+
 const { Client: NotionClient } = require('@notionhq/client');
 
 // ✅ OpenAI 초기화 (v4 방식)
