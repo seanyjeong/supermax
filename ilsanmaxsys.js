@@ -1196,27 +1196,26 @@ router.post('/analyze-mental', async (req, res) => {
   } = req.body;
 
   const totalScore =
-  Number(sleep_hours) +
-  Number(motivation_level) +
-  Number(condition_level) +
-  Number(focus_level) +
-  Number(study_level) -
-  Number(stress_level) -
-  Number(pain_level);
+    Number(sleep_hours) +
+    Number(motivation_level) +
+    Number(condition_level) +
+    Number(focus_level) +
+    Number(study_level) -
+    Number(stress_level) -
+    Number(pain_level);
 
   // 부정적 항목 체크 (하나라도 2 이하인지)
-const badCheck =
-  Number(sleep_hours) <= 5 ||
-  Number(motivation_level) <= 2 ||
-  Number(condition_level) <= 2 ||
-  Number(focus_level) <= 2 ||
-  Number(study_level) <= 1;
+  const badCheck =
+    Number(sleep_hours) <= 5 ||
+    Number(motivation_level) <= 2 ||
+    Number(condition_level) <= 2 ||
+    Number(focus_level) <= 2 ||
+    Number(study_level) <= 1;
 
-
-const prompt = `
+  // 1. 학생에게 보여줄 코멘트 (따뜻한 버전)
+  const studentPrompt = `
 너는 체대입시 멘탈 컨설턴트야.
-
-다음은 체대입시 진학하는 학생이 제출한 멘탈 체크 결과야:
+학생이 제출한 멘탈 체크 결과는 아래와 같아.
 
 - 수면시간: ${sleep_hours}시간
 - 스트레스 정도: ${stress_level}/5
@@ -1226,67 +1225,81 @@ const prompt = `
 - 운동 집중도: ${focus_level}/5
 - 학습 집중도: ${study_level}/5
 
-🧮 총점: ${totalScore}점
-(계산식: 수면시간 + 의욕 + 컨디션 + 운동집중도 + 학습집중도 - 스트레스 - 통증)
+총점: ${totalScore}점
 
-👉 반드시 위의 총점(${totalScore})을 그대로 사용해서 상태를 평가하고,
-총점은 직접 다시 계산하지 말고 위에 적힌 값을 그대로 학생에게 안내해줘.
+너의 역할:
+1. 학생에게 따뜻하게 격려와 응원을 주고,
+2. 긍정적인 점은 칭찬, 부족한 점은 용기를 주며 개선 팁을 알려줘.
+3. 문장은 3~6줄로 짧고 명확하게 써줘.
+`;
 
-📊 총점 기준:
+  // 2. 강사(노션)용 코멘트 (관리전략/위험진단 버전)
+  const teacherPrompt = `
+너는 체대입시 전문 코치야.
+아래 학생의 멘탈 자가체크 데이터를 토대로, 강사용 상태 보고와 관리 전략을 작성해줘.
+
+- 수면시간: ${sleep_hours}시간
+- 스트레스: ${stress_level}/5
+- 대학진학 의욕: ${motivation_level}/5
+- 컨디션: ${condition_level}/5
+- 통증: ${pain_level}/5
+- 운동 집중도: ${focus_level}/5
+- 학습 집중도: ${study_level}/5
+- 총점: ${totalScore}점
+
+분석 기준:
 - 14점 이상: 양호
 - 10~13점: 주의
 - 6~9점: 위험
 - 5점 이하: 매우 위험
 
-⚠️ 개별 항목 기준:
-- 수면시간: 7시간 이상 좋음, 5시간 이하 위험
-- 스트레스: 1~2 좋음, 4~5 위험
-- 의욕: 4~5 좋음, 1~2 위험
-- 컨디션: 4~5 좋음, 1~2 위험
-- 통증: 1 안전, 4~5 위험
-- 운동/학습 집중도: 4~5 좋음, 1~2 위험
--스트레스, 통증 이 1일경우 문제없음.
-
-👉 너의 역할:
-1. 총점 기준으로 전체 상태 평가 (총점은 반드시 위에서 제공한 값만 사용!)
-2. 각 항목별로 "좋은 점은 칭찬", "문제 있는 항목은 명확하게 경고 및 조언"
-3. 전체 문장은 3~6줄 이내로, 따뜻하면서도 구체적으로 작성
+너의 역할:
+1. 객관적으로 현재 학생의 멘탈/컨디션을 진단 (최대 2줄)
+2. 우려되는 점(위험/부족/문제)만 딱 2~3개 지목
+3. 강사용 관리전략/코칭/면담법 등 실전 관리 팁을 제안 (최대 3줄)
+4. 학생 이름이나 “너/당신” 표현 없이, 강사용 보고서 느낌으로.
 `;
 
   try {
-    const completion = await openai.chat.completions.create({
+    // 1. 학생용 코멘트 생성
+    const studentRes = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: studentPrompt }],
       temperature: 0.7
     });
+    const studentComment = studentRes.choices[0].message.content.trim();
 
-// GPT 분석 후
-const comment = completion.choices[0].message.content.trim();
+    // 2. 강사용 코멘트 생성
+    const teacherRes = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [{ role: 'user', content: teacherPrompt }],
+      temperature: 0.7
+    });
+    const teacherComment = teacherRes.choices[0].message.content.trim();
 
+    // 🔗 학생 이름 가져오기 (학생 정보도 필요하므로)
+    const [studentRow] = await dbQuery(`SELECT name FROM students WHERE id = ?`, [req.body.student_id]);
+    if (studentRow) {
+      const studentData = {
+        ...req.body,
+        student_name: studentRow.name
+      };
 
+      // 조건부 노션 저장
+      if (totalScore <= 13 || badCheck) {
+        await sendToNotion(studentData, teacherComment, totalScore); // 노션엔 teacher용만!
+      }
+    }
 
-// 🔗 학생 이름 가져오기 (학생 정보도 필요하므로)
-const [studentRow] = await dbQuery(`SELECT name FROM students WHERE id = ?`, [req.body.student_id]);
-if (studentRow) {
-  const studentData = {
-    ...req.body,
-    student_name: studentRow.name
-  };
-
-  // Notion 전송
-
-  if (totalScore <= 13 || badCheck) {
-    await sendToNotion(studentData, comment, totalScore);
-  }
-}
-
-res.json({ comment });
+    // 학생 화면에는 studentComment만 반환!
+    res.json({ comment: studentComment });
 
   } catch (e) {
     console.error('멘탈 GPT 분석 실패:', e);
     res.status(500).json({ message: 'GPT 분석 실패' });
   }
 });
+
 
 
 
