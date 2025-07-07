@@ -1490,9 +1490,9 @@ async function sendAlimtalk(users, templateCode, contentBuilder) {
   const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
   const signature = crypto.createHmac('sha256', secretKey).update(hmac).digest('base64');
 
-const messages = users.map(u => ({
-  to: u.phone.replace(/[^0-9]/g, ''),
-  content: `
+  const messages = users.map(u => ({
+    to: u.phone.replace(/[^0-9]/g, ''),
+    content: `
 [일산맥스체대입시]
 
 현재 수강중인,
@@ -1500,20 +1500,19 @@ ${u.name} 학생의 자가멘탈체크
 
 10초도 걸리지 않으니, 빠르게 체크하자
 -절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!
-  `.trim(),
-  buttons: [
-    {
-      type: 'WL',
-      name: '자가멘탈체크',
-      linkMobile: 'https://ilsanmax.com/mental.html',
-      linkPc: ''
+    `.trim(),
+    buttons: [
+      {
+        type: 'WL',
+        name: '자가멘탈체크',
+        linkMobile: 'https://ilsanmax.com/mental.html',
+        linkPc: ''
+      }
+    ],
+    image: {
+      url: 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg'
     }
-  ],
-  image: {
-    url: 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg'   // 이미지 포함 옵션, 실제 img_l.jpg 경로로!
-  }
-}));
-
+  }));
 
   const body = {
     plusFriendId,
@@ -1521,20 +1520,28 @@ ${u.name} 학생의 자가멘탈체크
     messages
   };
 
-  const resp = await axios.post(
-    `https://sens.apigw.ntruss.com${uri}`,
-    body,
-    {
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'x-ncp-apigw-timestamp': timestamp,
-        'x-ncp-iam-access-key': accessKey,
-        'x-ncp-apigw-signature-v2': signature
+  // ⬇️ **여기 try-catch를 꼭 함수 안에서 감싸줘!**
+  try {
+    const resp = await axios.post(
+      `https://sens.apigw.ntruss.com${uri}`,
+      body,
+      {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'x-ncp-apigw-timestamp': timestamp,
+          'x-ncp-iam-access-key': accessKey,
+          'x-ncp-apigw-signature-v2': signature
+        }
       }
-    }
-  );
-  return resp.data;
+    );
+    return resp.data;
+  } catch (e) {
+    // 🚩🚩🚩 디버깅 로그는 여기에서!
+    console.error('[SENS 401에러 상세]', JSON.stringify(e.response?.data || e, null, 2));
+    throw e;
+  }
 }
+
 
 // ================================
 // 2. [최초] 멘탈체크 안내(m01) 발송 함수
