@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const crypto = require('crypto');
+const schedule = require('node-schedule');
+
 
 const { dbAcademy } = require('./college');
 const { OpenAI } = require('openai');
@@ -1576,8 +1578,9 @@ router.post('/test-send-mental', async (req, res) => {
 // ================================
 
 // [22:00] 전체 재원생 m01(최초) 안내
+// [22:00] 전체 재원생 m01(최초) 안내
 schedule.scheduleJob('0 22 * * *', async () => {
-  const [rows] = await dbAcademy.query(`
+  const rows = await dbQuery(`
     SELECT id, name, phone
     FROM students
     WHERE status = '재원'
@@ -1589,7 +1592,7 @@ schedule.scheduleJob('0 22 * * *', async () => {
 // [09:00] 오늘 미제출자만 m02(독려) 안내
 schedule.scheduleJob('0 9 * * *', async () => {
   const today = new Date().toISOString().slice(0, 10);
-  const [rows] = await dbAcademy.query(`
+  const rows = await dbQuery(`
     SELECT id, name, phone
     FROM students
     WHERE status = '재원'
@@ -1600,6 +1603,7 @@ schedule.scheduleJob('0 9 * * *', async () => {
   const users = rows.map(r => ({ name: r.name, phone: r.phone }));
   if (users.length > 0) await sendMentalReminder(users);
 });
+
 
 // ================================
 // 6. [수동발송] 직접 엔드포인트로 원하는 대상 보내기
