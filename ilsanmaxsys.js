@@ -1520,7 +1520,7 @@ async function sendAlimtalk(users, templateKey) {
         type: 'WL',
         name: '자가멘탈체크',
         linkMobile: mentalUrl,
-        linkPc: mentalUrl  // ★ 반드시 추가
+        linkPc:  '-'  // ★ 반드시 추가
       }
     ]
     // image 필드 X!
