@@ -1482,8 +1482,9 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 // ilsanmaxsys.js 라우터에 추가
 
+// ilsanmaxsys.js 라우터에 추가
+
 router.post('/test-send-mental-alimtalk', async (req, res) => {
-  // 하드코딩된 테스트 정보
   const testName = '정으뜸';
   const testPhone = '01021446765';
 
@@ -1495,12 +1496,20 @@ router.post('/test-send-mental-alimtalk', async (req, res) => {
 
   const messages = [{
     to: testPhone,
-    content: `[일산맥스체대입시]\n\n현재 수강중인,\n${testName} 학생의 자가멘탈체크\n\n10초도 걸리지 않으니, 빠르게 체크하자\n-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`
+    content: `[일산맥스체대입시]\n\n현재 수강중인,\n${testName} 학생의 자가멘탈체크\n\n10초도 걸리지 않으니, 빠르게 체크하자\n-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`,
+    buttons: [
+      {
+        type: 'WL', // 웹링크
+        name: '자가멘탈체크',
+        mobileUrl: 'https://ilsanmax.com/mental.html',
+        pcUrl: '' // PC는 비워둠
+      }
+    ]
   }];
 
   const body = {
     plusFriendId,
-    templateCode: 'm01', // 자가멘탈 알림톡 템플릿 코드 맞게 교체
+    templateCode: 'm01', // 자가멘탈 알림톡 템플릿 코드
     messages
   };
 
@@ -1523,6 +1532,7 @@ router.post('/test-send-mental-alimtalk', async (req, res) => {
     res.status(500).json({ message: '발송 실패', error: e.response?.data || e.message });
   }
 });
+
 
 
 
