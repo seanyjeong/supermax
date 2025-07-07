@@ -1487,7 +1487,7 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 // 템플릿/이미지/버튼
 const mentalUrl = 'https://ilsanmax.com/mental.html';
-const imgUrl = 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg';
+// const imgUrl = 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg';
 
 const TEMPLATES = {
   m01: {
@@ -1537,7 +1537,7 @@ async function sendAlimtalk(users, templateKey) {
         linkMobile: mentalUrl
       }
     ],
-    image: { url: imgUrl }
+   // image: { url: imgUrl }
   }));
 
   const body = {
