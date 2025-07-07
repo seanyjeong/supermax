@@ -1536,10 +1536,14 @@ ${u.name} 학생의 자가멘탈체크
     );
     return resp.data;
   } catch (e) {
-    // 🚩🚩🚩 디버깅 로그는 여기에서!
-    console.error('[SENS 401에러 상세]', JSON.stringify(e.response?.data || e, null, 2));
-    throw e;
+  if (e.response && e.response.data) {
+    console.error('\n\n[SENS ERROR]', JSON.stringify(e.response.data, null, 2), '\n\n');
+  } else {
+    console.error('[SENS ERROR - 기타]', e);
   }
+  throw e;
+}
+
 }
 
 
