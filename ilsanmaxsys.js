@@ -1501,7 +1501,7 @@ router.post('/test-send-mental-alimtalk', async (req, res) => {
       {
         type: 'WL', // 웹링크
         name: '자가멘탈체크',
-        mobileUrl: 'https://ilsanmax.com/mental.html',
+        linkMobile: 'https://ilsanmax.com/mental.html',
         pcUrl: '' // PC는 비워둠
       }
     ]
