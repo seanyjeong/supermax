@@ -1480,6 +1480,133 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 
 
+// ==== [멘탈 자가 체크 알림톡 스케줄러] ====
+// ※ ilsanmaxsys.js 맨 아래 module.exports = router; 다음에 붙여넣기!
+
+const schedule = require('node-schedule');
+
+// 템플릿/이미지/버튼
+const mentalUrl = 'https://ilsanmax.com/mental.html';
+const imgUrl = 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg';
+
+const TEMPLATES = {
+  m01: {
+    code: 'm01',
+    content: `[일산맥스체대입시]\n\n현재 수강중인,\n#{이름} 학생의 자가멘탈체크\n\n10초도 걸리지 않으니, 빠르게 체크하자\n-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`
+  },
+  m02: {
+    code: 'm02',
+    content: `[일산맥스체대입시]\n\n현재 수강중인,\n#{이름} 학생의 자가멘탈체크\n\n아직 멘탈체크를 하지 않았으니, 바로 부탁한다!\n10초도 걸리지 않으니, 빠르게 체크하자\n-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`
+  }
+};
+
+// 기존 ilsanmaxsys.js에서 이미 아래 값/모듈 다 선언되어 있음!
+/*
+const axios = require('axios');
+const crypto = require('crypto');
+const dbAcademy = ...
+const plusFriendId = '@일산맥스체대입시';
+const serviceId = 'ncp:kkobizmsg:kr:2842405:sean';
+const accessKey = 'A8zINaiL6JjWUNbT1uDB';
+const secretKey = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
+*/
+
+async function sendAlimtalk(users, templateKey) {
+  if (!users.length) return;
+  const template = TEMPLATES[templateKey];
+
+  const timestamp = Date.now().toString();
+  const uri = `/alimtalk/v2/services/${serviceId}/messages`;
+  const method = 'POST';
+  const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
+  const signature = crypto.createHmac('sha256', secretKey).update(hmac).digest('base64');
+
+  const messages = users.map(u => ({
+    to: u.phone.replace(/[^0-9]/g, ''),
+    content: template.content.replace('#{이름}', u.name),
+    buttons: [
+      {
+        type: 'WL',
+        name: '자가멘탈체크',
+        linkMobile: mentalUrl
+      }
+    ],
+    image: { url: imgUrl }
+  }));
+
+  const body = {
+    plusFriendId,
+    templateCode: template.code,
+    messages
+  };
+
+  try {
+    await axios.post(
+      `https://sens.apigw.ntruss.com${uri}`,
+      body,
+      {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'x-ncp-apigw-timestamp': timestamp,
+          'x-ncp-iam-access-key': accessKey,
+          'x-ncp-apigw-signature-v2': signature
+        }
+      }
+    );
+    console.log(`[${templateKey}] ${users.length}명 알림톡 발송 완료!`);
+  } catch (e) {
+    console.error('알림톡 발송 실패:', e.response?.data || e.message);
+  }
+}
+
+// 1. 2일에 한 번 23:00 (m01)
+schedule.scheduleJob('0 23 */2 * *', async () => {
+  dbAcademy.query(
+    `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`,
+    async (err, rows) => {
+      if (err) return console.error('학생 조회 오류:', err);
+      await sendAlimtalk(rows, 'm01');
+    }
+  );
+});
+
+// 2. 매일 8:00 (m02, 미입력자만)
+schedule.scheduleJob('0 8 * * *', async () => {
+  const yesterday = new Date(Date.now() - 24*60*60*1000);
+  const ymd = yesterday.toISOString().slice(0, 10);
+  dbAcademy.query(
+    `
+    SELECT s.id, s.name, s.phone 
+    FROM students s
+    LEFT JOIN (SELECT student_id FROM mental_check WHERE submitted_at = ?) mc
+      ON s.id = mc.student_id
+    WHERE s.status='재원' AND s.phone IS NOT NULL AND mc.student_id IS NULL
+    `,
+    [ymd],
+    async (err, rows) => {
+      if (err) return console.error('멘탈 미입력 학생 조회 오류:', err);
+      await sendAlimtalk(rows, 'm02');
+    }
+  );
+});
+
+console.log('멘탈 자가체크 알림톡 스케줄러 구동 시작됨!');
+
+
+// ====== 테스트용 멘탈 알림톡 단건 발송 라우터 ======
+router.post('/test-mental-alimtalk', async (req, res) => {
+  const { name = '테스트학생', templateKey = 'm01' } = req.body;
+
+  // 테스트 번호 (고정)
+  const phone = '01021446765';
+
+  try {
+    await sendAlimtalk([{ name, phone }], templateKey);
+    res.json({ success: true, message: `알림톡 ${templateKey} ${phone}로 발송 완료!` });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
 
 
 
