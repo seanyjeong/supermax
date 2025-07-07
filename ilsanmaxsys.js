@@ -1487,41 +1487,26 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 // 템플릿/이미지/버튼
 const mentalUrl = 'https://ilsanmax.com/mental.html';
-// const imgUrl = 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg';
 
 const TEMPLATES = {
   m01: {
     code: 'm01',
-    content: `[일산맥스체대입시]\n\n현재 수강중인,\n#{이름} 학생의 자가멘탈체크\n\n10초도 걸리지 않으니, 빠르게 체크하자\n-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`
-  },
-  m02: {
-    code: 'm02',
-    content: `[일산맥스체대입시]\n\n현재 수강중인,\n#{이름} 학생의 자가멘탈체크\n\n아직 멘탈체크를 하지 않았으니, 바로 부탁한다!\n10초도 걸리지 않으니, 빠르게 체크하자\n-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`
-  }
-};
+    content: `[일산맥스체대입시]
 
-// 기존 ilsanmaxsys.js에서 이미 아래 값/모듈 다 선언되어 있음!
-/*
-const axios = require('axios');
-const crypto = require('crypto');
-const dbAcademy = ...
-const plusFriendId = '@일산맥스체대입시';
-const serviceId = 'ncp:kkobizmsg:kr:2842405:sean';
-const accessKey = 'A8zINaiL6JjWUNbT1uDB';
-const secretKey = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
-*/
+현재 수강중인,
+#{이름} 학생의 자가멘탈체크
+
+10초도 걸리지 않으니, 빠르게 체크하자
+-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`
+  }
+  // m02도 필요하면 여기에 추가!
+};
 
 async function sendAlimtalk(users, templateKey) {
   if (!users.length) return;
   const template = TEMPLATES[templateKey];
 
   const timestamp = Date.now().toString();
-
-    console.log('==== 알림톡 디버깅용 ====');
-  console.log('NODE date:', new Date().toString());
-  console.log('timestamp(밀리초):', timestamp);
-  console.log('UTC date:', new Date().toUTCString());
-  console.log('========================');
   const uri = `/alimtalk/v2/services/${serviceId}/messages`;
   const method = 'POST';
   const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
@@ -1534,10 +1519,11 @@ async function sendAlimtalk(users, templateKey) {
       {
         type: 'WL',
         name: '자가멘탈체크',
-        linkMobile: mentalUrl
+        linkMobile: mentalUrl,
+        linkPc: mentalUrl  // ★ 반드시 추가
       }
-    ],
-   // image: { url: imgUrl }
+    ]
+    // image 필드 X!
   }));
 
   const body = {
@@ -1562,8 +1548,10 @@ async function sendAlimtalk(users, templateKey) {
     console.log(`[${templateKey}] ${users.length}명 알림톡 발송 완료!`);
   } catch (e) {
     console.error('알림톡 발송 실패:', e.response?.data || e.message);
+    throw e;
   }
 }
+
 
 // 1. 2일에 한 번 23:00 (m01)
 schedule.scheduleJob('0 23 */2 * *', async () => {
