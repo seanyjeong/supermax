@@ -1500,7 +1500,7 @@ router.post('/test-send-mental-alimtalk', async (req, res) => {
 
   const body = {
     plusFriendId,
-    templateCode: 'A06', // 자가멘탈 알림톡 템플릿 코드 맞게 교체
+    templateCode: 'm01', // 자가멘탈 알림톡 템플릿 코드 맞게 교체
     messages
   };
 
