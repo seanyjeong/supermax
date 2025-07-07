@@ -1536,21 +1536,14 @@ ${u.name} 학생의 자가멘탈체크
     );
     return resp.data;
   } catch (e) {
-if (e.response && e.response.data) {
-  console.error('\n\n[SENS ERROR RAW]', e.response.data);
-  try {
-    console.error('[SENS ERROR STR]', JSON.stringify(e.response.data, null, 2));
-  } catch (jsonErr) {
-    console.error('[SENS JSON.stringify 실패]', jsonErr);
+  if (e.response && e.response.data) {
+    console.error('[SENS ERROR]', JSON.stringify(e.response.data, null, 2));
+    if (e.response.data.error) {
+      console.error('[SENS ERROR DETAIL]', JSON.stringify(e.response.data.error, null, 2));
+    }
+  } else {
+    console.error('[SENS ERROR - 기타]', e);
   }
-  // 중첩된 object까지 강제로 펼치기
-  if (e.response.data.error && typeof e.response.data.error === 'object') {
-    console.error('[SENS ERROR - error 상세]', JSON.stringify(e.response.data.error, null, 2));
-  }
-} else {
-  console.error('[SENS ERROR - 기타]', e);
-}
-
   throw e;
 }
 
@@ -1597,7 +1590,7 @@ router.post('/test-send-mental', async (req, res) => {
     phone: '010-2144-6765'
   }];
   try {
-    await sendMentalAlimtalk(users);
+    await sendMentalReminder(users);
     res.json({ message: '테스트 전송 성공!' });
   } catch (e) {
     console.error('❌ test-send-mental 오류:', e);  // 👈 추가!
