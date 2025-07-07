@@ -1490,21 +1490,30 @@ async function sendAlimtalk(users, templateCode, contentBuilder) {
   const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
   const signature = crypto.createHmac('sha256', secretKey).update(hmac).digest('base64');
 
-  const messages = users.map(u => ({
-    to: u.phone.replace(/[^0-9]/g, ''),
-    content: contentBuilder(u),
-    buttons: [
-      {
-        type: 'WL',
-        name: '자가멘탈체크',
-        linkMobile: 'https://ilsanmax.com/mental.html',
-        linkPc: ''
-      }
-    ]
+const messages = users.map(u => ({
+  to: u.phone.replace(/[^0-9]/g, ''),
+  content: `
+[일산맥스체대입시]
+
+현재 수강중인,
+${u.name} 학생의 자가멘탈체크
+
+10초도 걸리지 않으니, 빠르게 체크하자
+-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!
+  `.trim(),
+  buttons: [
+    {
+      type: 'WL',
+      name: '자가멘탈체크',
+      linkMobile: 'https://ilsanmax.com/mental.html',
+      linkPc: ''
+    }
+  ],
   image: {
     url: 'https://ilsanmax.com/img_l.jpg'   // 이미지 포함 옵션, 실제 img_l.jpg 경로로!
   }
-  }));
+}));
+
 
   const body = {
     plusFriendId,
