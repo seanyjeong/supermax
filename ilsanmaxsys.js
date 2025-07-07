@@ -1561,17 +1561,18 @@ ${u.name} 학생의 자가멘탈체크
 // ================================
 router.post('/test-send-mental', async (req, res) => {
   const users = [{
-    name: '정으뜸',               // 너 이름(임의로 바꿔도 됨)
-    phone: '010-2144-6765'       // 너 번호(실제로!)
+    name: '정으뜸',
+    phone: '010-2144-6765'
   }];
   try {
-    await sendMentalAlimtalk(users); // m01
-    // await sendMentalReminder(users); // m02로 테스트시 주석 교체
+    await sendMentalAlimtalk(users);
     res.json({ message: '테스트 전송 성공!' });
   } catch (e) {
+    console.error('❌ test-send-mental 오류:', e);  // 👈 추가!
     res.status(500).json({ message: '테스트 실패', error: e.message });
   }
 });
+
 
 // ================================
 // 5. [자동발송] 스케줄러 (매일 22시, 09시)
