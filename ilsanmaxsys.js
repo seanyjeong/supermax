@@ -1479,6 +1479,150 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 
 
+async function sendAlimtalk(users, templateCode, contentBuilder) {
+  if (!Array.isArray(users) || users.length === 0) return;
+
+  const timestamp = Date.now().toString();
+  const uri = `/alimtalk/v2/services/${serviceId}/messages`;
+  const method = 'POST';
+  const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
+  const signature = crypto.createHmac('sha256', secretKey).update(hmac).digest('base64');
+
+  const messages = users.map(u => ({
+    to: u.phone.replace(/[^0-9]/g, ''),
+    content: contentBuilder(u),
+    buttons: [
+      {
+        type: 'WL',
+        name: '자가멘탈체크',
+        linkMobile: 'https://ilsanmax.com/mental.html',
+        linkPc: ''
+      }
+    ]
+    // 필요시 image: {url: 'https://ilsanmax.com/img_l.jpg'}
+  }));
+
+  const body = {
+    plusFriendId,
+    templateCode,
+    messages
+  };
+
+  const resp = await axios.post(
+    `https://sens.apigw.ntruss.com${uri}`,
+    body,
+    {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'x-ncp-apigw-timestamp': timestamp,
+        'x-ncp-iam-access-key': accessKey,
+        'x-ncp-apigw-signature-v2': signature
+      }
+    }
+  );
+  return resp.data;
+}
+
+// ================================
+// 2. [최초] 멘탈체크 안내(m01) 발송 함수
+// ================================
+async function sendMentalAlimtalk(users) {
+  return sendAlimtalk(users, 'm01', (u) => `
+[일산맥스체대입시]
+
+현재 수강중인,
+${u.name} 학생의 자가멘탈체크
+
+10초도 걸리지 않으니, 빠르게 체크하자
+-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!
+  `.trim());
+}
+
+// ================================
+// 3. [독려] 멘탈체크 미제출자(m02) 발송 함수
+// ================================
+async function sendMentalReminder(users) {
+  return sendAlimtalk(users, 'm02', (u) => `
+[일산맥스체대입시]
+
+현재 수강중인,
+${u.name} 학생의 자가멘탈체크
+
+아직 멘탈체크를 하지 않았으니, 바로 부탁한다!
+10초도 걸리지 않으니, 빠르게 체크하자
+-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!
+  `.trim());
+}
+
+// ================================
+// 4. [테스트용] 내 번호로 단건 발송 라우트
+// ================================
+router.post('/test-send-mental', async (req, res) => {
+  const users = [{
+    name: '정으뜸',               // 너 이름(임의로 바꿔도 됨)
+    phone: '010-2144-6765'       // 너 번호(실제로!)
+  }];
+  try {
+    await sendMentalAlimtalk(users); // m01
+    // await sendMentalReminder(users); // m02로 테스트시 주석 교체
+    res.json({ message: '테스트 전송 성공!' });
+  } catch (e) {
+    res.status(500).json({ message: '테스트 실패', error: e.message });
+  }
+});
+
+// ================================
+// 5. [자동발송] 스케줄러 (매일 22시, 09시)
+// ================================
+
+// [22:00] 전체 재원생 m01(최초) 안내
+schedule.scheduleJob('0 22 * * *', async () => {
+  const [rows] = await dbAcademy.query(`
+    SELECT id, name, phone
+    FROM students
+    WHERE status = '재원'
+  `);
+  const users = rows.map(r => ({ name: r.name, phone: r.phone }));
+  if (users.length > 0) await sendMentalAlimtalk(users);
+});
+
+// [09:00] 오늘 미제출자만 m02(독려) 안내
+schedule.scheduleJob('0 9 * * *', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const [rows] = await dbAcademy.query(`
+    SELECT id, name, phone
+    FROM students
+    WHERE status = '재원'
+      AND id NOT IN (
+        SELECT student_id FROM mental_check WHERE submitted_at = ?
+      )
+  `, [today]);
+  const users = rows.map(r => ({ name: r.name, phone: r.phone }));
+  if (users.length > 0) await sendMentalReminder(users);
+});
+
+// ================================
+// 6. [수동발송] 직접 엔드포인트로 원하는 대상 보내기
+// ================================
+router.post('/send-mental-alimtalk', async (req, res) => {
+  const users = req.body; // [{name, phone}]
+  try {
+    const result = await sendMentalAlimtalk(users);
+    res.json({ message: 'm01 발송 완료', result });
+  } catch (e) {
+    res.status(500).json({ message: '발송 실패', error: e.message });
+  }
+});
+router.post('/send-mental-reminder', async (req, res) => {
+  const users = req.body; // [{name, phone}]
+  try {
+    const result = await sendMentalReminder(users);
+    res.json({ message: 'm02 발송 완료', result });
+  } catch (e) {
+    res.status(500).json({ message: '발송 실패', error: e.message });
+  }
+});
+
 
 
 // 유틸성 DB Promise
