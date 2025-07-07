@@ -1516,6 +1516,12 @@ async function sendAlimtalk(users, templateKey) {
   const template = TEMPLATES[templateKey];
 
   const timestamp = Date.now().toString();
+
+    console.log('==== 알림톡 디버깅용 ====');
+  console.log('NODE date:', new Date().toString());
+  console.log('timestamp(밀리초):', timestamp);
+  console.log('UTC date:', new Date().toUTCString());
+  console.log('========================');
   const uri = `/alimtalk/v2/services/${serviceId}/messages`;
   const method = 'POST';
   const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
