@@ -1510,7 +1510,7 @@ ${u.name} 학생의 자가멘탈체크
     }
   ],
   image: {
-    url: 'https://ilsanmax.com/img_l.jpg'   // 이미지 포함 옵션, 실제 img_l.jpg 경로로!
+    url: 'https://mud-kage.kakao.com/dn/oi2LU/btsO5eBlgWs/ZZWYuRWj2XKvwvtr2Md9Ak/img_l.jpg'   // 이미지 포함 옵션, 실제 img_l.jpg 경로로!
   }
 }));
 
