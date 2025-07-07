@@ -1501,7 +1501,7 @@ async function sendAlimtalk(users, templateCode, contentBuilder) {
         linkPc: ''
       }
     ]
-    // 필요시 image: {url: 'https://ilsanmax.com/img_l.jpg'}
+image: {url: 'https://ilsanmax.com/img_l.jpg'}
   }));
 
   const body = {
