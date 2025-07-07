@@ -1483,7 +1483,7 @@ ${JSON.stringify(finalRecords, null, 2)}
 // ==== [멘탈 자가 체크 알림톡 스케줄러] ====
 // ※ ilsanmaxsys.js 맨 아래 module.exports = router; 다음에 붙여넣기!
 
-const schedule = require('node-schedule');
+
 
 // 템플릿/이미지/버튼
 const mentalUrl = 'https://ilsanmax.com/mental.html';
