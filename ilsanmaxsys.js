@@ -1536,11 +1536,21 @@ ${u.name} 학생의 자가멘탈체크
     );
     return resp.data;
   } catch (e) {
-  if (e.response && e.response.data) {
-    console.error('\n\n[SENS ERROR]', JSON.stringify(e.response.data, null, 2), '\n\n');
-  } else {
-    console.error('[SENS ERROR - 기타]', e);
+if (e.response && e.response.data) {
+  console.error('\n\n[SENS ERROR RAW]', e.response.data);
+  try {
+    console.error('[SENS ERROR STR]', JSON.stringify(e.response.data, null, 2));
+  } catch (jsonErr) {
+    console.error('[SENS JSON.stringify 실패]', jsonErr);
   }
+  // 중첩된 object까지 강제로 펼치기
+  if (e.response.data.error && typeof e.response.data.error === 'object') {
+    console.error('[SENS ERROR - error 상세]', JSON.stringify(e.response.data.error, null, 2));
+  }
+} else {
+  console.error('[SENS ERROR - 기타]', e);
+}
+
   throw e;
 }
 
