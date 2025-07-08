@@ -1607,9 +1607,16 @@ async function sendAlimtalkBatch(students, templateKey) {
 
 
 // 3일마다 23시 전체 발송 (m01)
-schedule.scheduleJob('0 23 */3 * *', async () => {
-  try {
-    const today = new Date().toISOString().slice(0, 10);
+// 3일마다 실행 플래그
+let lastSent = null;
+
+schedule.scheduleJob('0 23 * * *', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // lastSent가 null이거나, 3일 이상 지났으면 발송
+  if (!lastSent || (new Date(today) - new Date(lastSent)) >= 1000*60*60*24*3) {
+    lastSent = today;
+    // ... (여기서 m01 전체 발송 코드 실행)
     const students = await dbQuery(
       `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`
     );
@@ -1620,10 +1627,9 @@ schedule.scheduleJob('0 23 */3 * *', async () => {
       await sendAlimtalkBatch(students, 'm01');
       console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
     }
-  } catch (e) {
-    console.error('❌ 멘탈알림 전체 m01 발송 오류:', e);
   }
 });
+
 
 // 매일 오전 8시 미제출자 리마인드 (m02)
 schedule.scheduleJob('0 8 * * *', async () => {
