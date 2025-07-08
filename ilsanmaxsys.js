@@ -1534,6 +1534,119 @@ router.post('/test-send-mental-alimtalk', async (req, res) => {
 });
 
 
+// -------------------[멘탈 자가체크 알림톡 자동화 - ]-------------------
+
+// (1) 메시지 템플릿(내용) 변수
+const MENTAL_M01_MSG = `[일산맥스체대입시]
+
+현재 수강중인,
+#{이름} 학생의 자가멘탈체크
+
+10초도 걸리지 않으니, 빠르게 체크하자
+-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`;
+
+const MENTAL_M02_MSG = `[일산맥스체대입시]
+
+현재 수강중인,
+#{이름} 학생의 자가멘탈체크
+
+아직 멘탈체크를 하지 않았으니, 바로 부탁한다!
+10초도 걸리지 않으니, 빠르게 체크하자
+-절대 대충 하지말고 현재, 내 상황을 정확하게 체크 하길 바랄께!`;
+
+// (2) 알림톡 발송 함수 (m01/m02 자동 분기 + 이름치환)
+async function sendAlimtalkBatch(students, templateKey) {
+  if (!students || !students.length) return;
+  const timestamp = Date.now().toString();
+  const uri = `/alimtalk/v2/services/${serviceId}/messages`;
+  const method = 'POST';
+  const hmac = method + ' ' + uri + '\n' + timestamp + '\n' + accessKey;
+  const signature = crypto.createHmac('sha256', secretKey).update(hmac).digest('base64');
+
+  const bodyMsg = templateKey === 'm02' ? MENTAL_M02_MSG : MENTAL_M01_MSG;
+
+  const messages = students.map(s => ({
+    to: s.phone.replace(/[^0-9]/g, ''),
+    content: bodyMsg.replace('#{이름}', s.name),
+    buttons: [{
+      type: 'WL',
+      name: '자가멘탈체크',
+      linkMobile: 'https://ilsanmax.com/mental.html',
+      pcUrl: ''
+    }]
+  }));
+
+  const body = {
+    plusFriendId,
+    templateCode: templateKey,   // 'm01' 또는 'm02'
+    messages
+  };
+
+  await axios.post(`https://sens.apigw.ntruss.com${uri}`, body, {
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'x-ncp-apigw-timestamp': timestamp,
+      'x-ncp-iam-access-key': accessKey,
+      'x-ncp-apigw-signature-v2': signature
+    }
+  });
+}
+
+// (3) 스케줄러 자동화 (3일마다 전체 m01, 매일 8시 미제출자 m02)
+// mental_alarm_log 테이블 필요! (없으면 아래 쿼리로 생성)
+// CREATE TABLE IF NOT EXISTS mental_alarm_log (
+//   id INT AUTO_INCREMENT PRIMARY KEY,
+//   student_id INT NOT NULL,
+//   alarm_date DATE NOT NULL
+// );
+
+
+
+// 3일마다 23시 전체 발송 (m01)
+schedule.scheduleJob('0 23 */3 * *', async () => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const students = await dbQuery(
+      `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`
+    );
+    await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [today]);
+    if (students.length > 0) {
+      const logs = students.map(s => [s.id, today]);
+      await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
+      await sendAlimtalkBatch(students, 'm01');
+      console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
+    }
+  } catch (e) {
+    console.error('❌ 멘탈알림 전체 m01 발송 오류:', e);
+  }
+});
+
+// 매일 오전 8시 미제출자 리마인드 (m02)
+schedule.scheduleJob('0 8 * * *', async () => {
+  try {
+    // 어제 날짜(알림톡 발송일)
+    const alarmDate = new Date(Date.now() - 1000*60*60*24).toISOString().slice(0, 10);
+    const targets = await dbQuery(
+      `SELECT student_id FROM mental_alarm_log WHERE alarm_date = ?`, [alarmDate]
+    );
+    if (!targets.length) return;
+    const submitted = await dbQuery(
+      `SELECT student_id FROM mental_check WHERE submitted_at = ?`, [alarmDate]
+    );
+    const submittedSet = new Set(submitted.map(r => r.student_id));
+    const remindIds = targets.map(r => r.student_id).filter(id => !submittedSet.has(id));
+    if (!remindIds.length) return;
+    const remindStudents = await dbQuery(
+      `SELECT id, name, phone FROM students WHERE id IN (?)`, [remindIds]
+    );
+    await sendAlimtalkBatch(remindStudents, 'm02');
+    console.log(`✅ [멘탈알림] 리마인드 ${remindStudents.length}명 m02 발송 완료`);
+  } catch (e) {
+    console.error('❌ 멘탈알림 리마인드(m02) 오류:', e);
+  }
+});
+
+// -------------------[]-------------------
 
 
 
