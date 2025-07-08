@@ -4,6 +4,11 @@ const axios = require('axios');
 const crypto = require('crypto');
 const schedule = require('node-schedule');
 console.log(schedule.scheduledJobs);
+console.log('=== 등록된 스케줄러 목록 ===');
+Object.entries(schedule.scheduledJobs).forEach(([name, job]) => {
+  console.log(`- [${name}] next: ${job.nextInvocation()}`);
+});
+
 
 
 
