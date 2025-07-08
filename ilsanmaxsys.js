@@ -1485,8 +1485,8 @@ ${JSON.stringify(finalRecords, null, 2)}
 // ilsanmaxsys.js 라우터에 추가
 
 router.post('/test-send-mental-alimtalk', async (req, res) => {
-  const testName = '정으뜸';
-  const testPhone = '01021446765';
+  const testName = '박멩꽁이';
+  const testPhone = '01071511941';
 
   const timestamp = Date.now().toString();
   const uri = `/alimtalk/v2/services/${serviceId}/messages`;
