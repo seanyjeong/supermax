@@ -1569,7 +1569,9 @@ async function sendAlimtalkBatch(students, templateKey) {
 
   const bodyMsg = templateKey === 'm02' ? MENTAL_M02_MSG : MENTAL_M01_MSG;
 
-  const messages = students.map(s => ({
+const messages = students
+  .filter(s => s.phone && /^[0-9]{10,11}$/.test(s.phone.replace(/[^0-9]/g, '')))
+  .map(s => ({
     to: s.phone.replace(/[^0-9]/g, ''),
     content: bodyMsg.replace('#{이름}', s.name),
     buttons: [{
@@ -1579,6 +1581,7 @@ async function sendAlimtalkBatch(students, templateKey) {
       pcUrl: ''
     }]
   }));
+
 
   const body = {
     plusFriendId,
