@@ -1346,7 +1346,13 @@ async function sendToNotion(data, gptComment, totalScore) {
           date: {
             start: new Date().toISOString().split('T')[0]
           }
+
+
         },
+        기타메모: {  // <= 노션 DB에서 "기타메모" property 추가할 것
+    rich_text: [{ type: 'text', text: { content: data.note || '' } }]
+  },
+
         AI분석: { // ✅ 여기에 분석 결과 저장
           rich_text: [{
             type: 'text',
@@ -1367,6 +1373,7 @@ async function sendToNotion(data, gptComment, totalScore) {
         }
       ]
     });
+    
     console.log(`✅ Notion에 멘탈 체크 전송 완료`);
   } catch (e) {
     console.error('❌ Notion 전송 실패:', e.message);
@@ -1611,7 +1618,7 @@ const messages = students
 
 // 3일마다 23시 전체 발송 (m01)
 // 3일마다 실행 플래그
-let lastSent = null;
+let lastSent = '2025-07-10';
 
 schedule.scheduleJob('0 23 * * *', async () => {
   const today = new Date().toISOString().slice(0, 10);
@@ -1637,8 +1644,8 @@ schedule.scheduleJob('0 23 * * *', async () => {
 // 매일 오전 8시 미제출자 리마인드 (m02)
 schedule.scheduleJob('0 8 * * *', async () => {
   try {
-    // 어제 날짜(알림톡 발송일)
     const alarmDate = new Date(Date.now() - 1000*60*60*24).toISOString().slice(0, 10);
+    if (alarmDate < '2025-07-11') return;
     const targets = await dbQuery(
       `SELECT student_id FROM mental_alarm_log WHERE alarm_date = ?`, [alarmDate]
     );
@@ -1649,15 +1656,21 @@ schedule.scheduleJob('0 8 * * *', async () => {
     const submittedSet = new Set(submitted.map(r => r.student_id));
     const remindIds = targets.map(r => r.student_id).filter(id => !submittedSet.has(id));
     if (!remindIds.length) return;
+
+    // --- 이 부분 고침! ---
     const remindStudents = await dbQuery(
-      `SELECT id, name, phone FROM students WHERE id IN (?)`, [remindIds]
+      `SELECT id, name, phone FROM students WHERE id IN (${remindIds.map(() => '?').join(',')})`, remindIds
     );
+    // -------------------
+
+    if (!remindStudents.length) return;
     await sendAlimtalkBatch(remindStudents, 'm02');
     console.log(`✅ [멘탈알림] 리마인드 ${remindStudents.length}명 m02 발송 완료`);
   } catch (e) {
     console.error('❌ 멘탈알림 리마인드(m02) 오류:', e);
   }
 });
+
 
 // -------------------[]-------------------
 setTimeout(() => {
