@@ -1680,6 +1680,21 @@ setTimeout(() => {
   });
 }, 1000); // 서버 다 뜨고 1초 후!
 
+// ilsanmaxsys.js에 추가
+router.get('/all-mental-check', async (req, res) => {
+  try {
+    const sql = `
+      SELECT m.*, s.name AS student_name
+      FROM mental_check m
+      LEFT JOIN students s ON m.student_id = s.id
+      ORDER BY m.submitted_at DESC, m.student_id
+    `;
+    const rows = await dbQuery(sql);
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ message: 'DB 오류', error: e });
+  }
+});
 
 
 // 유틸성 DB Promise
