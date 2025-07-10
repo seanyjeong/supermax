@@ -1618,7 +1618,7 @@ const messages = students
 
 // 3일마다 23시 전체 발송 (m01)
 // 3일마다 실행 플래그
-let lastSent = '2025-07-10';
+let lastSent = '2025-07-11';
 
 schedule.scheduleJob('0 23 * * *', async () => {
   const today = new Date().toISOString().slice(0, 10);
