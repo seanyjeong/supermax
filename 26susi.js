@@ -1,4 +1,3 @@
-// ✅ 26수시 실기 점수 서버 (정확한 실기ID 기반 전체 배점 매칭 + 종목 리스트 분리 API 추가)
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
@@ -8,6 +7,7 @@ const port = 8080;
 app.use(cors());
 app.use(express.json());
 
+// ✅ DB 연결
 const db = mysql.createConnection({
   host: '211.37.174.218',
   user: 'maxilsan',
@@ -16,91 +16,84 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 1. 실기ID 목록 (학교 선택용)
+// ✅ 1. 대학/학과 목록 (대표 실기ID 1개만)
 app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
     SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명
     FROM \`26수시실기배점\`
     GROUP BY 대학명, 학과명, 전형명
-    ORDER BY 대학명, 학과명
+    ORDER BY 대학명
   `;
-  db.query(sql, (err, rows) => {
-    if (err) return res.status(500).json({ error: err });
-    res.json(rows);
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error('실기ID 목록 오류:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(results);
   });
 });
 
-// 2. 실기ID로 해당 종목 리스트만 (종목명 + 성별) 반환
-app.get('/26susi/practical-event-list', (req, res) => {
-  const { 실기ID } = req.query;
+// ✅ 2. 종목명+성별 목록 (실기ID 기반)
+app.get('/26susi/events/:id', (req, res) => {
+  const 실기ID = req.params.id;
   const sql = `
     SELECT DISTINCT 종목명, 성별
     FROM \`26수시실기배점\`
-    WHERE ID = ?
-    ORDER BY 종목명
+    WHERE 실기ID = ?
   `;
-  db.query(sql, [실기ID], (err, rows) => {
-    if (err) return res.status(500).json({ error: err });
-    res.json(rows);
+  db.query(sql, [실기ID], (err, results) => {
+    if (err) {
+      console.error('종목 조회 오류:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(results);
   });
 });
 
-// 3. 점수 계산
-app.post('/26susi/practical', (req, res) => {
-  const { 실기ID, 성별, 기록입력 } = req.body;
-  if (!실기ID || !기록입력 || !성별) return res.json({ error: '필수값 없음' });
+// ✅ 3. 기록입력 → 최저배점 계산 + 총점
+app.post('/26susi/calculate-score', (req, res) => {
+  const { 실기ID, gender, inputs } = req.body;
 
-  const infoSql = `SELECT 대학명, 학과명, 전형명 FROM \`26수시실기배점\` WHERE ID = ? LIMIT 1`;
-  db.query(infoSql, [실기ID], (err, infoRows) => {
-    if (err || !infoRows.length) return res.status(500).json({ error: '실기ID에 대한 학교정보 없음' });
+  console.log('[요청 들어옴]');
+  console.log('실기ID:', 실기ID);
+  console.log('성별:', gender);
+  console.log('입력값:', inputs);
 
-    const { 대학명, 학과명, 전형명 } = infoRows[0];
-
-    const sql = `SELECT * FROM \`26수시실기배점\` WHERE ID = ?`;
-    db.query(sql, [실기ID], (err, rows) => {
-      if (err || !rows.length) return res.status(500).json({ error: '배점표 없음' });
-
-      const 배점표 = rows.map(r => ({
-        종목명: r.종목명.trim(),
-        성별: r.성별.trim(),
-        기록: r.기록.toString().trim(),
-        배점: parseInt(r.배점)
-      }));
-
-      let total = 0;
-      const results = [];
-
-      for (const [event, recordRaw] of Object.entries(기록입력)) {
-        const record = recordRaw.toString().trim();
-        const isReverse = /m|런|run|10|20|100|왕복|z/i.test(event);
-
-        const 후보 = 배점표.filter(row => row.종목명 === event && row.성별 === 성별);
-        const target = parseFloat(record);
-        const 정렬 = 후보
-          .filter(r => !isNaN(parseFloat(r.기록)))
-          .sort((a, b) => isReverse
-            ? parseFloat(a.기록) - parseFloat(b.기록)
-            : parseFloat(b.기록) - parseFloat(a.기록));
-
-        let score = 0;
-        for (const row of 정렬) {
-          const 기준 = parseFloat(row.기록);
-          if ((isReverse && 기준 >= target) || (!isReverse && 기준 <= target)) {
-            score = row.배점;
-            break;
-          }
+  const tasks = inputs.map((input) => {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT 배점
+        FROM \`26수시실기배점\`
+        WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND 기록 <= ?
+        ORDER BY 기록 DESC
+        LIMIT 1
+      `;
+      db.query(sql, [실기ID, input.종목명, gender, input.기록], (err, rows) => {
+        if (err) {
+          console.error('배점 계산 오류:', err);
+          return reject(err);
         }
-        if (score === 0 && 정렬.length > 0) score = 정렬[정렬.length - 1].배점;
 
-        results.push({ event, record, score });
-        total += score;
-      }
-
-      res.json({ 실기ID, 대학명, 학과명, 전형명, 성별, total, details: results });
+        const 점수 = rows.length > 0 ? Number(rows[0].배점) : 0;
+        console.log(`▶ ${input.종목명} / 기록: ${input.기록} → 배점: ${점수}`);
+        resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
+      });
     });
   });
+
+  Promise.all(tasks)
+    .then(results => {
+      const 총점 = results.reduce((sum, row) => sum + row.배점, 0);
+      console.log('✅ 총점:', 총점);
+      res.json({ 종목별결과: results, 총점 });
+    })
+    .catch(err => {
+      console.error('배점 계산 실패:', err);
+      res.status(500).json({ message: '계산 오류', error: err });
+    });
 });
 
+// ✅ 서버 실행
 app.listen(port, () => {
-  console.log(`✅ 26susi 점수 서버 실행 중! http://localhost:${port}`);
+  console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
 });
