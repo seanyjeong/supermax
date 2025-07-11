@@ -70,13 +70,14 @@ app.post('/26susi/calculate-score', (req, res) => {
       const operator = reverse ? '>=' : '<=';
       const order = reverse ? 'ASC' : 'DESC';
 
-      const sql = `
-        SELECT 배점
-        FROM \`26수시실기배점\`
-        WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND 기록 ${operator} ?
-        ORDER BY 기록 ${order}
-        LIMIT 1
-      `;
+const sql = `
+  SELECT 배점
+  FROM \`26수시실기배점\`
+  WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) ${operator} ?
+  ORDER BY CAST(기록 AS DECIMAL(10,2)) ${order}
+  LIMIT 1
+`;
+
 
       db.query(sql, [실기ID, input.종목명, gender, input.기록], (err, rows) => {
         if (err) {
