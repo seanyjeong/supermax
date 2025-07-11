@@ -123,7 +123,7 @@ app.get('/26susi/practical-events', (req, res) => {
   const { 실기ID } = req.query;
   const sql = `
     SELECT DISTINCT 종목명, 성별
-    FROM practical_score_table_26su
+    FROM 26수시실기배점
     WHERE 실기ID = ?
   `;
   db.query(sql, [실기ID], (err, rows) => {
