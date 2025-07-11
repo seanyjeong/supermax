@@ -24,19 +24,17 @@ const isReverseEvent = (eventName) => {
 // ✅ 1. 대학/학과 선택용 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
-    SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명
+    SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명, 성별
     FROM \`26수시실기배점\`
-    GROUP BY 대학명, 학과명, 전형명
+    GROUP BY 대학명, 학과명, 전형명, 성별
     ORDER BY 대학명
   `;
   db.query(sql, (err, results) => {
-    if (err) {
-      console.error('실기ID 목록 오류:', err);
-      return res.status(500).json({ message: 'DB 오류' });
-    }
+    if (err) return res.status(500).json({ message: 'DB 오류' });
     res.json(results);
   });
 });
+
 
 // ✅ 2. 종목명 + 성별 리스트
 app.get('/26susi/events/:id', (req, res) => {
