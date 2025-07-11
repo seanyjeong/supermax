@@ -7,7 +7,6 @@ const port = 8080;
 app.use(cors());
 app.use(express.json());
 
-// ✅ DB 연결
 const db = mysql.createConnection({
   host: '211.37.174.218',
   user: 'maxilsan',
@@ -16,7 +15,13 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// ✅ 1. 대학/학과 목록 (대표 실기ID 1개만)
+// ✅ isReverse 판별 함수
+const isReverseEvent = (eventName) => {
+  const lower = eventName.toLowerCase();
+  return ['10', '20', 'run', '100', 'z', '달리기'].some(keyword => lower.includes(keyword));
+};
+
+// ✅ 1. 대학/학과 선택용 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
     SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명
@@ -33,7 +38,7 @@ app.get('/26susi/practical-ids', (req, res) => {
   });
 });
 
-// ✅ 2. 종목명+성별 목록 (실기ID 기반)
+// ✅ 2. 종목명 + 성별 리스트
 app.get('/26susi/events/:id', (req, res) => {
   const 실기ID = req.params.id;
   const sql = `
@@ -50,32 +55,37 @@ app.get('/26susi/events/:id', (req, res) => {
   });
 });
 
-// ✅ 3. 기록입력 → 최저배점 계산 + 총점
+// ✅ 3. 배점 계산 API
 app.post('/26susi/calculate-score', (req, res) => {
   const { 실기ID, gender, inputs } = req.body;
 
-  console.log('[요청 들어옴]');
+  console.log('📥 요청 도착');
   console.log('실기ID:', 실기ID);
   console.log('성별:', gender);
-  console.log('입력값:', inputs);
+  console.log('입력 기록:', inputs);
 
   const tasks = inputs.map((input) => {
     return new Promise((resolve, reject) => {
+      const reverse = isReverseEvent(input.종목명);
+      const operator = reverse ? '>=' : '<=';
+      const order = reverse ? 'ASC' : 'DESC';
+
       const sql = `
         SELECT 배점
         FROM \`26수시실기배점\`
-        WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND 기록 <= ?
-        ORDER BY 기록 DESC
+        WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND 기록 ${operator} ?
+        ORDER BY 기록 ${order}
         LIMIT 1
       `;
+
       db.query(sql, [실기ID, input.종목명, gender, input.기록], (err, rows) => {
         if (err) {
-          console.error('배점 계산 오류:', err);
+          console.error('배점 쿼리 오류:', err);
           return reject(err);
         }
 
         const 점수 = rows.length > 0 ? Number(rows[0].배점) : 0;
-        console.log(`▶ ${input.종목명} / 기록: ${input.기록} → 배점: ${점수}`);
+        console.log(`▶ ${input.종목명} (${reverse ? '작을수록 높음' : '클수록 높음'}) → 기록: ${input.기록} → 배점: ${점수}`);
         resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
       });
     });
