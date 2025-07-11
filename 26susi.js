@@ -104,14 +104,18 @@ app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
     SELECT DISTINCT 실기ID, 대학명, 학과명, 전형명
     FROM practical_score_table_26su
-    WHERE 실기ID IS NOT NULL AND 실기ID != ''
+    WHERE 실기ID IS NOT NULL AND 실기ID != 0
     ORDER BY 대학명, 학과명, 전형명
   `;
   db.query(sql, (err, rows) => {
-    if (err) return res.status(500).json({ error: err });
+    if (err) {
+      console.log('SQL ERROR:', err); // ← 반드시 콘솔에서 에러 내용 확인!
+      return res.status(500).json({ error: err });
+    }
     res.json(rows);
   });
 });
+
 
 // (이미 있음) /26susi/practical-events 라우터도 필요!
 app.get('/26susi/practical-events', (req, res) => {
