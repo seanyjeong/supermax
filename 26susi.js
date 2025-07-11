@@ -64,7 +64,7 @@ app.post('/26susi/practical', (req, res) => {
       let sql;
       if (/^[A-Za-z]$/.test(record)) {
         sql = `
-          SELECT 배점 FROM practical_score_table_26su
+          SELECT 배점 FROM 26수시실기배점
            WHERE 실기ID=? AND 종목명=? AND 성별=? AND 기록=?
            LIMIT 1
         `;
@@ -80,10 +80,10 @@ app.post('/26susi/practical', (req, res) => {
         checkEvent(idx + 1);
       } else {
         sql = isReverse
-          ? `SELECT 배점 FROM practical_score_table_26su
+          ? `SELECT 배점 FROM 26수시실기배점
                WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) >= ? 
                ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`
-          : `SELECT 배점 FROM practical_score_table_26su
+          : `SELECT 배점 FROM 26수시실기배점
                WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) <= ? 
                ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`;
 
