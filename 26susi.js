@@ -4,11 +4,9 @@ const mysql = require('mysql2');
 const app = express();
 const port = 8080;
 
-// CORS 설정
 app.use(cors());
-app.use(express.json()); // JSON 바디 파싱
+app.use(express.json());
 
-// CORS preflight 처리
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, PUT, DELETE');
@@ -17,7 +15,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// DB 연결
 const db = mysql.createConnection({
   host: '211.37.174.218',
   user: 'maxilsan',
@@ -26,82 +23,81 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 점수 매칭 함수 (isReverse, cb 모두 확실하게)
+// 🔍 점수 매칭 함수
 function getScore(실기ID, event, 성별, record, isReverse, cb) {
+  console.log(`🟡 getScore():`, { 실기ID, event, 성별, record, isReverse });
+
   if (/^[A-Za-z]$/.test(record)) {
-    // 등급(알파벳)
     const sql = `
       SELECT 배점 FROM \`26수시실기배점\`
-      WHERE 실기ID=? AND 종목명=? AND 성별=? AND 기록=?
+      WHERE ID=? AND 종목명=? AND 성별=? AND 기록=?
       LIMIT 1
     `;
+    console.log(`🔍 [등급] SQL: ${sql}`);
     db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
-      if (err) return cb(0);
+      if (err) {
+        console.error('❌ 등급 쿼리 에러:', err);
+        return cb(0);
+      }
+      console.log(`✅ 등급 매칭 결과:`, rows);
       if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
       cb(0);
     });
   } else if (/^pass$/i.test(record) || /^fail$/i.test(record)) {
+    console.log(`✅ PASS/FAIL 입력됨: ${record}`);
     cb(record.toLowerCase() === 'pass' ? 100 : 0);
   } else {
-    // 숫자 기록
-    if (isReverse) {
-      // 기록이 작을수록 점수 높음 (달리기)
-      const sql = `
-        SELECT 배점 FROM \`26수시실기배점\`
-        WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) >= ?
-        ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1
-      `;
-      db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
-        if (err) return cb(0);
-        if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
-        // 값 없으면 "최대 기록"의 배점 반환
-        db.query(
-          `SELECT 배점 FROM \`26수시실기배점\`
-           WHERE 실기ID=? AND 종목명=? AND 성별=?
-           ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`,
-          [실기ID, event, 성별],
-          (err2, minRows) => {
-            if (minRows.length > 0) return cb(parseInt(minRows[0].배점, 10));
-            cb(0);
-          }
-        );
+    const baseSQL = isReverse
+      ? `SELECT 배점 FROM \`26수시실기배점\`
+         WHERE ID=? AND 종목명=? AND 성별=? AND CAST(TRIM(기록) AS DECIMAL) >= ?
+         ORDER BY CAST(TRIM(기록) AS DECIMAL) ASC LIMIT 1`
+      : `SELECT 배점 FROM \`26수시실기배점\`
+         WHERE ID=? AND 종목명=? AND 성별=? AND CAST(TRIM(기록) AS DECIMAL) <= ?
+         ORDER BY CAST(TRIM(기록) AS DECIMAL) DESC LIMIT 1`;
+
+    console.log(`🔍 [숫자기록] 쿼리:`, baseSQL, [실기ID, event, 성별, record]);
+
+    db.query(baseSQL, [실기ID, event, 성별, record], (err, rows) => {
+      if (err) {
+        console.error('❌ 숫자기록 쿼리 에러:', err);
+        return cb(0);
+      }
+      if (rows.length > 0) {
+        console.log(`✅ 숫자 매칭 성공:`, rows);
+        return cb(parseInt(rows[0].배점, 10));
+      }
+
+      // 🔁 매칭 없으면 보정 (최소값 or 최대값)
+      const fallbackSQL = isReverse
+        ? `SELECT 배점 FROM \`26수시실기배점\` WHERE ID=? AND 종목명=? AND 성별=? ORDER BY CAST(TRIM(기록) AS DECIMAL) ASC LIMIT 1`
+        : `SELECT 배점 FROM \`26수시실기배점\` WHERE ID=? AND 종목명=? AND 성별=? ORDER BY CAST(TRIM(기록) AS DECIMAL) DESC LIMIT 1`;
+
+      console.log('⚠️ 매칭 안 됨. 보정 쿼리:', fallbackSQL);
+
+      db.query(fallbackSQL, [실기ID, event, 성별], (err2, fallbackRows) => {
+        if (err2) {
+          console.error('❌ fallback 쿼리 에러:', err2);
+          return cb(0);
+        }
+        console.log(`🟢 fallback 결과:`, fallbackRows);
+        if (fallbackRows.length > 0) return cb(parseInt(fallbackRows[0].배점, 10));
+        cb(0);
       });
-    } else {
-      // 기록이 클수록 점수 높음 (제멀, 윗몸 등)
-      const sql = `
-        SELECT 배점 FROM \`26수시실기배점\`
-        WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) <= ?
-        ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1
-      `;
-      db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
-        if (err) return cb(0);
-        if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
-        // 값 없으면 "최소 기록"의 배점 반환
-        db.query(
-          `SELECT 배점 FROM \`26수시실기배점\`
-           WHERE 실기ID=? AND 종목명=? AND 성별=?
-           ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`,
-          [실기ID, event, 성별],
-          (err2, maxRows) => {
-            if (maxRows.length > 0) return cb(parseInt(maxRows[0].배점, 10));
-            cb(0);
-          }
-        );
-      });
-    }
+    });
   }
 }
 
-// 실기 점수 계산 라우터
+// 🧪 점수 계산 API
 app.post('/26susi/practical', (req, res) => {
   const { 실기ID, 성별, 기록입력 } = req.body;
   const eventNames = Object.keys(기록입력 || {});
   if (!실기ID || eventNames.length === 0) return res.json({ error: "실기ID, 기록입력 필요", total: 0, details: [] });
 
-  // 실기ID로 대학정보(대학명, 학과명, 전형명) 가져오기
+  console.log(`🔵 실기ID ${실기ID}에 대한 기록입력:`, 기록입력);
+
   const infoSql = `
     SELECT 대학명, 학과명, 전형명 FROM \`26수시실기배점\`
-    WHERE 실기ID=? LIMIT 1
+    WHERE ID=? LIMIT 1
   `;
   db.query(infoSql, [실기ID], (err, infoRows) => {
     if (err || !infoRows.length) return res.status(404).json({ error: "실기ID에 해당하는 대학정보 없음" });
@@ -124,9 +120,10 @@ app.post('/26susi/practical', (req, res) => {
       }
       const event = eventNames[idx];
       const record = 기록입력[event];
-      // 여기서 isReverse 자동 감지
       const isReverse = /m|런|run|10|20|100|왕복|z/i.test(event);
+
       getScore(실기ID, event, 성별, record, isReverse, (score) => {
+        console.log(`✅ 계산된 점수: ${event} (${record}) → ${score}`);
         results.push({ event, record, score });
         total += score;
         checkEvent(idx + 1);
@@ -136,12 +133,12 @@ app.post('/26susi/practical', (req, res) => {
   });
 });
 
-// 실기ID + 대학명 + 학과명 + 전형명 목록 (프론트 드롭다운용)
+// 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
-    SELECT DISTINCT 실기ID, 대학명, 학과명, 전형명
+    SELECT DISTINCT ID as 실기ID, 대학명, 학과명, 전형명
     FROM \`26수시실기배점\`
-    WHERE 실기ID IS NOT NULL AND 실기ID != 0
+    WHERE ID IS NOT NULL AND ID != 0
     ORDER BY 대학명, 학과명, 전형명
   `;
   db.query(sql, (err, rows) => {
@@ -153,13 +150,13 @@ app.get('/26susi/practical-ids', (req, res) => {
   });
 });
 
-// 종목 목록
+// 종목목록
 app.get('/26susi/practical-events', (req, res) => {
   const { 실기ID } = req.query;
   const sql = `
     SELECT DISTINCT 종목명, 성별
     FROM \`26수시실기배점\`
-    WHERE 실기ID = ?
+    WHERE ID = ?
   `;
   db.query(sql, [실기ID], (err, rows) => {
     if (err) return res.status(500).json({ error: err });
@@ -167,7 +164,7 @@ app.get('/26susi/practical-events', (req, res) => {
   });
 });
 
-// 서버 실행
+// 서버 시작
 app.listen(port, () => {
   console.log(`✅ 26susi 점수 서버 실행 중! http://localhost:${port}/26susi/practical`);
 });
