@@ -6,7 +6,7 @@ const port = 8080;
 
 // CORS 설정
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // JSON 바디 파싱
 
 // CORS preflight 처리
 app.use((req, res, next) => {
@@ -26,10 +26,8 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-function getScore(실기ID, event, 성별, record, cb) {
-  // isReverse 판별 (달리기류/런/100m/20m/왕복 등)
-  const isReverse = /m|런|run|10|20|100|왕복|z/i.test(event);
-
+// 점수 매칭 함수 (isReverse, cb 모두 확실하게)
+function getScore(실기ID, event, 성별, record, isReverse, cb) {
   if (/^[A-Za-z]$/.test(record)) {
     // 등급(알파벳)
     const sql = `
@@ -47,7 +45,7 @@ function getScore(실기ID, event, 성별, record, cb) {
   } else {
     // 숫자 기록
     if (isReverse) {
-      // 기록이 작을수록 점수 높음 (ex. 달리기)
+      // 기록이 작을수록 점수 높음 (달리기)
       const sql = `
         SELECT 배점 FROM \`26수시실기배점\`
         WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) >= ?
@@ -58,7 +56,9 @@ function getScore(실기ID, event, 성별, record, cb) {
         if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
         // 값 없으면 "최대 기록"의 배점 반환
         db.query(
-          `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID=? AND 종목명=? AND 성별=? ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`,
+          `SELECT 배점 FROM \`26수시실기배점\`
+           WHERE 실기ID=? AND 종목명=? AND 성별=?
+           ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`,
           [실기ID, event, 성별],
           (err2, minRows) => {
             if (minRows.length > 0) return cb(parseInt(minRows[0].배점, 10));
@@ -67,7 +67,7 @@ function getScore(실기ID, event, 성별, record, cb) {
         );
       });
     } else {
-      // 기록이 클수록 점수 높음 (ex. 제멀, 윗몸 등)
+      // 기록이 클수록 점수 높음 (제멀, 윗몸 등)
       const sql = `
         SELECT 배점 FROM \`26수시실기배점\`
         WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) <= ?
@@ -78,7 +78,9 @@ function getScore(실기ID, event, 성별, record, cb) {
         if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
         // 값 없으면 "최소 기록"의 배점 반환
         db.query(
-          `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID=? AND 종목명=? AND 성별=? ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`,
+          `SELECT 배점 FROM \`26수시실기배점\`
+           WHERE 실기ID=? AND 종목명=? AND 성별=?
+           ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`,
           [실기ID, event, 성별],
           (err2, maxRows) => {
             if (maxRows.length > 0) return cb(parseInt(maxRows[0].배점, 10));
@@ -89,7 +91,6 @@ function getScore(실기ID, event, 성별, record, cb) {
     }
   }
 }
-
 
 // 실기 점수 계산 라우터
 app.post('/26susi/practical', (req, res) => {
@@ -123,8 +124,8 @@ app.post('/26susi/practical', (req, res) => {
       }
       const event = eventNames[idx];
       const record = 기록입력[event];
-      const isReverse = /m|런|run|10|20|100|z/i.test(event);
-
+      // 여기서 isReverse 자동 감지
+      const isReverse = /m|런|run|10|20|100|왕복|z/i.test(event);
       getScore(실기ID, event, 성별, record, isReverse, (score) => {
         results.push({ event, record, score });
         total += score;
