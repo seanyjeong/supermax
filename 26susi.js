@@ -24,22 +24,32 @@ const isReverseEvent = (eventName) => {
 // ✅ 1. 대학/학과 선택용 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
-SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명, 성별
-FROM \`26수시실기배점\`
-GROUP BY 대학명, 학과명, 전형명, 성별
-ORDER BY 대학명
-
+    SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명, 성별
+    FROM \`26수시실기배점\`
+    GROUP BY 대학명, 학과명, 전형명, 성별
+    ORDER BY 대학명
   `;
   db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ message: 'DB 오류' });
+    if (err) {
+      console.error('❌ [실기ID 목록 조회 오류]', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+
+    console.log('\n📌 [실기ID 목록 응답]');
+    results.forEach(r => {
+      console.log(`▶ 실기ID: ${r.실기ID} | ${r.대학명} / ${r.학과명} / ${r.전형명} / ${r.성별}`);
+    });
+
     res.json(results);
   });
 });
 
 
+
 // ✅ 2. 종목명 + 성별 리스트
 app.get('/26susi/events/:id', (req, res) => {
   const 실기ID = req.params.id;
+
   const sql = `
     SELECT DISTINCT 종목명, 성별
     FROM \`26수시실기배점\`
@@ -47,12 +57,23 @@ app.get('/26susi/events/:id', (req, res) => {
   `;
   db.query(sql, [실기ID], (err, results) => {
     if (err) {
-      console.error('종목 조회 오류:', err);
+      console.error('❌ [종목 조회 오류]', err);
       return res.status(500).json({ message: 'DB 오류' });
     }
+
+    console.log(`\n📌 [실기ID ${실기ID} 종목 조회 결과]`);
+    if (results.length === 0) {
+      console.warn('⚠️ 종목 없음');
+    } else {
+      results.forEach(r => {
+        console.log(`▶ 종목: ${r.종목명}, 성별: ${r.성별}`);
+      });
+    }
+
     res.json(results);
   });
 });
+
 
 // ✅ 3. 배점 계산 API
 app.post('/26susi/calculate-score', (req, res) => {
