@@ -1,4 +1,4 @@
-// ✅ 26수시 실기 점수 서버 (정확한 실기ID 기반 전체 배점 매칭 + 디버깅 포함)
+// ✅ 26수시 실기 점수 서버 (정확한 실기ID 기반 전체 배점 매칭 + 종목 리스트 분리 API 추가)
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
@@ -30,14 +30,14 @@ app.get('/26susi/practical-ids', (req, res) => {
   });
 });
 
-// 2. 실기ID로 해당 배점표 전체 가져오기 (종목/기록/배점/성별)
-app.get('/26susi/practical-events', (req, res) => {
+// 2. 실기ID로 해당 종목 리스트만 (종목명 + 성별) 반환
+app.get('/26susi/practical-event-list', (req, res) => {
   const { 실기ID } = req.query;
   const sql = `
-    SELECT 종목명, 성별, 기록, 배점
+    SELECT DISTINCT 종목명, 성별
     FROM \`26수시실기배점\`
     WHERE ID = ?
-    ORDER BY 종목명, CAST(TRIM(기록) AS DECIMAL) DESC
+    ORDER BY 종목명
   `;
   db.query(sql, [실기ID], (err, rows) => {
     if (err) return res.status(500).json({ error: err });
@@ -50,7 +50,6 @@ app.post('/26susi/practical', (req, res) => {
   const { 실기ID, 성별, 기록입력 } = req.body;
   if (!실기ID || !기록입력 || !성별) return res.json({ error: '필수값 없음' });
 
-  // 대학 정보 포함해서 가져오기
   const infoSql = `SELECT 대학명, 학과명, 전형명 FROM \`26수시실기배점\` WHERE ID = ? LIMIT 1`;
   db.query(infoSql, [실기ID], (err, infoRows) => {
     if (err || !infoRows.length) return res.status(500).json({ error: '실기ID에 대한 학교정보 없음' });
