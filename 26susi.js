@@ -138,13 +138,12 @@ app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
     SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명
     FROM \`26수시실기배점\`
-    WHERE ID IS NOT NULL
     GROUP BY 대학명, 학과명, 전형명
     ORDER BY 대학명, 학과명
   `;
   db.query(sql, (err, rows) => {
     if (err) {
-      console.error('❌ 실기ID 목록 쿼리 에러:', err);
+      console.error('❌ school list error:', err);
       return res.status(500).json({ error: err });
     }
     res.json(rows);
@@ -152,19 +151,25 @@ app.get('/26susi/practical-ids', (req, res) => {
 });
 
 
+
 // 종목목록
 app.get('/26susi/practical-events', (req, res) => {
   const { 실기ID } = req.query;
   const sql = `
-    SELECT DISTINCT 종목명, 성별
+    SELECT 종목명, 성별, 기록, 배점
     FROM \`26수시실기배점\`
     WHERE ID = ?
+    ORDER BY 종목명, CAST(TRIM(기록) AS DECIMAL) DESC
   `;
   db.query(sql, [실기ID], (err, rows) => {
-    if (err) return res.status(500).json({ error: err });
+    if (err) {
+      console.error('❌ 종목 불러오기 에러:', err);
+      return res.status(500).json({ error: err });
+    }
     res.json(rows);
   });
 });
+
 
 // 서버 시작
 app.listen(port, () => {
