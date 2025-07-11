@@ -99,6 +99,35 @@ app.post('/26susi/practical', (req, res) => {
   });
 });
 
+// 실기ID + 대학명 + 학과명 + 전형명 목록 (프론트 드롭다운용)
+app.get('/26susi/practical-ids', (req, res) => {
+  const sql = `
+    SELECT DISTINCT 실기ID, 대학명, 학과명, 전형명
+    FROM practical_score_table_26su
+    WHERE 실기ID IS NOT NULL AND 실기ID != ''
+    ORDER BY 대학명, 학과명, 전형명
+  `;
+  db.query(sql, (err, rows) => {
+    if (err) return res.status(500).json({ error: err });
+    res.json(rows);
+  });
+});
+
+// (이미 있음) /26susi/practical-events 라우터도 필요!
+app.get('/26susi/practical-events', (req, res) => {
+  const { 실기ID } = req.query;
+  const sql = `
+    SELECT DISTINCT 종목명, 성별
+    FROM practical_score_table_26su
+    WHERE 실기ID = ?
+  `;
+  db.query(sql, [실기ID], (err, rows) => {
+    if (err) return res.status(500).json({ error: err });
+    res.json(rows);
+  });
+});
+
+
 
 // 서버 실행
 app.listen(port, () => {
