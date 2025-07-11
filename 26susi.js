@@ -26,58 +26,70 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 점수 매칭 함수
-function getScore(실기ID, event, 성별, record, isReverse, cb) {
-  let sql, params;
+function getScore(실기ID, event, 성별, record, cb) {
+  // isReverse 판별 (달리기류/런/100m/20m/왕복 등)
+  const isReverse = /m|런|run|10|20|100|왕복|z/i.test(event);
+
   if (/^[A-Za-z]$/.test(record)) {
-    // 알파벳 등급 점수
-    sql = `
+    // 등급(알파벳)
+    const sql = `
       SELECT 배점 FROM \`26수시실기배점\`
       WHERE 실기ID=? AND 종목명=? AND 성별=? AND 기록=?
       LIMIT 1
     `;
-    params = [실기ID, event, 성별, record];
-    db.query(sql, params, (err, rows) => {
+    db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
       if (err) return cb(0);
       if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
       cb(0);
     });
   } else if (/^pass$/i.test(record) || /^fail$/i.test(record)) {
-    // pass/fail 특수 처리 (원하는 대로 값 수정 가능)
     cb(record.toLowerCase() === 'pass' ? 100 : 0);
   } else {
-    // 숫자 기록 점수 매칭 (이상/이하 로직)
+    // 숫자 기록
     if (isReverse) {
-      // 기록이 작을수록 점수 높음(달리기류)
-      sql = `
+      // 기록이 작을수록 점수 높음 (ex. 달리기)
+      const sql = `
         SELECT 배점 FROM \`26수시실기배점\`
         WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) >= ?
         ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1
       `;
-      params = [실기ID, event, 성별, record];
+      db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
+        if (err) return cb(0);
+        if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
+        // 값 없으면 "최대 기록"의 배점 반환
+        db.query(
+          `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID=? AND 종목명=? AND 성별=? ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`,
+          [실기ID, event, 성별],
+          (err2, minRows) => {
+            if (minRows.length > 0) return cb(parseInt(minRows[0].배점, 10));
+            cb(0);
+          }
+        );
+      });
     } else {
-      // 기록이 클수록 점수 높음
-      sql = `
+      // 기록이 클수록 점수 높음 (ex. 제멀, 윗몸 등)
+      const sql = `
         SELECT 배점 FROM \`26수시실기배점\`
         WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) <= ?
         ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1
       `;
-      params = [실기ID, event, 성별, record];
-    }
-    db.query(sql, params, (err, rows) => {
-      if (err) return cb(0);
-      if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
-      // 매칭되는 값이 없으면 최소/최대 배점 반환
-      let minMaxSql = isReverse
-        ? `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID=? AND 종목명=? AND 성별=? ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`
-        : `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID=? AND 종목명=? AND 성별=? ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`;
-      db.query(minMaxSql, [실기ID, event, 성별], (err2, minMaxRows) => {
-        if (minMaxRows.length > 0) return cb(parseInt(minMaxRows[0].배점, 10));
-        cb(0);
+      db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
+        if (err) return cb(0);
+        if (rows.length > 0) return cb(parseInt(rows[0].배점, 10));
+        // 값 없으면 "최소 기록"의 배점 반환
+        db.query(
+          `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID=? AND 종목명=? AND 성별=? ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`,
+          [실기ID, event, 성별],
+          (err2, maxRows) => {
+            if (maxRows.length > 0) return cb(parseInt(maxRows[0].배점, 10));
+            cb(0);
+          }
+        );
       });
-    });
+    }
   }
 }
+
 
 // 실기 점수 계산 라우터
 app.post('/26susi/practical', (req, res) => {
