@@ -26,75 +26,79 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
-// 기록 낮을수록 좋은 종목 자동 판별
-const isReverseScoring = (eventName) => /(m|런|달리기)/i.test(eventName);
+app.post('/26susi/practical', (req, res) => {
+  const { 실기ID, 성별, 기록입력 } = req.body;
 
-// 점수 계산 API (POST 방식)
-app.post('/26susi/score-check', (req, res) => {
-  const { univ_id, event, gender, record } = req.body;
-  const 대학ID = parseInt(univ_id);
-  const 기록 = parseFloat(record);
+  const eventNames = Object.keys(기록입력 || {});
+  if (!실기ID || eventNames.length === 0) return res.json({ error: "실기ID, 기록입력 필요", total: 0, details: [] });
 
-  console.log(`[요청] 대학ID: ${univ_id}, 종목: ${event}, 성별: ${gender}, 기록: ${record}`);
-
-  if (!univ_id || !event || !gender || isNaN(기록)) {
-    return res.status(400).json({ error: '필수 파라미터 누락' });
-  }
-
-  const reverse = isReverseScoring(event);
-  const order = reverse ? 'ASC' : 'DESC';
-  const comp = reverse ? '>=' : '<=';
-
-  const query = `
-    SELECT 배점
-    FROM \`26수시실기배점\`
-    WHERE 대학ID = ?
-      AND 종목명 = ?
-      AND 성별 = ?
-      AND 기록 ${comp} ?
-    ORDER BY 기록 ${order}
-    LIMIT 1
+  // 실기ID로 대학정보(대학명, 학과명, 전형명) 가져오기
+  const infoSql = `
+    SELECT 대학명, 학과명, 전형명 FROM practical_score_table_26su
+     WHERE 실기ID=? LIMIT 1
   `;
+  db.query(infoSql, [실기ID], (err, infoRows) => {
+    if (err || !infoRows.length) return res.status(404).json({ error: "실기ID에 해당하는 대학정보 없음" });
 
-  db.query(query, [대학ID, event, gender, 기록], (err, results) => {
-    if (err) {
-      console.error('[DB 오류]', err);
-      return res.status(500).json({ error: err.message });
-    }
+    const { 대학명, 학과명, 전형명 } = infoRows[0];
 
-    if (results.length > 0) {
-      console.log(`[결과] 배점: ${results[0].배점}`);
-      return res.json({ score: results[0].배점 });
-    } else {
-      if (대학ID === 1 || 대학ID === 3) {
-        console.log(`[결과] 범위 밖 → 0점 처리`);
-        return res.json({ score: 0 });
-      } else if (대학ID === 2) {
-        const altQuery = `
-          SELECT 배점 FROM \`26수시실기배점\`
-          WHERE 대학ID = ? AND 종목명 = ? AND 성별 = ?
-          ORDER BY 기록 ${order === 'DESC' ? 'ASC' : 'DESC'}
-          LIMIT 1
-        `;
-        db.query(altQuery, [대학ID, event, gender], (err2, rows) => {
-          if (err2) {
-            console.error('[보정 쿼리 오류]', err2);
-            return res.status(500).json({ error: err2.message });
-          }
-          if (rows.length > 0) {
-            console.log(`[결과] 범위 밖 → 최하점: ${rows[0].배점}`);
-            return res.json({ score: rows[0].배점 });
-          }
-          console.log(`[결과] 범위 밖 → 점수 없음 (0점)`);
-          return res.json({ score: 0 });
+    let total = 0;
+    let results = [];
+
+    const checkEvent = (idx) => {
+      if (idx >= eventNames.length) {
+        return res.json({
+          대학명,
+          학과명,
+          전형명,
+          실기ID,
+          성별,
+          total,
+          details: results
         });
-      } else {
-        console.log(`[결과] 범위 밖 → 기본 처리 (0점)`);
-        return res.json({ score: 0 });
       }
-    }
+      const event = eventNames[idx];
+      const record = 기록입력[event];
+      const isReverse = /m|런|run|10|20|100|z/i.test(event);
+
+      let sql;
+      if (/^[A-Za-z]$/.test(record)) {
+        sql = `
+          SELECT 배점 FROM practical_score_table_26su
+           WHERE 실기ID=? AND 종목명=? AND 성별=? AND 기록=?
+           LIMIT 1
+        `;
+        db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
+          let score = rows?.[0]?.배점 ? parseInt(rows[0].배점, 10) : 0;
+          results.push({ event, record, score });
+          total += score;
+          checkEvent(idx + 1);
+        });
+      } else if (/^pass$/i.test(record) || /^fail$/i.test(record)) {
+        results.push({ event, record, score: record.toLowerCase() === 'pass' ? 100 : 0 });
+        total += record.toLowerCase() === 'pass' ? 100 : 0;
+        checkEvent(idx + 1);
+      } else {
+        sql = isReverse
+          ? `SELECT 배점 FROM practical_score_table_26su
+               WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) >= ? 
+               ORDER BY CAST(기록 AS DECIMAL) ASC LIMIT 1`
+          : `SELECT 배점 FROM practical_score_table_26su
+               WHERE 실기ID=? AND 종목명=? AND 성별=? AND CAST(기록 AS DECIMAL) <= ? 
+               ORDER BY CAST(기록 AS DECIMAL) DESC LIMIT 1`;
+
+        db.query(sql, [실기ID, event, 성별, record], (err, rows) => {
+          let score = rows?.[0]?.배점 ? parseInt(rows[0].배점, 10) : 0;
+          results.push({ event, record, score });
+          total += score;
+          checkEvent(idx + 1);
+        });
+      }
+    };
+    checkEvent(0);
   });
 });
+
 
 // 서버 실행
 app.listen(port, () => {
