@@ -136,19 +136,21 @@ app.post('/26susi/practical', (req, res) => {
 // 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
   const sql = `
-    SELECT DISTINCT ID as 실기ID, 대학명, 학과명, 전형명
+    SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명
     FROM \`26수시실기배점\`
-    WHERE ID IS NOT NULL AND ID != 0
-    ORDER BY 대학명, 학과명, 전형명
+    WHERE ID IS NOT NULL
+    GROUP BY 대학명, 학과명, 전형명
+    ORDER BY 대학명, 학과명
   `;
   db.query(sql, (err, rows) => {
     if (err) {
-      console.log('SQL ERROR:', err);
+      console.error('❌ 실기ID 목록 쿼리 에러:', err);
       return res.status(500).json({ error: err });
     }
     res.json(rows);
   });
 });
+
 
 // 종목목록
 app.get('/26susi/practical-events', (req, res) => {
