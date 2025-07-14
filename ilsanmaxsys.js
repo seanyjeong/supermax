@@ -1618,34 +1618,43 @@ const messages = students
 
 // 3일마다 23시 전체 발송 (m01)
 // 3일마다 실행 플래그
-let lastSent = '2025-07-11';
+let lastSent = '2025-07-14';
 
 schedule.scheduleJob('0 23 * * *', async () => {
   const today = new Date().toISOString().slice(0, 10);
 
-  // lastSent가 null이거나, 3일 이상 지났으면 발송
-  if (!lastSent || (new Date(today) - new Date(lastSent)) >= 1000*60*60*24*3) {
+  if (!lastSent || (new Date(today) - new Date(lastSent)) >= 1000 * 60 * 60 * 24 * 3) {
     lastSent = today;
-    // ... (여기서 m01 전체 발송 코드 실행)
+
     const students = await dbQuery(
       `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`
     );
-    await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [today]);
-    if (students.length > 0) {
+
+    try {
+      await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [today]);
+
       const logs = students.map(s => [s.id, today]);
-      await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
+      if (logs.length > 0) {
+        await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
+      }
+
+      // ✅ 쿼리 다 끝난 뒤에 알림톡 실행
       await sendAlimtalkBatch(students, 'm01');
+
       console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
+    } catch (err) {
+      console.error('❌ 알림톡 발송 중 오류:', err);
     }
   }
 });
+
 
 
 // 매일 오전 8시 미제출자 리마인드 (m02)
 schedule.scheduleJob('0 8 * * *', async () => {
   try {
     const alarmDate = new Date(Date.now() - 1000*60*60*24).toISOString().slice(0, 10);
-    if (alarmDate < '2025-07-11') return;
+    if (alarmDate < '2025-07-14') return;
     const targets = await dbQuery(
       `SELECT student_id FROM mental_alarm_log WHERE alarm_date = ?`, [alarmDate]
     );
