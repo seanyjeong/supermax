@@ -1497,7 +1497,7 @@ ${JSON.stringify(finalRecords, null, 2)}
 
 router.post('/test-send-mental-alimtalk', async (req, res) => {
   const testName = '박멩꽁이';
-  const testPhone = '01071511941';
+  const testPhone = '01021446765';
 
   const timestamp = Date.now().toString();
   const uri = `/alimtalk/v2/services/${serviceId}/messages`;
