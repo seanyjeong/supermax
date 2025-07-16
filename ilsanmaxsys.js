@@ -1616,37 +1616,40 @@ const messages = students
 
 
 
-// 3일마다 23시 전체 발송 (m01)
-// 3일마다 실행 플래그
-let lastSent = '2025-07-14';
-
+// 3일마다 자정 23시 전체 m01 발송
 schedule.scheduleJob('0 23 * * *', async () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const firstSendDate = new Date('2025-07-16');  // 💡 시작 기준일: "오늘부터 시작"
+  const today = new Date();
 
-  if (!lastSent || (new Date(today) - new Date(lastSent)) >= 1000 * 60 * 60 * 24 * 3) {
-    lastSent = today;
+  // 일수 차이 계산
+  const diffDays = Math.floor((today - firstSendDate) / (1000 * 60 * 60 * 24));
+  if (diffDays % 3 !== 0) {
+    console.log(`[m01] 오늘은 3일 주기가 아님. (기준일로부터 ${diffDays}일 경과)`);
+    return;
+  }
 
+  const todayStr = today.toISOString().slice(0, 10);
+  try {
     const students = await dbQuery(
       `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`
     );
 
-    try {
-      await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [today]);
+    // 오늘 발송 기록 초기화 후 다시 insert
+    await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [todayStr]);
 
-      const logs = students.map(s => [s.id, today]);
-      if (logs.length > 0) {
-        await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
-      }
-
-      // ✅ 쿼리 다 끝난 뒤에 알림톡 실행
-      await sendAlimtalkBatch(students, 'm01');
-
-      console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
-    } catch (err) {
-      console.error('❌ 알림톡 발송 중 오류:', err);
+    const logs = students.map(s => [s.id, todayStr]);
+    if (logs.length > 0) {
+      await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
     }
+
+    await sendAlimtalkBatch(students, 'm01');
+    console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
+  } catch (err) {
+    console.error('❌ [멘탈알림] m01 발송 오류:', err);
   }
 });
+
+
 
 
 
