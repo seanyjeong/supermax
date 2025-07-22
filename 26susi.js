@@ -132,6 +132,84 @@ app.listen(port, () => {
   console.log('원장회원 가입/로그인 서버 실행!');
 });
 
+//학생관리(정보수정및등록)
+// 1. 학생 명단 다중등록 (엑셀 복붙/파싱된 배열)
+app.post('/26susi_student_bulk_insert', authJWT, async (req, res) => {
+  try {
+    const branch = req.body.branch;
+    const students = req.body.students;
+    if (!branch || !Array.isArray(students) || students.length === 0)
+      return res.json({ success: false, message: "지점/명단 입력 필요" });
+
+    // (원장별 branch 일치 여부 검증하고 싶으면 여기서 체크!)
+    // if (req.user.branch !== branch) return res.json({success:false, message:"권한없음"});
+
+    let inserted = 0;
+    for (let s of students) {
+      if (!s.name) continue; // 최소값
+      await db.promise().query(
+        `INSERT INTO 학생기초정보 (이름, 학교명, 학년, 성별, 전화번호, 지점명)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [s.name, s.school || '', s.grade || '', s.gender || '', s.phone || '', branch]
+      );
+      inserted++;
+    }
+    res.json({ success: true, inserted });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false, message: "등록 오류" });
+  }
+});
+
+// 2. 학생 리스트 조회 (지점별)
+app.get('/26susi_student_list', authJWT, async (req, res) => {
+  try {
+    const branch = req.query.branch || req.user.branch;
+    // (여기도 branch 권한 체크해주면 더 안전!)
+    // if (req.user.branch !== branch) return res.json({success:false, message:"권한없음"});
+
+    const [rows] = await db.promise().query(
+      "SELECT * FROM 학생기초정보 WHERE 지점명 = ? ORDER BY 학생ID DESC",
+      [branch]
+    );
+    res.json({ success: true, students: rows });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false, message: "조회 오류" });
+  }
+});
+
+// 3. 학생 삭제
+app.post('/26susi_student_delete', authJWT, async (req, res) => {
+  try {
+    const student_id = req.body.student_id;
+    if (!student_id) return res.json({ success: false, message: "student_id 필요" });
+    await db.promise().query("DELETE FROM 학생기초정보 WHERE 학생ID = ?", [student_id]);
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ success: false, message: "삭제 오류" });
+  }
+});
+
+// 4. 학생 수정
+app.post('/26susi_student_update', authJWT, async (req, res) => {
+  try {
+    const { student_id, name, school, grade, gender, phone } = req.body;
+    if (!student_id) return res.json({ success: false, message: "student_id 필요" });
+
+    await db.promise().query(
+      `UPDATE 학생기초정보 SET
+        이름=?, 학교명=?, 학년=?, 성별=?, 전화번호=?
+        WHERE 학생ID=?`,
+      [name, school, grade, gender, phone, student_id]
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ success: false, message: "수정 오류" });
+  }
+});
+
+
 
 // ✅ isReverse 판별 함수
 const isReverseEvent = (eventName) => {
