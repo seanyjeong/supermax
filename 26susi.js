@@ -22,6 +22,10 @@ const db = mysql.createConnection({
 function isAdmin(user) {
   return user && user.userid === 'admin';
 }
+function safe(v) {
+  return v === undefined ? null : v;
+}
+
 
 // (GET) 원장회원 리스트 조회
 app.get('/26susi_admin_members', authJWT, async (req, res) => {
@@ -275,23 +279,24 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
   ?, ?, ?
 )`
 
-      [
-        student_id,
-        col.대학ID,
-        col.실기ID ?? null,
-        col.내신등급 ?? null,
-        col.내신점수 ?? null,
-        col.기록1 ?? null, col.점수1 ?? null,
-        col.기록2 ?? null, col.점수2 ?? null,
-        col.기록3 ?? null, col.점수3 ?? null,
-        col.기록4 ?? null, col.점수4 ?? null,
-        col.기록5 ?? null, col.점수5 ?? null,
-        col.기록6 ?? null, col.점수6 ?? null,
-        col.기록7 ?? null, col.점수7 ?? null,
-        col.실기총점 ?? null,
-        col.합산점수 ?? null,
-        col.상담메모 ?? null
-      ]
+[
+  student_id,
+  safe(col.대학ID),
+  safe(col.실기ID),
+  safe(col.내신등급),
+  safe(col.내신점수),
+  safe(col.기록1), safe(col.점수1),
+  safe(col.기록2), safe(col.점수2),
+  safe(col.기록3), safe(col.점수3),
+  safe(col.기록4), safe(col.점수4),
+  safe(col.기록5), safe(col.점수5),
+  safe(col.기록6), safe(col.점수6),
+  safe(col.기록7), safe(col.점수7),
+  safe(col.실기총점),
+  safe(col.합산점수),
+  safe(col.상담메모)
+]
+
     );
   }
   res.json({ success: true });
