@@ -231,20 +231,22 @@ app.get('/26susi_student_grade_map', authJWT, async (req, res) => {
 
   // 대학/학생/기존 입력값 모두 조회 (전형명 포함)
   const [colleges] = await db.promise().query("SELECT 대학ID, 대학명, 학과명, 전형명 FROM 대학정보");
-  const [students] = await db.promise().query(
-    "SELECT 학생ID, 이름 FROM 학생기초정보 WHERE 지점명 = ? ORDER BY 학생ID", [branch]
+const [students] = await db.promise().query(
+  "SELECT 학생ID, 이름 FROM 학생기초정보 WHERE 지점명 = ? ORDER BY 학생ID", [branch]
+);
+const studentIds = students.map(s => s.학생ID);
+let grades = [];
+if (studentIds.length > 0) {
+  [grades] = await db.promise().query(
+    "SELECT 학생ID, 대학ID, 등급, 내신점수 FROM 학생_내신정보 WHERE 학생ID IN (?)",
+    [studentIds]
   );
-  const [grades] = students.length > 0
-    ? await db.promise().query(
-        "SELECT 학생ID, 대학ID, 등급, 내신점수 FROM 학생_내신정보 WHERE 학생ID IN (?)",
-        [students.map(s => s.학생ID)]
-      )
-    : [[]]; // 학생 없을 때 빈 배열
-  const grade_map = {};
-  grades[0].forEach(g => {
-    grade_map[`${g.학생ID}-${g.대학ID}`] = { 등급: g.등급, 내신점수: g.내신점수 };
-  });
-  res.json({ success: true, colleges, students, grade_map });
+}
+const grade_map = {};
+(grades || []).forEach(g => {
+  grade_map[`${g.학생ID}-${g.대학ID}`] = { 등급: g.등급, 내신점수: g.내신점수 };
+});
+res.json({ success: true, colleges, students, grade_map });
 });
 
 // 4. 학생-대학 등급/내신 입력/수정 (Upsert)
