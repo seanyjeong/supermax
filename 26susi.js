@@ -210,10 +210,7 @@ app.post('/26susi_student_update', authJWT, async (req, res) => {
 });
 // 내신입력및조회
 // 1. 대학리스트 (전형명 포함!)
-app.get('/26susi_college_list', authJWT, async (req, res) => {
-  const [rows] = await db.promise().query("SELECT 대학ID, 대학명, 학과명, 전형명 FROM 대학정보");
-  res.json({ success: true, colleges: rows });
-});
+
 
 // 2. 학생리스트 (지점별)
 app.get('/26susi_student_list', authJWT, async (req, res) => {
