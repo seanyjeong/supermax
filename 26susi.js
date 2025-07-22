@@ -18,6 +18,36 @@ const db = mysql.createConnection({
   charset: 'utf8mb4'
 });
 
+// 관리자 권한 체크 함수
+function isAdmin(user) {
+  return user && user.userid === 'admin';
+}
+
+// (GET) 원장회원 리스트 조회
+app.get('/26susi_admin_members', authJWT, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ success: false, message: "권한없음" });
+  const [rows] = await db.promise().query("SELECT 원장ID, 아이디, 이름, 지점명, 전화번호, 승인여부 FROM 원장회원");
+  res.json({ success: true, members: rows });
+});
+
+// (POST) 회원 승인
+app.post('/26susi_admin_approve', authJWT, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ success: false, message: "권한없음" });
+  const { userid } = req.body;
+  if (!userid) return res.json({ success: false, message: "아이디 필요" });
+  await db.promise().query("UPDATE 원장회원 SET 승인여부='O' WHERE 아이디=?", [userid]);
+  res.json({ success: true });
+});
+
+// (POST) 회원 삭제
+app.post('/26susi_admin_delete', authJWT, async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ success: false, message: "권한없음" });
+  const { userid } = req.body;
+  if (!userid) return res.json({ success: false, message: "아이디 필요" });
+  await db.promise().query("DELETE FROM 원장회원 WHERE 아이디=?", [userid]);
+  res.json({ success: true });
+});
+
 // ✅ 원장회원 회원가입
 app.post('/26susi/register', async (req, res) => {
   try {
