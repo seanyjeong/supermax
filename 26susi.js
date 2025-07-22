@@ -266,38 +266,37 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
     return res.json({ success: false, message: "필수값 누락" });
 
   for(const col of colleges) {
-    await db.promise().query(
-     `INSERT INTO 상담대학정보 (
-  학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
-  기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
-  기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-  실기총점, 합산점수, 상담메모
-) VALUES (
-  ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?, ?, ?, ?,
-  ?, ?, ?, ?, ?, ?,
-  ?, ?, ?
-)`
+await db.promise().query(
+  `INSERT INTO 상담대학정보 (
+    학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
+    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
+    기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+    실기총점, 합산점수, 상담메모
+  ) VALUES (
+    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?,
+    ?, ?, ?
+  )`,
+  [
+    student_id,
+    safe(col.대학ID),
+    safe(col.실기ID),
+    safe(col.내신등급),
+    safe(col.내신점수),
+    safe(col.기록1), safe(col.점수1),
+    safe(col.기록2), safe(col.점수2),
+    safe(col.기록3), safe(col.점수3),
+    safe(col.기록4), safe(col.점수4),
+    safe(col.기록5), safe(col.점수5),
+    safe(col.기록6), safe(col.점수6),
+    safe(col.기록7), safe(col.점수7),
+    safe(col.실기총점),
+    safe(col.합산점수),
+    safe(col.상담메모)
+  ]
+);
 
-[
-  student_id,
-  safe(col.대학ID),
-  safe(col.실기ID),
-  safe(col.내신등급),
-  safe(col.내신점수),
-  safe(col.기록1), safe(col.점수1),
-  safe(col.기록2), safe(col.점수2),
-  safe(col.기록3), safe(col.점수3),
-  safe(col.기록4), safe(col.점수4),
-  safe(col.기록5), safe(col.점수5),
-  safe(col.기록6), safe(col.점수6),
-  safe(col.기록7), safe(col.점수7),
-  safe(col.실기총점),
-  safe(col.합산점수),
-  safe(col.상담메모)
-]
-
-    );
   }
   res.json({ success: true });
 });
