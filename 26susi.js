@@ -313,6 +313,27 @@ app.get('/26susi_events_by_practical_id', authJWT, async (req, res) => {
   res.json({ success: true, events: rows });
 });
 
+app.get('/26susi_counsel_college_load', async (req, res) => {
+  const student_id = req.query.student_id;
+  if (!student_id) return res.json({ success: false, message: '학생ID 누락' });
+
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT 대학ID,
+             기록1, 점수1, 기록2, 점수2, 기록3, 점수3,
+             기록4, 점수4, 기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+             합산점수, 상담메모
+      FROM 상담대학정보
+      WHERE 학생ID = ?
+    `, [student_id]);
+
+    res.json({ success: true, colleges: rows });
+  } catch (err) {
+    console.error('❌ 상담대학정보 불러오기 오류:', err);
+    res.json({ success: false, message: 'DB 오류' });
+  }
+});
+
 
 
 app.get('/26susi_counsel_college_list', authJWT, async (req, res) => {
