@@ -265,41 +265,57 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
   if (!student_id || !Array.isArray(colleges))
     return res.json({ success: false, message: "필수값 누락" });
 
-  for(const col of colleges) {
-await db.promise().query(
-  `INSERT INTO 상담대학정보 (
-    학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
-    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
-    기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-    실기총점, 합산점수, 상담메모
-  ) VALUES (
-    ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?, ?, ?,
-    ?, ?, ?, ?, ?, ?,
-    ?, ?, ?
-  )`,
-  [
-    student_id,
-    safe(col.대학ID),
-    safe(col.실기ID),
-    safe(col.내신등급),
-    safe(col.내신점수),
-    safe(col.기록1), safe(col.점수1),
-    safe(col.기록2), safe(col.점수2),
-    safe(col.기록3), safe(col.점수3),
-    safe(col.기록4), safe(col.점수4),
-    safe(col.기록5), safe(col.점수5),
-    safe(col.기록6), safe(col.점수6),
-    safe(col.기록7), safe(col.점수7),
-    safe(col.실기총점),
-    safe(col.합산점수),
-    safe(col.상담메모)
-  ]
-);
-
+  for (const col of colleges) {
+    await db.promise().query(
+      `INSERT INTO 상담대학정보 (
+        학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
+        기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
+        기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+        실기총점, 합산점수, 상담메모
+      ) VALUES (
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?
+      )
+      ON DUPLICATE KEY UPDATE
+        실기ID = VALUES(실기ID),
+        내신등급 = VALUES(내신등급),
+        내신점수 = VALUES(내신점수),
+        기록1 = VALUES(기록1), 점수1 = VALUES(점수1),
+        기록2 = VALUES(기록2), 점수2 = VALUES(점수2),
+        기록3 = VALUES(기록3), 점수3 = VALUES(점수3),
+        기록4 = VALUES(기록4), 점수4 = VALUES(점수4),
+        기록5 = VALUES(기록5), 점수5 = VALUES(점수5),
+        기록6 = VALUES(기록6), 점수6 = VALUES(점수6),
+        기록7 = VALUES(기록7), 점수7 = VALUES(점수7),
+        실기총점 = VALUES(실기총점),
+        합산점수 = VALUES(합산점수),
+        상담메모 = VALUES(상담메모)
+      `,
+      [
+        student_id,
+        safe(col.대학ID),
+        safe(col.실기ID),
+        safe(col.내신등급),
+        safe(col.내신점수),
+        safe(col.기록1), safe(col.점수1),
+        safe(col.기록2), safe(col.점수2),
+        safe(col.기록3), safe(col.점수3),
+        safe(col.기록4), safe(col.점수4),
+        safe(col.기록5), safe(col.점수5),
+        safe(col.기록6), safe(col.점수6),
+        safe(col.기록7), safe(col.점수7),
+        safe(col.실기총점),
+        safe(col.합산점수),
+        safe(col.상담메모)
+      ]
+    );
   }
+
   res.json({ success: true });
 });
+
 
 app.get('/26susi_events_by_practical_id', authJWT, async (req, res) => {
   const { practical_id, gender } = req.query;
