@@ -224,6 +224,124 @@ app.get('/26susi_student_list', authJWT, async (req, res) => {
   );
   res.json({ success: true, students: rows });
 });
+// $개별조회
+// GET /26susi_student_grade?student_id=123
+app.get('/26susi_student_grade', authJWT, async (req, res) => {
+  const student_id = req.query.student_id;
+  if (!student_id) return res.json({ success: false, message: "student_id 필요" });
+  const [rows] = await db.promise().query(
+    "SELECT 대학ID, 등급, 내신점수 FROM 학생_내신정보 WHERE 학생ID = ?",
+    [student_id]
+  );
+  res.json({ success: true, grades: rows });
+});
+
+//  상담페이지 대학선택 등급내신
+// { student_id, college_id, 등급, 내신점수 }
+app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
+  const { student_id, college_id, 등급, 내신점수 } = req.body;
+  if (!student_id || !college_id)
+    return res.json({ success: false, message: "필수값 누락" });
+  await db.promise().query(`
+    INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE 등급=VALUES(등급), 내신점수=VALUES(내신점수)
+  `, [student_id, college_id, 등급, 내신점수]);
+  res.json({ success: true });
+});
+
+// GET /26susi_college_list 대학리스트
+app.get('/26susi_college_list', authJWT, async (req, res) => {
+  const [rows] = await db.promise().query(
+    "SELECT 대학ID, 대학명, 학과명, 전형명 FROM 대학정보"
+  );
+  res.json({ success: true, colleges: rows });
+});
+
+// 상담 시 여러 대학 한 번에 저장 (colleges: [{...}, {...}])
+app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
+  const { student_id, colleges } = req.body;
+  if (!student_id || !Array.isArray(colleges))
+    return res.json({ success: false, message: "필수값 누락" });
+
+  for(const col of colleges) {
+    await db.promise().query(
+      `INSERT INTO 상담대학정보 (
+        학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
+        기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+        실기총점, 합산점수, 상담메모
+      ) VALUES (
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?
+      )`,
+      [
+        student_id,
+        col.대학ID,
+        col.실기ID ?? null,
+        col.내신등급 ?? null,
+        col.내신점수 ?? null,
+        col.기록1 ?? null, col.점수1 ?? null,
+        col.기록2 ?? null, col.점수2 ?? null,
+        col.기록3 ?? null, col.점수3 ?? null,
+        col.기록4 ?? null, col.점수4 ?? null,
+        col.기록5 ?? null, col.점수5 ?? null,
+        col.기록6 ?? null, col.점수6 ?? null,
+        col.기록7 ?? null, col.점수7 ?? null,
+        col.실기총점 ?? null,
+        col.합산점수 ?? null,
+        col.상담메모 ?? null
+      ]
+    );
+  }
+  res.json({ success: true });
+});
+
+app.get('/26susi_events_by_practical_id', authJWT, async (req, res) => {
+  const { practical_id, gender } = req.query;
+  if (!practical_id || !gender)
+    return res.json({ success: false, message: "practical_id, gender 필요" });
+
+  const [rows] = await db.promise().query(
+    "SELECT DISTINCT 종목명 FROM 26수시실기배점 WHERE 실기ID = ? AND 성별 = ? ORDER BY 종목명",
+    [practical_id, gender]
+  );
+  res.json({ success: true, events: rows });
+});
+
+
+
+app.get('/26susi_counsel_college_list', authJWT, async (req, res) => {
+  const student_id = req.query.student_id;
+  if (!student_id)
+    return res.json({ success: false, message: "학생ID 필요" });
+
+  const [rows] = await db.promise().query(
+    "SELECT * FROM 상담대학정보 WHERE 학생ID = ? ORDER BY 기록ID DESC", [student_id]
+  );
+  res.json({ success: true, list: rows });
+});
+
+
+// POST /26susi_counsel_college_save
+// { student_id, college_id, 실기_id, 상담메모 }
+app.post('/26susi_counsel_college_save', authJWT, async (req, res) => {
+  const { student_id, college_id, 실기_id, 상담메모 } = req.body;
+  if (!student_id || !college_id)
+    return res.json({ success: false, message: "필수값 누락" });
+
+  await db.promise().query(`
+    INSERT INTO 상담대학정보 (학생ID, 대학ID, 실기ID, 상담메모)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE 상담메모=VALUES(상담메모)
+  `, [student_id, college_id, 실기_id || null, 상담메모 || null]);
+
+  res.json({ success: true });
+});
+
+
+
+
 
 // 3. 학생-대학 내신입력 데이터 전체조회 (branch별) - 전형명 포함!
 app.get('/26susi_student_grade_map', authJWT, async (req, res) => {
