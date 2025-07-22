@@ -392,12 +392,19 @@ const isReverseEvent = (eventName) => {
 // ✅ 1. 대학/학과 선택용 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
 const sql = `
-SELECT MIN(ID) AS 실기ID, 대학명, 학과명, 전형명, 성별,
-  (SELECT 대학ID FROM 대학정보 
-    WHERE 대학명 = A.대학명 AND 학과명 = A.학과명 AND 전형명 = A.전형명 LIMIT 1) AS 대학ID
-FROM \`26수시실기배점\` A
-WHERE 실기ID IS NOT NULL
-GROUP BY 대학명, 학과명, 전형명, 성별
+SELECT 
+  MIN(P.ID) AS 실기ID,
+  P.대학명, P.학과명, P.전형명, P.성별,
+  D.대학ID
+FROM \`26수시실기배점\` P
+JOIN 대학정보 D
+  ON P.대학명 = D.대학명
+ AND P.학과명 = D.학과명
+ AND P.전형명 = D.전형명
+WHERE P.실기ID IS NOT NULL
+GROUP BY P.대학명, P.학과명, P.전형명, P.성별
+ORDER BY P.대학명
+
 
 `;
 
