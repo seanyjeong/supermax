@@ -253,7 +253,7 @@ app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
 // GET /26susi_college_list 대학리스트
 app.get('/26susi_college_list', authJWT, async (req, res) => {
   const [rows] = await db.promise().query(
-    "SELECT 대학ID, 대학명, 학과명, 전형명 FROM 대학정보"
+    "SELECT 대학ID, 대학명, 학과명, 전형명, 실기ID FROM 대학정보"
   );
   res.json({ success: true, colleges: rows });
 });
