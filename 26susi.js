@@ -391,23 +391,14 @@ const isReverseEvent = (eventName) => {
 
 // ✅ 1. 대학/학과 선택용 실기ID 목록
 app.get('/26susi/practical-ids', (req, res) => {
-  const sql = `
-    SELECT 
-      MIN(P.ID) AS 실기ID,
-      P.대학명,
-      P.학과명,
-      P.전형명,
-      P.성별,
-      D.대학ID
-    FROM \`26수시실기배점\` P
-    JOIN 대학정보 D
-      ON P.대학명 = D.대학명
-     AND P.학과명 = D.학과명
-     AND P.전형명 = D.전형명
-    WHERE P.실기ID IS NOT NULL
-    GROUP BY D.대학ID, P.성별
-    ORDER BY P.대학명, P.학과명
-  `;
+const sql = `
+  SELECT 실기ID, 대학명, 학과명, 전형명, 성별
+  FROM \`26수시실기배점\`
+  WHERE 실기ID IS NOT NULL
+  GROUP BY 실기ID, 대학명, 학과명, 전형명, 성별
+  ORDER BY 대학명
+`;
+
 
   db.query(sql, (err, results) => {
     if (err) {
@@ -417,7 +408,7 @@ app.get('/26susi/practical-ids', (req, res) => {
 
     console.log('\n📌 [실기ID 목록 응답]');
     results.forEach(r => {
-      console.log(`▶ 실기ID: ${r.실기ID} | 대학ID: ${r.대학ID} | ${r.대학명} / ${r.학과명} / ${r.전형명} / ${r.성별}`);
+      console.log(`▶ 실기ID: ${r.실기ID} | ${r.대학명} / ${r.학과명} / ${r.전형명} / ${r.성별}`);
     });
 
     res.json(results);
