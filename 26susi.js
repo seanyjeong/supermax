@@ -208,6 +208,57 @@ app.post('/26susi_student_update', authJWT, async (req, res) => {
     res.json({ success: false, message: "수정 오류" });
   }
 });
+// 내신입력및조회
+// 1. 대학리스트
+app.get('/26susi_college_list', authJWT, async (req, res) => {
+  const [rows] = await db.promise().query("SELECT 대학ID, 대학명, 학과명 FROM 대학정보");
+  res.json({ success: true, colleges: rows });
+});
+
+// 2. 학생리스트 (지점별)
+app.get('/26susi_student_list', authJWT, async (req, res) => {
+  const branch = req.query.branch || req.user.branch;
+  const [rows] = await db.promise().query(
+    "SELECT 학생ID, 이름 FROM 학생기초정보 WHERE 지점명 = ? ORDER BY 학생ID",
+    [branch]
+  );
+  res.json({ success: true, students: rows });
+});
+
+// 3. 학생-대학 내신입력 데이터 전체조회 (branch별)
+app.get('/26susi_student_grade_map', authJWT, async (req, res) => {
+  const branch = req.query.branch || req.user.branch;
+
+  // 대학/학생/기존 입력값 모두 조회
+  const [colleges] = await db.promise().query("SELECT 대학ID, 대학명, 학과명 FROM 대학정보");
+  const [students] = await db.promise().query(
+    "SELECT 학생ID, 이름 FROM 학생기초정보 WHERE 지점명 = ? ORDER BY 학생ID", [branch]
+  );
+  const [grades] = await db.promise().query(
+    "SELECT 학생ID, 대학ID, 등급, 내신점수 FROM 학생_내신정보 WHERE 학생ID IN (?)",
+    [students.map(s => s.학생ID)]
+  );
+  const grade_map = {};
+  grades.forEach(g => {
+    grade_map[`${g.학생ID}-${g.대학ID}`] = { 등급: g.등급, 내신점수: g.내신점수 };
+  });
+  res.json({ success: true, colleges, students, grade_map });
+});
+
+// 4. 학생-대학 등급/내신 입력/수정 (Upsert)
+app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
+  const { student_id, college_id, 등급, 내신점수 } = req.body;
+  if (!student_id || !college_id)
+    return res.json({ success: false, message: "필수값 누락" });
+  // Upsert (없으면 insert, 있으면 update)
+  await db.promise().query(`
+    INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE 등급=VALUES(등급), 내신점수=VALUES(내신점수)
+  `, [student_id, college_id, 등급, 내신점수]);
+  res.json({ success: true });
+});
+
 
 
 
