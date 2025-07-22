@@ -1,8 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const app = express();
 const port = 8080;
+const JWT_SECRET = 'super-secret-key!!'; // 환경변수로 빼는게 정석
 
 app.use(cors());
 app.use(express.json());
@@ -14,6 +17,91 @@ const db = mysql.createConnection({
   database: '26susi',
   charset: 'utf8mb4'
 });
+
+// ✅ 원장회원 회원가입
+app.post('/26susi/register', async (req, res) => {
+  try {
+    const { userid, password, name, branch, phone } = req.body;
+    if (![userid, password, name, branch, phone].every(Boolean))
+      return res.json({ success: false, message: "모든 값 입력" });
+
+    // 중복 확인
+    const [dup] = await db.promise().query(
+      "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?",
+      [userid]
+    );
+    if (dup.length > 0) return res.json({ success: false, message: "이미 사용중인 아이디" });
+
+    // 비번 해시
+    const hash = await bcrypt.hash(password, 10);
+    // 가입 승인은 기본 '대기'
+    await db.promise().query(
+      "INSERT INTO 원장회원 (아이디, 비밀번호, 이름, 지점명, 전화번호) VALUES (?, ?, ?, ?, ?)",
+      [userid, hash, name, branch, phone]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('회원가입 오류:', err);
+    res.json({ success: false, message: "서버 오류" });
+  }
+});
+
+// ✅ 원장회원 로그인 + JWT 발급
+app.post('/26susi/login', async (req, res) => {
+  try {
+    const { userid, password } = req.body;
+    if (!userid || !password)
+      return res.json({ success: false, message: "아이디/비번 입력" });
+
+    const [rows] = await db.promise().query(
+      "SELECT * FROM 원장회원 WHERE 아이디 = ?",
+      [userid]
+    );
+    if (!rows.length) return res.json({ success: false, message: "아이디 없음" });
+
+    const user = rows[0];
+    if (user.승인여부 !== 'O')
+      return res.json({ success: false, message: "아직 승인 안 됨" });
+
+    const isMatch = await bcrypt.compare(password, user.비밀번호);
+    if (!isMatch) return res.json({ success: false, message: "비번 오류" });
+
+    // JWT 발급
+    const token = jwt.sign(
+      { id: user.원장ID, userid: user.아이디, name: user.이름, branch: user.지점명 },
+      JWT_SECRET,
+      { expiresIn: '3d' }
+    );
+    res.json({ success: true, token });
+  } catch (err) {
+    console.error('로그인 오류:', err);
+    res.json({ success: false, message: "서버 오류" });
+  }
+});
+
+// ✅ JWT 인증 미들웨어 (이후 모든 API에 붙여서 인증체크)
+function authJWT(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ success: false, message: 'No token' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+}
+
+// 예시: 인증필요한 API
+app.get('/26susi/profile', authJWT, async (req, res) => {
+  // req.user에 원장정보 들어있음!
+  res.json({ success: true, user: req.user });
+});
+
+app.listen(port, () => {
+  console.log('원장회원 가입/로그인 서버 실행!');
+});
+
 
 // ✅ isReverse 판별 함수
 const isReverseEvent = (eventName) => {
