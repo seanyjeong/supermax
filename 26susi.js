@@ -195,36 +195,37 @@ app.post('/26susi_save_practical_total_config', async (req, res) => {
 
 // ✅ 실기ID 기준 배점표 + 종목명 조회
 // ✅ 실기ID 기준 전체 원시 배점표 반환 (렌더링은 프론트에서)
+// ✅ (수정된 코드) 실기ID 기준 배점표 + 종목명 조회
 app.get('/26susi_get_score_table', async (req, res) => {
-  const { 실기ID } = req.query;
-  if (!실기ID) return res.status(400).json({ error: '실기ID 누락' });
+  const { 실기ID } = req.query;
+  if (!실기ID) return res.status(400).json({ error: '실기ID 누락' });
 
-  try {
-    // 먼저 전체 rows부터 가져옴
-    const rows = await dbQuery(
-      `SELECT 종목명, 성별, 기록, 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? ORDER BY 배점 DESC`,
-      [실기ID]
-    );
+  try {
+    // 먼저 전체 rows부터 가져옴 (dbQuery -> db.promise().query로 수정)
+    const [rows] = await db.promise().query(
+      `SELECT 종목명, 성별, 기록, 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? ORDER BY 배점 DESC`,
+      [실기ID]
+    );
 
-    if (!rows || rows.length === 0) {
-      console.log(`[❌] 실기ID ${실기ID}에 해당하는 배점표 없음`);
-      return res.status(404).json({ error: '해당 실기ID에 대한 배점표 없음' });
-    }
+    if (!rows || rows.length === 0) {
+      console.log(`[❌] 실기ID ${실기ID}에 해당하는 배점표 없음`);
+      return res.status(404).json({ error: '해당 실기ID에 대한 배점표 없음' });
+    }
 
-    const 종목명 = rows[0].종목명 || '종목명 없음';
-    const result = { 종목명, 남: [], 여: [] };
+    const 종목명 = rows[0].종목명 || '종목명 없음';
+    const result = { 종목명, 남: [], 여: [] };
 
-    rows.forEach(row => {
-      const entry = { 배점: row.배점, 기록: row.기록 };
-      if (row.성별 === '남') result.남.push(entry);
-      else if (row.성별 === '여') result.여.push(entry);
-    });
+    rows.forEach(row => {
+      const entry = { 배점: row.배점, 기록: row.기록 };
+      if (row.성별 === '남') result.남.push(entry);
+      else if (row.성별 === '여') result.여.push(entry);
+    });
 
-    res.json(result);
-  } catch (err) {
-    console.error('❌ 배점표 조회 중 오류:', err);
-    res.status(500).json({ error: '배점표 조회 실패' });
-  }
+    res.json(result);
+  } catch (err) {
+    console.error('❌ 배점표 조회 중 오류:', err);
+    res.status(500).json({ error: '배점표 조회 실패' });
+  }
 });
 
 
