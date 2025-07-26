@@ -301,7 +301,7 @@ app.post('/counseling-memosave', authJWT, async (req, res) => {
 });
 
 // ✅ 상담 메모 불러오기
-app.get('/counseling-memo/load', authJWT, async (req, res) => {
+app.get('/counseling-memoload', authJWT, async (req, res) => {
   try {
     const { student_id } = req.query;
 
