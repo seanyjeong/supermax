@@ -274,7 +274,7 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 // ✅ 상담 메모 저장/수정 (UPSERT)
-app.post('/counseling-memo/save', authJWT, async (req, res) => {
+app.post('/counseling-memosave', authJWT, async (req, res) => {
   try {
     const { student_id, memo } = req.body;
 
