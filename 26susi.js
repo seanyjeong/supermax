@@ -235,12 +235,14 @@ app.post('/26susi_save_practical_total_config', async (req, res) => {
 });
 
 // ✅ (새로 추가할 API) 대학 목록 + 실기 만점 합계 조회
+// ✅ (새로 추가할 API) 대학 목록 + 실기 만점 합계 조회 -> (수정) 저장된 설정값도 함께 조회
 app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
-  // 복잡한 쿼리를 통해 실기ID별로 각 종목의 만점을 구하고, 그 만점들을 모두 합산합니다.
+  // 기존 쿼리에 `26수시실기총점반영` 테이블을 LEFT JOIN 하여 저장된 값을 함께 가져오도록 수정
   const sql = `
     SELECT 
       d.대학ID, d.실기ID, d.대학명, d.학과명, d.전형명,
-      COALESCE(s.total_max_score, 0) AS 기본만점총합
+      COALESCE(s.total_max_score, 0) AS 기본만점총합,
+      t.실기반영총점, t.기준총점, t.환산방식, t.특수식설명
     FROM 
       대학정보 d
     LEFT JOIN (
@@ -255,6 +257,7 @@ app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
       ) as subquery
       GROUP BY 실기ID
     ) s ON d.실기ID = s.실기ID
+    LEFT JOIN \`26수시실기총점반영\` t ON d.대학ID = t.대학ID
     WHERE 
       d.실기ID IS NOT NULL
     ORDER BY 
@@ -265,11 +268,10 @@ app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
     const [rows] = await db.promise().query(sql);
     res.json(rows);
   } catch (err) {
-    console.error('실기 만점 합계 조회 실패:', err);
+    console.error('실기 만점 합계 및 설정값 조회 실패:', err);
     res.status(500).json({ error: '데이터 조회 실패' });
   }
 });
-
 // ✅ 실기ID 기준 배점표 + 종목명 조회
 // ✅ 실기ID 기준 전체 원시 배점표 반환 (렌더링은 프론트에서)
 // ✅ (수정) 실기ID 기준 전체 배점표 반환 (종목별로 그룹화)
