@@ -202,6 +202,8 @@ app.get('/26susi_get_score_table', async (req, res) => {
     const metaRows = await dbQuery(
       `SELECT 종목명 FROM \`26수시실기배점\` WHERE 실기ID = ? LIMIT 1`, [실기ID]
     );
+    console.log('🔍 metaRows:', metaRows); // ✅ 이거 추가
+
     const 종목명 = metaRows.length > 0 ? metaRows[0].종목명 : '';
 
     const rows = await dbQuery(
@@ -217,10 +219,11 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('배점표 조회 에러:', err);
+    console.error('❌ 배점표 조회 실패:', err); // ✅ 여기도 로그 찍어
     res.status(500).json({ error: '배점표 조회 실패' });
   }
 });
+
 
 
 
