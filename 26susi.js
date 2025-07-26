@@ -1,18 +1,30 @@
 const express = require('express');
-
+const cors = require('cors'); // ❗️ require는 파일 상단에서 한 번만 합니다.
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+
 const app = express();
 const port = 8080;
-const JWT_SECRET = 'super-secret-key!!'; // 환경변수로 빼는게 정석
+const JWT_SECRET = 'super-secret-key!!';
+
+// 1. CORS 옵션 설정
+const corsOptions = {
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type,Authorization'
+};
+
+// 2. 미들웨어 적용 (순서가 중요합니다)
+app.use(cors(corsOptions)); // ❗️ 만들어둔 corsOptions를 적용합니다.
+app.use(express.json());   // ❗️ express.json()은 한 번만 호출합니다.
 
 
-app.use(express.json());
+// --- 이 아래에 모든 API 라우트(app.get, app.post 등)를 작성합니다. ---
 
-const cors = require('cors');
-app.use(cors());
-app.use(express.json());
+app.get('/', (req, res) => {
+    res.send('서버가 동작하고 있습니다.');
+});
 
 const db = mysql.createConnection({
   host: '211.37.174.218',
