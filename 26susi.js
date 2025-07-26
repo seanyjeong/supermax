@@ -140,9 +140,9 @@ app.listen(port, () => {
 
 app.get('/26susi_get_practical_colleges', async (req, res) => {
   const sql = `
-    SELECT MIN(ID) AS 실기ID, 대학ID, 대학명, 학과명, 전형명
-    FROM 26수시실기배점
-    GROUP BY 대학ID, 대학명, 학과명, 전형명
+    SELECT 대학ID, 실기ID, 대학명, 학과명, 전형명
+    FROM 대학정보
+    WHERE 실기ID IS NOT NULL
     ORDER BY 대학명
   `;
   try {
@@ -153,6 +153,7 @@ app.get('/26susi_get_practical_colleges', async (req, res) => {
     res.status(500).json({ error: '실기 대학 조회 실패' });
   }
 });
+
 
 app.post('/26susi_save_practical_total_config', async (req, res) => {
   const {
