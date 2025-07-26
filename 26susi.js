@@ -772,9 +772,9 @@ app.post('/26susi/calculate-score', (req, res) => {
 
   const tasks = inputs.map((input) => {
     return new Promise((resolve, reject) => {
-const reverse = isReverseEvent(input.종목명);
-const operator = reverse ? '<=' : '>=';  // 작을수록 좋은 건 '<='
-const order = reverse ? 'DESC' : 'ASC';  // 작을수록 좋은 건 DESC
+      const reverse = isReverseEvent(input.종목명);
+      const operator = reverse ? '<=' : '<=';
+      const order = reverse ? 'DESC' : 'DESC';
 
 
 const sql = `
