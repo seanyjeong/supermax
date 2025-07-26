@@ -1,5 +1,5 @@
 const express = require('express');
-const cors = require('cors'); // ❗️ require는 파일 상단에서 한 번만 합니다.
+const cors = require('cors');
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -15,16 +15,41 @@ const corsOptions = {
     allowedHeaders: 'Content-Type,Authorization'
 };
 
-// 2. 미들웨어 적용 (순서가 중요합니다)
-app.use(cors(corsOptions)); // ❗️ 만들어둔 corsOptions를 적용합니다.
-app.use(express.json());   // ❗️ express.json()은 한 번만 호출합니다.
+// 2. 미들웨어 적용 (순서 중요)
+app.use(cors(corsOptions));
+app.use(express.json());
 
-
-// --- 이 아래에 모든 API 라우트(app.get, app.post 등)를 작성합니다. ---
-
-app.get('/', (req, res) => {
-    res.send('서버가 동작하고 있습니다.');
+// =================================================================
+// 🚦 [디버깅 로그 1] 모든 요청을 가장 먼저 확인하는 '문지기'
+// =================================================================
+app.use((req, res, next) => {
+    console.log(`\n\n<<<<< [${new Date().toLocaleString('ko-KR')}] 새로운 요청 감지! >>>>>`);
+    console.log(`[요청 메소드] ${req.method}`);
+    console.log(`[요청 경로] ${req.path}`);
+    console.log(`[요청 발신지(Origin)] ${req.headers.origin}`);
+    console.log('----------------------------------------------------');
+    next();
 });
+
+// =================================================================
+// 👮 [디버깅 로그 2] JWT 인증 미들웨어 실행 확인
+// =================================================================
+function authJWT(req, res, next) {
+    console.log(`[인증 검사 시작] ${req.path} 경로의 토큰을 확인합니다.`);
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+        console.log("    -> [인증 실패] ❌ 토큰이 없습니다.");
+        return res.status(401).json({ success: false, message: 'No token' });
+    }
+    try {
+        req.user = jwt.verify(token, JWT_SECRET);
+        console.log("    -> [인증 성공] ✅ 토큰이 유효합니다. 다음으로 진행합니다.");
+        next();
+    } catch {
+        console.log("    -> [인증 실패] ❌ 토큰이 유효하지 않습니다.");
+        return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+}
 
 const db = mysql.createConnection({
   host: '211.37.174.218',
@@ -291,6 +316,7 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 // ✅ 상담 메모 저장/수정 (UPSERT)
 app.post('/counseling-memosave', authJWT, async (req, res) => {
+     console.log('    -> ✅✅✅ 최종 목적지 도착! /counseling-memosave API의 핵심 로직이 실행되었습니다.');
   try {
     const { student_id, memo } = req.body;
 
@@ -319,6 +345,7 @@ app.post('/counseling-memosave', authJWT, async (req, res) => {
 
 // ✅ 상담 메모 불러오기
 app.get('/counseling-memoload', authJWT, async (req, res) => {
+     console.log('    -> ✅✅✅ 최종 목적지 도착! /counseling-memoload API의 핵심 로직이 실행되었습니다.');
   try {
     const { student_id } = req.query;
 
