@@ -273,8 +273,55 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 
+// ✅ 상담 메모 저장/수정 (UPSERT)
+app.post('/counseling-memo/save', authJWT, async (req, res) => {
+  try {
+    const { student_id, memo } = req.body;
 
+    // 학생 ID가 없는 경우 에러 처리
+    if (!student_id) {
+      return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
+    }
 
+    const sql = `
+      INSERT INTO 상담_로그 (학생ID, 상담메모)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE
+        상담메모 = VALUES(상담메모)
+    `;
+
+    await db.promise().query(sql, [student_id, memo]);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error('상담 메모 저장 오류:', err);
+    res.status(500).json({ success: false, message: '서버 오류' });
+  }
+});
+
+// ✅ 상담 메모 불러오기
+app.get('/counseling-memo/load', authJWT, async (req, res) => {
+  try {
+    const { student_id } = req.query;
+
+    if (!student_id) {
+      return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
+    }
+
+    const sql = "SELECT 상담메모 FROM 상담_로그 WHERE 학생ID = ?";
+    const [rows] = await db.promise().query(sql, [student_id]);
+
+    // 메모가 존재하면 해당 내용을, 없으면 빈 문자열을 보냅니다.
+    const memo = rows.length > 0 ? rows[0].상담메모 : '';
+
+    res.json({ success: true, memo });
+
+  } catch (err) {
+    console.error('상담 메모 불러오기 오류:', err);
+    res.status(500).json({ success: false, message: '서버 오류' });
+  }
+});
 
 
 
