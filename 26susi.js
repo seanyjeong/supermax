@@ -135,6 +135,64 @@ app.get('/26susi/profile', authJWT, async (req, res) => {
 app.listen(port, () => {
   console.log('원장회원 가입/로그인 서버 실행!');
 });
+//실기배점
+
+
+app.get('/26susi_get_practical_colleges', async (req, res) => {
+  const sql = `
+    SELECT MIN(ID) AS 실기ID, 대학ID, 대학명, 학과명, 전형명
+    FROM 26수시실기배점
+    GROUP BY 대학ID, 대학명, 학과명, 전형명
+    ORDER BY 대학명
+  `;
+  try {
+    const [rows] = await db.promise().query(sql);
+    res.json(rows);
+  } catch (err) {
+    console.error('실기 대학 조회 실패:', err);
+    res.status(500).json({ error: '실기 대학 조회 실패' });
+  }
+});
+
+app.post('/26susi_save_practical_total_config', async (req, res) => {
+  const {
+    대학ID,
+    실기반영총점,
+    기준총점,
+    환산방식,
+    특수식설명
+  } = req.body;
+
+  if (!대학ID || !실기반영총점) {
+    return res.status(400).json({ error: '필수값 누락' });
+  }
+
+  const sql = `
+    INSERT INTO 26수시실기총점반영 
+    (대학ID, 실기반영총점, 기준총점, 환산방식, 특수식설명)
+    VALUES (?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE 
+      실기반영총점 = VALUES(실기반영총점),
+      기준총점 = VALUES(기준총점),
+      환산방식 = VALUES(환산방식),
+      특수식설명 = VALUES(특수식설명)
+  `;
+  try {
+    await db.promise().query(sql, [
+      대학ID,
+      실기반영총점,
+      기준총점 || 400,
+      환산방식 || '비율환산',
+      특수식설명 || ''
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('총점 설정 저장 실패:', err);
+    res.status(500).json({ error: '총점 설정 저장 실패' });
+  }
+});
+
+
 
 //학생관리(정보수정및등록)
 // 1. 학생 명단 다중등록 (엑셀 복붙/파싱된 배열)
