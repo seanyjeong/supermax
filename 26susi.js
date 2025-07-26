@@ -194,19 +194,16 @@ app.post('/26susi_save_practical_total_config', async (req, res) => {
 });
 
 // ✅ 실기ID 기준 배점표 + 종목명 조회
-// ✅ 실기ID 기준 배점표 조회 API (남/여 기록 병렬 + 종목명 포함)
 app.get('/26susi_get_score_table', async (req, res) => {
   const { 실기ID } = req.query;
   if (!실기ID) return res.status(400).json({ error: '실기ID 누락' });
 
   try {
-    // 종목명 가져오기
     const metaRows = await dbQuery(
       `SELECT 종목명 FROM \`26수시실기배점\` WHERE 실기ID = ? LIMIT 1`, [실기ID]
     );
     const 종목명 = metaRows.length > 0 ? metaRows[0].종목명 : '';
 
-    // 배점표 가져오기
     const rows = await dbQuery(
       `SELECT 배점, 성별, 기록 FROM \`26수시실기배점\` WHERE 실기ID = ? ORDER BY 배점 DESC`,
       [실기ID]
@@ -224,6 +221,7 @@ app.get('/26susi_get_score_table', async (req, res) => {
     res.status(500).json({ error: '배점표 조회 실패' });
   }
 });
+
 
 
 
