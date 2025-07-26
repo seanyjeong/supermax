@@ -195,6 +195,57 @@ app.get('/26susi_get_practical_colleges', async (req, res) => {
   }
 });
 
+// ✅ (신규) 실기ID 기준 배점표 전체 수정/저장 API
+app.post('/26susi_update_score_table', authJWT, async (req, res) => {
+    // authJWT를 넣어서 로그인한 관리자만 이 기능을 사용하도록 제한해야 해.
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
+    }
+
+    const { 실기ID, data } = req.body;
+
+    if (!실기ID || !Array.isArray(data) || data.length === 0) {
+        return res.status(400).json({ success: false, message: "실기ID와 배점표 데이터가 필요합니다." });
+    }
+
+    const connection = await db.promise().getConnection(); // 트랜잭션을 위해 커넥션 가져오기
+
+    try {
+        await connection.beginTransaction(); // 트랜잭션 시작
+
+        // 1. 기존 데이터를 모두 삭제
+        console.log(`[수정 시작] 실기ID(${실기ID})의 기존 배점표를 삭제합니다.`);
+        await connection.query("DELETE FROM `26수시실기배점` WHERE 실기ID = ?", [실기ID]);
+
+        // 2. 프론트에서 받은 새 데이터로 다시 INSERT
+        console.log(`[수정 진행] 실기ID(${실기ID})의 새로운 배점표 ${data.length}개를 추가합니다.`);
+        
+        // 여러 데이터를 한번에 넣기 위해 배열 형태로 가공
+        const values = data.map(item => [
+            실기ID,
+            item.종목명,
+            item.성별,
+            item.기록,
+            item.배점
+        ]);
+
+        const sql = "INSERT INTO `26수시실기배점` (실기ID, 종목명, 성별, 기록, 배점) VALUES ?";
+        await connection.query(sql, [values]); // Bulk Insert 실행
+
+        await connection.commit(); // 모든 작업이 성공했으면 최종 반영 (커밋)
+        
+        console.log(`[수정 완료] 실기ID(${실기ID}) 배점표 업데이트 성공!`);
+        res.json({ success: true, message: '배점표가 성공적으로 업데이트되었습니다.' });
+
+    } catch (err) {
+        await connection.rollback(); // 오류 발생 시 모든 작업을 취소 (롤백)
+        console.error('❌ 배점표 업데이트 중 오류 발생:', err);
+        res.status(500).json({ success: false, message: '서버 오류로 업데이트에 실패했습니다.' });
+    } finally {
+        connection.release(); // 커넥션 반환
+    }
+});
+
 
 app.post('/26susi_save_practical_total_config', async (req, res) => {
   const {
