@@ -193,6 +193,42 @@ app.post('/26susi_save_practical_total_config', async (req, res) => {
   }
 });
 
+// ✅ (새로 추가할 API) 대학 목록 + 실기 만점 합계 조회
+app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
+  // 복잡한 쿼리를 통해 실기ID별로 각 종목의 만점을 구하고, 그 만점들을 모두 합산합니다.
+  const sql = `
+    SELECT 
+      d.대학ID, d.실기ID, d.대학명, d.학과명, d.전형명,
+      COALESCE(s.total_max_score, 0) AS 기본만점총합
+    FROM 
+      대학정보 d
+    LEFT JOIN (
+      SELECT 
+        실기ID, SUM(max_score) as total_max_score
+      FROM (
+        SELECT 
+          실기ID, 종목명, MAX(CAST(배점 AS SIGNED)) as max_score 
+        FROM \`26수시실기배점\`
+        WHERE 실기ID IS NOT NULL
+        GROUP BY 실기ID, 종목명
+      ) as subquery
+      GROUP BY 실기ID
+    ) s ON d.실기ID = s.실기ID
+    WHERE 
+      d.실기ID IS NOT NULL
+    ORDER BY 
+      d.대학명;
+  `;
+
+  try {
+    const [rows] = await db.promise().query(sql);
+    res.json(rows);
+  } catch (err) {
+    console.error('실기 만점 합계 조회 실패:', err);
+    res.status(500).json({ error: '데이터 조회 실패' });
+  }
+});
+
 // ✅ 실기ID 기준 배점표 + 종목명 조회
 // ✅ 실기ID 기준 전체 원시 배점표 반환 (렌더링은 프론트에서)
 // ✅ (수정) 실기ID 기준 전체 배점표 반환 (종목별로 그룹화)
