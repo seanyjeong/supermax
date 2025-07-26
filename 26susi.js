@@ -393,11 +393,17 @@ app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
   res.json({ success: true });
 });
 
-// GET /26susi_college_list 대학리스트
+// GET /26susi_college_list 대학리스트 (수정)
 app.get('/26susi_college_list', authJWT, async (req, res) => {
-  const [rows] = await db.promise().query(
-    "SELECT 대학ID, 대학명, 학과명, 전형명, 실기ID FROM 대학정보"
-  );
+  // 26수시실기총점반영 테이블과 LEFT JOIN하여 환산 정보를 함께 가져옵니다.
+  const sql = `
+    SELECT 
+      d.대학ID, d.대학명, d.학과명, d.전형명, d.실기ID,
+      t.실기반영총점, t.기준총점, t.환산방식
+    FROM 대학정보 d
+    LEFT JOIN \`26수시실기총점반영\` t ON d.대학ID = t.대학ID
+  `;
+  const [rows] = await db.promise().query(sql);
   res.json({ success: true, colleges: rows });
 });
 
