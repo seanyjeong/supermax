@@ -314,7 +314,53 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 
+// 🟩 추가할 새 API 코드
 
+// ✅ (신규) 학생별 상담메모 불러오기
+app.get('/26susi_counsel_memo_load', authJWT, async (req, res) => {
+  const { student_id } = req.query;
+  if (!student_id) return res.status(400).json({ success: false, message: "학생ID 누락" });
+  try {
+    const [rows] = await db.promise().query("SELECT 상담메모 FROM 상담_로그 WHERE 학생ID = ?", [student_id]);
+    const memo = rows.length > 0 ? rows[0].상담메모 : '';
+    res.json({ success: true, memo });
+  } catch(err) {
+    console.error('상담메모 로드 오류:', err);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+});
+
+// ✅ (신규) 학생별 상담메모 저장/수정
+app.post('/26susi_counsel_memo_save', authJWT, async (req, res) => {
+  const { student_id, memo } = req.body;
+  if (student_id === undefined || memo === undefined) 
+    return res.status(400).json({ success: false, message: "필수값 누락" });
+
+  try {
+    await db.promise().query(`
+      INSERT INTO 상담_로그 (학생ID, 상담메모) VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE 상담메모 = VALUES(상담메모)
+    `, [student_id, memo]);
+    res.json({ success: true });
+  } catch(err) {
+    console.error('상담메모 저장 오류:', err);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+});
+
+// ✅ (신규) 학생별 상담메모 삭제 (필요 시 사용)
+app.post('/26susi_counsel_memo_delete', authJWT, async (req, res) => {
+    const { student_id } = req.body;
+    if (!student_id) return res.status(400).json({ success: false, message: "학생ID 누락" });
+
+    try {
+        await db.promise().query("DELETE FROM 상담_로그 WHERE 학생ID = ?", [student_id]);
+        res.json({ success: true });
+    } catch(err) {
+        console.error('상담메모 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 오류' });
+    }
+});
 
 
 
