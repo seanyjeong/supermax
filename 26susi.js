@@ -196,22 +196,23 @@ app.post('/26susi_save_practical_total_config', async (req, res) => {
 // ✅ 실기ID 기준 배점표 + 종목명 조회
 app.get('/26susi_get_score_table', async (req, res) => {
   const { 실기ID } = req.query;
-  if (!실기ID) return res.status(400).json({ error: '실기ID 누락' });
+  if (!실기ID || isNaN(실기ID)) return res.status(400).json({ error: '실기ID 누락 또는 잘못됨' });
 
   try {
-    const metaRows = await dbQuery(
+    console.log('👉 실기ID:', 실기ID);
+
+    const metaResult = await dbQuery(
       `SELECT 종목명 FROM \`26수시실기배점\` WHERE 실기ID = ? LIMIT 1`, [실기ID]
     );
-    console.log('🔍 metaRows:', metaRows); // ✅ 이거 추가
 
-    const 종목명 = metaRows.length > 0 ? metaRows[0].종목명 : '';
+    if (!metaResult.length) return res.status(404).json({ error: '해당 실기ID의 종목명을 찾을 수 없음' });
 
     const rows = await dbQuery(
       `SELECT 배점, 성별, 기록 FROM \`26수시실기배점\` WHERE 실기ID = ? ORDER BY 배점 DESC`,
       [실기ID]
     );
 
-    const result = { 종목명, 남: [], 여: [] };
+    const result = { 종목명: metaResult[0].종목명, 남: [], 여: [] };
     rows.forEach(row => {
       if (row.성별 === '남') result.남.push({ 배점: row.배점, 기록: row.기록 });
       else if (row.성별 === '여') result.여.push({ 배점: row.배점, 기록: row.기록 });
@@ -219,10 +220,11 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error('❌ 배점표 조회 실패:', err); // ✅ 여기도 로그 찍어
+    console.error('❌ 배점표 조회 실패:', err);
     res.status(500).json({ error: '배점표 조회 실패' });
   }
 });
+
 
 
 
