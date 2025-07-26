@@ -776,26 +776,38 @@ app.post('/26susi/calculate-score', (req, res) => {
       const operator = reverse ? '<=' : '<=';
       const order = reverse ? 'DESC' : 'DESC';
 
+      
 
-const sql = `
-  SELECT 배점
-  FROM \`26수시실기배점\`
-  WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) ${operator} ?
-  ORDER BY CAST(기록 AS DECIMAL(10,2)) ${order}
-  LIMIT 1
-`;
+db.query(sql, [실기ID, input.종목명, gender, input.기록], (err, rows) => {
+  if (err) {
+    console.error('배점 쿼리 오류:', err);
+    return reject(err);
+  }
 
+  // ✅ 💥 여기서 결과가 없고 달리기류(isReverse면) → 만점 처리
+  if (rows.length === 0 && reverse) {
+    const fallbackSql = `
+      SELECT MAX(CAST(배점 AS SIGNED)) AS 배점
+      FROM \`26수시실기배점\`
+      WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?
+    `;
+    return db.query(fallbackSql, [실기ID, input.종목명, gender], (err2, maxRow) => {
+      if (err2) {
+        console.error('만점 보정 쿼리 오류:', err2);
+        return reject(err2);
+      }
+      const 점수 = maxRow[0]?.배점 ?? 0;
+      console.log(`💯 ${input.종목명} → 입력기록 ${input.기록}이 너무 좋아서 만점(${점수}) 처리됨`);
+      return resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
+    });
+  }
 
-      db.query(sql, [실기ID, input.종목명, gender, input.기록], (err, rows) => {
-        if (err) {
-          console.error('배점 쿼리 오류:', err);
-          return reject(err);
-        }
+  // 일반적으로 처리
+  const 점수 = rows.length > 0 ? Number(rows[0].배점) : 0;
+  console.log(`▶ ${input.종목명} (${reverse ? '작을수록 높음' : '클수록 높음'}) → 기록: ${input.기록} → 배점: ${점수}`);
+  resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
+});
 
-        const 점수 = rows.length > 0 ? Number(rows[0].배점) : 0;
-        console.log(`▶ ${input.종목명} (${reverse ? '작을수록 높음' : '클수록 높음'}) → 기록: ${input.기록} → 배점: ${점수}`);
-        resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
-      });
     });
   });
 
