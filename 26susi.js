@@ -16,6 +16,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'OPTIONS','DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.options('*', cors());
 
 const db = mysql.createConnection({
   host: '211.37.174.218',
