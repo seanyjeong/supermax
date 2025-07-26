@@ -773,8 +773,9 @@ app.post('/26susi/calculate-score', (req, res) => {
   const tasks = inputs.map((input) => {
     return new Promise((resolve, reject) => {
 const reverse = isReverseEvent(input.종목명);
-const operator = reverse ? '<=' : '>=';  // ✅ 방향 반대
-const order = reverse ? 'DESC' : 'ASC';  // ✅ 정렬 방향 반대
+const operator = reverse ? '<=' : '>=';  // 작을수록 좋은 건 '<='
+const order = reverse ? 'DESC' : 'ASC';  // 작을수록 좋은 건 DESC
+
 
 const sql = `
   SELECT 배점
