@@ -314,58 +314,7 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 
-// ✅ 상담 메모 저장/수정 (UPSERT)
-app.post('/counseling-memosave', authJWT, async (req, res) => {
-     console.log('    -> ✅✅✅ 최종 목적지 도착! /counseling-memosave API의 핵심 로직이 실행되었습니다.');
-  try {
-    const { student_id, memo } = req.body;
 
-    // 학생 ID가 없는 경우 에러 처리
-    if (!student_id) {
-      return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
-    }
-
-    const sql = `
-      INSERT INTO 상담_로그 (학생ID, 상담메모)
-      VALUES (?, ?)
-      ON DUPLICATE KEY UPDATE
-        상담메모 = VALUES(상담메모)
-    `;
-
-    await db.promise().query(sql, [student_id, memo]);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error('상담 메모 저장 오류:', err);
-    res.status(500).json({ success: false, message: '서버 오류' });
-  }
-});
-
-
-// ✅ 상담 메모 불러오기
-app.get('/counseling-memoload', authJWT, async (req, res) => {
-     console.log('    -> ✅✅✅ 최종 목적지 도착! /counseling-memoload API의 핵심 로직이 실행되었습니다.');
-  try {
-    const { student_id } = req.query;
-
-    if (!student_id) {
-      return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
-    }
-
-    const sql = "SELECT 상담메모 FROM 상담_로그 WHERE 학생ID = ?";
-    const [rows] = await db.promise().query(sql, [student_id]);
-
-    // 메모가 존재하면 해당 내용을, 없으면 빈 문자열을 보냅니다.
-    const memo = rows.length > 0 ? rows[0].상담메모 : '';
-
-    res.json({ success: true, memo });
-
-  } catch (err) {
-    console.error('상담 메모 불러오기 오류:', err);
-    res.status(500).json({ success: false, message: '서버 오류' });
-  }
-});
 
 
 
@@ -510,7 +459,7 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
         학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
         기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
         기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-        실기총점, 합산점수, 상담메모
+        실기총점, 합산점수
       ) VALUES (
         ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?, ?,
@@ -529,8 +478,8 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
         기록6 = VALUES(기록6), 점수6 = VALUES(점수6),
         기록7 = VALUES(기록7), 점수7 = VALUES(점수7),
         실기총점 = VALUES(실기총점),
-        합산점수 = VALUES(합산점수),
-        상담메모 = VALUES(상담메모)
+        합산점수 = VALUES(합산점수)
+        
       `,
       [
         student_id,
@@ -546,8 +495,8 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
         safe(col.기록6), safe(col.점수6),
         safe(col.기록7), safe(col.점수7),
         safe(col.실기총점),
-        safe(col.합산점수),
-        safe(col.상담메모)
+        safe(col.합산점수)
+      
       ]
     );
   }
