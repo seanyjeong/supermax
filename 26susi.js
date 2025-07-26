@@ -316,7 +316,9 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 // 🟩 추가할 새 API 코드
 
-// ✅ (신규) 학생별 상담메모 불러오기
+// ✅ 아래 코드를 통째로 복사해서 추가하세요.
+
+// (신규) 학생별 상담메모 불러오기
 app.get('/26susi_counsel_memo_load', authJWT, async (req, res) => {
   const { student_id } = req.query;
   if (!student_id) return res.status(400).json({ success: false, message: "학생ID 누락" });
@@ -330,7 +332,7 @@ app.get('/26susi_counsel_memo_load', authJWT, async (req, res) => {
   }
 });
 
-// ✅ (신규) 학생별 상담메모 저장/수정
+// (신규) 학생별 상담메모 저장/수정
 app.post('/26susi_counsel_memo_save', authJWT, async (req, res) => {
   const { student_id, memo } = req.body;
   if (student_id === undefined || memo === undefined) 
@@ -348,7 +350,7 @@ app.post('/26susi_counsel_memo_save', authJWT, async (req, res) => {
   }
 });
 
-// ✅ (신규) 학생별 상담메모 삭제 (필요 시 사용)
+// (신규) 학생별 상담메모 삭제 (필요 시 사용)
 app.post('/26susi_counsel_memo_delete', authJWT, async (req, res) => {
     const { student_id } = req.body;
     if (!student_id) return res.status(400).json({ success: false, message: "학생ID 누락" });
@@ -361,7 +363,6 @@ app.post('/26susi_counsel_memo_delete', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: 'DB 오류' });
     }
 });
-
 
 
 //학생관리(정보수정및등록)
@@ -494,6 +495,7 @@ app.get('/26susi_college_list', authJWT, async (req, res) => {
 });
 
 // 상담 시 여러 대학 한 번에 저장 (colleges: [{...}, {...}])
+// ✅ 수정 후 코드 (이 코드로 교체하세요)
 app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
   const { student_id, colleges } = req.body;
   if (!student_id || !Array.isArray(colleges))
@@ -507,42 +509,24 @@ app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
         기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
         실기총점, 합산점수
       ) VALUES (
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?
       )
       ON DUPLICATE KEY UPDATE
-        실기ID = VALUES(실기ID),
-        내신등급 = VALUES(내신등급),
-        내신점수 = VALUES(내신점수),
-        기록1 = VALUES(기록1), 점수1 = VALUES(점수1),
-        기록2 = VALUES(기록2), 점수2 = VALUES(점수2),
-        기록3 = VALUES(기록3), 점수3 = VALUES(점수3),
-        기록4 = VALUES(기록4), 점수4 = VALUES(점수4),
-        기록5 = VALUES(기록5), 점수5 = VALUES(점수5),
-        기록6 = VALUES(기록6), 점수6 = VALUES(점수6),
-        기록7 = VALUES(기록7), 점수7 = VALUES(점수7),
-        실기총점 = VALUES(실기총점),
-        합산점수 = VALUES(합산점수)
-        
+        실기ID = VALUES(실기ID), 내신등급 = VALUES(내신등급),
+        내신점수 = VALUES(내신점수), 기록1 = VALUES(기록1), 점수1 = VALUES(점수1),
+        기록2 = VALUES(기록2), 점수2 = VALUES(점수2), 기록3 = VALUES(기록3), 점수3 = VALUES(점수3),
+        기록4 = VALUES(기록4), 점수4 = VALUES(점수4), 기록5 = VALUES(기록5), 점수5 = VALUES(점수5),
+        기록6 = VALUES(기록6), 점수6 = VALUES(점수6), 기록7 = VALUES(기록7), 점수7 = VALUES(점수7),
+        실기총점 = VALUES(실기총점), 합산점수 = VALUES(합산점수)
       `,
       [
-        student_id,
-        safe(col.대학ID),
-        safe(col.실기ID),
-        safe(col.내신등급),
-        safe(col.내신점수),
-        safe(col.기록1), safe(col.점수1),
-        safe(col.기록2), safe(col.점수2),
-        safe(col.기록3), safe(col.점수3),
-        safe(col.기록4), safe(col.점수4),
-        safe(col.기록5), safe(col.점수5),
-        safe(col.기록6), safe(col.점수6),
-        safe(col.기록7), safe(col.점수7),
-        safe(col.실기총점),
+        student_id, safe(col.대학ID), safe(col.실기ID), safe(col.내신등급),
+        safe(col.내신점수), safe(col.기록1), safe(col.점수1), safe(col.기록2),
+        safe(col.점수2), safe(col.기록3), safe(col.점수3), safe(col.기록4),
+        safe(col.점수4), safe(col.기록5), safe(col.점수5), safe(col.기록6),
+        safe(col.점수6), safe(col.기록7), safe(col.점수7), safe(col.실기총점),
         safe(col.합산점수)
-      
       ]
     );
   }
