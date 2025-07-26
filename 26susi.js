@@ -278,11 +278,10 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 // ✅ 상담 메모 저장/수정 (UPSERT)
-app.post('/counseling-memosave', authJWT, async (req, res) => {
+// ✅ 인증 없이 저장 가능하게 바꾼 버전
+app.post('/counseling-memosave', async (req, res) => {
   try {
     const { student_id, memo } = req.body;
-
-    // 학생 ID가 없는 경우 에러 처리
     if (!student_id) {
       return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
     }
@@ -290,19 +289,16 @@ app.post('/counseling-memosave', authJWT, async (req, res) => {
     const sql = `
       INSERT INTO 상담_로그 (학생ID, 상담메모)
       VALUES (?, ?)
-      ON DUPLICATE KEY UPDATE
-        상담메모 = VALUES(상담메모)
+      ON DUPLICATE KEY UPDATE 상담메모 = VALUES(상담메모)
     `;
-
     await db.promise().query(sql, [student_id, memo]);
-
     res.json({ success: true });
-
   } catch (err) {
     console.error('상담 메모 저장 오류:', err);
     res.status(500).json({ success: false, message: '서버 오류' });
   }
 });
+
 
 // ✅ 상담 메모 불러오기
 app.get('/counseling-memoload', authJWT, async (req, res) => {
