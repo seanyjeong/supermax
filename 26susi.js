@@ -645,7 +645,7 @@ app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
 // ✅ isReverse 판별 함수
 const isReverseEvent = (eventName) => {
   const lower = eventName.toLowerCase();
-  return ['10', '20', 'run', '100', 'z', '달리기'].some(keyword => lower.includes(keyword));
+  return ['10', '20', 'run', '100', 'z', '달리기','벽치기'].some(keyword => lower.includes(keyword));
 };
 
 // ✅ 1. 대학/학과 선택용 실기ID 목록
