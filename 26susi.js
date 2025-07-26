@@ -7,8 +7,15 @@ const app = express();
 const port = 8080;
 const JWT_SECRET = 'super-secret-key!!'; // 환경변수로 빼는게 정석
 
-app.use(cors());
+
 app.use(express.json());
+
+const cors = require('cors');
+app.use(cors({
+  origin: '*',  // 또는 https://yourdomain.com
+  methods: ['GET', 'POST', 'OPTIONS','DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 const db = mysql.createConnection({
   host: '211.37.174.218',
