@@ -1177,23 +1177,33 @@ app.post('/26susi/calculate-score', authJWT, async (req, res) => {
   }
 
   // 기록 → 점수 계산
-  const tasks = inputs.map(async (input) => {
-    if (!input.기록 && input.기록 !== 0) return 0;
+const tasks = inputs.map(async (input) => {
+    // ✅ [여기에 콘솔 추가] 모든 쿼리 입력값 확인!
+    console.log('쿼리 파라미터:', 실기ID, input.종목명, gender, input.기록);
+
     const reverse = isReverseEvent(input.종목명);
     const operator = reverse ? '<=' : '>=';
+
     const sql = `
       SELECT 배점 FROM \`26수시실기배점\`
-      WHERE 실기ID=? AND 종목명=? AND 성별=? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
-      ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+      WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
+      ORDER BY CAST(배점 AS SIGNED) DESC
+      LIMIT 1`;
     let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
+
+    // ✅ [여기에도 콘솔 추가] 쿼리 결과 바로 확인!
+    console.log('쿼리 결과:', row);
+
     if (!row) {
-      // 기록 미해당시 최대 배점 사용
-      [[row]] = await db.promise().query(
-        "SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM `26수시실기배점` WHERE 실기ID=? AND 종목명=? AND 성별=?",
-        [실기ID, input.종목명, gender]);
+      // 기록이 범위 밖이면 최대 배점으로 fallback
+      const fallbackSql = `SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?`;
+      [[row]] = await db.promise().query(fallbackSql, [실기ID, input.종목명, gender]);
+      console.log('Fallback 쿼리 결과:', row);
     }
-    return Number(row?.배점 || 0);
-  });
+
+    return { 종목명: input.종목명, 기록: input.기록, 배점: row ? Number(row.배점) : 0 };
+});
+
 
   try {
     const scoreArr = await Promise.all(tasks);
