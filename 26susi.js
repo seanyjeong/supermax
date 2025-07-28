@@ -542,12 +542,42 @@ app.get('/26susi_college_list', authJWT, async (req, res) => {
   const sql = `
     SELECT 
       d.대학ID, d.대학명, d.학과명, d.전형명, d.실기ID,
-      t.실기반영총점, t.기준총점, t.환산방식
+      t.실기반영총점, t.기준총점, t.환산방식,
+      d.26맥스예상컷, d.26지점예상컷  -- 이 부분을 추가
     FROM 대학정보 d
     LEFT JOIN \`26수시실기총점반영\` t ON d.대학ID = t.대학ID
   `;
   const [rows] = await db.promise().query(sql);
   res.json({ success: true, colleges: rows });
+});
+
+// [새로 추가할 코드]
+
+// (신규) 대학별 예상컷 저장/수정
+app.post('/26susi_college_cut_update', authJWT, async (req, res) => {
+    // 관리자만 이 기능을 사용하도록 제한
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
+    }
+
+    const { 대학ID, 맥스예상컷, 지점예상컷 } = req.body;
+    if (!대학ID) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+
+    try {
+        await db.promise().query(
+            `UPDATE 대학정보 SET
+                \`26맥스예상컷\` = ?,
+                \`26지점예상컷\` = ?
+             WHERE 대학ID = ?`,
+            [맥스예상컷, 지점예상컷, 대학ID]
+        );
+        res.json({ success: true, message: '예상컷이 저장되었습니다.' });
+    } catch (err) {
+        console.error('예상컷 저장 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.' });
+    }
 });
 
 // 상담 시 여러 대학 한 번에 저장 (colleges: [{...}, {...}])
