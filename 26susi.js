@@ -1167,49 +1167,42 @@ app.get('/26susi/events/:id', (req, res) => {
 
 
 // ✅ 3. 배점 계산 API
-// [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
+const calcPracticalScore = require('./calcPracticalScore');
 
-// [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
 
 app.post('/26susi/calculate-score', authJWT, async (req, res) => {
-    const { 실기ID, gender, inputs } = req.body;
-    if (!실기ID || !gender || !Array.isArray(inputs)) {
-        return res.status(400).json({ success: false, message: "필수 정보 누락" });
+  const { 실기ID, gender, inputs } = req.body;
+  if (!실기ID || !gender || !Array.isArray(inputs)) {
+    return res.status(400).json({ success: false, message: "필수 정보 누락" });
+  }
+
+  // 기록 → 점수 계산
+  const tasks = inputs.map(async (input) => {
+    if (!input.기록 && input.기록 !== 0) return 0;
+    const reverse = isReverseEvent(input.종목명);
+    const operator = reverse ? '<=' : '>=';
+    const sql = `
+      SELECT 배점 FROM \`26수시실기배점\`
+      WHERE 실기ID=? AND 종목명=? AND 성별=? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
+      ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+    let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
+    if (!row) {
+      // 기록 미해당시 최대 배점 사용
+      [[row]] = await db.promise().query(
+        "SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM `26수시실기배점` WHERE 실기ID=? AND 종목명=? AND 성별=?",
+        [실기ID, input.종목명, gender]);
     }
+    return Number(row?.배점 || 0);
+  });
 
-    const tasks = inputs.map(async (input) => {
-        if (input.기록 === null || input.기록 === '') {
-            return { 종목명: input.종목명, 기록: input.기록, 배점: 0 };
-        }
-
-        const reverse = isReverseEvent(input.종목명);
-        const operator = reverse ? '<=' : '>=';
-
-        const sql = `
-            SELECT 배점 FROM \`26수시실기배점\`
-            WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
-            ORDER BY CAST(배점 AS SIGNED) DESC 
-            LIMIT 1`;
-        
-        // ✅ .promise() 추가
-        let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
-        
-        if (!row) {
-            const fallbackSql = `SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?`;
-            // ✅ .promise() 추가
-            [[row]] = await db.promise().query(fallbackSql, [실기ID, input.종목명, gender]);
-        }
-        
-        return { 종목명: input.종목명, 기록: input.기록, 배점: row ? Number(row.배점) : 0 };
-    });
-    
-    try {
-        const finalScores = await Promise.all(tasks);
-        res.json({ 종목별결과: finalScores });
-    } catch (err) {
-        console.error("점수 계산 중 오류:", err);
-        res.status(500).json({ success: false, message: "점수 계산 중 오류 발생" });
-    }
+  try {
+    const scoreArr = await Promise.all(tasks);
+    const 환산총점 = await calcPracticalScore({ 실기ID, scores: scoreArr, db });
+    res.json({ 종목별배점: scoreArr, 환산총점 });
+  } catch (e) {
+    console.error('실기 총점 계산 오류:', e);
+    res.status(500).json({ success: false, message: "계산 오류" });
+  }
 });
 
 
