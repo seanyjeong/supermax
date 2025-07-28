@@ -539,6 +539,8 @@ app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
 // GET /26susi_college_list 대학리스트 (수정)
 // [교체할 코드]
 
+// ✅ 이 코드가 파일에 남아있는지 확인해 봐.
+
 app.get('/26susi_college_list', authJWT, async (req, res) => {
   // 로그인한 사용자의 지점 정보를 가져옴
   const userBranch = req.user.branch;
