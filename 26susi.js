@@ -97,31 +97,39 @@ app.post('/26susi_admin_delete', authJWT, async (req, res) => {
 });
 
 // ✅ 원장회원 회원가입
+// ✅ [수정] 회원가입 API (에러 로깅 강화)
 app.post('/26susi/register', async (req, res) => {
   try {
     const { userid, password, name, branch, phone } = req.body;
-    if (![userid, password, name, branch, phone].every(Boolean))
-      return res.json({ success: false, message: "모든 값 입력" });
+    if (![userid, password, name, branch, phone].every(Boolean)) {
+      return res.json({ success: false, message: "모든 값을 입력해주세요." });
+    }
 
-    // 중복 확인
     const [dup] = await db.promise().query(
-      "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?",
-      [userid]
+      "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?", [userid]
     );
-    if (dup.length > 0) return res.json({ success: false, message: "이미 사용중인 아이디" });
+    if (dup.length > 0) {
+      return res.json({ success: false, message: "이미 사용중인 아이디입니다." });
+    }
 
-    // 비번 해시
     const hash = await bcrypt.hash(password, 10);
-    // 가입 승인은 기본 '대기'
     await db.promise().query(
       "INSERT INTO 원장회원 (아이디, 비밀번호, 이름, 지점명, 전화번호) VALUES (?, ?, ?, ?, ?)",
       [userid, hash, name, branch, phone]
     );
 
     res.json({ success: true });
+
   } catch (err) {
-    console.error('회원가입 오류:', err);
-    res.json({ success: false, message: "서버 오류" });
+    // 에러를 더 명확하게 터미널에 출력
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.error("!!! /26susi/register 경로에서 오류 발생 !!!");
+    console.error("- 발생 시간:", new Date().toLocaleString('ko-KR'));
+    console.error("- 에러 내용:", err); // 에러 객체 전체를 출력
+    console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+    // 500 상태 코드와 함께 명확한 에러 메시지를 응답
+    res.status(500).json({ success: false, message: "서버 내부 오류가 발생했습니다." });
   }
 });
 
