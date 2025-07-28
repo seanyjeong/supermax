@@ -412,38 +412,52 @@ app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     }
 });
 // (신규) 그룹 상담 페이지 전체 저장 API
+// [기존 /26susi_counsel_by_college_save 함수를 이걸로 교체]
+
 app.post('/26susi_counsel_by_college_save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
     if (!college_id || !Array.isArray(studentData)) {
-        return res.status(400).json({ success: false, message: "필수 데이터 누락" });
+        return res.status(400).json({ success: false, message: "필수 데이터가 누락되었습니다." });
     }
 
-    const connection = await db.getConnection();
+    const connection = await db.promise().getConnection();
     await connection.beginTransaction();
 
     try {
-        // studentData 배열에 있는 각 학생 정보에 대해 UPSERT 실행
         for (const student of studentData) {
-            const sql = `
+            // 1. 상담 당시의 기록(스냅샷)을 '상담대학정보'에 저장 (기존 로직)
+            const counselSql = `
                 INSERT INTO 상담대학정보 (
-                    학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
-                    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
-                    기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-                    실기총점, 합산점수
+                    학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 기록1, 점수1, 기록2, 점수2, 기록3, 점수3,
+                    기록4, 점수4, 기록5, 점수5, 기록6, 점수6, 기록7, 점수7, 실기총점, 합산점수
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
-                    실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수),
-                    기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
-                    기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
-                    기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
-                    기록7=VALUES(기록7), 점수7=VALUES(점수7), 실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수)
-            `;
-            await connection.query(sql, [
-                student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수,
-                student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3,
-                student.기록4, student.점수4, student.기록5, student.점수5, student.기록6, student.점수6,
-                student.기록7, student.점수7, student.실기총점, student.합산점수
-            ]);
+                    실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수), 기록1=VALUES(기록1),
+                    점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2), 기록3=VALUES(기록3),
+                    점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4), 기록5=VALUES(기록5),
+                    점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6), 기록7=VALUES(기록7),
+                    점수7=VALUES(점수7), 실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수)`;
+            
+            const counselParams = [
+                safe(student.학생ID), safe(college_id), safe(student.실기ID), safe(student.내신등급), safe(student.내신점수),
+                safe(student.기록1), safe(student.점수1), safe(student.기록2), safe(student.점수2), safe(student.기록3), safe(student.점수3),
+                safe(student.기록4), safe(student.점수4), safe(student.기록5), safe(student.점수5), safe(student.기록6), safe(student.점수6),
+                safe(student.기록7), safe(student.점수7), safe(student.실기총점), safe(student.합산점수)
+            ];
+            await connection.query(counselSql, counselParams);
+
+            // ✅ 2. 학생의 '공식' 내신 정보를 '학생_내신정보' 테이블에도 업데이트 (새로 추가된 로직)
+            const gradeSql = `
+                INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 등급=VALUES(등급), 내신점수=VALUES(내신점수)`;
+            const gradeParams = [
+                safe(student.학생ID),
+                safe(college_id),
+                safe(student.내신등급),
+                safe(student.내신점수)
+            ];
+            await connection.query(gradeSql, gradeParams);
         }
         
         await connection.commit();
@@ -451,10 +465,10 @@ app.post('/26susi_counsel_by_college_save', authJWT, async (req, res) => {
 
     } catch (err) {
         await connection.rollback();
-        console.error("그룹 상담 저장 오류:", err);
-        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+        console.error("그룹 상담 저장 API 오류:", err);
+        res.status(500).json({ success: false, message: '서버 DB 처리 중 오류가 발생했습니다.' });
     } finally {
-        connection.release();
+        if (connection) connection.release();
     }
 });
 
