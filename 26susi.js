@@ -516,6 +516,38 @@ app.post('/26susi/check-userid', async (req, res) => {
     }
 });
 
+async function sendVerificationSMS(phone, code) {
+  try {
+    const message = `[맥스체대입시] 인증번호는 [${code}] 입니다.`;
+    const timestamp = Date.now().toString();
+    const url = `/sms/v2/services/${SERVICE_ID}/messages`;
+    const signature = makeSignature('POST', url, timestamp, NAVER_ACCESS_KEY, NAVER_SECRET_KEY);
+
+    await axios({
+      method: 'POST',
+      url: `https://sens.apigw.ntruss.com${url}`,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'x-ncp-apigw-timestamp': timestamp,
+        'x-ncp-iam-access-key': NAVER_ACCESS_KEY,
+        'x-ncp-apigw-signature-v2': signature,
+      },
+      data: {
+        type: 'SMS',
+        from: FROM_PHONE,
+        content: message,
+        messages: [{ to: phone }],
+      },
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error("SMS 발송 실패:", err.response?.data || err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+
 // ✅ (신규) 비밀번호 재설정을 위한 사용자 확인 및 인증 SMS 발송 API
 app.post('/26susi/request-reset-sms', async (req, res) => {
     const { userid, phone } = req.body;
@@ -535,7 +567,7 @@ app.post('/26susi/request-reset-sms', async (req, res) => {
 
         // 2. 회원이 확인되면, 기존 SMS 발송 로직 재사용
         const code = generateCode();
-        const smsResult = await sendSms(phone, code); // 기존에 만든 sendSms 함수 재사용
+        const smsResult = await sendVerificationSMS(phone, code); // 기존에 만든 sendSms 함수 재사용
 
         if (smsResult.success) {
             verificationCodes[phone] = { code, expires: Date.now() + 3 * 60 * 1000 };
