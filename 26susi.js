@@ -428,6 +428,9 @@ app.post('/26susi/send-verification-sms', async (req, res) => {
     verificationCodes[phone] = { code, expires: Date.now() + 3 * 60 * 1000 };
 
     const url = `/sms/v2/services/${SERVICE_ID}/messages`;
+        console.log("--- API 호출 직전 NAVER_SECRET_KEY 타입:", typeof NAVER_SECRET_KEY);
+    console.log("--- API 호출 직전 NAVER_SECRET_KEY 값:", NAVER_SECRET_KEY);
+    console.log("------------------------------------------");
     const signature = makeSignature('POST', url, timestamp, NAVER_ACCESS_KEY, NAVER_SECRET_KEY);
 
     try {
