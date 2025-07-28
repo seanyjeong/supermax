@@ -1207,8 +1207,8 @@ const tasks = inputs.map(async (input) => {
 
   try {
     const scoreArr = await Promise.all(tasks);
-    const 환산총점 = await calcPracticalScore({ 실기ID, scores: scoreArr, db });
-    res.json({ 종목별배점: scoreArr, 환산총점 });
+    const 실기총점 = await calcPracticalScore({ 실기ID, scores: scoreArr, db });
+    res.json({ 종목별배점: scoreArr, 실기총점 });
   } catch (e) {
     console.error('실기 총점 계산 오류:', e);
     res.status(500).json({ success: false, message: "계산 오류" });
