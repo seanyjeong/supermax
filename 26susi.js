@@ -961,17 +961,7 @@ app.post('/26susi/calculate-score', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: "점수 계산 중 오류 발생" });
     }
 });
-  Promise.all(tasks)
-    .then(results => {
-      const 총점 = results.reduce((sum, row) => sum + row.배점, 0);
-      console.log('✅ 총점:', 총점);
-      res.json({ 종목별결과: results, 총점 });
-    })
-    .catch(err => {
-      console.error('배점 계산 실패:', err);
-      res.status(500).json({ message: '계산 오류', error: err });
-    });
-});
+
 
 // ✅ 서버 실행
 app.listen(port, () => {
