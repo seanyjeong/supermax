@@ -1196,7 +1196,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             if (input.기록 === null || input.기록 === '') {
                 return { 종목명: input.종목명, 배점: 0 };
             }
-            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기'].some(k => input.종목명.toLowerCase().includes(k));
+            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런'].some(k => input.종목명.toLowerCase().includes(k));
             const operator = reverse ? '<=' : '>=';
             const sql = `
                 SELECT 배점 FROM \`26수시실기배점\`
