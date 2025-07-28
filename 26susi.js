@@ -385,10 +385,10 @@ app.get('/26susi_get_score_table', async (req, res) => {
 const verificationCodes = {}; // 메모리에 인증번호 저장 (서버 재시작 시 초기화됨)
 
 // 네이버 클라우드 플랫폼 SENS 키 (실제 운영 시에는 환경변수로 빼는 것이 안전)
-const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB'; // 여기에 네 키를 넣어줘
-const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW'; // 여기에 네 키를 넣어줘
-const SERVICE_ID = 'ncp:sms:kr:284240549231:sean'; // 여기에 네 서비스 ID를 넣어줘
-const FROM_PHONE = '01021446765'; // 여기에 네 발신번호를 넣어줘
+const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB';
+const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
+const SERVICE_ID = 'ncp:sms:kr:284240549231:sean';
+const FROM_PHONE = '01021446765';
 
 // 4자리 랜덤 인증번호 생성 함수
 function generateCode() {
