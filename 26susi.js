@@ -369,10 +369,54 @@ app.get('/26susi_get_score_table', async (req, res) => {
 });
 
 
+// [새로 추가할 API 코드]
 
-// 🟩 추가할 새 API 코드
+// (신규) 그룹 상담 페이지 전체 저장 API
+app.post('/26susi_counsel_by_college_save', authJWT, async (req, res) => {
+    const { college_id, studentData } = req.body;
+    if (!college_id || !Array.isArray(studentData)) {
+        return res.status(400).json({ success: false, message: "필수 데이터 누락" });
+    }
 
-// ✅ 아래 코드를 통째로 복사해서 추가하세요.
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+        // studentData 배열에 있는 각 학생 정보에 대해 UPSERT 실행
+        for (const student of studentData) {
+            const sql = `
+                INSERT INTO 상담대학정보 (
+                    학생ID, 대학ID, 실기ID, 내신등급, 내신점수,
+                    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
+                    기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+                    실기총점, 합산점수
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수),
+                    기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
+                    기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
+                    기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
+                    기록7=VALUES(기록7), 점수7=VALUES(점수7), 실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수)
+            `;
+            await connection.query(sql, [
+                student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수,
+                student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3,
+                student.기록4, student.점수4, student.기록5, student.점수5, student.기록6, student.점수6,
+                student.기록7, student.점수7, student.실기총점, student.합산점수
+            ]);
+        }
+        
+        await connection.commit();
+        res.json({ success: true, message: "성공적으로 저장되었습니다." });
+
+    } catch (err) {
+        await connection.rollback();
+        console.error("그룹 상담 저장 오류:", err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+    } finally {
+        connection.release();
+    }
+});
 
 // (신규) 학생별 상담메모 불러오기
 app.get('/26susi_counsel_memo_load', authJWT, async (req, res) => {
