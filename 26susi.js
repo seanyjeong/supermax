@@ -495,6 +495,27 @@ app.post('/26susi/verify-code', async (req, res) => {
 
 // [기존 /26susi_counsel_by_college 함수를 이걸로 교체]
 
+// ✅ (신규) 아이디 중복 체크 API
+app.post('/26susi/check-userid', async (req, res) => {
+    try {
+        const { userid } = req.body;
+        if (!userid) {
+            return res.status(400).json({ available: false, message: "아이디를 입력해주세요." });
+        }
+        const [dup] = await db.promise().query(
+            "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?", [userid]
+        );
+        if (dup.length > 0) {
+            res.json({ available: false, message: "이미 사용중인 아이디입니다." });
+        } else {
+            res.json({ available: true, message: "사용 가능한 아이디입니다." });
+        }
+    } catch (err) {
+        console.error("아이디 중복 체크 오류:", err);
+        res.status(500).json({ available: false, message: "서버 오류가 발생했습니다." });
+    }
+});
+
 
 app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     const { college_id } = req.query;
