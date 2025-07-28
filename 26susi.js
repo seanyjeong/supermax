@@ -3,6 +3,8 @@ const cors = require('cors');
 const mysql = require('mysql2');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
 
 const app = express();
 const port = 8080;
