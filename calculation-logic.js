@@ -60,11 +60,14 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                     break;
                 
                 // [규칙] P(Pass) 개수 * 100 + 200
-                case 338:
-                    const passCount = Object.values(종목별점수).filter(s => String(s).toUpperCase() === 'P' || String(s).toUpperCase() === 'PASS').length;
+               case 338:
+                    // '종목별점수'가 아닌 원본 '기록(inputs)'에서 P/PASS 개수를 셈
+                    const passCount = inputs.filter(input => {
+                        const record = String(input.기록).toUpperCase();
+                        return record === 'P' || record === 'PASS';
+                    }).length;
                     실기총점 = (passCount * 100) + 200;
                     break;
-
                 default:
                     실기총점 = rawSum;
                     break;
