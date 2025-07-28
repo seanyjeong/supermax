@@ -920,6 +920,8 @@ app.get('/26susi/events/:id', (req, res) => {
 // ✅ 3. 배점 계산 API
 // [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
 
+// [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
+
 app.post('/26susi/calculate-score', authJWT, async (req, res) => {
     const { 실기ID, gender, inputs } = req.body;
     if (!실기ID || !gender || !Array.isArray(inputs)) {
@@ -927,27 +929,26 @@ app.post('/26susi/calculate-score', authJWT, async (req, res) => {
     }
 
     const tasks = inputs.map(async (input) => {
-        // ✅ [핵심 수정] 기록이 비어있으면(null), DB 조회 없이 바로 0점 처리
         if (input.기록 === null || input.기록 === '') {
             return { 종목명: input.종목명, 기록: input.기록, 배점: 0 };
         }
 
         const reverse = isReverseEvent(input.종목명);
-        // 나의 기록이 기준 기록보다 좋거나 같아야 함 (클수록 좋은 종목: >=, 작을수록 좋은 종목: <=)
         const operator = reverse ? '<=' : '>=';
 
-        // 해당 기준을 만족하는 가장 높은 점수를 찾음
         const sql = `
             SELECT 배점 FROM \`26수시실기배점\`
             WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
             ORDER BY CAST(배점 AS SIGNED) DESC 
             LIMIT 1`;
         
-        // 쿼리 결과가 없을 때(만점보다 기록이 좋을 때) 처리
-        let [[row]] = await db.query(sql, [실기ID, input.종목명, gender, input.기록]);
+        // ✅ .promise() 추가
+        let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
+        
         if (!row) {
             const fallbackSql = `SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?`;
-            [[row]] = await db.query(fallbackSql, [실기ID, input.종목명, gender]);
+            // ✅ .promise() 추가
+            [[row]] = await db.promise().query(fallbackSql, [실기ID, input.종목명, gender]);
         }
         
         return { 종목명: input.종목명, 기록: input.기록, 배점: row ? Number(row.배점) : 0 };
