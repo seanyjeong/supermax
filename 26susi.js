@@ -1171,34 +1171,36 @@ app.get('/26susi/events/:id', (req, res) => {
 // [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
 
 // [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
-
-// ✅ (수정) 최종 실기총점 및 합산점수 계산 API (모듈 사용)
 app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
+    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    console.log("!!! /calculate-final-score API 요청 도착 !!!");
+    console.log("!!! 프론트에서 보낸 데이터:", JSON.stringify(req.body, null, 2));
+    console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    
     const { 대학ID, 종목별점수, 내신점수 } = req.body;
     if (!대학ID || !종목별점수) {
+        console.log("  -> [처리 거부] ❌ '대학ID' 또는 '종목별점수'가 누락되어 400 에러를 보냅니다.");
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
 
     try {
-        // 1. 대학별 환산방식 정보 가져오기
         const [rows] = await db.promise().query(
             "SELECT 실기반영총점, 기준총점, 환산방식 FROM `26수시실기총점반영` WHERE 대학ID = ?", 
             [대학ID]
         );
         const config = rows[0] || {};
 
-        // 2. 분리된 계산 모듈(함수) 호출
+        // 모듈을 사용해서 계산
         const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config);
 
-        // 3. 결과 응답
+        console.log(`  -> [계산 완료] ✅ 최종 계산된 점수를 프론트로 보냅니다:`, finalScores);
         res.json({
             success: true,
             실기총점: finalScores.실기총점,
             합산점수: finalScores.합산점수
         });
-
     } catch (err) {
-        console.error("최종 점수 계산 API 오류:", err);
+        console.error("❌ 최종 점수 계산 API 처리 중 오류:", err);
         res.status(500).json({ success: false, message: "서버 오류 발생" });
     }
 });
