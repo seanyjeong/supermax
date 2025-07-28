@@ -537,52 +537,75 @@ app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
 });
 
 // GET /26susi_college_list 대학리스트 (수정)
+// [교체할 코드]
+
 app.get('/26susi_college_list', authJWT, async (req, res) => {
-  // 26수시실기총점반영 테이블과 LEFT JOIN하여 환산 정보를 함께 가져옵니다.
+  // 로그인한 사용자의 지점 정보를 가져옴
+  const userBranch = req.user.branch;
+
   const sql = `
     SELECT 
       d.대학ID, d.대학명, d.학과명, d.전형명, d.실기ID,
       t.실기반영총점, t.기준총점, t.환산방식,
-      d.26맥스예상컷, d.26지점예상컷  -- 이 부분을 추가
+      d.26맥스예상컷,
+      bc.지점예상컷  -- 지점별_예상컷 테이블에서 가져온 지점예상컷
     FROM 대학정보 d
     LEFT JOIN \`26수시실기총점반영\` t ON d.대학ID = t.대학ID
+    -- 로그인한 사용자의 지점에 해당하는 지점컷만 JOIN
+    LEFT JOIN \`지점별_예상컷\` bc ON d.대학ID = bc.대학ID AND bc.지점명 = ?
   `;
-  const [rows] = await db.promise().query(sql);
+  const [rows] = await db.promise().query(sql, [userBranch]);
   res.json({ success: true, colleges: rows });
 });
-
 // [새로 추가할 코드]
+// [새로 추가할 코드 1: 맥스컷 저장 API (관리자 전용)]
 
-// (신규) 대학별 예상컷 저장/수정
-app.post('/26susi_college_cut_update', authJWT, async (req, res) => {
-    // 관리자만 이 기능을 사용하도록 제한
+app.post('/26susi_update_max_cut', authJWT, async (req, res) => {
     if (!isAdmin(req.user)) {
         return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
     }
+    const { 대학ID, 맥스예상컷 } = req.body;
+    if (!대학ID) return res.status(400).json({ success: false, message: "대학ID 누락" });
 
-    const { 대학ID, 맥스예상컷, 지점예상컷 } = req.body;
-    if (!대학ID) {
-        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
-    }
-
-    try {
-        await db.promise().query(
-            `UPDATE 대학정보 SET
-                \`26맥스예상컷\` = ?,
-                \`26지점예상컷\` = ?
-             WHERE 대학ID = ?`,
-            [맥스예상컷, 지점예상컷, 대학ID]
-        );
-        res.json({ success: true, message: '예상컷이 저장되었습니다.' });
-    } catch (err) {
-        console.error('예상컷 저장 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.' });
-    }
+    await db.promise().query("UPDATE 대학정보 SET `26맥스예상컷` = ? WHERE 대학ID = ?", [맥스예상컷, 대학ID]);
+    res.json({ success: true });
 });
 
-// 상담 시 여러 대학 한 번에 저장 (colleges: [{...}, {...}])
-// ✅ 수정 후 코드 (이 코드로 교체하세요)
-// 상담 시 여러 대학 한 번에 저장 (colleges: [{...}, {...}])
+// [새로 추가할 코드 2: 지점컷 저장 API (해당 지점 원장 전용)]
+
+app.post('/26susi_update_branch_cut', authJWT, async (req, res) => {
+    const { 대학ID, 지점예상컷 } = req.body;
+    const 지점명 = req.user.branch; // JWT 토큰에서 로그인한 원장의 지점명 사용 (안전!)
+
+    if (!대학ID) return res.status(400).json({ success: false, message: "대학ID 누락" });
+
+    // UPSERT: 데이터가 없으면 새로 INSERT, 있으면 UPDATE
+    const sql = `
+        INSERT INTO 지점별_예상컷 (대학ID, 지점명, 지점예상컷)
+        VALUES (?, ?, ?)
+        ON DUPLICATE KEY UPDATE 지점예상컷 = VALUES(지점예상컷)
+    `;
+    await db.promise().query(sql, [대학ID, 지점명, 지점예상컷]);
+    res.json({ success: true });
+});
+// [새로 추가할 코드 3: 컷 관리 페이지용 데이터 로딩]
+
+app.get('/26susi_get_all_cuts', authJWT, async (req, res) => {
+    const userBranch = req.user.branch;
+    const sql = `
+        SELECT 
+            d.대학ID, d.대학명, d.학과명, d.전형명, d.26맥스예상컷,
+            bc.지점예상컷
+        FROM 대학정보 d
+        LEFT JOIN 지점별_예상컷 bc ON d.대학ID = bc.대학ID AND bc.지점명 = ?
+        ORDER BY d.대학명, d.학과명, d.전형명
+    `;
+    const [rows] = await db.promise().query(sql, [userBranch]);
+    res.json({ success: true, cuts: rows, user: req.user });
+});
+
+
+
 // ✅ [수정] 삭제 로직이 포함된 최종 코드로 교체하세요.
 app.post('/26susi_counsel_college_save_multi', authJWT, async (req, res) => {
   const { student_id, colleges } = req.body;
