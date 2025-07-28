@@ -376,6 +376,8 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 // [기존 /26susi_counsel_by_college 함수를 이걸로 교체]
 
+// [기존 /26susi_counsel_by_college 함수를 이걸로 교체]
+
 app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
@@ -385,11 +387,10 @@ app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     }
 
     try {
-        // ✅ [수정] LEFT JOIN을 없애고, '상담대학정보'에 저장된 스냅샷 데이터를 직접 가져오도록 변경
         const sql = `
             SELECT 
                 s.이름, s.학년, s.성별, s.학생ID,
-                c.내신등급, c.내신점수, -- 상담 당시에 저장된 내신 정보
+                c.내신등급, c.내신점수,
                 c.기록1, c.점수1, c.기록2, c.점수2, c.기록3, c.점수3,
                 c.기록4, c.점수4, c.기록5, c.점수5, c.기록6, c.점수6,
                 c.기록7, c.점수7,
@@ -399,7 +400,10 @@ app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
             WHERE c.대학ID = ? AND s.지점명 = ?
             ORDER BY c.합산점수 DESC, s.이름 ASC
         `;
-        const [rows] = await db.query(sql, [college_id, branch]);
+        
+        // ✅ [핵심 수정] db.query 앞에 .promise() 를 추가
+        const [rows] = await db.promise().query(sql, [college_id, branch]);
+        
         res.json({ success: true, students: rows });
 
     } catch (err) {
@@ -407,7 +411,6 @@ app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: "DB 조회 중 오류 발생", error: err.message });
     }
 });
-
 // (신규) 그룹 상담 페이지 전체 저장 API
 app.post('/26susi_counsel_by_college_save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
