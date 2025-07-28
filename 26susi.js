@@ -590,11 +590,15 @@ app.post('/26susi_update_branch_cut', authJWT, async (req, res) => {
 });
 // [새로 추가할 코드 3: 컷 관리 페이지용 데이터 로딩]
 
+// [교체할 코드]
+
+// (수정) 컷 관리 페이지용 데이터 로딩 API
 app.get('/26susi_get_all_cuts', authJWT, async (req, res) => {
     const userBranch = req.user.branch;
     const sql = `
         SELECT 
             d.대학ID, d.대학명, d.학과명, d.전형명, d.26맥스예상컷,
+            d.실기ID, -- 이 부분을 추가해야 프론트에서 필터링 가능!
             bc.지점예상컷
         FROM 대학정보 d
         LEFT JOIN 지점별_예상컷 bc ON d.대학ID = bc.대학ID AND bc.지점명 = ?
