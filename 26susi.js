@@ -372,6 +372,8 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 
+// [이 코드로 교체하세요]
+
 app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
@@ -381,12 +383,11 @@ app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     }
 
     try {
-        // ✅ [수정] 내신 정보를 '학생_내신정보' 테이블에서 LEFT JOIN 하도록 쿼리 변경
         const sql = `
             SELECT 
                 s.이름, s.학년, s.성별, s.학생ID,
-                g.등급 AS 내신등급,      -- 학생_내신정보 테이블에서 가져옴
-                g.내신점수 AS 내신점수,  -- 학생_내신정보 테이블에서 가져옴
+                g.등급 AS 내신등급,
+                g.내신점수 AS 내신점수,
                 c.기록1, c.점수1, c.기록2, c.점수2, c.기록3, c.점수3,
                 c.기록4, c.점수4, c.기록5, c.점수5, c.기록6, c.점수6,
                 c.기록7, c.점수7,
@@ -397,12 +398,14 @@ app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
             WHERE c.대학ID = ? AND s.지점명 = ?
             ORDER BY s.이름 ASC
         `;
-        const [rows] = await db.query(sql, [college_id, branch]);
+        
+        // ✅ [수정] db.query 앞에 .promise() 를 추가
+        const [rows] = await db.promise().query(sql, [college_id, branch]);
+        
         res.json({ success: true, students: rows });
 
     } catch (err) {
         console.error("대학별 상담 학생 조회 오류:", err);
-        // ✅ [중요] 에러 내용을 프론트로 보내서 확인
         res.status(500).json({ success: false, message: "DB 조회 중 오류 발생", error: err.message });
     }
 });
