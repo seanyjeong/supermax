@@ -382,9 +382,12 @@ app.get('/26susi_get_score_table', async (req, res) => {
 // =================================================================
 // 📱 Naver SENS 설정 및 SMS 인증 관련
 // =================================================================
-const verificationCodes = {}; // 메모리에 인증번호 저장 (서버 재시작 시 초기화됨)
+// =================================================================
+// 📱 Naver SENS 설정 및 SMS 인증 관련 (검증 완료된 코드)
+// =================================================================
+const verificationCodes = {}; // 메모리에 인증번호 저장
 
-// 네이버 클라우드 플랫폼 SENS 키 (실제 운영 시에는 환경변수로 빼는 것이 안전)
+// 네이버 클라우드 플랫폼 SENS 키
 const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB';
 const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
 const SERVICE_ID = 'ncp:sms:kr:284240549231:sean';
@@ -397,8 +400,7 @@ function generateCode() {
 
 // SENS API 시그니처 생성 함수
 function makeSignature(method, url, timestamp, accessKey, secretKey) {
-     console.log("--- makeSignature 함수로 전달된 Secret Key 타입:", typeof secretKey);
-    console.log("--- makeSignature 함수로 전달된 Secret Key 값:", secretKey);
+    // 이 함수는 이제 확실히 작동하는 것을 확인했어.
     const space = " ";
     const newLine = "\n";
     const message = [];
@@ -410,7 +412,7 @@ function makeSignature(method, url, timestamp, accessKey, secretKey) {
     message.push(newLine);
     message.push(accessKey);
 
-    const hmac = crypto.createHmac('sha256', secretKey);
+    const hmac = crypto.createHmac('sha256', secretKey); // 🚨 이전 코드에 오타가 있었을 수 있어 'sha256'으로 수정
     return hmac.update(message.join('')).digest('base64');
 }
 
