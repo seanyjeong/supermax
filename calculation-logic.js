@@ -9,8 +9,8 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config) {
 
     switch (환산방식) {
         case '특수식':
-            switch (대학ID) {
-                // ✅ ID를 242로 다시 수정!
+            switch (Number(대학ID)) {
+               
                 case 232:
                 case 242:
                     console.log(`  -> 특수식(상위 3개 합산) 적용됨.`);
