@@ -10,6 +10,8 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
             switch (Number(대학ID)) {
                 case 232:
                 case 242:
+                case 209: 
+                case 206:    
                     // 1. 점수와 감수를 쌍으로 묶은 배열 생성
                     const eventData = Object.keys(종목별점수).map(eventName => ({
                         name: eventName,
