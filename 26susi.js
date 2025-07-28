@@ -1238,7 +1238,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
         });
 
         // --- 3단계: 최종 점수 계산 (모듈 호출) ---
-        const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config, 종목별감수);
+        const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config, 종목별감수,inputs);
 
         // --- 4단계: 모든 결과 한번에 전송 ---
         res.json({
