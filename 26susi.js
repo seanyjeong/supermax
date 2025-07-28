@@ -397,6 +397,8 @@ function generateCode() {
 
 // SENS API 시그니처 생성 함수
 function makeSignature(method, url, timestamp, accessKey, secretKey) {
+     console.log("--- makeSignature 함수로 전달된 Secret Key 타입:", typeof secretKey);
+    console.log("--- makeSignature 함수로 전달된 Secret Key 값:", secretKey);
     const space = " ";
     const newLine = "\n";
     const message = [];
