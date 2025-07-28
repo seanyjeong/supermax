@@ -918,63 +918,49 @@ app.get('/26susi/events/:id', (req, res) => {
 
 
 // ✅ 3. 배점 계산 API
-app.post('/26susi/calculate-score', (req, res) => {
-  const { 실기ID, gender, inputs } = req.body;
+// [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
 
-  console.log('📥 요청 도착');
-  console.log('실기ID:', 실기ID);
-  console.log('성별:', gender);
-  console.log('입력 기록:', inputs);
+app.post('/26susi/calculate-score', authJWT, async (req, res) => {
+    const { 실기ID, gender, inputs } = req.body;
+    if (!실기ID || !gender || !Array.isArray(inputs)) {
+        return res.status(400).json({ success: false, message: "필수 정보 누락" });
+    }
 
-  const tasks = inputs.map((input) => {
-    return new Promise((resolve, reject) => {
-      const reverse = isReverseEvent(input.종목명);
-      const operator = reverse ? '<=' : '<=';
-      const order = reverse ? 'DESC' : 'DESC';
+    const tasks = inputs.map(async (input) => {
+        // ✅ [핵심 수정] 기록이 비어있으면(null), DB 조회 없이 바로 0점 처리
+        if (input.기록 === null || input.기록 === '') {
+            return { 종목명: input.종목명, 기록: input.기록, 배점: 0 };
+        }
 
-      
+        const reverse = isReverseEvent(input.종목명);
+        // 나의 기록이 기준 기록보다 좋거나 같아야 함 (클수록 좋은 종목: >=, 작을수록 좋은 종목: <=)
+        const operator = reverse ? '<=' : '>=';
 
-const sql = `
-  SELECT 배점
-  FROM \`26수시실기배점\`
-  WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) ${operator} ?
-  ORDER BY CAST(기록 AS DECIMAL(10,2)) ${order}
-  LIMIT 1
-`;
-
-db.query(sql, [실기ID, input.종목명, gender, input.기록], (err, rows) => {
-  if (err) {
-    console.error('배점 쿼리 오류:', err);
-    return reject(err);
-  }
-
-  // ✅ 달리기류에서 너무 좋은 기록 → fallback 만점 처리
-  if (rows.length === 0 && reverse) {
-    const fallbackSql = `
-      SELECT MAX(CAST(배점 AS SIGNED)) AS 배점
-      FROM \`26수시실기배점\`
-      WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?
-    `;
-    return db.query(fallbackSql, [실기ID, input.종목명, gender], (err2, maxRow) => {
-      if (err2) {
-        console.error('만점 보정 쿼리 오류:', err2);
-        return reject(err2);
-      }
-      const 점수 = maxRow[0]?.배점 ?? 0;
-      console.log(`💯 ${input.종목명} → 입력기록 ${input.기록}이 너무 좋아서 만점(${점수}) 처리됨`);
-      return resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
+        // 해당 기준을 만족하는 가장 높은 점수를 찾음
+        const sql = `
+            SELECT 배점 FROM \`26수시실기배점\`
+            WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
+            ORDER BY CAST(배점 AS SIGNED) DESC 
+            LIMIT 1`;
+        
+        // 쿼리 결과가 없을 때(만점보다 기록이 좋을 때) 처리
+        let [[row]] = await db.query(sql, [실기ID, input.종목명, gender, input.기록]);
+        if (!row) {
+            const fallbackSql = `SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?`;
+            [[row]] = await db.query(fallbackSql, [실기ID, input.종목명, gender]);
+        }
+        
+        return { 종목명: input.종목명, 기록: input.기록, 배점: row ? Number(row.배점) : 0 };
     });
-  }
-
-  // ✅ 일반적인 경우
-  const 점수 = rows.length > 0 ? Number(rows[0].배점) : 0;
-  console.log(`▶ ${input.종목명} (${reverse ? '작을수록 높음' : '클수록 높음'}) → 기록: ${input.기록} → 배점: ${점수}`);
-  resolve({ 종목명: input.종목명, 기록: input.기록, 배점: 점수 });
+    
+    try {
+        const finalScores = await Promise.all(tasks);
+        res.json({ 종목별결과: finalScores });
+    } catch (err) {
+        console.error("점수 계산 중 오류:", err);
+        res.status(500).json({ success: false, message: "점수 계산 중 오류 발생" });
+    }
 });
-
-    });
-  });
-
   Promise.all(tasks)
     .then(results => {
       const 총점 = results.reduce((sum, row) => sum + row.배점, 0);
