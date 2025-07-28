@@ -371,12 +371,109 @@ app.get('/26susi_get_score_table', async (req, res) => {
 
 
 
+// =================================================================
+// 📱 Naver SENS 설정 및 SMS 인증 관련
+// =================================================================
+const verificationCodes = {}; // 메모리에 인증번호 저장 (서버 재시작 시 초기화됨)
 
-// [이 코드로 교체하세요]
+// 네이버 클라우드 플랫폼 SENS 키 (실제 운영 시에는 환경변수로 빼는 것이 안전)
+const NAVER_ACCESS_KEY = 'A8zINaiL6JjWUNbT1uDB'; // 여기에 네 키를 넣어줘
+const NAVER_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW'; // 여기에 네 키를 넣어줘
+const SERVICE_ID = 'ncp:sms:kr:284240549231:sean'; // 여기에 네 서비스 ID를 넣어줘
+const FROM_PHONE = '01021446765'; // 여기에 네 발신번호를 넣어줘
+
+// 4자리 랜덤 인증번호 생성 함수
+function generateCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+// SENS API 시그니처 생성 함수
+function makeSignature(method, url, timestamp, accessKey, secretKey) {
+    const space = " ";
+    const newLine = "\n";
+    const message = [];
+    message.push(method);
+    message.push(space);
+    message.push(url);
+    message.push(newLine);
+    message.push(timestamp);
+    message.push(newLine);
+    message.push(accessKey);
+
+    const hmac = crypto.createHmac('sha256', secretKey);
+    return hmac.update(message.join('')).digest('base64');
+}
+
+// ✅ (신규) 인증번호 SMS 발송 API
+app.post('/26susi/send-verification-sms', async (req, res) => {
+    const { phone } = req.body;
+    if (!phone) {
+        return res.status(400).json({ success: false, message: "전화번호를 입력해주세요." });
+    }
+
+    const code = generateCode();
+    const timestamp = Date.now().toString();
+    
+    // 인증번호와 만료시간(3분) 저장
+    verificationCodes[phone] = { code, expires: Date.now() + 3 * 60 * 1000 };
+
+    const url = `/sms/v2/services/${SERVICE_ID}/messages`;
+    const signature = makeSignature('POST', url, timestamp, NAVER_ACCESS_KEY, NAVER_SECRET_KEY);
+
+    try {
+        await axios({
+            method: 'POST',
+            url: `https://sens.apigw.ntruss.com${url}`,
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                'x-ncp-apigw-timestamp': timestamp,
+                'x-ncp-iam-access-key': NAVER_ACCESS_KEY,
+                'x-ncp-apigw-signature-v2': signature,
+            },
+            data: {
+                type: 'SMS',
+                from: FROM_PHONE,
+                content: `[맥스체대입시] 인증번호는 [${code}] 입니다.`,
+                messages: [{ to: phone }],
+            },
+        });
+        console.log(`[인증번호 발송] 번호: ${phone}, 코드: ${code}`);
+        res.json({ success: true, message: "인증번호가 발송되었습니다." });
+    } catch (error) {
+        console.error("SENS 발송 오류:", error.response?.data || error.message);
+        res.status(500).json({ success: false, message: "인증번호 발송에 실패했습니다." });
+    }
+});
+
+
+// ✅ (신규) 인증번호 확인 API
+app.post('/26susi/verify-code', async (req, res) => {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
+    }
+
+    const stored = verificationCodes[phone];
+
+    if (!stored) {
+        return res.status(400).json({ success: false, message: "인증번호 요청 기록이 없습니다." });
+    }
+    if (Date.now() > stored.expires) {
+        delete verificationCodes[phone]; // 만료된 코드는 삭제
+        return res.status(400).json({ success: false, message: "인증번호가 만료되었습니다." });
+    }
+    if (stored.code !== code) {
+        return res.status(400).json({ success: false, message: "인증번호가 일치하지 않습니다." });
+    }
+
+    // 인증 성공 시, 저장된 코드 삭제
+    delete verificationCodes[phone];
+    console.log(`[인증 성공] 번호: ${phone}`);
+    res.json({ success: true, message: "인증에 성공했습니다." });
+});
 
 // [기존 /26susi_counsel_by_college 함수를 이걸로 교체]
 
-// [기존 /26susi_counsel_by_college 함수를 이걸로 교체]
 
 app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     const { college_id } = req.query;
