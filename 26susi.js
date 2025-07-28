@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const axios = require('axios');
+const { calculateFinalScore } = require('./calculation-logic.js');
 
 
 
@@ -1171,47 +1172,36 @@ app.get('/26susi/events/:id', (req, res) => {
 
 // [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
 
-app.post('/26susi/calculate-score', authJWT, async (req, res) => {
-    const { 실기ID, gender, inputs } = req.body;
-    if (!실기ID || !gender || !Array.isArray(inputs)) {
+// ✅ (수정) 최종 실기총점 및 합산점수 계산 API (모듈 사용)
+app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
+    const { 대학ID, 종목별점수, 내신점수 } = req.body;
+    if (!대학ID || !종목별점수) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
 
-    const tasks = inputs.map(async (input) => {
-        if (input.기록 === null || input.기록 === '') {
-            return { 종목명: input.종목명, 기록: input.기록, 배점: 0 };
-        }
-
-        const reverse = isReverseEvent(input.종목명);
-        const operator = reverse ? '<=' : '>=';
-
-        const sql = `
-            SELECT 배점 FROM \`26수시실기배점\`
-            WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
-            ORDER BY CAST(배점 AS SIGNED) DESC 
-            LIMIT 1`;
-        
-        // ✅ .promise() 추가
-        let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
-        
-        if (!row) {
-            const fallbackSql = `SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?`;
-            // ✅ .promise() 추가
-            [[row]] = await db.promise().query(fallbackSql, [실기ID, input.종목명, gender]);
-        }
-        
-        return { 종목명: input.종목명, 기록: input.기록, 배점: row ? Number(row.배점) : 0 };
-    });
-    
     try {
-        const finalScores = await Promise.all(tasks);
-        res.json({ 종목별결과: finalScores });
+        // 1. 대학별 환산방식 정보 가져오기
+        const [rows] = await db.promise().query(
+            "SELECT 실기반영총점, 기준총점, 환산방식 FROM `26수시실기총점반영` WHERE 대학ID = ?", 
+            [대학ID]
+        );
+        const config = rows[0] || {};
+
+        // 2. 분리된 계산 모듈(함수) 호출
+        const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config);
+
+        // 3. 결과 응답
+        res.json({
+            success: true,
+            실기총점: finalScores.실기총점,
+            합산점수: finalScores.합산점수
+        });
+
     } catch (err) {
-        console.error("점수 계산 중 오류:", err);
-        res.status(500).json({ success: false, message: "점수 계산 중 오류 발생" });
+        console.error("최종 점수 계산 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
     }
 });
-
 
 // ✅ 서버 실행
 app.listen(port, () => {
