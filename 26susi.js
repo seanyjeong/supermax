@@ -1175,6 +1175,8 @@ app.get('/26susi/events/:id', (req, res) => {
 // [교체할 코드] /26susi/calculate-final-score API
 // [26susi.js] 파일의 /calculate-final-score API를 이걸로 교체
 
+// [26susi.js] 파일의 /calculate-final-score API를 이걸로 교체
+
 app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
     const { 대학ID, gender, inputs, 내신점수 } = req.body;
     if (!대학ID || !gender || !Array.isArray(inputs)) {
@@ -1196,15 +1198,46 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             if (input.기록 === null || input.기록 === '') {
                 return { 종목명: input.종목명, 배점: 0 };
             }
+
+            // ✅✅✅ P/F 판정 로직 시작 ✅✅✅
+            // 실기ID 99번(청주대)일 경우, P/F 로직을 우선 적용
+            if (실기ID === 99) {
+                const [[pf_row]] = await db.promise().query(
+                    "SELECT 기록 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND 배점 = 'P' LIMIT 1",
+                    [실기ID, input.종목명, gender]
+                );
+
+                if (!pf_row) return { 종목명: input.종목명, 배점: 'F' }; // 기준 기록이 없으면 Fail
+
+                const benchmarkRecord = parseFloat(pf_row.기록);
+                const studentRecord = parseFloat(input.기록);
+                const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런'].some(k => input.종목명.toLowerCase().includes(k));
+
+                if (reverse) { // 기록이 낮을수록 좋은 종목
+                    return { 종목명: input.종목명, 배점: studentRecord <= benchmarkRecord ? 'P' : 'F' };
+                } else { // 기록이 높을수록 좋은 종목
+                    return { 종목명: input.종목명, 배점: studentRecord >= benchmarkRecord ? 'P' : 'F' };
+                }
+            }
+            // ✅✅✅ P/F 판정 로직 끝 ✅✅✅
+
+            // --- P/F 대학이 아닐 경우, 기존 숫자 점수 계산 로직 실행 ---
             const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런'].some(k => input.종목명.toLowerCase().includes(k));
             const operator = reverse ? '<=' : '>=';
             const sql = `
                 SELECT 배점 FROM \`26수시실기배점\`
                 WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
                 ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+            
             const [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
-            return { 종목명: input.종목명, 배점: row ? Number(row.배점) : 0 };
+            
+            const scoreValue = row ? row.배점 : 0;
+            const isNumeric = !isNaN(parseFloat(scoreValue)) && isFinite(scoreValue);
+            const finalScore = isNumeric ? Number(scoreValue) : scoreValue;
+            
+            return { 종목명: input.종목명, 배점: finalScore };
         });
+        
         const individualScores = await Promise.all(scoreCalculationTasks);
         
         const 종목별점수 = {};
@@ -1215,18 +1248,16 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
         // --- 2단계: 종목별 감수 계산 ---
         const gamCalculationTasks = Object.keys(종목별점수).map(async (eventName) => {
             const studentScore = 종목별점수[eventName];
-            if (studentScore === 0) return { 종목명: eventName, 감수: 0 };
+            if (studentScore === 0 || isNaN(Number(studentScore))) return { 종목명: eventName, 감수: 0 }; // P/F 같은 문자 점수는 감수 0
 
             const [scoreList] = await db.promise().query(
                 "SELECT 배점 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? ORDER BY CAST(배점 AS SIGNED) DESC",
                 [실기ID, eventName, gender]
             );
             const scores = scoreList.map(item => parseFloat(item.배점));
-            
             if (scores.length === 0 || studentScore >= scores[0]) {
                 return { 종목명: eventName, 감수: 0 };
             }
-
             const scoreIndex = scores.indexOf(studentScore);
             return { 종목명: eventName, 감수: scoreIndex === -1 ? 0 : scoreIndex };
         });
@@ -1238,7 +1269,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
         });
 
         // --- 3단계: 최종 점수 계산 (모듈 호출) ---
-        const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config, 종목별감수,inputs);
+        const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config, 종목별감수, inputs);
 
         // --- 4단계: 모든 결과 한번에 전송 ---
         res.json({
