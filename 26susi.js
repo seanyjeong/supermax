@@ -1172,53 +1172,66 @@ app.get('/26susi/events/:id', (req, res) => {
 
 // [기존 calculate-score 함수를 이걸로 통째로 교체하세요]
 // [교체할 코드] 이 API를 아래 내용으로 완전히 바꿔줘
+// [교체할 코드] /26susi/calculate-final-score API
 app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
-    // 프론트에서는 이제 기록(inputs)을 바로 보냄
     const { 대학ID, gender, inputs, 내신점수 } = req.body;
-
     if (!대학ID || !gender || !Array.isArray(inputs)) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
 
     try {
-        // --- 1단계: 실기ID와 대학 설정 정보 가져오기 ---
         const [collegeInfoRows] = await db.promise().query("SELECT 실기ID FROM 대학정보 WHERE 대학ID = ?", [대학ID]);
-        if (collegeInfoRows.length === 0) {
-            return res.status(404).json({ success: false, message: "대학 정보를 찾을 수 없습니다." });
-        }
+        if (collegeInfoRows.length === 0) return res.status(404).json({ success: false, message: "대학 정보를 찾을 수 없습니다." });
         const 실기ID = collegeInfoRows[0].실기ID;
 
         const [configRows] = await db.promise().query("SELECT 실기반영총점, 기준총점, 환산방식 FROM `26수시실기총점반영` WHERE 대학ID = ?", [대학ID]);
         const config = configRows[0] || {};
 
-        // --- 2단계: 기록을 개별 점수로 변환 (예전에 지웠던 /calculate-score의 로직) ---
+        // --- 1단계: 기록을 개별 점수로 변환 ---
         const scoreCalculationTasks = inputs.map(async (input) => {
-            if (input.기록 === null || input.기록 === '') {
-                return { 종목명: input.종목명, 배점: 0 };
-            }
+            if (!input.기록) return { 종목명: input.종목명, 배점: 0 };
             const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기'].some(k => input.종목명.toLowerCase().includes(k));
             const operator = reverse ? '<=' : '>=';
-            const sql = `
-                SELECT 배점 FROM \`26수시실기배점\`
-                WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
-                ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
-            let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
+            const sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2)) ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+            const [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
             return { 종목명: input.종목명, 배점: row ? Number(row.배점) : 0 };
         });
         const individualScores = await Promise.all(scoreCalculationTasks);
         
         const 종목별점수 = {};
-        individualScores.forEach(item => {
-            종목별점수[item.종목명] = item.배점;
+        individualScores.forEach(item => { 종목별점수[item.종목명] = item.배점; });
+
+        // --- 2단계 (신규): 종목별 감수 계산 ---
+        const gamCalculationTasks = Object.keys(종목별점수).map(async (eventName) => {
+            const studentScore = 종목별점수[eventName];
+            if (studentScore === 0) return { 종목명: eventName, 감수: 0 };
+
+            const [scoreList] = await db.promise().query("SELECT 배점 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? ORDER BY CAST(배점 AS SIGNED) DESC", [실기ID, eventName, gender]);
+            const scores = scoreList.map(item => parseFloat(item.배점));
+            
+            if (scores.length === 0 || studentScore >= scores[0]) return { 종목명: eventName, 감수: 0 };
+
+            const scoreIndex = scores.indexOf(studentScore);
+            return { 종목명: eventName, 감수: scoreIndex === -1 ? 0 : scoreIndex };
+        });
+        const individualGams = await Promise.all(gamCalculationTasks);
+
+        const 종목별감수 = {};
+        let 총감수 = 0;
+        individualGams.forEach(item => {
+            종목별감수[item.종목명] = item.감수;
+            총감수 += item.감수;
         });
 
-        // --- 3단계: 계산된 개별 점수들로 최종 점수 계산 (모듈 사용) ---
+        // --- 3단계: 최종 점수 계산 ---
         const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config);
 
-        // --- 4단계: 모든 결과를 한번에 프론트로 전송 ---
+        // --- 4단계: 모든 결과 한번에 전송 ---
         res.json({
             success: true,
-            종목별점수: 종목별점수, // 개별 점수도 같이 보내줌
+            종목별점수,
+            종목별감수, // ✅ 감수 정보 추가
+            총감수,       // ✅ 총 감수 정보 추가
             실기총점: finalScores.실기총점,
             합산점수: finalScores.합산점수
         });
