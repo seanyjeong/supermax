@@ -1242,6 +1242,41 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
     }
 });
 
+// (수정) 저장된 설정값도 함께 조회
+app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
+  const sql = `
+    SELECT 
+      d.대학ID, d.실기ID, d.대학명, d.학과명, d.전형명,
+      COALESCE(s.total_max_score, 0) AS 기본만점총합,
+      t.실기반영총점, t.기준총점, t.환산방식, t.특수식설명
+    FROM 
+      대학정보 d
+    LEFT JOIN (
+      SELECT 
+        실기ID, SUM(max_score) as total_max_score
+      FROM (
+        SELECT 
+          실기ID, 종목명, MAX(CAST(배점 AS SIGNED)) as max_score 
+        FROM \`26수시실기배점\`
+        WHERE 실기ID IS NOT NULL
+        GROUP BY 실기ID, 종목명
+      ) as subquery
+      GROUP BY 실기ID
+    ) s ON d.실기ID = s.실기ID
+    LEFT JOIN \`26수시실기총점반영\` t ON d.대학ID = t.대학ID
+    WHERE 
+      d.실기ID IS NOT NULL
+    ORDER BY 
+      d.대학명;
+  `;
+  try {
+    const [rows] = await db.promise().query(sql);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: '데이터 조회 실패' });
+  }
+});
+
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
