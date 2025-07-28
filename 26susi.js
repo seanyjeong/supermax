@@ -516,6 +516,69 @@ app.post('/26susi/check-userid', async (req, res) => {
     }
 });
 
+// ✅ (신규) 비밀번호 재설정을 위한 사용자 확인 및 인증 SMS 발송 API
+app.post('/26susi/request-reset-sms', async (req, res) => {
+    const { userid, phone } = req.body;
+    if (!userid || !phone) {
+        return res.status(400).json({ success: false, message: "아이디와 전화번호를 모두 입력해주세요." });
+    }
+
+    try {
+        // 1. 아이디와 전화번호가 일치하는 회원이 있는지 확인
+        const [rows] = await db.promise().query(
+            "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ? AND 전화번호 = ?", [userid, phone]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: "일치하는 회원 정보가 없습니다." });
+        }
+
+        // 2. 회원이 확인되면, 기존 SMS 발송 로직 재사용
+        const code = generateCode();
+        const smsResult = await sendSms(phone, code); // 기존에 만든 sendSms 함수 재사용
+
+        if (smsResult.success) {
+            verificationCodes[phone] = { code, expires: Date.now() + 3 * 60 * 1000 };
+            console.log(`[비밀번호 재설정] 인증번호 발송 요청 성공. ID: ${userid}, 번호: ${phone}`);
+            res.json({ success: true, message: "인증번호가 발송되었습니다." });
+        } else {
+            throw new Error(smsResult.message || "SMS 발송 실패");
+        }
+    } catch (err) {
+        console.error("비밀번호 재설정 요청 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류가 발생했습니다." });
+    }
+});
+
+
+// ✅ (신규) 새 비밀번호 업데이트 API
+app.post('/26susi/reset-password', async (req, res) => {
+    const { userid, newPassword } = req.body;
+    if (!userid || !newPassword) {
+        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
+    }
+
+    try {
+        // 1. 새 비밀번호를 bcrypt로 해싱
+        const hash = await bcrypt.hash(newPassword, 10);
+
+        // 2. DB에 업데이트
+        const [result] = await db.promise().query(
+            "UPDATE 원장회원 SET 비밀번호 = ? WHERE 아이디 = ?", [hash, userid]
+        );
+
+        if (result.affectedRows > 0) {
+            console.log(`[비밀번호 재설정] 성공. ID: ${userid}`);
+            res.json({ success: true, message: "비밀번호가 성공적으로 변경되었습니다." });
+        } else {
+            throw new Error("일치하는 사용자가 없어 비밀번호 변경에 실패했습니다.");
+        }
+    } catch (err) {
+        console.error("비밀번호 업데이트 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류로 비밀번호 변경에 실패했습니다." });
+    }
+});
+
 
 app.get('/26susi_counsel_by_college', authJWT, async (req, res) => {
     const { college_id } = req.query;
