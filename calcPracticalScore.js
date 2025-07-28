@@ -1,8 +1,13 @@
-// calcPracticalScore.js
 async function calcPracticalScore({ 실기ID, scores, db }) {
-  // 실기ID별로 실기반영총점/기준총점 불러오기
+  // 1. 실기ID → 대학ID
+  const [[collegeRow]] = await db.promise().query(
+    "SELECT 대학ID FROM 대학정보 WHERE 실기ID=? LIMIT 1", [실기ID]);
+  const 대학ID = collegeRow?.대학ID;
+  if (!대학ID) throw new Error('대학ID를 찾을 수 없음');
+
+  // 2. 대학ID로 환산 정보 조회
   const [[config]] = await db.promise().query(
-    "SELECT 실기반영총점, 기준총점 FROM `26수시실기총점반영` WHERE 실기ID=? LIMIT 1", [실기ID]);
+    "SELECT 실기반영총점, 기준총점 FROM `26수시실기총점반영` WHERE 대학ID=? LIMIT 1", [대학ID]);
   const 실기반영총점 = config?.실기반영총점 || 100;
   const 기준총점 = config?.기준총점 || (scores.length * 100);
 
