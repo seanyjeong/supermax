@@ -1169,52 +1169,46 @@ app.get('/26susi/events/:id', (req, res) => {
 // ✅ 3. 배점 계산 API
 const calcPracticalScore = require('./calcPracticalScore');
 
-
 app.post('/26susi/calculate-score', authJWT, async (req, res) => {
   const { 실기ID, gender, inputs } = req.body;
   if (!실기ID || !gender || !Array.isArray(inputs)) {
     return res.status(400).json({ success: false, message: "필수 정보 누락" });
   }
 
-  // 기록 → 점수 계산
-const tasks = inputs.map(async (input) => {
-    // ✅ [여기에 콘솔 추가] 모든 쿼리 입력값 확인!
-    console.log('쿼리 파라미터:', 실기ID, input.종목명, gender, input.기록);
-
+  // 1. 종목별 점수 계산
+  const tasks = inputs.map(async (input) => {
     const reverse = isReverseEvent(input.종목명);
     const operator = reverse ? '<=' : '>=';
-
     const sql = `
       SELECT 배점 FROM \`26수시실기배점\`
       WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
       ORDER BY CAST(배점 AS SIGNED) DESC
       LIMIT 1`;
     let [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
-
-    // ✅ [여기에도 콘솔 추가] 쿼리 결과 바로 확인!
-    console.log('쿼리 결과:', row);
-
     if (!row) {
-      // 기록이 범위 밖이면 최대 배점으로 fallback
       const fallbackSql = `SELECT MAX(CAST(배점 AS SIGNED)) AS 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ?`;
       [[row]] = await db.promise().query(fallbackSql, [실기ID, input.종목명, gender]);
-      console.log('Fallback 쿼리 결과:', row);
     }
-
     return { 종목명: input.종목명, 기록: input.기록, 배점: row ? Number(row.배점) : 0 };
-});
-
+  });
 
   try {
     const scoreArr = await Promise.all(tasks);
-    const 실기총점 = await calcPracticalScore({ 실기ID, scores: scoreArr, db });
-    res.json({ 종목별배점: scoreArr, 실기총점 });
+    const onlyScores = scoreArr.map(x => x.배점);
+
+    // 2. 실기총점(=환산총점)만 계산
+    const 실기총점 = await calcPracticalScore({ 실기ID, scores: onlyScores, db });
+
+    // 3. 클라로 결과 응답 (종목별점수 + 실기총점만 내려줌)
+    res.json({
+      종목별배점: scoreArr,
+      실기총점   // 오로지 환산된 총점만! (float)
+    });
   } catch (e) {
     console.error('실기 총점 계산 오류:', e);
     res.status(500).json({ success: false, message: "계산 오류" });
   }
 });
-
 
 // ✅ 서버 실행
 app.listen(port, () => {
