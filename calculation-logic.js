@@ -17,6 +17,15 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                 case 121:
                     실기총점 = rawSum + 20;
                     break;
+                case 67:
+                case 68:
+                    const X = rawSum; // X는 세 종목의 합
+                    실기총점 = (X / 3 - 80) * (7 / 6) + 560;
+                    break;
+                case 69:
+                    const Y =rawSum;
+                    실기총점 = (Y / 2 - 80) + 480;
+                    break;
 
                 // [규칙] 상위 3개 종목 합산 후 비율 환산
                 case 232:
@@ -45,6 +54,7 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                 case 270:
                     실기총점 = rawSum + 30;
                     break;
+                    
                 
                 // [규칙] 단순합산 * 0.75
                 case 332:
