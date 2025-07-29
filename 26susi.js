@@ -1199,6 +1199,31 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
                 return { 종목명: input.종목명, 배점: 0 };
             }
 
+            const studentRecord = parseFloat(input.기록);
+            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기'].some(k => input.종목명.toLowerCase().includes(k));
+
+            // ✅✅✅ 대학ID 155번(동국대) 특수 계산식 ✅✅✅
+            if (Number(대학ID) === 155) {
+                const [[formula_data]] = await db.promise().query(
+                    "SELECT 최저기준, 최고기준, 기본점수, 최고점수 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? LIMIT 1",
+                    [실기ID, input.종목명, gender]
+                );
+
+                if (formula_data) {
+                    const { 최저기준, 최고기준, 기본점수, 최고점수 } = formula_data;
+                    
+                    // 기록이 기준치를 벗어나는 경우 처리
+                    if (reverse && studentRecord < 최고기준) return { 종목명: input.종목명, 배점: 최고점수 };
+                    if (reverse && studentRecord > 최저기준) return { 종목명: input.종목명, 배점: 기본점수 };
+                    if (!reverse && studentRecord > 최고기준) return { 종목명: input.종목명, 배점: 최고점수 };
+                    if (!reverse && studentRecord < 최저기준) return { 종목명: input.종목명, 배점: 기본점수 };
+                    
+                    // 점수 산출 공식 적용
+                    const score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
+                    return { 종목명: input.종목명, 배점: score };
+                }
+            }
+
             // ✅✅✅ P/F 판정 로직 시작 ✅✅✅
             // 실기ID 99번(청주대)일 경우, P/F 로직을 우선 적용
             if (실기ID === 99) {
@@ -1222,7 +1247,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             // ✅✅✅ P/F 판정 로직 끝 ✅✅✅
 
             // --- P/F 대학이 아닐 경우, 기존 숫자 점수 계산 로직 실행 ---
-            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런'].some(k => input.종목명.toLowerCase().includes(k));
+ 
             const operator = reverse ? '<=' : '>=';
             const sql = `
                 SELECT 배점 FROM \`26수시실기배점\`
@@ -1286,7 +1311,6 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: "서버 오류 발생" });
     }
 });
-
 // (수정) 저장된 설정값도 함께 조회
 app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
   const sql = `
