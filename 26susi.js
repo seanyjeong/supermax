@@ -1219,8 +1219,11 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
                     if (!reverse && studentRecord < 최저기준) return { 종목명: input.종목명, 배점: 기본점수 };
                     
                     // 점수 산출 공식 적용
-                    const score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
-                    return { 종목명: input.종목명, 배점: score };
+// 점수 산출 공식 적용
+                    let score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
+                    // ✅ 소수점 둘째 자리까지 반올림
+                    score = parseFloat(score.toFixed(2));
+                    return { 종목명: input.종목명, 배점: score };
                 }
             }
 
