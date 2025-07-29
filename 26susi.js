@@ -1546,6 +1546,24 @@ app.post('/26susi/confirmed-list-save', authJWT, async (req, res) => {
 });
 
 // [이 API를 26susi.js 파일에 새로 추가]
+app.get('/26susi/counseled-students-only', authJWT, async (req, res) => {
+    const { college_id } = req.query;
+    const branch = req.user.branch;
+    if (!college_id) { return res.status(400).json({ success: false, message: "대학ID가 필요합니다." }); }
+    try {
+        const sql = `
+            SELECT s.학생ID, s.이름, s.학년, s.성별
+            FROM 학생기초정보 s
+            JOIN (SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?) AS counseled ON s.학생ID = counseled.학생ID
+            WHERE s.지점명 = ? AND s.학생ID NOT IN (
+                SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?
+            ) ORDER BY s.이름 ASC`;
+        const [rows] = await db.promise().query(sql, [college_id, branch, college_id]);
+        res.json({ success: true, students: rows });
+    } catch(err) { res.status(500).json({ success: false, message: "DB 조회 오류" }); }
+});
+
+// [이 API를 26susi.js 파일에 새로 추가]
 app.get('/26susi/confirmed-student-details', authJWT, async (req, res) => {
     const { student_id, college_id } = req.query;
     if (!student_id || !college_id) {
