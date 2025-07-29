@@ -264,7 +264,34 @@ app.post('/26susi_update_score_table', authJWT, async (req, res) => {
     }
 });
 
+// ✅ (신규) 대학 상세정보 전체 조회 API
+app.get('/26susi/university-details', authJWT, async (req, res) => {
+    // 프론트에서 ?college_id=123 형식으로 대학ID를 받음
+    const { college_id } = req.query;
 
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+
+    try {
+        // 대학정보 테이블에서 해당 ID의 모든 컬럼(*)을 조회
+        const [rows] = await db.promise().query(
+            "SELECT * FROM 대학정보 WHERE 대학ID = ?",
+            [college_id]
+        );
+
+        if (rows.length > 0) {
+            // 조회 성공 시, 첫 번째 결과(대학 정보 객체)를 'details'라는 키로 전송
+            res.json({ success: true, details: rows[0] });
+        } else {
+            // 해당 ID의 대학이 없을 경우 404 에러 전송
+            res.status(404).json({ success: false, message: "해당 대학 정보를 찾을 수 없습니다." });
+        }
+    } catch (err) {
+        console.error("대학 상세정보 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류가 발생했습니다." });
+    }
+});
 app.post('/26susi_save_practical_total_config', async (req, res) => {
   const {
     대학ID,
