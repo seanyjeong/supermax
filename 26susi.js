@@ -1407,16 +1407,12 @@ app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
     const branch = req.user.branch;
     if (!college_id) { return res.status(400).json({ success: false, message: "대학ID가 필요합니다." }); }
     try {
-        // ✅ JOIN으로 변경: '확정대학정보'에 데이터가 있는 학생만 조회
         const sql = `
             SELECT 
-                s.학생ID, s.이름, s.학년, s.성별,
-                c.*
+                s.학생ID, s.이름, s.학년, s.성별, c.*
             FROM 학생기초정보 s
             JOIN 확정대학정보 c ON s.학생ID = c.학생ID AND c.대학ID = ?
-            WHERE s.지점명 = ?
-            ORDER BY s.이름 ASC
-        `;
+            WHERE s.지점명 = ? ORDER BY s.이름 ASC`;
         const [rows] = await db.promise().query(sql, [college_id, branch]);
         res.json({ success: true, students: rows });
     } catch (err) {
@@ -1426,27 +1422,42 @@ app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
 });
 
 // [이 API를 26susi.js 파일에 새로 추가]
+// [이 API를 26susi.js 파일에 새로 추가]
 app.get('/26susi/counseled-students-only', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
     if (!college_id) { return res.status(400).json({ success: false, message: "대학ID가 필요합니다." }); }
     try {
-        // 상담은 했지만(counseled), 확정되지는 않은(NOT IN confirmed) 학생만 조회
         const sql = `
             SELECT s.학생ID, s.이름, s.학년, s.성별
             FROM 학생기초정보 s
-            JOIN (
-                SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?
-            ) AS counseled ON s.학생ID = counseled.학생ID
+            JOIN (SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?) AS counseled ON s.학생ID = counseled.학생ID
             WHERE s.지점명 = ? AND s.학생ID NOT IN (
                 SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?
-            )
-            ORDER BY s.이름 ASC
-        `;
+            ) ORDER BY s.이름 ASC`;
         const [rows] = await db.promise().query(sql, [college_id, branch, college_id]);
         res.json({ success: true, students: rows });
     } catch(err) {
         console.error("상담학생만 불러오기 API 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 오류" });
+    }
+});
+
+// [기존 /26susi/import-counsel-data API를 이걸로 교체]
+app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
+    const { college_id, student_ids } = req.query;
+    if (!college_id || !student_ids) {
+        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
+    }
+    try {
+        const sql = `
+            SELECT 학생ID, 등급 AS 내신등급, 내신점수
+            FROM 학생_내신정보
+            WHERE 대학ID = ? AND 학생ID IN (?)`;
+        const [rows] = await db.promise().query(sql, [college_id, JSON.parse(student_ids)]);
+        res.json({ success: true, counselData: rows });
+    } catch (err) {
+        console.error("내신 불러오기 API 오류:", err);
         res.status(500).json({ success: false, message: "DB 조회 오류" });
     }
 });
