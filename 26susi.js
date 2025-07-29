@@ -1376,6 +1376,29 @@ app.get('/26susi_get_practical_colleges_with_scores', async (req, res) => {
   }
 });
 
+// ✅ (신규) 대시보드용 발표일정 조회 API
+app.get('/26susi/announcement-dates', authJWT, async (req, res) => {
+    try {
+        // 1단계 발표일과 최종 발표일을 합쳐서 하나의 목록으로 만듦
+        // STR_TO_DATE 함수로 문자열을 날짜로 변환하여 오늘(CURDATE())과 비교
+        const sql = `
+            SELECT * FROM (
+                (SELECT 대학명, 학과명, 전형명, \`1단계발표일\` AS 발표일, '1차 발표' AS 내용 FROM 대학정보 WHERE \`1단계발표일\` IS NOT NULL AND \`1단계발표일\` != '')
+                UNION ALL
+                (SELECT 대학명, 학과명, 전형명, \`합격자발표일\` AS 발표일, '최종 발표' AS 내용 FROM 대학정보 WHERE \`합격자발표일\` IS NOT NULL AND \`합격자발표일\` != '')
+            ) AS announcements
+            WHERE STR_TO_DATE(발표일, '%Y.%m.%d') >= CURDATE()
+            ORDER BY STR_TO_DATE(발표일, '%Y.%m.%d') ASC
+            LIMIT 10;
+        `;
+        const [dates] = await db.promise().query(sql);
+        res.json({ success: true, dates });
+    } catch(err) {
+        console.error("발표일정 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
