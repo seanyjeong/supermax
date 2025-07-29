@@ -1430,21 +1430,35 @@ app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
 });
 
 // ✅ (신규) 상담 정보 불러오기 API (내신만)
+// [기존 import-counsel-data API를 이걸로 교체]
+
+// ✅ (신규) 상담 정보 불러오기 API (학생_내신정보 테이블 기준)
 app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
     if (!college_id) {
         return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
     }
+
     try {
-        // 학생기초정보와 상담대학정보를 JOIN해서 해당 지점, 해당 대학의 내신 정보만 가져옴
+        // 1. 먼저 '상담대학정보'에서 해당 대학에 상담 이력이 있는 학생 ID 목록을 가져옴
+        // 2. 그 학생 ID 목록을 기준으로, '학생_내신정보' 테이블에서 해당 대학의 공식 내신을 조회
         const sql = `
-            SELECT s.학생ID, c.내신등급, c.내신점수
-            FROM 학생기초정보 s
-            JOIN 상담대학정보 c ON s.학생ID = c.학생ID
-            WHERE s.지점명 = ? AND c.대학ID = ?
+            SELECT
+                counseled.학생ID,
+                official_naesin.내신등급,
+                official_naesin.내신점수
+            FROM (
+                SELECT DISTINCT s.학생ID
+                FROM 학생기초정보 s
+                JOIN 상담대학정보 c ON s.학생ID = c.학생ID
+                WHERE s.지점명 = ? AND c.대학ID = ?
+            ) AS counseled
+            LEFT JOIN 학생_내신정보 AS official_naesin
+                ON counseled.학생ID = official_naesin.학생ID AND official_naesin.대학ID = ?
         `;
-        const [rows] = await db.promise().query(sql, [branch, college_id]);
+        // college_id가 두 번 사용되므로 파라미터를 3개 전달
+        const [rows] = await db.promise().query(sql, [branch, college_id, college_id]);
         res.json({ success: true, counselData: rows });
     } catch (err) {
         console.error("상담 정보 불러오기 API 오류:", err);
@@ -1453,6 +1467,8 @@ app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
 });
 
 // ✅ (신규) 확정 대학 정보 저장 API
+// [기존 /26susi/confirmed-list-save API를 이걸로 교체]
+
 app.post('/26susi/confirmed-list-save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
     if (!college_id || !Array.isArray(studentData)) {
@@ -1463,36 +1479,52 @@ app.post('/26susi/confirmed-list-save', authJWT, async (req, res) => {
     await connection.beginTransaction();
 
     try {
-        const sql = `
-            INSERT INTO 확정대학정보 (
-                학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 
-                기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
-                기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-                실기총점, 합산점수, 최초합여부, 최종합여부
-            ) VALUES ?
-            ON DUPLICATE KEY UPDATE 
-                실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수),
-                기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
-                기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
-                기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
-                기록7=VALUES(기록7), 점수7=VALUES(점수7),
-                실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수),
-                최초합여부=VALUES(최초합여부), 최종합여부=VALUES(최종합여부)
-        `;
-        
-        const values = studentData.map(s => ([
-            s.학생ID, college_id, s.실기ID, s.내신등급, s.내신점수,
-            s.기록1, s.점수1, s.기록2, s.점수2, s.기록3, s.점수3, s.기록4, s.점수4,
-            s.기록5, s.점수5, s.기록6, s.점수6, s.기록7, s.점수7,
-            s.실기총점, s.합산점수, s.최초합여부 || null, s.최종합여부 || null
-        ]));
+        for (const student of studentData) {
+            // 1. 확정대학정보 테이블에 모든 정보 저장 (기존 로직)
+            const confirmSql = `
+                INSERT INTO 확정대학정보 (
+                    학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 
+                    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
+                    기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+                    실기총점, 합산점수, 최초합여부, 최종합여부
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수),
+                    기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
+                    기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
+                    기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
+                    기록7=VALUES(기록7), 점수7=VALUES(점수7),
+                    실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수),
+                    최초합여부=VALUES(최초합여부), 최종합여부=VALUES(최종합여부)
+            `;
+            const confirmParams = [
+                student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수,
+                student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3,
+                student.기록4, student.점수4, student.기록5, student.점수5, student.기록6, student.점수6,
+                student.기록7, student.점수7,
+                student.실기총점, student.합산점수, student.최초합여부 || null, student.최종합여부 || null
+            ];
+            await connection.query(confirmSql, confirmParams);
 
-        if (values.length > 0) {
-            await connection.query(sql, [values]);
+            // ✅ 2. 학생_내신정보 테이블에도 내신 등급/점수 업데이트 (새로 추가된 로직)
+            if (student.내신등급 || student.내신점수) {
+                const gradeSql = `
+                    INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE 등급=VALUES(등급), 내신점수=VALUES(내신점수)`;
+                const gradeParams = [
+                    student.학생ID,
+                    college_id,
+                    student.내신등급 || null,
+                    student.내신점수 || null
+                ];
+                await connection.query(gradeSql, gradeParams);
+            }
         }
 
         await connection.commit();
         res.json({ success: true, message: "성공적으로 저장되었습니다." });
+
     } catch (err) {
         await connection.rollback();
         console.error("확정 대학 정보 저장 API 오류:", err);
