@@ -1399,6 +1399,108 @@ app.get('/26susi/announcement-dates', authJWT, async (req, res) => {
     }
 });
 
+
+// ✅ (신규) 확정 대학 정보 조회 API
+app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
+    const { college_id } = req.query;
+    const branch = req.user.branch;
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+    try {
+        const sql = `
+            SELECT 
+                s.학생ID, s.이름, s.학년, s.성별,
+                c.내신등급, c.내신점수, 
+                c.기록1, c.점수1, c.기록2, c.점수2, c.기록3, c.점수3, c.기록4, c.점수4, 
+                c.기록5, c.점수5, c.기록6, c.점수6, c.기록7, c.점수7,
+                c.실기총점, c.합산점수,
+                c.최초합여부, c.최종합여부
+            FROM 학생기초정보 s
+            LEFT JOIN 확정대학정보 c ON s.학생ID = c.학생ID AND c.대학ID = ?
+            WHERE s.지점명 = ?
+            ORDER BY s.이름 ASC
+        `;
+        const [rows] = await db.promise().query(sql, [college_id, branch]);
+        res.json({ success: true, students: rows });
+    } catch (err) {
+        console.error("확정 대학 정보 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 오류" });
+    }
+});
+
+// ✅ (신규) 상담 정보 불러오기 API (내신만)
+app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
+    const { college_id } = req.query;
+    const branch = req.user.branch;
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+    try {
+        // 학생기초정보와 상담대학정보를 JOIN해서 해당 지점, 해당 대학의 내신 정보만 가져옴
+        const sql = `
+            SELECT s.학생ID, c.내신등급, c.내신점수
+            FROM 학생기초정보 s
+            JOIN 상담대학정보 c ON s.학생ID = c.학생ID
+            WHERE s.지점명 = ? AND c.대학ID = ?
+        `;
+        const [rows] = await db.promise().query(sql, [branch, college_id]);
+        res.json({ success: true, counselData: rows });
+    } catch (err) {
+        console.error("상담 정보 불러오기 API 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 오류" });
+    }
+});
+
+// ✅ (신규) 확정 대학 정보 저장 API
+app.post('/26susi/confirmed-list-save', authJWT, async (req, res) => {
+    const { college_id, studentData } = req.body;
+    if (!college_id || !Array.isArray(studentData)) {
+        return res.status(400).json({ success: false, message: "필수 데이터 누락" });
+    }
+
+    const connection = await db.promise().getConnection();
+    await connection.beginTransaction();
+
+    try {
+        const sql = `
+            INSERT INTO 확정대학정보 (
+                학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 
+                기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
+                기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
+                실기총점, 합산점수, 최초합여부, 최종합여부
+            ) VALUES ?
+            ON DUPLICATE KEY UPDATE 
+                실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수),
+                기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
+                기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
+                기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
+                기록7=VALUES(기록7), 점수7=VALUES(점수7),
+                실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수),
+                최초합여부=VALUES(최초합여부), 최종합여부=VALUES(최종합여부)
+        `;
+        
+        const values = studentData.map(s => ([
+            s.학생ID, college_id, s.실기ID, s.내신등급, s.내신점수,
+            s.기록1, s.점수1, s.기록2, s.점수2, s.기록3, s.점수3, s.기록4, s.점수4,
+            s.기록5, s.점수5, s.기록6, s.점수6, s.기록7, s.점수7,
+            s.실기총점, s.합산점수, s.최초합여부 || null, s.최종합여부 || null
+        ]));
+
+        if (values.length > 0) {
+            await connection.query(sql, [values]);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: "성공적으로 저장되었습니다." });
+    } catch (err) {
+        await connection.rollback();
+        console.error("확정 대학 정보 저장 API 오류:", err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생' });
+    } finally {
+        connection.release();
+    }
+});
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
