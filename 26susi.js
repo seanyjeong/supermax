@@ -1556,6 +1556,25 @@ app.get('/26susi/confirmed-student-details', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: "DB 조회 오류" });
     }
 });
+
+// ✅ (신규) 확정 대학 정보에서 특정 학생 삭제 API
+app.post('/26susi/confirmed-student-delete', authJWT, async (req, res) => {
+    const { student_id, college_id } = req.body;
+    if (!student_id || !college_id) {
+        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
+    }
+
+    try {
+        await db.promise().query(
+            "DELETE FROM 확정대학정보 WHERE 학생ID = ? AND 대학ID = ?",
+            [student_id, college_id]
+        );
+        res.json({ success: true, message: "학생 정보가 삭제되었습니다." });
+    } catch (err) {
+        console.error("확정 정보 삭제 API 오류:", err);
+        res.status(500).json({ success: false, message: "DB 처리 중 오류가 발생했습니다." });
+    }
+});
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
