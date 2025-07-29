@@ -1401,6 +1401,7 @@ app.get('/26susi/announcement-dates', authJWT, async (req, res) => {
 
 
 // ✅ (신규) 확정 대학 정보 조회 API
+// [기존 /26susi/confirmed-list API를 이걸로 교체]
 app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
@@ -1408,20 +1409,21 @@ app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
         return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
     }
     try {
+        // ✅ JOIN으로 변경: '상담대학정보'에 기록이 있는 학생만 조회
         const sql = `
             SELECT 
                 s.학생ID, s.이름, s.학년, s.성별,
-                c.내신등급, c.내신점수, 
-                c.기록1, c.점수1, c.기록2, c.점수2, c.기록3, c.점수3, c.기록4, c.점수4, 
-                c.기록5, c.점수5, c.기록6, c.점수6, c.기록7, c.점수7,
-                c.실기총점, c.합산점수,
+                c.내신등급, c.내신점수, c.실기총점, c.합산점수,
                 c.최초합여부, c.최종합여부
-            FROM 학생기초정보 s
+            FROM (
+                SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?
+            ) AS counseled_students
+            JOIN 학생기초정보 s ON counseled_students.학생ID = s.학생ID
             LEFT JOIN 확정대학정보 c ON s.학생ID = c.학생ID AND c.대학ID = ?
             WHERE s.지점명 = ?
             ORDER BY s.이름 ASC
         `;
-        const [rows] = await db.promise().query(sql, [college_id, branch]);
+        const [rows] = await db.promise().query(sql, [college_id, college_id, branch]);
         res.json({ success: true, students: rows });
     } catch (err) {
         console.error("확정 대학 정보 조회 API 오류:", err);
@@ -1433,31 +1435,28 @@ app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
 // [기존 import-counsel-data API를 이걸로 교체]
 
 // ✅ (신규) 상담 정보 불러오기 API (학생_내신정보 테이블 기준)
+// [기존 /26susi/import-counsel-data API를 이걸로 교체]
 app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
     if (!college_id) {
         return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
     }
-
     try {
-        // 1. 먼저 '상담대학정보'에서 해당 대학에 상담 이력이 있는 학생 ID 목록을 가져옴
-        // 2. 그 학생 ID 목록을 기준으로, '학생_내신정보' 테이블에서 해당 대학의 공식 내신을 조회
+        // ✅ SQL 컬럼명 오타 수정: official_naesin.내신등급 -> official_naesin.등급
         const sql = `
             SELECT
                 counseled.학생ID,
-                official_naesin.내신등급,
+                official_naesin.등급 AS 내신등급,
                 official_naesin.내신점수
             FROM (
-                SELECT DISTINCT s.학생ID
-                FROM 학생기초정보 s
+                SELECT DISTINCT s.학생ID FROM 학생기초정보 s
                 JOIN 상담대학정보 c ON s.학생ID = c.학생ID
                 WHERE s.지점명 = ? AND c.대학ID = ?
             ) AS counseled
             LEFT JOIN 학생_내신정보 AS official_naesin
                 ON counseled.학생ID = official_naesin.학생ID AND official_naesin.대학ID = ?
         `;
-        // college_id가 두 번 사용되므로 파라미터를 3개 전달
         const [rows] = await db.promise().query(sql, [branch, college_id, college_id]);
         res.json({ success: true, counselData: rows });
     } catch (err) {
@@ -1531,6 +1530,30 @@ app.post('/26susi/confirmed-list-save', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생' });
     } finally {
         connection.release();
+    }
+});
+
+// [이 API를 26susi.js 파일에 새로 추가]
+app.get('/26susi/confirmed-student-details', authJWT, async (req, res) => {
+    const { student_id, college_id } = req.query;
+    if (!student_id || !college_id) {
+        return res.status(400).json({ success: false, message: "필수 정보 누락" });
+    }
+    try {
+        const sql = `
+            SELECT 
+                s.학생ID, s.이름, s.학년, s.성별,
+                n.등급 AS 내신등급,
+                n.내신점수
+            FROM 학생기초정보 s
+            LEFT JOIN 학생_내신정보 n ON s.학생ID = n.학생ID AND n.대학ID = ?
+            WHERE s.학생ID = ?
+        `;
+        const [[student]] = await db.promise().query(sql, [college_id, student_id]);
+        res.json({ success: true, student });
+    } catch (err) {
+        console.error("확정 학생 상세 정보 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 오류" });
     }
 });
 // ✅ 서버 실행
