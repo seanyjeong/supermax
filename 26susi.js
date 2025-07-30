@@ -1278,7 +1278,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
 
             // --- P/F 대학이 아닐 경우, 기존 숫자 점수 계산 로직 실행 ---
  
-            const operator = reverse ? '<=' : '>=';
+            const operator = reverse ? '>=' : '>=';
             const sql = `
                 SELECT 배점 FROM \`26수시실기배점\`
                 WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
