@@ -1463,6 +1463,7 @@ app.get('/26susi_counsel_candidates', authJWT, async (req, res) => {
 });
 
 // (신규) 최종 수합 페이지 전체 저장
+// ✅ (수정) 최종 수합 페이지 전체 저장 (개인별 실기일정 포함)
 app.post('/26susi_final_save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
     if (!college_id || !Array.isArray(studentData)) {
@@ -1473,28 +1474,27 @@ app.post('/26susi_final_save', authJWT, async (req, res) => {
     await connection.beginTransaction();
 
     try {
-        // 1. 해당 대학의 기존 확정 정보를 모두 삭제 (가장 간단하고 확실한 동기화 방식)
         await connection.query("DELETE FROM 확정대학정보 WHERE 대학ID = ?", [college_id]);
 
         for (const student of studentData) {
-            // 2. 받은 데이터로 '확정대학정보'에 새로 INSERT
+            // [수정] INSERT 문에 '실기일정' 추가
             const finalSql = `
                 INSERT INTO 확정대학정보 (
                     학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 
                     기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
                     기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-                    실기총점, 합산점수, 최초합여부, 최종합여부
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+                    실기총점, 합산점수, 최초합여부, 최종합여부, 실기일정
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
             
+            // [수정] 파라미터에 student.실기일정 추가
             const finalParams = [
                 student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수,
                 student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3, student.기록4, student.점수4,
                 student.기록5, student.점수5, student.기록6, student.점수6, student.기록7, student.점수7,
-                student.실기총점, student.합산점수, student.최초합여부, student.최종합여부
-            ].map(v => v === undefined ? null : v); // undefined 값을 null로 변환
+                student.실기총점, student.합산점수, student.최초합여부, student.최종합여부, student.실기일정
+            ].map(v => v === undefined ? null : v);
             await connection.query(finalSql, finalParams);
 
-            // 3. '학생_내신정보' 테이블에도 업데이트 (요구사항 #6)
             if (student.내신등급 !== undefined || student.내신점수 !== undefined) {
                 const gradeSql = `
                     INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
@@ -1516,6 +1516,61 @@ app.post('/26susi_final_save', authJWT, async (req, res) => {
         if (connection) connection.release();
     }
 });
+
+// ✅ (수정) 대시보드용 지점별 실기일정 조회 API (개인별 실기일정 반영)
+app.get('/26susi/branch-schedule', authJWT, async (req, res) => {
+    const branch = req.user.branch;
+
+    try {
+        // [수정] d.실기일 대신 f.실기일정 을 기준으로 조회
+        const sql = `
+            SELECT
+                f.실기일정 AS 실기일,
+                d.대학명,
+                d.학과명,
+                s.이름 AS 학생이름
+            FROM 확정대학정보 f
+            JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+            JOIN 대학정보 d ON f.대학ID = d.대학ID
+            WHERE
+                s.지점명 = ?
+                AND f.실기일정 IS NOT NULL
+                AND f.실기일정 != ''
+                AND STR_TO_DATE(f.실기일정, '%Y-%m-%d') >= CURDATE()
+            ORDER BY
+                STR_TO_DATE(f.실기일정, '%Y-%m-%d') ASC, d.대학명 ASC;
+        `;
+        const [rows] = await db.promise().query(sql, [branch]);
+
+        if (rows.length === 0) {
+            return res.json({ success: true, schedule: [] });
+        }
+
+        const scheduleMap = new Map();
+        rows.forEach(row => {
+            const key = `${row.실기일}|${row.대학명}|${row.학과명}`;
+            if (!scheduleMap.has(key)) {
+                scheduleMap.set(key, {
+                    date: row.실기일,
+                    university: row.대학명,
+                    department: row.학과명,
+                    students: []
+                });
+            }
+            scheduleMap.get(key).students.push(row.학생이름);
+        });
+
+        const groupedSchedule = Array.from(scheduleMap.values());
+        
+        res.json({ success: true, schedule: groupedSchedule });
+
+    } catch (err) {
+        console.error("지점별 실기일정 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
+
 
 // ✅ 서버 실행
 app.listen(port, () => {
