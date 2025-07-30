@@ -1278,11 +1278,22 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
 
             // --- P/F 대학이 아닐 경우, 기존 숫자 점수 계산 로직 실행 ---
  
-            const operator = reverse ? '>=' : '>=';
-            const sql = `
-                SELECT 배점 FROM \`26수시실기배점\`
-                WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? ${operator} CAST(기록 AS DECIMAL(10,2))
-                ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+  let sql;
+            if (reverse) {
+                // 달리기처럼 기록이 낮을수록 좋은 종목의 경우 (구간 점수 방식)
+                // 학생 기록(예: 8.1)보다 작거나 같은 기준기록(예: 8.01) 중 가장 큰 것을 찾음 -> 95점
+                sql = `
+                    SELECT 배점 FROM \`26수시실기배점\`
+                    WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) <= ?
+                    ORDER BY CAST(기록 AS DECIMAL(10,2)) DESC LIMIT 1`;
+            } else {
+                // 멀리뛰기처럼 기록이 높을수록 좋은 종목의 경우 (기존 등급 달성 방식)
+                // 학생 기록(예: 265)보다 크거나 같은 기준기록은 통과 못함. 작거나 같은 기준기록(예: 260) 중 가장 높은 점수를 찾음 -> 90점
+                sql = `
+                    SELECT 배점 FROM \`26수시실기배점\`
+                    WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? >= CAST(기록 AS DECIMAL(10,2))
+                    ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+            }
             
             const [[row]] = await db.promise().query(sql, [실기ID, input.종목명, gender, input.기록]);
             
