@@ -1401,221 +1401,122 @@ app.get('/26susi/announcement-dates', authJWT, async (req, res) => {
 
 
 // ✅ (신규) 확정 대학 정보 조회 API
-// [기존 /26susi/confirmed-list API를 이걸로 교체]
-app.get('/26susi/confirmed-list', authJWT, async (req, res) => {
+// =================================================================
+// 📋 최종 수합 페이지 관련 API
+// =================================================================
+
+// (신규) 최종 수합 페이지 데이터 조회
+app.get('/26susi_final_list', authJWT, async (req, res) => {
     const { college_id } = req.query;
-    const branch = req.user.branch;
-    if (!college_id) { return res.status(400).json({ success: false, message: "대학ID가 필요합니다." }); }
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+
     try {
         const sql = `
             SELECT 
-                s.학생ID, s.이름, s.학년, s.성별, c.*
-            FROM 학생기초정보 s
-            JOIN 확정대학정보 c ON s.학생ID = c.학생ID AND c.대학ID = ?
-            WHERE s.지점명 = ? ORDER BY s.이름 ASC`;
-        const [rows] = await db.promise().query(sql, [college_id, branch]);
+                s.이름, s.학년, s.성별,
+                f.* -- 확정대학정보 테이블의 모든 컬럼
+            FROM 확정대학정보 f
+            JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+            WHERE f.대학ID = ?
+            ORDER BY f.합산점수 DESC, s.이름 ASC
+        `;
+        const [rows] = await db.promise().query(sql, [college_id]);
         res.json({ success: true, students: rows });
+
     } catch (err) {
-        console.error("확정 대학 정보 조회 API 오류:", err);
-        res.status(500).json({ success: false, message: "DB 조회 오류" });
+        console.error("최종 수합 데이터 조회 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 중 오류 발생" });
     }
 });
 
-// [이 API를 26susi.js 파일에 새로 추가]
-// [이 API를 26susi.js 파일에 새로 추가]
-app.get('/26susi/counseled-students-only', authJWT, async (req, res) => {
+// (신규) 최종 수합 페이지로 불러올 상담 학생 후보 조회
+app.get('/26susi_counsel_candidates', authJWT, async (req, res) => {
     const { college_id } = req.query;
     const branch = req.user.branch;
-    if (!college_id) { return res.status(400).json({ success: false, message: "대학ID가 필요합니다." }); }
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+
     try {
+        // 특정 대학에 대해 상담 이력이 있고, 해당 지점 소속이며, 아직 확정 명단에는 없는 학생들을 조회
         const sql = `
-            SELECT s.학생ID, s.이름, s.학년, s.성별
+            SELECT 
+                s.학생ID, s.이름, s.학년, s.성별,
+                g.등급 as 내신등급, g.내신점수
             FROM 학생기초정보 s
-            JOIN (SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?) AS counseled ON s.학생ID = counseled.학생ID
-            WHERE s.지점명 = ? AND s.학생ID NOT IN (
-                SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?
-            ) ORDER BY s.이름 ASC`;
-        const [rows] = await db.promise().query(sql, [college_id, branch, college_id]);
-        res.json({ success: true, students: rows });
-    } catch(err) {
-        console.error("상담학생만 불러오기 API 오류:", err);
-        res.status(500).json({ success: false, message: "DB 조회 오류" });
-    }
-});
-
-// [기존 /26susi/import-counsel-data API를 이걸로 교체]
-app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
-    const { college_id, student_ids } = req.query;
-    if (!college_id || !student_ids) {
-        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
-    }
-    try {
-        const sql = `
-            SELECT 학생ID, 등급 AS 내신등급, 내신점수
-            FROM 학생_내신정보
-            WHERE 대학ID = ? AND 학생ID IN (?)`;
-        const [rows] = await db.promise().query(sql, [college_id, JSON.parse(student_ids)]);
-        res.json({ success: true, counselData: rows });
-    } catch (err) {
-        console.error("내신 불러오기 API 오류:", err);
-        res.status(500).json({ success: false, message: "DB 조회 오류" });
-    }
-});
-
-// ✅ (신규) 상담 정보 불러오기 API (내신만)
-// [기존 import-counsel-data API를 이걸로 교체]
-
-// ✅ (신규) 상담 정보 불러오기 API (학생_내신정보 테이블 기준)
-// [기존 /26susi/import-counsel-data API를 이걸로 교체]
-// [기존 /26susi/import-counsel-data API를 이걸로 교체]
-app.get('/26susi/import-counsel-data', authJWT, async (req, res) => {
-    const { college_id, student_ids } = req.query;
-    if (!college_id || !student_ids) {
-        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
-    }
-    try {
-        // 전달받은 학생 ID 목록을 기준으로 '학생_내신정보'에서 공식 내신을 조회
-        const sql = `
-            SELECT 학생ID, 등급 AS 내신등급, 내신점수
-            FROM 학생_내신정보
-            WHERE 대학ID = ? AND 학생ID IN (?)
+            JOIN (SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?) c ON s.학생ID = c.학생ID
+            LEFT JOIN 학생_내신정보 g ON s.학생ID = g.학생ID AND g.대학ID = ?
+            WHERE 
+                s.지점명 = ? 
+                AND s.학생ID NOT IN (SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?)
+            ORDER BY s.이름
         `;
-        const [rows] = await db.promise().query(sql, [college_id, JSON.parse(student_ids)]);
-        res.json({ success: true, counselData: rows });
+        const [rows] = await db.promise().query(sql, [college_id, college_id, branch, college_id]);
+        res.json({ success: true, candidates: rows });
+
     } catch (err) {
-        console.error("내신 불러오기 API 오류:", err);
-        res.status(500).json({ success: false, message: "DB 조회 오류" });
+        console.error("상담 학생 후보 조회 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 중 오류 발생" });
     }
 });
 
-// ✅ (신규) 확정 대학 정보 저장 API
-// [기존 /26susi/confirmed-list-save API를 이걸로 교체]
-
-app.post('/26susi/confirmed-list-save', authJWT, async (req, res) => {
+// (신규) 최종 수합 페이지 전체 저장
+app.post('/26susi_final_save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
     if (!college_id || !Array.isArray(studentData)) {
-        return res.status(400).json({ success: false, message: "필수 데이터 누락" });
+        return res.status(400).json({ success: false, message: "필수 데이터가 누락되었습니다." });
     }
 
     const connection = await db.promise().getConnection();
     await connection.beginTransaction();
 
     try {
+        // 1. 해당 대학의 기존 확정 정보를 모두 삭제 (가장 간단하고 확실한 동기화 방식)
+        await connection.query("DELETE FROM 확정대학정보 WHERE 대학ID = ?", [college_id]);
+
         for (const student of studentData) {
-            // 1. 확정대학정보 테이블에 모든 정보 저장 (기존 로직)
-            const confirmSql = `
+            // 2. 받은 데이터로 '확정대학정보'에 새로 INSERT
+            const finalSql = `
                 INSERT INTO 확정대학정보 (
                     학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 
-                    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
+                    기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
                     기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
                     실기총점, 합산점수, 최초합여부, 최종합여부
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
-                    실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수),
-                    기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
-                    기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
-                    기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
-                    기록7=VALUES(기록7), 점수7=VALUES(점수7),
-                    실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수),
-                    최초합여부=VALUES(최초합여부), 최종합여부=VALUES(최종합여부)
-            `;
-            const confirmParams = [
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            
+            const finalParams = [
                 student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수,
-                student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3,
-                student.기록4, student.점수4, student.기록5, student.점수5, student.기록6, student.점수6,
-                student.기록7, student.점수7,
-                student.실기총점, student.합산점수, student.최초합여부 || null, student.최종합여부 || null
-            ];
-            await connection.query(confirmSql, confirmParams);
+                student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3, student.기록4, student.점수4,
+                student.기록5, student.점수5, student.기록6, student.점수6, student.기록7, student.점수7,
+                student.실기총점, student.합산점수, student.최초합여부, student.최종합여부
+            ].map(v => v === undefined ? null : v); // undefined 값을 null로 변환
+            await connection.query(finalSql, finalParams);
 
-            // ✅ 2. 학생_내신정보 테이블에도 내신 등급/점수 업데이트 (새로 추가된 로직)
-            if (student.내신등급 || student.내신점수) {
+            // 3. '학생_내신정보' 테이블에도 업데이트 (요구사항 #6)
+            if (student.내신등급 !== undefined || student.내신점수 !== undefined) {
                 const gradeSql = `
                     INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
                     VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE 등급=VALUES(등급), 내신점수=VALUES(내신점수)`;
-                const gradeParams = [
-                    student.학생ID,
-                    college_id,
-                    student.내신등급 || null,
-                    student.내신점수 || null
-                ];
+                const gradeParams = [student.학생ID, college_id, student.내신등급, student.내신점수];
                 await connection.query(gradeSql, gradeParams);
             }
         }
-
+        
         await connection.commit();
         res.json({ success: true, message: "성공적으로 저장되었습니다." });
 
     } catch (err) {
         await connection.rollback();
-        console.error("확정 대학 정보 저장 API 오류:", err);
-        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생' });
+        console.error("최종 수합 저장 API 오류:", err);
+        res.status(500).json({ success: false, message: '서버 DB 처리 중 오류가 발생했습니다.' });
     } finally {
-        connection.release();
+        if (connection) connection.release();
     }
 });
 
-// [이 API를 26susi.js 파일에 새로 추가]
-app.get('/26susi/counseled-students-only', authJWT, async (req, res) => {
-    const { college_id } = req.query;
-    const branch = req.user.branch;
-    if (!college_id) { return res.status(400).json({ success: false, message: "대학ID가 필요합니다." }); }
-    try {
-        const sql = `
-            SELECT s.학생ID, s.이름, s.학년, s.성별
-            FROM 학생기초정보 s
-            JOIN (SELECT DISTINCT 학생ID FROM 상담대학정보 WHERE 대학ID = ?) AS counseled ON s.학생ID = counseled.학생ID
-            WHERE s.지점명 = ? AND s.학생ID NOT IN (
-                SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?
-            ) ORDER BY s.이름 ASC`;
-        const [rows] = await db.promise().query(sql, [college_id, branch, college_id]);
-        res.json({ success: true, students: rows });
-    } catch(err) { res.status(500).json({ success: false, message: "DB 조회 오류" }); }
-});
-
-// [이 API를 26susi.js 파일에 새로 추가]
-app.get('/26susi/confirmed-student-details', authJWT, async (req, res) => {
-    const { student_id, college_id } = req.query;
-    if (!student_id || !college_id) {
-        return res.status(400).json({ success: false, message: "필수 정보 누락" });
-    }
-    try {
-        const sql = `
-            SELECT 
-                s.학생ID, s.이름, s.학년, s.성별,
-                n.등급 AS 내신등급,
-                n.내신점수
-            FROM 학생기초정보 s
-            LEFT JOIN 학생_내신정보 n ON s.학생ID = n.학생ID AND n.대학ID = ?
-            WHERE s.학생ID = ?
-        `;
-        const [[student]] = await db.promise().query(sql, [college_id, student_id]);
-        res.json({ success: true, student });
-    } catch (err) {
-        console.error("확정 학생 상세 정보 조회 API 오류:", err);
-        res.status(500).json({ success: false, message: "DB 조회 오류" });
-    }
-});
-
-// ✅ (신규) 확정 대학 정보에서 특정 학생 삭제 API
-app.post('/26susi/confirmed-student-delete', authJWT, async (req, res) => {
-    const { student_id, college_id } = req.body;
-    if (!student_id || !college_id) {
-        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
-    }
-
-    try {
-        await db.promise().query(
-            "DELETE FROM 확정대학정보 WHERE 학생ID = ? AND 대학ID = ?",
-            [student_id, college_id]
-        );
-        res.json({ success: true, message: "학생 정보가 삭제되었습니다." });
-    } catch (err) {
-        console.error("확정 정보 삭제 API 오류:", err);
-        res.status(500).json({ success: false, message: "DB 처리 중 오류가 발생했습니다." });
-    }
-});
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
