@@ -162,7 +162,7 @@ app.post('/26susi/login', async (req, res) => {
 
     // JWT 발급
     const token = jwt.sign(
-      { id: user.원장ID, userid: user.아이디, name: user.이름, branch: user.지점명 },
+      { id: user.원장ID, userid: user.아이디, name: user.이름, branch: user.지점명, phone: user.전화번호 }, // ✅ phone: user.전화번호 추가
       JWT_SECRET,
       { expiresIn: '3d' }
     );
