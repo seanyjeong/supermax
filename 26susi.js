@@ -1722,6 +1722,32 @@ app.post('/26susi/add-counseling-bulk', authJWT, async (req, res) => {
     }
 });
 
+// ✅ (신규) 특정 대학에 대해 이미 상담 목록에 있는 학생 ID 목록 조회 API
+app.get('/26susi/counseled-students-for-college', authJWT, async (req, res) => {
+    const { college_id } = req.query;
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+    
+    // 로그인한 원장 지점의 학생들만 대상으로 함
+    const branch = req.user.branch;
+
+    try {
+        const sql = `
+            SELECT c.학생ID 
+            FROM 상담대학정보 c
+            JOIN 학생기초정보 s ON c.학생ID = s.학생ID
+            WHERE c.대학ID = ? AND s.지점명 = ?
+        `;
+        const [rows] = await db.promise().query(sql, [college_id, branch]);
+        const studentIds = rows.map(r => r.학생ID);
+        res.json({ success: true, student_ids: studentIds });
+    } catch(err) {
+        console.error("기존 상담 학생 ID 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
 
 // ✅ (신규) 필터링을 위한 모든 지역 목록 API
 app.get('/26susi/filter-options/regions', authJWT, async (req, res) => {
