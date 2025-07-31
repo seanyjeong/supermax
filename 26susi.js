@@ -1658,7 +1658,7 @@ app.get('/26susi/explore-universities', authJWT, async (req, res) => {
 
         const eligibility = ['일반고', '특성화고', '체육고', '검정고시'].filter(key => req.query[key] === 'O');
         if (eligibility.length > 0) {
-            whereClauses.push(`(${eligibility.map(e => `d.${e} = 'O'`).join(' OR ')})`);
+            whereClauses.push(`(${eligibility.map(e => `d.${e} = 'O'`).join(' AND ')})`);
         }
         const grades = ['내신일반', '내신진로'].filter(key => req.query[key] === 'O');
         if (grades.length > 0) {
