@@ -1685,8 +1685,15 @@ app.get('/26susi/explore-universities', authJWT, async (req, res) => {
     }
 });
 // ✅ (신규) 여러 학생에게 상담 대학 일괄 추가 API
+// ✅ (수정) 디버깅 로그를 추가한 버전
 app.post('/26susi/add-counseling-bulk', authJWT, async (req, res) => {
     const { college_id, student_ids } = req.body;
+
+    // ▼▼▼▼▼▼ 디버깅 로그 ▼▼▼▼▼▼
+    console.log('\n--- 상담 대학 일괄 추가 API 호출됨 ---');
+    console.log('서버가 받은 데이터:', req.body);
+    // ▲▲▲▲▲▲ 디버깅 로그 ▲▲▲▲▲▲
+
     if (!college_id || !Array.isArray(student_ids) || student_ids.length === 0) {
         return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
     }
@@ -1698,22 +1705,32 @@ app.post('/26susi/add-counseling-bulk', authJWT, async (req, res) => {
         }
 
         let addedCount = 0;
+        console.log(`[시작] ${student_ids.length}명의 학생에 대한 작업을 시작합니다.`); // 디버깅 로그
+
         for (const student_id of student_ids) {
-            // 이미 상담 목록에 있는지 확인
+            
+            console.log(`  [처리중] 학생 ID: ${student_id}`); // 디버깅 로그
+
             const [existing] = await db.promise().query(
                 "SELECT 기록ID FROM 상담대학정보 WHERE 학생ID = ? AND 대학ID = ?",
                 [student_id, college_id]
             );
 
-            // 없는 경우에만 새로 추가
             if (existing.length === 0) {
+                console.log(`    -> [추가] 해당 학생은 목록에 없으므로 새로 추가합니다.`); // 디버깅 로그
                 await db.promise().query(
                     "INSERT INTO 상담대학정보 (학생ID, 대학ID, 실기ID) VALUES (?, ?, ?)",
                     [student_id, college_id, college.실기ID]
                 );
                 addedCount++;
+            } else {
+                console.log(`    -> [건너뛰기] 해당 학생은 이미 상담 목록에 있습니다.`); // 디버깅 로그
             }
         }
+        
+        console.log(`[완료] 총 ${addedCount}명의 학생을 추가했습니다.`); // 디버깅 로그
+        console.log('-------------------------------------\n');
+        
         res.json({ success: true, message: `${addedCount}명의 학생에게 상담 대학이 추가되었습니다.` });
 
     } catch (err) {
