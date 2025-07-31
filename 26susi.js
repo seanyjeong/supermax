@@ -1605,6 +1605,126 @@ app.get('/26susi/branch-schedule', authJWT, async (req, res) => {
     }
 });
 
+// ✅ (신규) 모집요강 탐색 페이지용 대학 필터링 API
+app.get('/26susi/explore-universities', authJWT, async (req, res) => {
+    try {
+        let baseQuery = `
+            SELECT d.*, s.실기종목들
+            FROM 대학정보 d
+            LEFT JOIN (
+                SELECT 실기ID, GROUP_CONCAT(DISTINCT 종목명 SEPARATOR ',') as 실기종목들
+                FROM \`26수시실기배점\`
+                GROUP BY 실기ID
+            ) AS s ON d.실기ID = s.실기ID
+        `;
+
+        const whereClauses = [];
+        const params = [];
+
+        // 필터 조건들을 동적으로 추가
+        if (req.query.type) { // 국립/사립
+            whereClauses.push('d.구분 = ?');
+            params.push(req.query.type);
+        }
+        if (req.query.region) { // 지역
+            whereClauses.push('d.광역 = ?');
+            params.push(req.query.region);
+        }
+        if (req.query.teaching === 'O') { // 교직이수
+            whereClauses.push("d.교직이수 IN ('O', '△')");
+        }
+        if (req.query.firstStage === 'O') { // 1단계 전형
+            whereClauses.push("d.1단계배수 IS NOT NULL AND d.1단계배수 != ''");
+        }
+        // 지원자격 (여러 개 선택 가능)
+        const eligibility = ['일반고', '특성화고', '체육고', '검정고시'].filter(key => req.query[key] === 'O');
+        if (eligibility.length > 0) {
+            whereClauses.push(`(${eligibility.map(e => `d.${e} = 'O'`).join(' OR ')})`);
+        }
+        // 내신 반영 (여러 개 선택 가능)
+        const grades = ['내신일반', '내신진로'].filter(key => req.query[key] === 'O');
+        if (grades.length > 0) {
+            whereClauses.push(`(${grades.map(g => `d.${g} = 'O'`).join(' OR ')})`);
+        }
+        // 실기 종목 제외
+        if (req.query.excludeEvents) {
+            const eventsToExclude = req.query.excludeEvents.split(',');
+            eventsToExclude.forEach(event => {
+                whereClauses.push("(s.실기종목들 IS NULL OR NOT FIND_IN_SET(?, s.실기종목들))");
+                params.push(event);
+            });
+        }
+        if (req.query.isPractical === 'O') { // 실기 전형만 보기
+            whereClauses.push("d.실기ID IS NOT NULL");
+        }
+
+        if (whereClauses.length > 0) {
+            baseQuery += ' WHERE ' + whereClauses.join(' AND ');
+        }
+        
+        baseQuery += ' ORDER BY d.대학명, d.학과명;';
+
+        const [rows] = await db.promise().query(baseQuery, params);
+        res.json({ success: true, universities: rows });
+
+    } catch (err) {
+        console.error("대학 탐색 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
+// ✅ (신규) 여러 학생에게 상담 대학 일괄 추가 API
+app.post('/26susi/add-counseling-bulk', authJWT, async (req, res) => {
+    const { college_id, student_ids } = req.body;
+    if (!college_id || !Array.isArray(student_ids) || student_ids.length === 0) {
+        return res.status(400).json({ success: false, message: "필수 정보가 누락되었습니다." });
+    }
+
+    try {
+        const college = (await db.promise().query("SELECT 실기ID FROM 대학정보 WHERE 대학ID = ?", [college_id]))[0][0];
+        if (!college) {
+            return res.status(404).json({ success: false, message: "대학 정보를 찾을 수 없습니다." });
+        }
+
+        let addedCount = 0;
+        for (const student_id of student_ids) {
+            // 이미 상담 목록에 있는지 확인
+            const [existing] = await db.promise().query(
+                "SELECT 기록ID FROM 상담대학정보 WHERE 학생ID = ? AND 대학ID = ?",
+                [student_id, college_id]
+            );
+
+            // 없는 경우에만 새로 추가
+            if (existing.length === 0) {
+                await db.promise().query(
+                    "INSERT INTO 상담대학정보 (학생ID, 대학ID, 실기ID) VALUES (?, ?, ?)",
+                    [student_id, college_id, college.실기ID]
+                );
+                addedCount++;
+            }
+        }
+        res.json({ success: true, message: `${addedCount}명의 학생에게 상담 대학이 추가되었습니다.` });
+
+    } catch (err) {
+        console.error("상담 대학 일괄 추가 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
+
+// ✅ (신규) 필터링을 위한 모든 지역 목록 API
+app.get('/26susi/filter-options/regions', authJWT, async (req, res) => {
+    const [rows] = await db.promise().query("SELECT DISTINCT 광역 FROM 대학정보 WHERE 광역 IS NOT NULL AND 광역 != '' ORDER BY 광역");
+    res.json({ success: true, regions: rows.map(r => r.광역) });
+});
+
+// ✅ (신규) 필터링을 위한 모든 실기 종목 목록 API
+app.get('/26susi/filter-options/events', authJWT, async (req, res) => {
+    const [rows] = await db.promise().query("SELECT DISTINCT 종목명 FROM `26수시실기배점` ORDER BY 종목명");
+    res.json({ success: true, events: rows.map(r => r.종목명) });
+});
+
+
 
 
 // ✅ 서버 실행
