@@ -1784,6 +1784,51 @@ app.get('/26susi/filter-options/events', authJWT, async (req, res) => {
     res.json({ success: true, events: rows.map(r => r.종목명) });
 });
 
+// ✅ (신규) 공지사항 관련 API 3개
+
+// 1. 공지사항 목록 조회 API (모든 사용자가 호출)
+app.get('/26susi/announcements', authJWT, async (req, res) => {
+    try {
+        const sql = "SELECT * FROM 공지사항 ORDER BY 중요 DESC, 작성일시 DESC LIMIT 5";
+        const [announcements] = await db.promise().query(sql);
+        res.json({ success: true, announcements });
+    } catch(err) {
+        console.error("공지사항 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+// 2. 새 공지사항 작성 API (관리자 전용)
+app.post('/26susi/announcements/create', authJWT, async (req, res) => {
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
+    }
+    const { title, content, is_important } = req.body;
+    try {
+        const sql = "INSERT INTO 공지사항 (제목, 내용, 중요) VALUES (?, ?, ?)";
+        await db.promise().query(sql, [title, content, is_important ? 'O' : 'X']);
+        res.json({ success: true, message: "공지사항이 등록되었습니다." });
+    } catch(err) {
+        console.error("공지사항 작성 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+// 3. 공지사항 삭제 API (관리자 전용)
+app.post('/26susi/announcements/delete', authJWT, async (req, res) => {
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "관리자 권한이 필요합니다." });
+    }
+    const { notice_id } = req.body;
+    try {
+        await db.promise().query("DELETE FROM 공지사항 WHERE 공지ID = ?", [notice_id]);
+        res.json({ success: true, message: "공지사항이 삭제되었습니다." });
+    } catch(err) {
+        console.error("공지사항 삭제 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
 
 
 
