@@ -1626,7 +1626,12 @@ app.get('/26susi/explore-universities', authJWT, async (req, res) => {
 
         // 필터 조건들을 동적으로 추가
         if (req.query.type) { whereClauses.push('d.구분 = ?'); params.push(req.query.type); }
-        if (req.query.region) { whereClauses.push('d.광역 = ?'); params.push(req.query.region); }
+       if (req.query.region) {
+            // region 파라미터가 '서울,경기' 처럼 콤마로 구분된 문자열로 올 수 있음
+            const regions = req.query.region.split(',');
+            whereClauses.push('d.광역 IN (?)'); // IN 절을 사용하여 여러 지역을 한 번에 검색
+            params.push(regions);
+        }
         
         if (req.query.teaching && req.query.teaching !== '전체') { 
             whereClauses.push("d.교직이수 = ?");
