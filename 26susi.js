@@ -1691,6 +1691,7 @@ app.get('/26susi/explore-universities', authJWT, async (req, res) => {
 });
 // ✅ (신규) 여러 학생에게 상담 대학 일괄 추가 API
 // ✅ (수정) 디버깅 로그를 추가한 버전
+// ✅ (수정) 디버깅 로그를 추가한 버전
 app.post('/26susi/add-counseling-bulk', authJWT, async (req, res) => {
     const { college_id, student_ids } = req.body;
 
