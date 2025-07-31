@@ -1607,6 +1607,7 @@ app.get('/26susi/branch-schedule', authJWT, async (req, res) => {
 
 // ✅ (신규) 모집요강 탐색 페이지용 대학 필터링 API
 // ✅ (수정) 새로운 필터(교직이수, 수능최저)를 처리하도록 기능 추가
+// ✅ (수정) '1단계 전형 없음' 필터 조건을 처리하도록 기능 추가
 app.get('/26susi/explore-universities', authJWT, async (req, res) => {
     try {
         let baseQuery = `
@@ -1622,28 +1623,31 @@ app.get('/26susi/explore-universities', authJWT, async (req, res) => {
         const whereClauses = [];
         const params = [];
 
-        // 필터 조건들을 동적으로 추가
         if (req.query.type) { whereClauses.push('d.구분 = ?'); params.push(req.query.type); }
         if (req.query.region) { whereClauses.push('d.광역 = ?'); params.push(req.query.region); }
-        
-        // ▼▼▼▼▼▼ 새로운 필터 로직 ▼▼▼▼▼▼
         if (req.query.teaching && req.query.teaching !== '전체') { 
             whereClauses.push("d.교직이수 = ?");
             params.push(req.query.teaching);
         }
+        
+        // ▼▼▼▼▼▼ '1단계 전형' 필터 로직 수정 ▼▼▼▼▼▼
         if (req.query.firstStage === 'O') { 
             whereClauses.push("d.1단계배수 IS NOT NULL AND d.1단계배수 != ''");
+        } else if (req.query.firstStage === 'X') {
+            whereClauses.push("(d.1단계배수 IS NULL OR d.1단계배수 = '')");
         }
+        // ▲▲▲▲▲▲ '1단계 전형' 필터 로직 수정 ▲▲▲▲▲▲
+
         if (req.query.minSat && req.query.minSat !== '전체') {
             whereClauses.push("d.수능최저 = ?");
             params.push(req.query.minSat);
         }
-        // ▲▲▲▲▲▲ 새로운 필터 로직 ▲▲▲▲▲▲
 
         const eligibility = ['일반고', '특성화고', '체육고', '검정고시'].filter(key => req.query[key] === 'O');
         if (eligibility.length > 0) {
             whereClauses.push(`(${eligibility.map(e => `d.${e} = 'O'`).join(' OR ')})`);
         }
+        // ... (이하 로직은 기존과 동일) ...
         const grades = ['내신일반', '내신진로'].filter(key => req.query[key] === 'O');
         if (grades.length > 0) {
             whereClauses.push(`(${grades.map(g => `d.${g} = 'O'`).join(' OR ')})`);
