@@ -1991,7 +1991,7 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 // --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
 // --- API 3: 학생 정보 조회 (통합) ---
 // 쿼리 파라미터에 따라 다르게 동작
-/app.get('/26susi/students', (req, res) => {
+app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
 
     let sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
