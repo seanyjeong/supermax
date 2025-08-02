@@ -1860,8 +1860,11 @@ async function calculateScoreFromDB(event, gender, recordValue) {
 // =================================================================
 
 // API 1: [명단 등록] 지점별로 학생 명단(이름, 성별) 일괄 등록
+// API 1: [명단 등록] (수정된 버전)
+// 지점별로 학생 명단(이름, 성별, 학교, 학년) 일괄 등록
 app.post('/26susi/students', async (req, res) => {
-    const { branchName, students } = req.body; // { branchName: "강남점", students: [{name: "김철수", gender: "남"}, {name: "이영희", gender: "여"}] }
+    // 요청 형식: { branchName: "강남점", students: [{ name: "김민준", gender: "남", school: "맥스고", grade: "고3" }, ...] }
+    const { branchName, students } = req.body;
     if (!branchName || !students || !Array.isArray(students)) {
         return res.status(400).json({ message: '지점명과 학생 배열은 필수입니다.' });
     }
@@ -1871,13 +1874,15 @@ app.post('/26susi/students', async (req, res) => {
         let [rows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
         const branchId = rows.length > 0 ? rows[0].id : (await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]))[0].insertId;
 
-        // 학생 데이터 DB에 삽입
-        const studentValues = students.map(s => [s.name, s.gender, branchId]);
-        await db.query('INSERT INTO students (student_name, gender, branch_id) VALUES ?', [studentValues]);
+        // 학생 데이터 DB에 삽입 (school, grade 컬럼 추가)
+        const studentValues = students.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
+        const sql = 'INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?';
+        
+        await db.query(sql, [studentValues]);
 
         res.status(201).json({ success: true, message: `${branchName} 지점 ${students.length}명 등록 완료` });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'DB 오류', error: error.message });
+        res.status(500).json({ success: false, message: 'DB 오류가 발생했습니다.', error: error.message });
     }
 });
 
