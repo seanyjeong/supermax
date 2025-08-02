@@ -57,15 +57,15 @@ function authJWT(req, res, next) {
 }
 
 const db = mysql.createPool({
-  host: '211.37.174.218',
-  user: 'maxilsan',
-  password: 'q141171616!',
-  database: '26susi',
-  charset: 'utf8mb4',
-  waitForConnections: true, // 연결이 없을 때 대기
-  connectionLimit: 10,      // 최대 10개의 커넥션을 만듦
-  queueLimit: 0             // 대기열 제한 없음
-});
+    host: '211.37.174.218',
+    user: 'maxilsan',
+    password: 'q141171616!',
+    database: '26susi',
+    charset: 'utf8mb4',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+}).promise();
 
 // 관리자 권한 체크 함수
 function isAdmin(user) {
