@@ -1917,29 +1917,44 @@ app.post('/26susi/students', async (req, res) => {
 // API 2: [조 배정] 전체 학생 랜덤으로 14개 조 배정 및 수험번호 부여
 // API 2: [조 배정] (수정된 버전)
 // 수험번호를 A-1, B-1 같은 형식으로 부여
+// API 2: [조 배정] (오전/오후 세션 분리 버전)
 app.post('/26susi/assign-groups', async (req, res) => {
-    const TOTAL_GROUPS = 14;
-    try {
-        const [students] = await db.query('SELECT id FROM students WHERE exam_group IS NULL');
-        if (students.length === 0) return res.status(400).json({ message: '조를 배정할 학생이 없습니다.' });
+    const { session } = req.body; // { "session": "오전" } 또는 { "session": "오후" }
+    if (!session || !['오전', '오후'].includes(session)) {
+        return res.status(400).json({ message: '세션("오전" 또는 "오후") 정보가 필요합니다.' });
+    }
 
-        // 학생 랜덤 셔플
+    const TOTAL_GROUPS_PER_SESSION = 14;
+    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
+    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
+    
+    const targetBranches = (session === '오전') ? 오전조 : 오후조;
+
+    try {
+        // 1. 해당 세션의 지점 학생들 중 조 배정이 안된 학생들만 불러오기
+        const sql = `
+            SELECT s.id FROM students s
+            JOIN branches b ON s.branch_id = b.id
+            WHERE b.branch_name IN (?) AND s.exam_group IS NULL
+        `;
+        const [students] = await db.query(sql, [targetBranches]);
+        
+        if (students.length === 0) {
+            return res.status(400).json({ message: `조를 배정할 ${session}조 학생이 없습니다.` });
+        }
+
+        // 2. 학생 랜덤 섞기
         for (let i = students.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [students[i], students[j]] = [students[j], students[i]];
         }
         
-        // 조별 카운터 초기화
+        // 3. 조별 순번 및 수험번호 부여
         const groupCounters = {};
-
         const updatePromises = students.map((student, index) => {
-            const groupNum = (index % TOTAL_GROUPS) + 1;
-            
-            // 조별 순번 계산
+            const groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 1;
             groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
             const sequenceNum = groupCounters[groupNum];
-
-            // 수험번호 생성 (A-1, B-1, ...)
             const groupLetter = String.fromCharCode(64 + groupNum); // 1->A, 2->B
             const examNumber = `${groupLetter}-${sequenceNum}`;
             
@@ -1947,9 +1962,10 @@ app.post('/26susi/assign-groups', async (req, res) => {
         });
 
         await Promise.all(updatePromises);
-        res.status(200).json({ success: true, message: `${students.length}명 학생에게 ${TOTAL_GROUPS}개 조 배정을 완료했습니다.` });
+        res.status(200).json({ success: true, message: `${session}조 ${students.length}명 학생 배정 완료!` });
     } catch (error) {
-        res.status(500).json({ success: false, message: '조 배정 중 오류', error: error.message });
+        console.error(`🔥 ${session}조 배정 중 오류:`, error);
+        res.status(500).json({ success: false, message: '조 배정 중 오류 발생', error: error.message });
     }
 });
 
