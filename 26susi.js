@@ -2019,6 +2019,29 @@ app.get('/26susi/rankings', async (req, res) => {
     }
 });
 
+// API 6: [지점별 학생 조회] (신규 추가)
+// 특정 지점에 속한 학생들의 명단만 조회하는 전용 API
+app.get('/26susi/students/:branchName', async (req, res) => {
+    const { branchName } = req.params; // URL에서 지점 이름을 가져옴
+
+    try {
+        const sql = `
+            SELECT 
+                s.student_name, s.gender, s.school, s.grade, s.exam_number
+            FROM students s
+            JOIN branches b ON s.branch_id = b.id
+            WHERE b.branch_name = ?
+            ORDER BY s.student_name ASC;
+        `;
+        const [students] = await db.query(sql, [branchName]);
+        res.status(200).json({ success: true, data: students });
+
+    } catch (error) {
+        console.error("🔥 지점별 학생 조회 API 오류:", error);
+        res.status(500).json({ success: false, message: '학생 명단 조회 중 서버 오류 발생' });
+    }
+});
+
 
 
 
