@@ -2175,8 +2175,8 @@ app.post('/26susi/students/add-new', (req, res) => {
                     };
                     getBranchId((err, branchId) => {
                         if (err) return res.status(500).json({message: 'DB 오류'});
-                        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '추가')`;
-                        db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup], (err, result) => {
+const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status, attendance) VALUES (?, ?, ?, ?, ?, ?, ?, '추가', '참석')`;
+db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup], (err, result) => {
                             if (err) return res.status(500).json({message: 'DB 오류'});
                             // ⭐️ 메시지를 더 명확하게 수정
                             res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.\n\n부여된 수험번호: [${examNumber}]` });
