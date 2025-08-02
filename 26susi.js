@@ -1988,21 +1988,38 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
     });
 });
 // --- API 3: 학생 정보 조회 (통합) ---
+// --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
 app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
-    let sql = `SELECT s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
-    const params = [];
-    if (view === 'all') {
-        sql += ' ORDER BY b.branch_name, s.student_name';
-    } else if (branchName) {
-        sql += ' WHERE b.branch_name = ? ORDER BY s.student_name';
-        params.push(branchName);
-    } else {
-        return res.status(200).json({ success: true, data: [] });
+    try {
+        // ⭐️ s.attendance, s.status 컬럼을 SELECT에 추가
+        let sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
+        const params = [];
+
+        if (view === 'all') {
+            sql += ' ORDER BY s.exam_number IS NULL, s.exam_number ASC';
+        } else if (branchName) {
+            sql += ' WHERE b.branch_name = ? ORDER BY s.student_name ASC';
+            params.push(branchName);
+        } else {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        db.query(sql, params, (err, students) => {
+            if (err) return res.status(500).json({ message: 'DB 오류' });
+            res.status(200).json({ success: true, data: students });
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: '학생 조회 중 서버 오류 발생' });
     }
-    db.query(sql, params, (err, students) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        res.status(200).json({ success: true, data: students });
+});
+
+// --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
+app.patch('/26susi/attendance/present/:studentId', (req, res) => {
+    const { studentId } = req.params;
+    db.query(`UPDATE students SET attendance = '참석' WHERE id = ?`, [studentId], (err, result) => {
+        if (err) return res.status(500).json({ success: false, message: '서버 오류' });
+        res.status(200).json({ success: true, message: '참석 처리 완료' });
     });
 });
 
