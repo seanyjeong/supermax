@@ -1862,30 +1862,57 @@ async function calculateScoreFromDB(event, gender, recordValue) {
 // API 1: [명단 등록] 지점별로 학생 명단(이름, 성별) 일괄 등록
 // API 1: [명단 등록] (수정된 버전)
 // 지점별로 학생 명단(이름, 성별, 학교, 학년) 일괄 등록
+// API 1: [명단 등록] (데이터 검증 기능 강화 버전)
 app.post('/26susi/students', async (req, res) => {
-    // 요청 형식: { branchName: "강남점", students: [{ name: "김민준", gender: "남", school: "맥스고", grade: "고3" }, ...] }
     const { branchName, students } = req.body;
     if (!branchName || !students || !Array.isArray(students)) {
         return res.status(400).json({ message: '지점명과 학생 배열은 필수입니다.' });
     }
 
+    // 1. 데이터 검증: 이름과 성별이 없는 데이터는 걸러내기
+    const validStudents = [];
+    const invalidStudentLines = [];
+    students.forEach((s, index) => {
+        if (s.name && s.name.trim() !== '' && s.gender && (s.gender === '남' || s.gender === '여')) {
+            validStudents.push(s);
+        } else {
+            // 문제가 있는 데이터의 줄 번호를 기록
+            invalidStudentLines.push(index + 1);
+        }
+    });
+
+    // 2. 유효한 데이터가 하나도 없는 경우
+    if (validStudents.length === 0) {
+        let errorMessage = '등록할 유효한 학생 데이터가 없습니다.';
+        if (invalidStudentLines.length > 0) {
+            errorMessage += `\n오류 의심 라인: ${invalidStudentLines.join(', ')} 번째 줄의 이름 또는 성별을 확인해주세요.`;
+        }
+        return res.status(400).json({ message: errorMessage });
+    }
+    
     try {
-        // 지점 ID 확인 (없으면 새로 생성)
+        // 지점 ID 확인 또는 생성
         let [rows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
         const branchId = rows.length > 0 ? rows[0].id : (await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]))[0].insertId;
 
-        // 학생 데이터 DB에 삽입 (school, grade 컬럼 추가)
-        const studentValues = students.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
+        // 3. 유효한 학생 데이터만 DB에 삽입
+        const studentValues = validStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
         const sql = 'INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?';
         
         await db.query(sql, [studentValues]);
 
-        res.status(201).json({ success: true, message: `${branchName} 지점 ${students.length}명 등록 완료` });
+        let successMessage = `${branchName} 지점 ${validStudents.length}명 등록 완료.`;
+        if (invalidStudentLines.length > 0) {
+            successMessage += `\n(주의: ${invalidStudentLines.join(', ')} 번째 줄은 이름 또는 성별이 비어있어 제외됨)`;
+        }
+        res.status(201).json({ success: true, message: successMessage });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: 'DB 오류가 발생했습니다.', error: error.message });
+        // DB 자체에서 발생하는 다른 에러들 (예: DB 연결 끊김)
+        console.error("학생 등록 중 DB 오류:", error);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.', error: error.message });
     }
 });
-
 
 // API 2: [조 배정] 전체 학생 랜덤으로 14개 조 배정 및 수험번호 부여
 // API 2: [조 배정] (수정된 버전)
