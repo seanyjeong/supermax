@@ -1898,15 +1898,16 @@ app.post('/26susi/students', (req, res) => {
 });
 
 // --- API 2: 조 편성 (오전/오후) ---
+// --- API 2: 조 편성 (오전/오후) ---
+// ⭐️ 오후조는 13조부터 시작하도록 수정
 app.post('/26susi/assign-groups', (req, res) => {
     const { session } = req.body;
     if (!session || !['오전', '오후'].includes(session)) {
         return res.status(400).json({ message: '세션 정보가 필요합니다.' });
     }
     const TOTAL_GROUPS_PER_SESSION = 12;
-    const 오전조 = ['대전 교육원','강남 교육원','강동 교육원','광주 교육원','군포 교육원','논산 교육원','동탄 교육원','분당 교육원','서초 교육원','세종 교육원','수원 교육원','순천여수광양','아산 교육원','영통 교육원','용인 교육원','이천 교육원','익산 교육원','전주 교육원','군산 교육원','천안 교육원','청주 교육원','충주 교육원','하남 교육원','경산 교육원'];
-    const 오후조 = ['강릉 교육원','김해 교육원','대구만촌명덕','대구상인성서','대구칠곡','밀양 교육원','부산동래','부천 교육원','서면','양산 교육원','울산 교육원','원주 교육원','의정부 교육원','인천계양','인천서구','인천연수','일산 교육원','제주 교육원','창원 교육원','철원 교육원','포천 교육원','화명'];
-    
+    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
+    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
     const targetBranches = (session === '오전') ? 오전조 : 오후조;
     const sql = `SELECT s.id FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) AND s.exam_group IS NULL`;
     
@@ -1922,9 +1923,17 @@ app.post('/26susi/assign-groups', (req, res) => {
         let completed = 0;
         const groupCounters = {};
         students.forEach((student, index) => {
-            const groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 1;
+            let groupNum;
+            // ⭐️ 오후조일 경우 조 번호에 12를 더함
+            if (session === '오전') {
+                groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 1; // 결과: 1 ~ 12
+            } else { // 오후
+                groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 13; // 결과: 13 ~ 24
+            }
+
             groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
             const sequenceNum = groupCounters[groupNum];
+            // 이 로직은 숫자만 알면 알파벳으로 잘 바꿔줌 (13 -> M, 14 -> N)
             const groupLetter = String.fromCharCode(64 + groupNum);
             const examNumber = `${groupLetter}-${sequenceNum}`;
             
@@ -1937,7 +1946,6 @@ app.post('/26susi/assign-groups', (req, res) => {
         });
     });
 });
-
 // --- API 3: 학생 정보 조회 (통합) ---
 app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
