@@ -2056,51 +2056,47 @@ app.post('/26susi/students/substitute', (req, res) => {
 });
 
 // --- API 8: [마스터] 전체 교육원 학생 일괄 등록 ---
-// POST /26susi/students/master-bulk
+// --- API 8: [마스터] 전체 교육원 학생 일괄 등록 (학년 필수 체크) ---
 app.post('/26susi/students/master-bulk', (req, res) => {
-    const { students } = req.body; // [{ branch: '강남 교육원', name: '...', ... }, ...]
+    const { students } = req.body;
     if (!students || !Array.isArray(students)) {
         return res.status(400).json({ message: '학생 데이터 배열이 필요합니다.' });
     }
 
-    // 1. 유효한 학생 데이터만 필터링 (교육원, 이름, 성별 필수)
+    // ⭐️ '학년(grade)' 필수 체크 추가
     const validStudents = students.filter(s =>
         s.branch && s.branch.trim() !== '' &&
         s.name && s.name.trim() !== '' &&
-        s.gender && ['남', '여'].includes(s.gender)
+        s.gender && ['남', '여'].includes(s.gender) &&
+        s.grade && s.grade.toString().trim() !== '' // 학년 체크!
     );
 
     if (validStudents.length === 0) {
         return res.status(400).json({ message: '등록할 유효한 학생 데이터가 없습니다.' });
     }
 
-    // 2. 학생들을 교육원 이름으로 그룹핑
+    // 이하 로직은 이전과 동일...
     const studentsByBranch = {};
     validStudents.forEach(s => {
-        if (!studentsByBranch[s.branch]) {
-            studentsByBranch[s.branch] = [];
-        }
+        if (!studentsByBranch[s.branch]) { studentsByBranch[s.branch] = []; }
         studentsByBranch[s.branch].push(s);
     });
-
     const branchNames = Object.keys(studentsByBranch);
     let totalAdded = 0;
     let currentBranchIndex = 0;
 
-    // 3. 각 교육원별로 순차적으로 등록 처리 (콜백 중첩을 피하기 위한 재귀 함수)
     function processNextBranch() {
         if (currentBranchIndex >= branchNames.length) {
-            // 모든 지점 처리 완료
-            return res.status(201).json({ success: true, message: `총 ${totalAdded}명의 학생 등록을 완료했습니다.` });
+            return res.status(201).json({ 
+                success: true, 
+                message: `총 ${totalAdded}명의 학생 등록을 완료했습니다.`,
+                insertedCount: totalAdded 
+            });
         }
-
         const branchName = branchNames[currentBranchIndex];
         const branchStudents = studentsByBranch[branchName];
-
-        // 지점 ID 확인 또는 생성
         db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, rows) => {
             if (err) return res.status(500).json({ message: 'DB 오류' });
-
             const getBranchId = (callback) => {
                 if (rows.length > 0) return callback(null, rows[0].id);
                 db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
@@ -2108,28 +2104,23 @@ app.post('/26susi/students/master-bulk', (req, res) => {
                     callback(null, result.insertId);
                 });
             };
-
             getBranchId((err, branchId) => {
                 if (err) return res.status(500).json({ message: 'DB 오류' });
-
                 const studentValues = branchStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
                 db.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues], (err, result) => {
                     if (err) {
                         console.error(`🔥 ${branchName} 학생 등록 오류:`, err);
-                        // 에러가 나도 다음 지점 처리를 위해 계속 진행
                     } else {
                         totalAdded += result.affectedRows;
                     }
                     currentBranchIndex++;
-                    processNextBranch(); // 다음 교육원 처리
+                    processNextBranch();
                 });
             });
         });
     }
-
-    processNextBranch(); // 첫 교육원부터 처리 시작
+    processNextBranch();
 });
-
 
 // ✅ 서버 실행
 app.listen(port, () => {
