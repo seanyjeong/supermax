@@ -2210,34 +2210,26 @@ db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGr
 });
 
 // --- API 12: [기록 페이지] 조 목록 조회 ---
-// 특정 세션(오전/오후)에 배정된 조 목록을 가져옴
-app.get('/records/groups', (req, res) => {
-    // 오전은 1~12, 오후는 13~24
-    const sql = `
-        SELECT DISTINCT exam_group FROM students 
-        WHERE exam_group IS NOT NULL 
-        ORDER BY exam_group ASC
-    `;
+// --- API 12: [기록 페이지] 조 목록 조회 ---
+// ⭐️ 경로 수정
+app.get('/26susi/records/groups', (req, res) => {
+    const sql = `SELECT DISTINCT exam_group FROM students WHERE exam_group IS NOT NULL ORDER BY exam_group ASC`;
     db.query(sql, (err, rows) => {
         if (err) return res.status(500).json({ message: 'DB 오류' });
-        // ['A', 'B', 'C', ...] 형태로 가공
         const groups = rows.map(row => row.exam_group);
         res.status(200).json({ success: true, data: groups });
     });
 });
 
 // --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 ---
-app.get('/records/students', (req, res) => {
-    const { group, event } = req.query; // 예: group='A', event='제멀'
+// ⭐️ 경로 수정
+app.get('/26susi/records/students', (req, res) => {
+    const { group, event } = req.query;
     if (!group || !event) {
         return res.status(400).json({ message: '조와 종목 정보는 필수입니다.' });
     }
-
-    // 특정 조의 학생 정보와, 해당 '종목'의 기록이 이미 있는지 함께 조회
     const sql = `
-        SELECT 
-            s.id, s.student_name, s.exam_number, s.attendance,
-            r.record_value, r.score
+        SELECT s.id, s.student_name, s.exam_number, s.attendance, r.record_value, r.score
         FROM students s
         LEFT JOIN records r ON s.id = r.student_id AND r.event = ?
         WHERE s.exam_group = ?
