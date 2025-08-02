@@ -1829,6 +1829,151 @@ app.post('/26susi/announcements/delete', authJWT, async (req, res) => {
     }
 });
 
+// 3. [핵심 로직] 기록을 점수로 변환하는 헬퍼 함수
+async function calculateScoreFromDB(event, gender, recordValue) {
+    let score = 0;
+    // '10m'는 기록이 낮을수록 점수가 높고, 나머지는 높을수록 점수가 높음
+    const isLowerBetter = event === '10m';
+    
+    const sql = `
+        SELECT score FROM scoring_criteria 
+        WHERE event = ? AND gender = ? AND record_threshold ${isLowerBetter ? '>=' : '<='} ? 
+        ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
+        LIMIT 1;
+    `;
+
+    try {
+        const [rows] = await db.query(sql, [event, gender, recordValue]);
+        if (rows.length > 0) {
+            score = rows[0].score;
+        }
+        return score; // 기준표에 없으면 0점
+    } catch (error) {
+        console.error("점수 계산 DB 조회 오류:", error);
+        return 0; // 오류 발생 시 0점
+    }
+}
+
+
+// =================================================================
+// 🚀 API 엔드포인트 (라우터)
+// =================================================================
+
+// API 1: [명단 등록] 지점별로 학생 명단(이름, 성별) 일괄 등록
+app.post('/26susi/students', async (req, res) => {
+    const { branchName, students } = req.body; // { branchName: "강남점", students: [{name: "김철수", gender: "남"}, {name: "이영희", gender: "여"}] }
+    if (!branchName || !students || !Array.isArray(students)) {
+        return res.status(400).json({ message: '지점명과 학생 배열은 필수입니다.' });
+    }
+
+    try {
+        // 지점 ID 확인 (없으면 새로 생성)
+        let [rows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+        const branchId = rows.length > 0 ? rows[0].id : (await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]))[0].insertId;
+
+        // 학생 데이터 DB에 삽입
+        const studentValues = students.map(s => [s.name, s.gender, branchId]);
+        await db.query('INSERT INTO students (student_name, gender, branch_id) VALUES ?', [studentValues]);
+
+        res.status(201).json({ success: true, message: `${branchName} 지점 ${students.length}명 등록 완료` });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'DB 오류', error: error.message });
+    }
+});
+
+
+// API 2: [조 배정] 전체 학생 랜덤으로 14개 조 배정 및 수험번호 부여
+app.post('/26susi/assign-groups', async (req, res) => {
+    const TOTAL_GROUPS = 14;
+    try {
+        const [students] = await db.query('SELECT id FROM students WHERE exam_group IS NULL');
+        if (students.length === 0) return res.status(400).json({ message: '조를 배정할 학생이 없습니다.' });
+
+        // Fisher-Yates Shuffle로 학생 랜덤 섞기
+        for (let i = students.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [students[i], students[j]] = [students[j], students[i]];
+        }
+        
+        const updatePromises = students.map((student, index) => {
+            const group = (index % TOTAL_GROUPS) + 1;
+            const examNumber = `26Susi-${String(group).padStart(2, '0')}-${String(student.id).padStart(4, '0')}`;
+            return db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [group, examNumber, student.id]);
+        });
+
+        await Promise.all(updatePromises);
+        res.status(200).json({ success: true, message: `${students.length}명 학생에게 ${TOTAL_GROUPS}개 조 배정을 완료했습니다.` });
+    } catch (error) {
+        res.status(500).json({ success: false, message: '조 배정 중 오류', error: error.message });
+    }
+});
+
+
+// API 3: [실기 기록 입력] 수험번호로 학생을 찾아 기록 및 변환 점수 저장
+app.post('/26susi/records', async (req, res) => {
+    const { examNumber, event, recordValue } = req.body;
+    try {
+        const [students] = await db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
+        if (students.length === 0) return res.status(404).json({ message: '해당 수험번호의 학생이 없습니다.' });
+        
+        const student = students[0];
+        const score = await calculateScoreFromDB(event, student.gender, recordValue);
+
+        // 동일 학생, 동일 종목 기록이 이미 있으면 UPDATE, 없으면 INSERT
+        await db.query(
+            `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`,
+            [student.id, event, recordValue, score]
+        );
+        
+        res.status(201).json({ success: true, message: '기록 저장 완료', event, recordValue, score });
+    } catch (error) {
+        res.status(500).json({ success: false, message: '기록 저장 중 오류', error: error.message });
+    }
+});
+
+
+// API 4: [출석 상태 변경]
+app.patch('/26susi/attendance', async (req, res) => {
+    const { studentId, attendance } = req.body;
+    try {
+        const [result] = await db.query('UPDATE students SET attendance = ? WHERE id = ?', [attendance, studentId]);
+        if (result.affectedRows === 0) return res.status(404).json({ message: '학생을 찾을 수 없습니다.' });
+        res.status(200).json({ success: true, message: '출석 상태가 변경되었습니다.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'DB 오류', error: error.message });
+    }
+});
+
+
+// API 5: [전체 순위 조회] (프론트엔드 대시보드용)
+// 모든 학생의 정보와 각 종목별 기록, 점수, 총점을 한 번에 조회
+app.get('/26susi/rankings', async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                s.id,
+                s.student_name,
+                s.gender,
+                s.exam_number,
+                s.exam_group,
+                s.attendance,
+                b.branch_name,
+                COALESCE(SUM(r.score), 0) AS total_score,
+                JSON_OBJECTAGG(r.event, JSON_OBJECT('record', r.record_value, 'score', r.score)) AS records
+            FROM students s
+            LEFT JOIN branches b ON s.branch_id = b.id
+            LEFT JOIN records r ON s.id = r.student_id
+            GROUP BY s.id
+            ORDER BY total_score DESC;
+        `;
+        const [rankings] = await db.query(sql);
+        res.status(200).json({ success: true, data: rankings });
+    } catch (error) {
+        res.status(500).json({ success: false, message: '랭킹 조회 중 오류', error: error.message });
+    }
+});
+
 
 
 
