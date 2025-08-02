@@ -1899,10 +1899,16 @@ app.post('/26susi/students', (req, res) => {
 
 // --- API 2: 조 편성 (오전/오후) ---
 // --- API 2-1: [조 배정 실행] ---
-// 오전, 오후조를 한 번에 배정 (조가 없는 학생만 대상)
-app.post('/26susi/assign-all-groups', (req, res) => {
-    // 세션별 조 배정 로직을 함수로 만듦
-    const assignSession = (session, callback) => {
+// =================================================================
+// --- API 2: 조 편성 및 재배치 (안정성 강화 최종 버전) ---
+// =================================================================
+
+// [핵심 로직] 조 배정 실행 함수 (코드를 재사용하기 위해 분리)
+function executeFullAssignment(res, callback) {
+    let morningCount = 0;
+    let afternoonCount = 0;
+
+    const assignSession = (session, sessionCallback) => {
         const TOTAL_GROUPS_PER_SESSION = 12;
         const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
         const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
@@ -1910,8 +1916,8 @@ app.post('/26susi/assign-all-groups', (req, res) => {
         const sql = `SELECT s.id FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) AND s.exam_group IS NULL`;
         
         db.query(sql, [targetBranches], (err, students) => {
-            if (err) return callback(err);
-            if (students.length === 0) return callback(null, 0); // 배정할 학생 없으면 0명 반환
+            if (err) return sessionCallback(err);
+            if (students.length === 0) return sessionCallback(null, 0);
 
             for (let i = students.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -1920,10 +1926,10 @@ app.post('/26susi/assign-all-groups', (req, res) => {
             
             let completed = 0;
             const groupCounters = {};
-            students.forEach((student, index) => {
+            students.forEach((student) => {
                 let groupNum = (session === '오전')
-                    ? (index % TOTAL_GROUPS_PER_SESSION) + 1  // 1 ~ 12
-                    : (index % TOTAL_GROUPS_PER_SESSION) + 13; // 13 ~ 24
+                    ? (completed % TOTAL_GROUPS_PER_SESSION) + 1
+                    : (completed % TOTAL_GROUPS_PER_SESSION) + 13;
 
                 groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
                 const sequenceNum = groupCounters[groupNum];
@@ -1932,24 +1938,52 @@ app.post('/26susi/assign-all-groups', (req, res) => {
                 
                 db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupNum, examNumber, student.id], (err, result) => {
                     completed++;
+                    if (err) console.error(`학생 ID ${student.id} 업데이트 오류:`, err); // 에러가 나도 멈추지 않고 계속 진행
                     if (completed === students.length) {
-                        callback(null, students.length); // 배정 완료된 학생 수 반환
+                        sessionCallback(null, students.length);
                     }
                 });
             });
         });
     };
 
-    // 오전조 배정 후, 이어서 오후조 배정 실행
-    assignSession('오전', (err, morningCount) => {
-        if (err) return res.status(500).json({ message: '오전조 배정 중 오류' });
-        assignSession('오후', (err, afternoonCount) => {
-            if (err) return res.status(500).json({ message: '오후조 배정 중 오류' });
-            const totalCount = morningCount + afternoonCount;
-            if (totalCount === 0) {
-                return res.status(400).json({ success: false, message: '새로 조를 배정할 학생이 없습니다.' });
-            }
-            res.status(200).json({ success: true, message: `총 ${totalCount}명의 학생 조 배정을 완료했습니다.` });
+    // 오전조 배정 후, 콜백으로 오후조 배정 실행
+    assignSession('오전', (err, mCount) => {
+        if (err) return callback(err);
+        morningCount = mCount;
+        assignSession('오후', (err, aCount) => {
+            if (err) return callback(err);
+            afternoonCount = aCount;
+            callback(null, morningCount + afternoonCount); // 최종적으로 총 배정 인원 수를 반환
+        });
+    });
+}
+
+// [조 배정 실행 API]
+// 조가 없는 학생들만 대상으로 배정
+app.post('/26susi/assign-all-groups', (req, res) => {
+    executeFullAssignment(res, (err, totalCount) => {
+        if (err) return res.status(500).json({ message: '조 배정 중 오류 발생' });
+        if (totalCount === 0) {
+            return res.status(400).json({ success: false, message: '새로 조를 배정할 학생이 없습니다.' });
+        }
+        res.status(200).json({ success: true, message: `총 ${totalCount}명의 학생 조 배정을 완료했습니다.` });
+    });
+});
+
+// [전체 재배치 실행 API]
+// 모든 학생의 조를 초기화하고 다시 배정
+app.post('/26susi/reassign-all-groups', (req, res) => {
+    db.query('UPDATE students SET exam_group = NULL, exam_number = NULL', (err, result) => {
+        if (err) {
+            console.error("🔥 재배치 초기화 오류:", err);
+            return res.status(500).json({ message: '조 초기화 중 오류 발생' });
+        }
+        
+        // 초기화 성공 후, 위에서 만든 조 배정 로직 실행
+        executeFullAssignment(res, (err, totalCount) => {
+            if (err) return res.status(500).json({ message: '초기화 후 재배정 중 오류 발생' });
+            res.status(200).json({ success: true, message: `전체 재배치를 완료했습니다. 총 ${totalCount}명 배정.` });
         });
     });
 });
