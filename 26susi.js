@@ -2078,24 +2078,28 @@ app.patch('/26susi/attendance/present/:studentId', (req, res) => {
 });
 
 // --- API 4: 실기 기록 입력 ---
-app.post('/26susi/records', (req, res) => {
-    const { examNumber, event, recordValue } = req.body;
-    db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber], (err, students) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        if (students.length === 0) return res.status(404).json({ message: `수험번호 '${examNumber}' 학생이 없습니다.` });
-        
-        const student = students[0];
-        calculateScoreFromDB(event, student.gender, recordValue, (err, score) => {
-            if (err) return res.status(500).json({ message: '점수 계산 오류' });
-            
-            const sql = `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
-            db.query(sql, [student.id, event, recordValue, score], (err, result) => {
-                if (err) return res.status(500).json({ message: 'DB 오류' });
-                res.status(201).json({ success: true, message: '기록 저장 완료' });
-            });
-        });
-    });
+// 기록 저장/수정 API 예시
+app.post('/26susi/records', async (req, res) => {
+  const { student_id, event, record_value, score } = req.body;
+  if (!student_id || !event) {
+    return res.status(400).json({ success: false, message: '필수값 누락' });
+  }
+  try {
+    await db.promise().query(`
+      INSERT INTO 26susi.records (student_id, event, record_value, score)
+      VALUES (?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        record_value = VALUES(record_value),
+        score = VALUES(score),
+        created_at = CURRENT_TIMESTAMP
+    `, [student_id, event, record_value, score]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('기록 저장/수정 오류:', err);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
 });
+
 
 // --- API 5: 결석 처리 ---
 app.patch('/26susi/attendance/absent/:studentId', (req, res) => {
