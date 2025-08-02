@@ -1989,34 +1989,50 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 });
 // --- API 3: 학생 정보 조회 (통합) ---
 // --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
-// --- API 6: [대체 학생 등록] (수험번호 알림 추가) ---
-app.post('/26susi/students/substitute', (req, res) => {
-    const { oldStudentId, newStudent } = req.body;
-    const { name, gender, school, grade } = newStudent;
+// --- API 3: 학생 정보 조회 (통합) ---
+// 쿼리 파라미터에 따라 다르게 동작
+// 1. /students?view=all -> 전체 학생 조회
+// 2. /students?branchName=강남 -> 특정 지점 학생 조회
+app.get('/students', (req, res) => {
+    const { view, branchName } = req.query;
 
-    if (!name || !gender || !school || !grade) {
-        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보를 입력해야 합니다.' });
+    // ⭐️ 참고: 이 API는 페이지네이션 기능이 적용된 최종 버전이야.
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100; // 한 페이지에 100개씩
+    const offset = (page - 1) * limit;
+
+    let baseSql = `FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
+    let whereSql = '';
+    const params = [];
+
+    if (view === 'all') {
+        // 전체 조회
+    } else if (branchName) {
+        whereSql = ' WHERE b.branch_name = ?';
+        params.push(branchName);
+    } else {
+        return res.status(200).json({ success: true, data: [], total: 0 });
     }
 
-    // 1. ⭐️ 먼저 기존 학생의 수험번호를 조회
-    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
-        if (err) return res.status(500).json({ success: false, message: '기존 학생 정보 조회 중 오류' });
-        if (studentRows.length === 0) return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
-        
-        const examNumber = studentRows[0].exam_number;
+    const countSql = `SELECT COUNT(*) as total ${baseSql} ${whereSql}`;
+    // 수험번호 정렬 로직 추가
+    const dataSql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status ${baseSql} ${whereSql} ORDER BY s.exam_number IS NULL, s.exam_number ASC LIMIT ? OFFSET ?`;
+    
+    const dataParams = [...params, limit, offset];
 
-        // 2. ⭐️ 학생 정보 업데이트
-        const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
-        db.query(updateSql, [name, gender, school, grade, oldStudentId], (err, result) => {
-            if (err) {
-                console.error("🔥 대체 학생 처리 오류:", err);
-                return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류' });
-            }
-            // 3. ⭐️ 조회해둔 수험번호를 메시지에 포함해서 응답
-            res.status(200).json({ success: true, message: `대체 완료! 부여된 수험번호는 [${examNumber}] 입니다.` });
+    db.query(countSql, params, (err, countResult) => {
+        if (err) return res.status(500).json({ message: '카운트 조회 오류' });
+        
+        const total = countResult[0].total;
+
+        db.query(dataSql, dataParams, (err, students) => {
+            if (err) return res.status(500).json({ message: '학생 데이터 조회 오류' });
+            res.status(200).json({ success: true, data: students, total: total, page: page, limit: limit });
         });
     });
 });
+
+
 
 // --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
 app.patch('/26susi/attendance/present/:studentId', (req, res) => {
@@ -2055,39 +2071,32 @@ app.patch('/26susi/attendance/absent/:studentId', (req, res) => {
     });
 });
 
-// --- API 6: 대체 학생 등록 ---
-// --- API 6: [대체 학생 등록] (수정 버전) ---
-// 기존 학생 정보를 새 학생 정보로 덮어쓰는 방식으로 변경
+// --- API 6: [대체 학생 등록] (수험번호 알림 추가) ---
 app.post('/26susi/students/substitute', (req, res) => {
     const { oldStudentId, newStudent } = req.body;
     const { name, gender, school, grade } = newStudent;
 
     if (!name || !gender || !school || !grade) {
-        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보(이름, 성별, 학교, 학년)를 입력해야 합니다.' });
+        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보를 입력해야 합니다.' });
     }
 
-    const sql = `
-        UPDATE students 
-        SET 
-            student_name = ?, 
-            gender = ?, 
-            school = ?, 
-            grade = ?, 
-            status = '대체', 
-            attendance = '참석' 
-        WHERE id = ?
-    `;
-    const params = [name, gender, school, grade, oldStudentId];
+    // 1. ⭐️ 먼저 기존 학생의 수험번호를 조회
+    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
+        if (err) return res.status(500).json({ success: false, message: '기존 학생 정보 조회 중 오류' });
+        if (studentRows.length === 0) return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
+        
+        const examNumber = studentRows[0].exam_number;
 
-    db.query(sql, params, (err, result) => {
-        if (err) {
-            console.error("🔥 대체 학생 처리 오류:", err);
-            return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류가 발생했습니다.' });
-        }
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
-        }
-        res.status(200).json({ success: true, message: '대체 학생으로 교체 완료했습니다.' });
+        // 2. ⭐️ 학생 정보 업데이트
+        const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
+        db.query(updateSql, [name, gender, school, grade, oldStudentId], (err, result) => {
+            if (err) {
+                console.error("🔥 대체 학생 처리 오류:", err);
+                return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류' });
+            }
+            // 3. ⭐️ 조회해둔 수험번호를 메시지에 포함해서 응답
+            res.status(200).json({ success: true, message: `대체 완료! 부여된 수험번호는 [${examNumber}] 입니다.` });
+        });
     });
 });
 
