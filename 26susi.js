@@ -2261,12 +2261,14 @@ app.get('/26susi/records/groups', (req, res) => {
 // --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 ---
 // ⭐️ 경로 수정
 // --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 (gender 추가) ---
+// --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 (정렬 수정) ---
 app.get('/26susi/records/students', (req, res) => {
     const { group, event } = req.query;
     if (!group || !event) {
         return res.status(400).json({ message: '조와 종목 정보는 필수입니다.' });
     }
-    // ⭐️ s.gender를 SELECT 목록에 추가
+    
+    // ⭐️ ORDER BY 부분을 똑똑한 숫자 정렬 방식으로 수정
     const sql = `
         SELECT 
             s.id, s.student_name, s.exam_number, s.attendance, s.gender,
@@ -2274,14 +2276,15 @@ app.get('/26susi/records/students', (req, res) => {
         FROM students s
         LEFT JOIN records r ON s.id = r.student_id AND r.event = ?
         WHERE s.exam_group = ?
-        ORDER BY s.exam_number;
+        ORDER BY 
+            SUBSTRING_INDEX(s.exam_number, '-', 1), 
+            CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED);
     `;
     db.query(sql, [event, group], (err, students) => {
         if (err) return res.status(500).json({ message: 'DB 오류' });
         res.status(200).json({ success: true, data: students });
     });
 });
-
 // --- API 14: [기록 페이지] 실시간 점수 계산 ---
 app.get('/26susi/records/calculate-score', (req, res) => {
     const { event, gender, recordValue } = req.query;
