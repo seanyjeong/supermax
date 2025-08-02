@@ -2223,13 +2223,17 @@ app.get('/26susi/records/groups', (req, res) => {
 
 // --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 ---
 // ⭐️ 경로 수정
+// --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 (gender 추가) ---
 app.get('/26susi/records/students', (req, res) => {
     const { group, event } = req.query;
     if (!group || !event) {
         return res.status(400).json({ message: '조와 종목 정보는 필수입니다.' });
     }
+    // ⭐️ s.gender를 SELECT 목록에 추가
     const sql = `
-        SELECT s.id, s.student_name, s.exam_number, s.attendance, r.record_value, r.score
+        SELECT 
+            s.id, s.student_name, s.exam_number, s.attendance, s.gender,
+            r.record_value, r.score
         FROM students s
         LEFT JOIN records r ON s.id = r.student_id AND r.event = ?
         WHERE s.exam_group = ?
@@ -2241,6 +2245,20 @@ app.get('/26susi/records/students', (req, res) => {
     });
 });
 
+// --- API 14: [기록 페이지] 실시간 점수 계산 ---
+app.get('/26susi/records/calculate-score', (req, res) => {
+    const { event, gender, recordValue } = req.query;
+    if (!event || !gender || !recordValue) {
+        return res.status(400).json({ message: '종목, 성별, 기록 정보는 필수입니다.' });
+    }
+
+    calculateScoreFromDB(event, gender, parseFloat(recordValue), (err, score) => {
+        if (err) {
+            return res.status(500).json({ success: false, message: '점수 계산 중 오류 발생' });
+        }
+        res.status(200).json({ success: true, score: score });
+    });
+});
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
