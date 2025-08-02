@@ -2058,7 +2058,86 @@ app.get('/26susi/students/:branchName', async (req, res) => {
     }
 });
 
+// ===== 현장용 API 추가 =====
 
+// API 7: [출석 처리] 학생 상태를 '결석'으로 변경
+app.patch('/26susi/attendance/absent/:studentId', async (req, res) => {
+    const { studentId } = req.params;
+    try {
+        await db.query(`UPDATE students SET attendance = '결석' WHERE id = ?`, [studentId]);
+        res.status(200).json({ success: true, message: '결석 처리 완료' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: '서버 오류' });
+    }
+});
+
+// API 8: [대체 학생] 기존 학생 정보를 새 학생 정보로 교체 (수험번호 유지)
+app.post('/26susi/students/substitute', async (req, res) => {
+    const { oldStudentId, newStudent } = req.body;
+    try {
+        // 1. 기존 학생의 status를 '대체'로 변경
+        await db.query(`UPDATE students SET status = '대체' WHERE id = ?`, [oldStudentId]);
+        
+        // 2. 새로운 학생 정보로 INSERT
+        const { name, gender, school, grade } = newStudent;
+        const [oldStudent] = await db.query('SELECT branch_id, exam_number, exam_group FROM students WHERE id = ?', [oldStudentId]);
+
+        const sql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '정상')`;
+        const [result] = await db.query(sql, [name, gender, school, grade, oldStudent[0].branch_id, oldStudent[0].exam_number, oldStudent[0].exam_group]);
+        
+        res.status(200).json({ success: true, message: `대체 학생 등록 완료. 수험번호: ${oldStudent[0].exam_number}` });
+    } catch (error) {
+        console.error("🔥 대체 학생 처리 오류:", error);
+        res.status(500).json({ success: false, message: '서버 오류' });
+    }
+});
+
+
+// API 9: [현장 신규] 학생을 가장 인원이 적은 조에 배정
+app.post('/26susi/students/add-new', async (req, res) => {
+    const { session, newStudent } = req.body;
+    const { name, gender, school, grade, branchName } = newStudent;
+
+    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
+    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
+    const targetBranches = (session === '오전') ? 오전조 : 오후조;
+    const TOTAL_GROUPS_PER_SESSION = 14;
+
+    try {
+        // 1. 가장 인원이 적은 조 찾기
+        const groupCountSql = `
+            SELECT exam_group, COUNT(*) as count FROM students s
+            JOIN branches b ON s.branch_id = b.id
+            WHERE b.branch_name IN (?)
+            GROUP BY exam_group
+            ORDER BY count ASC
+            LIMIT 1;
+        `;
+        const [groupRows] = await db.query(groupCountSql, [targetBranches]);
+        const targetGroup = groupRows.length > 0 ? groupRows[0].exam_group : 1; // 학생이 아무도 없으면 1조
+
+        // 2. 해당 조의 마지막 순번 찾기
+        const sequenceSql = `SELECT COUNT(*) as count FROM students WHERE exam_group = ?`;
+        const [sequenceRows] = await db.query(sequenceSql, [targetGroup]);
+        const newSequenceNum = sequenceRows[0].count + 1;
+
+        // 3. 수험번호 생성
+        const groupLetter = String.fromCharCode(64 + targetGroup);
+        const examNumber = `${groupLetter}-${newSequenceNum}`;
+        
+        // 4. 지점 ID 찾기 및 학생 등록
+        let [branchRows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+        const branchId = branchRows.length > 0 ? branchRows[0].id : (await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]))[0].insertId;
+        
+        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '정상')`;
+        await db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup]);
+
+        res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.`, examNumber: examNumber });
+    } catch (error) {
+        console.error("🔥 현장 신규 등록 오류:", error);
+        res.status(500).json({ success: false, message: '서버 오류' });
+    }
+});
 
 
 // ✅ 서버 실행
