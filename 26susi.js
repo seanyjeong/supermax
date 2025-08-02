@@ -1832,21 +1832,51 @@ app.post('/26susi/announcements/delete', authJWT, async (req, res) => {
 });
 
 // --- 점수 계산 헬퍼 함수 (콜백 방식) ---
+// --- 점수 계산 헬퍼 함수 (만점/최하점 처리 기능 추가) ---
 function calculateScoreFromDB(event, gender, recordValue, callback) {
     const isLowerBetter = event === '10m';
-    const sql = `
-        SELECT score FROM scoring_criteria 
-        WHERE event = ? AND gender = ? AND record_threshold ${isLowerBetter ? '>=' : '<='} ? 
-        ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
-        LIMIT 1;
+
+    // 1. 해당 종목/성별의 최고점과 최하점 기준 기록을 가져옴
+    const boundarySql = `
+        SELECT 
+            MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
+            MAX(CASE WHEN score = 50 THEN record_threshold END) as min_score_record
+        FROM scoring_criteria
+        WHERE event = ? AND gender = ?
     `;
-    db.query(sql, [event, gender, recordValue], (err, rows) => {
-        if (err) {
-            console.error("점수 계산 DB 조회 오류:", err);
+
+    db.query(boundarySql, [event, gender], (err, boundaries) => {
+        if (err || boundaries.length === 0) {
+            console.error("기준점 조회 오류:", err);
             return callback(err, 0);
         }
-        const score = rows.length > 0 ? rows[0].score : 0;
-        callback(null, score); // 에러가 없으면 첫 번째 인자는 null
+
+        const { max_score_record, min_score_record } = boundaries[0];
+
+        // 2. 만점 또는 최하점인지 먼저 확인
+        if (isLowerBetter) { // 10m 달리기처럼 기록이 낮을수록 좋은 경우
+            if (recordValue <= max_score_record) return callback(null, 100); // 최고 기록보다 빠르면 만점
+            if (recordValue > min_score_record) return callback(null, 50);  // 최하 기록보다 느리면 최하점
+        } else { // 제멀처럼 기록이 높을수록 좋은 경우
+            if (recordValue >= max_score_record) return callback(null, 100); // 최고 기록보다 높으면 만점
+            if (recordValue < min_score_record) return callback(null, 50);  // 최하 기록보다 낮으면 최하점
+        }
+
+        // 3. 만점/최하점이 아니면, 기존 방식대로 점수 테이블에서 점수를 찾음
+        const findScoreSql = `
+            SELECT score FROM scoring_criteria 
+            WHERE event = ? AND gender = ? AND record_threshold ${isLowerBetter ? '>=' : '<='} ? 
+            ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
+            LIMIT 1;
+        `;
+        db.query(findScoreSql, [event, gender, recordValue], (err, rows) => {
+            if (err) {
+                console.error("점수 검색 오류:", err);
+                return callback(err, 0);
+            }
+            const score = rows.length > 0 ? rows[0].score : 50; // 혹시 못찾으면 최하점
+            callback(null, score);
+        });
     });
 }
 
