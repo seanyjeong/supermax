@@ -1991,27 +1991,40 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 // --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
 // --- API 3: 학생 정보 조회 (통합) ---
 // 쿼리 파라미터에 따라 다르게 동작
+// --- API 3: 학생 정보 조회 (DB에서 직접 정렬하도록 수정) ---
 app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
-
-    let sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
+    
+    // 페이지네이션은 현재 사용하지 않으므로 관련 코드 제거
+    let baseSql = `FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
+    let whereSql = '';
     const params = [];
 
     if (view === 'all') {
-        sql += ' ORDER BY s.exam_number IS NULL, s.exam_number ASC';
+        // 전체 조회
     } else if (branchName) {
-        sql += ' WHERE b.branch_name = ? ORDER BY s.student_name ASC';
+        whereSql = ' WHERE b.branch_name = ?';
         params.push(branchName);
     } else {
         return res.status(200).json({ success: true, data: [] });
     }
 
-    db.query(sql, params, (err, students) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
+    // ⭐️ 정렬(ORDER BY) 로직을 DB가 직접 처리하도록 SQL 수정
+    const dataSql = `
+        SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status 
+        ${baseSql} ${whereSql} 
+        ORDER BY 
+            s.exam_number IS NULL, 
+            SUBSTRING_INDEX(s.exam_number, '-', 1), 
+            CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED)
+    `;
+    
+    db.query(dataSql, params, (err, students) => {
+        if (err) return res.status(500).json({ message: '학생 데이터 조회 오류' });
+        // 전체 카운트는 이제 필요 없으므로 학생 데이터만 보냄
         res.status(200).json({ success: true, data: students });
     });
 });
-
 
 // --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
 app.patch('/26susi/attendance/present/:studentId', (req, res) => {
