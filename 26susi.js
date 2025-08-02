@@ -1898,52 +1898,76 @@ app.post('/26susi/students', (req, res) => {
 });
 
 // --- API 2: 조 편성 (오전/오후) ---
-// --- API 2: 조 편성 (오전/오후) ---
-// ⭐️ 오후조는 13조부터 시작하도록 수정
-app.post('/26susi/assign-groups', (req, res) => {
-    const { session } = req.body;
-    if (!session || !['오전', '오후'].includes(session)) {
-        return res.status(400).json({ message: '세션 정보가 필요합니다.' });
-    }
-    const TOTAL_GROUPS_PER_SESSION = 12;
-    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
-    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
-    const targetBranches = (session === '오전') ? 오전조 : 오후조;
-    const sql = `SELECT s.id FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) AND s.exam_group IS NULL`;
-    
-    db.query(sql, [targetBranches], (err, students) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        if (students.length === 0) return res.status(400).json({ message: `배정할 ${session}조 학생이 없습니다.` });
-
-        for (let i = students.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [students[i], students[j]] = [students[j], students[i]];
-        }
+// --- API 2-1: [조 배정 실행] ---
+// 오전, 오후조를 한 번에 배정 (조가 없는 학생만 대상)
+app.post('/26susi/assign-all-groups', (req, res) => {
+    // 세션별 조 배정 로직을 함수로 만듦
+    const assignSession = (session, callback) => {
+        const TOTAL_GROUPS_PER_SESSION = 12;
+        const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
+        const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
+        const targetBranches = (session === '오전') ? 오전조 : 오후조;
+        const sql = `SELECT s.id FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) AND s.exam_group IS NULL`;
         
-        let completed = 0;
-        const groupCounters = {};
-        students.forEach((student, index) => {
-            let groupNum;
-            // ⭐️ 오후조일 경우 조 번호에 12를 더함
-            if (session === '오전') {
-                groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 1; // 결과: 1 ~ 12
-            } else { // 오후
-                groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 13; // 결과: 13 ~ 24
-            }
+        db.query(sql, [targetBranches], (err, students) => {
+            if (err) return callback(err);
+            if (students.length === 0) return callback(null, 0); // 배정할 학생 없으면 0명 반환
 
-            groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
-            const sequenceNum = groupCounters[groupNum];
-            // 이 로직은 숫자만 알면 알파벳으로 잘 바꿔줌 (13 -> M, 14 -> N)
-            const groupLetter = String.fromCharCode(64 + groupNum);
-            const examNumber = `${groupLetter}-${sequenceNum}`;
+            for (let i = students.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [students[i], students[j]] = [students[j], students[i]];
+            }
             
-            db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupNum, examNumber, student.id], (err, result) => {
-                completed++;
-                if (completed === students.length) {
-                    res.status(200).json({ success: true, message: `${session}조 ${students.length}명 학생 배정 완료!` });
-                }
+            let completed = 0;
+            const groupCounters = {};
+            students.forEach((student, index) => {
+                let groupNum = (session === '오전')
+                    ? (index % TOTAL_GROUPS_PER_SESSION) + 1  // 1 ~ 12
+                    : (index % TOTAL_GROUPS_PER_SESSION) + 13; // 13 ~ 24
+
+                groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
+                const sequenceNum = groupCounters[groupNum];
+                const groupLetter = String.fromCharCode(64 + groupNum);
+                const examNumber = `${groupLetter}-${sequenceNum}`;
+                
+                db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupNum, examNumber, student.id], (err, result) => {
+                    completed++;
+                    if (completed === students.length) {
+                        callback(null, students.length); // 배정 완료된 학생 수 반환
+                    }
+                });
             });
         });
+    };
+
+    // 오전조 배정 후, 이어서 오후조 배정 실행
+    assignSession('오전', (err, morningCount) => {
+        if (err) return res.status(500).json({ message: '오전조 배정 중 오류' });
+        assignSession('오후', (err, afternoonCount) => {
+            if (err) return res.status(500).json({ message: '오후조 배정 중 오류' });
+            const totalCount = morningCount + afternoonCount;
+            if (totalCount === 0) {
+                return res.status(400).json({ success: false, message: '새로 조를 배정할 학생이 없습니다.' });
+            }
+            res.status(200).json({ success: true, message: `총 ${totalCount}명의 학생 조 배정을 완료했습니다.` });
+        });
+    });
+});
+
+// --- API 2-2: [재배치 실행] ---
+// 모든 학생의 조를 초기화하고 처음부터 다시 배정
+app.post('/26susi/reassign-all-groups', (req, res) => {
+    // 1. 모든 학생의 조와 수험번호를 초기화
+    db.query('UPDATE students SET exam_group = NULL, exam_number = NULL', (err, result) => {
+        if (err) {
+            console.error("🔥 재배치 초기화 오류:", err);
+            return res.status(500).json({ message: '조 초기화 중 오류 발생' });
+        }
+        
+        // 2. 초기화 성공 후, 전체 배정 API를 내부적으로 호출하는 것과 같은 로직 실행
+        // (코드가 중복되므로, 실제로는 위 /assign-all-groups API를 호출하는 것이 더 좋지만, 설명을 위해 로직을 다시 넣음)
+        req.url = '/assign-all-groups'; // URL을 잠시 변경하여
+        app._router.handle(req, res);   // 위 API가 대신 처리하도록 함
     });
 });
 // --- API 3: 학생 정보 조회 (통합) ---
