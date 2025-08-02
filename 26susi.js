@@ -1829,314 +1829,180 @@ app.post('/26susi/announcements/delete', authJWT, async (req, res) => {
     }
 });
 
-// 3. [핵심 로직] 기록을 점수로 변환하는 헬퍼 함수
-async function calculateScoreFromDB(event, gender, recordValue) {
-    let score = 0;
-    // '10m'는 기록이 낮을수록 점수가 높고, 나머지는 높을수록 점수가 높음
+// --- 점수 계산 헬퍼 함수 (콜백 방식) ---
+function calculateScoreFromDB(event, gender, recordValue, callback) {
     const isLowerBetter = event === '10m';
-    
     const sql = `
         SELECT score FROM scoring_criteria 
         WHERE event = ? AND gender = ? AND record_threshold ${isLowerBetter ? '>=' : '<='} ? 
         ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
         LIMIT 1;
     `;
-
-    try {
-        const [rows] = await db.query(sql, [event, gender, recordValue]);
-        if (rows.length > 0) {
-            score = rows[0].score;
+    db.query(sql, [event, gender, recordValue], (err, rows) => {
+        if (err) {
+            console.error("점수 계산 DB 조회 오류:", err);
+            return callback(err, 0);
         }
-        return score; // 기준표에 없으면 0점
-    } catch (error) {
-        console.error("점수 계산 DB 조회 오류:", error);
-        return 0; // 오류 발생 시 0점
-    }
+        const score = rows.length > 0 ? rows[0].score : 0;
+        callback(null, score); // 에러가 없으면 첫 번째 인자는 null
+    });
 }
 
 
 // =================================================================
-// 🚀 API 엔드포인트 (라우터)
+// 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
 // =================================================================
 
-// API 1: [명단 등록] 지점별로 학생 명단(이름, 성별) 일괄 등록
-// API 1: [명단 등록] (수정된 버전)
-// 지점별로 학생 명단(이름, 성별, 학교, 학년) 일괄 등록
-// API 1: [명단 등록] (데이터 검증 기능 강화 버전)
-app.post('/26susi/students', async (req, res) => {
+// --- API 1: 학생 일괄 등록 ---
+app.post('/26susi/students', (req, res) => {
     const { branchName, students } = req.body;
     if (!branchName || !students || !Array.isArray(students)) {
         return res.status(400).json({ message: '지점명과 학생 배열은 필수입니다.' });
     }
-
-    // 1. 데이터 검증: 이름과 성별이 없는 데이터는 걸러내기
-    const validStudents = [];
-    const invalidStudentLines = [];
-    students.forEach((s, index) => {
-        if (s.name && s.name.trim() !== '' && s.gender && (s.gender === '남' || s.gender === '여')) {
-            validStudents.push(s);
-        } else {
-            // 문제가 있는 데이터의 줄 번호를 기록
-            invalidStudentLines.push(index + 1);
-        }
-    });
-
-    // 2. 유효한 데이터가 하나도 없는 경우
+    const validStudents = students.filter(s => s.name && s.name.trim() !== '' && s.gender && ['남', '여'].includes(s.gender));
     if (validStudents.length === 0) {
-        let errorMessage = '등록할 유효한 학생 데이터가 없습니다.';
-        if (invalidStudentLines.length > 0) {
-            errorMessage += `\n오류 의심 라인: ${invalidStudentLines.join(', ')} 번째 줄의 이름 또는 성별을 확인해주세요.`;
-        }
-        return res.status(400).json({ message: errorMessage });
+        return res.status(400).json({ message: '등록할 유효한 학생 데이터가 없습니다.' });
     }
-    
-    try {
-        // 지점 ID 확인 또는 생성
-        let [rows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
-        const branchId = rows.length > 0 ? rows[0].id : (await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]))[0].insertId;
 
-        // 3. 유효한 학생 데이터만 DB에 삽입
-        const studentValues = validStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
-        const sql = 'INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?';
+    db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, rows) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
         
-        await db.query(sql, [studentValues]);
+        const getBranchId = (callback) => {
+            if (rows.length > 0) {
+                callback(null, rows[0].id);
+            } else {
+                db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
+                    if (err) return callback(err);
+                    callback(null, result.insertId);
+                });
+            }
+        };
 
-        let successMessage = `${branchName} 지점 ${validStudents.length}명 등록 완료.`;
-        if (invalidStudentLines.length > 0) {
-            successMessage += `\n(주의: ${invalidStudentLines.join(', ')} 번째 줄은 이름 또는 성별이 비어있어 제외됨)`;
-        }
-        res.status(201).json({ success: true, message: successMessage });
+        getBranchId((err, branchId) => {
+            if (err) return res.status(500).json({ message: 'DB 오류' });
 
-    } catch (error) {
-        // DB 자체에서 발생하는 다른 에러들 (예: DB 연결 끊김)
-        console.error("학생 등록 중 DB 오류:", error);
-        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.', error: error.message });
-    }
+            const studentValues = validStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
+            db.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues], (err, result) => {
+                if (err) {
+                    console.error("🔥 학생 등록 API 오류:", err);
+                    return res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.' });
+                }
+                let successMessage = `${branchName} 지점 ${validStudents.length}명 등록 완료.`;
+                if (validStudents.length < students.length) {
+                    successMessage += `\n(주의: ${students.length - validStudents.length}개 행은 제외됨)`;
+                }
+                res.status(201).json({ success: true, message: successMessage });
+            });
+        });
+    });
 });
 
-// API 2: [조 배정] 전체 학생 랜덤으로 14개 조 배정 및 수험번호 부여
-// API 2: [조 배정] (수정된 버전)
-// 수험번호를 A-1, B-1 같은 형식으로 부여
-// API 2: [조 배정] (오전/오후 세션 분리 버전)
-app.post('/26susi/assign-groups', async (req, res) => {
-    const { session } = req.body; // { "session": "오전" } 또는 { "session": "오후" }
+// --- API 2: 조 편성 (오전/오후) ---
+app.post('/26susi/assign-groups', (req, res) => {
+    const { session } = req.body;
     if (!session || !['오전', '오후'].includes(session)) {
-        return res.status(400).json({ message: '세션("오전" 또는 "오후") 정보가 필요합니다.' });
+        return res.status(400).json({ message: '세션 정보가 필요합니다.' });
     }
-
-    const TOTAL_GROUPS_PER_SESSION = 14;
+    const TOTAL_GROUPS_PER_SESSION = 12;
     const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
     const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
-    
     const targetBranches = (session === '오전') ? 오전조 : 오후조;
+    const sql = `SELECT s.id FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) AND s.exam_group IS NULL`;
+    
+    db.query(sql, [targetBranches], (err, students) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        if (students.length === 0) return res.status(400).json({ message: `배정할 ${session}조 학생이 없습니다.` });
 
-    try {
-        // 1. 해당 세션의 지점 학생들 중 조 배정이 안된 학생들만 불러오기
-        const sql = `
-            SELECT s.id FROM students s
-            JOIN branches b ON s.branch_id = b.id
-            WHERE b.branch_name IN (?) AND s.exam_group IS NULL
-        `;
-        const [students] = await db.query(sql, [targetBranches]);
-        
-        if (students.length === 0) {
-            return res.status(400).json({ message: `조를 배정할 ${session}조 학생이 없습니다.` });
-        }
-
-        // 2. 학생 랜덤 섞기
         for (let i = students.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [students[i], students[j]] = [students[j], students[i]];
         }
         
-        // 3. 조별 순번 및 수험번호 부여
+        let completed = 0;
         const groupCounters = {};
-        const updatePromises = students.map((student, index) => {
+        students.forEach((student, index) => {
             const groupNum = (index % TOTAL_GROUPS_PER_SESSION) + 1;
             groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
             const sequenceNum = groupCounters[groupNum];
-            const groupLetter = String.fromCharCode(64 + groupNum); // 1->A, 2->B
+            const groupLetter = String.fromCharCode(64 + groupNum);
             const examNumber = `${groupLetter}-${sequenceNum}`;
             
-            return db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupNum, examNumber, student.id]);
+            db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupNum, examNumber, student.id], (err, result) => {
+                completed++;
+                if (completed === students.length) {
+                    res.status(200).json({ success: true, message: `${session}조 ${students.length}명 학생 배정 완료!` });
+                }
+            });
         });
-
-        await Promise.all(updatePromises);
-        res.status(200).json({ success: true, message: `${session}조 ${students.length}명 학생 배정 완료!` });
-    } catch (error) {
-        console.error(`🔥 ${session}조 배정 중 오류:`, error);
-        res.status(500).json({ success: false, message: '조 배정 중 오류 발생', error: error.message });
-    }
+    });
 });
 
+// --- API 3: 학생 정보 조회 (통합) ---
+app.get('/26susi/students', (req, res) => {
+    const { view, branchName } = req.query;
+    let sql = `SELECT s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
+    const params = [];
+    if (view === 'all') {
+        sql += ' ORDER BY b.branch_name, s.student_name';
+    } else if (branchName) {
+        sql += ' WHERE b.branch_name = ? ORDER BY s.student_name';
+        params.push(branchName);
+    } else {
+        return res.status(200).json({ success: true, data: [] });
+    }
+    db.query(sql, params, (err, students) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        res.status(200).json({ success: true, data: students });
+    });
+});
 
-// API 3: [실기 기록 입력] 수험번호로 학생을 찾아 기록 및 변환 점수 저장
-app.post('/26susi/records', async (req, res) => {
+// --- API 4: 실기 기록 입력 ---
+app.post('/26susi/records', (req, res) => {
     const { examNumber, event, recordValue } = req.body;
-    try {
-        const [students] = await db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
-        if (students.length === 0) return res.status(404).json({ message: '해당 수험번호의 학생이 없습니다.' });
+    db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber], (err, students) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        if (students.length === 0) return res.status(404).json({ message: `수험번호 '${examNumber}' 학생이 없습니다.` });
         
         const student = students[0];
-        const score = await calculateScoreFromDB(event, student.gender, recordValue);
-
-        // 동일 학생, 동일 종목 기록이 이미 있으면 UPDATE, 없으면 INSERT
-        await db.query(
-            `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`,
-            [student.id, event, recordValue, score]
-        );
-        
-        res.status(201).json({ success: true, message: '기록 저장 완료', event, recordValue, score });
-    } catch (error) {
-        res.status(500).json({ success: false, message: '기록 저장 중 오류', error: error.message });
-    }
+        calculateScoreFromDB(event, student.gender, recordValue, (err, score) => {
+            if (err) return res.status(500).json({ message: '점수 계산 오류' });
+            
+            const sql = `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
+            db.query(sql, [student.id, event, recordValue, score], (err, result) => {
+                if (err) return res.status(500).json({ message: 'DB 오류' });
+                res.status(201).json({ success: true, message: '기록 저장 완료' });
+            });
+        });
+    });
 });
 
-
-// API 4: [출석 상태 변경]
-app.patch('/26susi/attendance', async (req, res) => {
-    const { studentId, attendance } = req.body;
-    try {
-        const [result] = await db.query('UPDATE students SET attendance = ? WHERE id = ?', [attendance, studentId]);
-        if (result.affectedRows === 0) return res.status(404).json({ message: '학생을 찾을 수 없습니다.' });
-        res.status(200).json({ success: true, message: '출석 상태가 변경되었습니다.' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'DB 오류', error: error.message });
-    }
-});
-
-
-// API 5: [전체 순위 조회] (프론트엔드 대시보드용)
-// 모든 학생의 정보와 각 종목별 기록, 점수, 총점을 한 번에 조회
-app.get('/26susi/rankings', async (req, res) => {
-    try {
-        const sql = `
-            SELECT 
-                s.id,
-                s.student_name,
-                s.gender,
-                s.exam_number,
-                s.exam_group,
-                s.attendance,
-                b.branch_name,
-                COALESCE(SUM(r.score), 0) AS total_score,
-                JSON_OBJECTAGG(r.event, JSON_OBJECT('record', r.record_value, 'score', r.score)) AS records
-            FROM students s
-            LEFT JOIN branches b ON s.branch_id = b.id
-            LEFT JOIN records r ON s.id = r.student_id
-            GROUP BY s.id
-            ORDER BY total_score DESC;
-        `;
-        const [rankings] = await db.query(sql);
-        res.status(200).json({ success: true, data: rankings });
-    } catch (error) {
-        res.status(500).json({ success: false, message: '랭킹 조회 중 오류', error: error.message });
-    }
-});
-
-// API 6: [지점별 학생 조회] (신규 추가)
-// 특정 지점에 속한 학생들의 명단만 조회하는 전용 API
-app.get('/26susi/students/:branchName', async (req, res) => {
-    const { branchName } = req.params; // URL에서 지점 이름을 가져옴
-
-    try {
-        const sql = `
-            SELECT 
-                s.student_name, s.gender, s.school, s.grade, s.exam_number
-            FROM students s
-            JOIN branches b ON s.branch_id = b.id
-            WHERE b.branch_name = ?
-            ORDER BY s.student_name ASC;
-        `;
-        const [students] = await db.query(sql, [branchName]);
-        res.status(200).json({ success: true, data: students });
-
-    } catch (error) {
-        console.error("🔥 지점별 학생 조회 API 오류:", error);
-        res.status(500).json({ success: false, message: '학생 명단 조회 중 서버 오류 발생' });
-    }
-});
-
-// ===== 현장용 API 추가 =====
-
-// API 7: [출석 처리] 학생 상태를 '결석'으로 변경
-app.patch('/26susi/attendance/absent/:studentId', async (req, res) => {
-    const { studentId } = req.params;
-    try {
-        await db.query(`UPDATE students SET attendance = '결석' WHERE id = ?`, [studentId]);
+// --- API 5: 결석 처리 ---
+app.patch('/26susi/attendance/absent/:studentId', (req, res) => {
+    db.query(`UPDATE students SET attendance = '결석' WHERE id = ?`, [req.params.studentId], (err, result) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
         res.status(200).json({ success: true, message: '결석 처리 완료' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: '서버 오류' });
-    }
+    });
 });
 
-// API 8: [대체 학생] 기존 학생 정보를 새 학생 정보로 교체 (수험번호 유지)
-app.post('/26susi/students/substitute', async (req, res) => {
+// --- API 6: 대체 학생 등록 ---
+app.post('/26susi/students/substitute', (req, res) => {
     const { oldStudentId, newStudent } = req.body;
-    try {
-        // 1. 기존 학생의 status를 '대체'로 변경
-        await db.query(`UPDATE students SET status = '대체' WHERE id = ?`, [oldStudentId]);
+    db.query(`UPDATE students SET status = '대체' WHERE id = ?`, [oldStudentId], (err, result) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
         
-        // 2. 새로운 학생 정보로 INSERT
-        const { name, gender, school, grade } = newStudent;
-        const [oldStudent] = await db.query('SELECT branch_id, exam_number, exam_group FROM students WHERE id = ?', [oldStudentId]);
-
-        const sql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '정상')`;
-        const [result] = await db.query(sql, [name, gender, school, grade, oldStudent[0].branch_id, oldStudent[0].exam_number, oldStudent[0].exam_group]);
-        
-        res.status(200).json({ success: true, message: `대체 학생 등록 완료. 수험번호: ${oldStudent[0].exam_number}` });
-    } catch (error) {
-        console.error("🔥 대체 학생 처리 오류:", error);
-        res.status(500).json({ success: false, message: '서버 오류' });
-    }
-});
-
-
-// API 9: [현장 신규] 학생을 가장 인원이 적은 조에 배정
-app.post('/26susi/students/add-new', async (req, res) => {
-    const { session, newStudent } = req.body;
-    const { name, gender, school, grade, branchName } = newStudent;
-
-    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
-    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
-    const targetBranches = (session === '오전') ? 오전조 : 오후조;
-    const TOTAL_GROUPS_PER_SESSION = 14;
-
-    try {
-        // 1. 가장 인원이 적은 조 찾기
-        const groupCountSql = `
-            SELECT exam_group, COUNT(*) as count FROM students s
-            JOIN branches b ON s.branch_id = b.id
-            WHERE b.branch_name IN (?)
-            GROUP BY exam_group
-            ORDER BY count ASC
-            LIMIT 1;
-        `;
-        const [groupRows] = await db.query(groupCountSql, [targetBranches]);
-        const targetGroup = groupRows.length > 0 ? groupRows[0].exam_group : 1; // 학생이 아무도 없으면 1조
-
-        // 2. 해당 조의 마지막 순번 찾기
-        const sequenceSql = `SELECT COUNT(*) as count FROM students WHERE exam_group = ?`;
-        const [sequenceRows] = await db.query(sequenceSql, [targetGroup]);
-        const newSequenceNum = sequenceRows[0].count + 1;
-
-        // 3. 수험번호 생성
-        const groupLetter = String.fromCharCode(64 + targetGroup);
-        const examNumber = `${groupLetter}-${newSequenceNum}`;
-        
-        // 4. 지점 ID 찾기 및 학생 등록
-        let [branchRows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
-        const branchId = branchRows.length > 0 ? branchRows[0].id : (await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]))[0].insertId;
-        
-        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '정상')`;
-        await db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup]);
-
-        res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.`, examNumber: examNumber });
-    } catch (error) {
-        console.error("🔥 현장 신규 등록 오류:", error);
-        res.status(500).json({ success: false, message: '서버 오류' });
-    }
+        db.query('SELECT branch_id, exam_number, exam_group FROM students WHERE id = ?', [oldStudentId], (err, oldStudentRows) => {
+            if (err) return res.status(500).json({ message: 'DB 오류' });
+            if (oldStudentRows.length === 0) return res.status(404).json({message: '대체할 학생을 찾지 못했습니다.'});
+            
+            const oldStudent = oldStudentRows[0];
+            const { name, gender, school, grade } = newStudent;
+            const sql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '정상')`;
+            db.query(sql, [name, gender, school, grade, oldStudent.branch_id, oldStudent.exam_number, oldStudent.exam_group], (err, result) => {
+                if (err) return res.status(500).json({ message: 'DB 오류' });
+                res.status(200).json({ success: true, message: `대체 학생 등록 완료. 수험번호: ${oldStudent.exam_number}` });
+            });
+        });
+    });
 });
 
 
