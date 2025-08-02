@@ -1993,7 +1993,7 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 // 쿼리 파라미터에 따라 다르게 동작
 // 1. /students?view=all -> 전체 학생 조회
 // 2. /students?branchName=강남 -> 특정 지점 학생 조회
-app.get('/students', (req, res) => {
+app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
 
     // ⭐️ 참고: 이 API는 페이지네이션 기능이 적용된 최종 버전이야.
