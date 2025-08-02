@@ -1989,29 +1989,33 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 });
 // --- API 3: 학생 정보 조회 (통합) ---
 // --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
-app.get('/26susi/students', (req, res) => {
-    const { view, branchName } = req.query;
-    try {
-        // ⭐️ s.attendance, s.status 컬럼을 SELECT에 추가
-        let sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
-        const params = [];
+// --- API 6: [대체 학생 등록] (수험번호 알림 추가) ---
+app.post('/26susi/students/substitute', (req, res) => {
+    const { oldStudentId, newStudent } = req.body;
+    const { name, gender, school, grade } = newStudent;
 
-        if (view === 'all') {
-            sql += ' ORDER BY s.exam_number IS NULL, s.exam_number ASC';
-        } else if (branchName) {
-            sql += ' WHERE b.branch_name = ? ORDER BY s.student_name ASC';
-            params.push(branchName);
-        } else {
-            return res.status(200).json({ success: true, data: [] });
-        }
-
-        db.query(sql, params, (err, students) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-            res.status(200).json({ success: true, data: students });
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: '학생 조회 중 서버 오류 발생' });
+    if (!name || !gender || !school || !grade) {
+        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보를 입력해야 합니다.' });
     }
+
+    // 1. ⭐️ 먼저 기존 학생의 수험번호를 조회
+    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
+        if (err) return res.status(500).json({ success: false, message: '기존 학생 정보 조회 중 오류' });
+        if (studentRows.length === 0) return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
+        
+        const examNumber = studentRows[0].exam_number;
+
+        // 2. ⭐️ 학생 정보 업데이트
+        const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
+        db.query(updateSql, [name, gender, school, grade, oldStudentId], (err, result) => {
+            if (err) {
+                console.error("🔥 대체 학생 처리 오류:", err);
+                return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류' });
+            }
+            // 3. ⭐️ 조회해둔 수험번호를 메시지에 포함해서 응답
+            res.status(200).json({ success: true, message: `대체 완료! 부여된 수험번호는 [${examNumber}] 입니다.` });
+        });
+    });
 });
 
 // --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
@@ -2152,6 +2156,51 @@ app.post('/26susi/students/master-bulk', (req, res) => {
         });
     }
     processNextBranch();
+});
+
+// --- API 7: [현장 신규 학생 추가] (메시지 수정) ---
+app.post('/26susi/students/add-new', (req, res) => {
+    // ... (이전 코드와 동일한 부분) ...
+    const { session, newStudent } = req.body;
+    const { name, gender, school, grade, branchName } = newStudent;
+    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
+    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
+    const targetBranches = (session === '오전') ? 오전조 : 오후조;
+    try {
+        const groupCountSql = `SELECT exam_group, COUNT(*) as count FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) GROUP BY exam_group ORDER BY count ASC LIMIT 1`;
+        db.query(groupCountSql, [targetBranches], (err, groupRows) => {
+            if (err) return res.status(500).json({message: 'DB 오류'});
+            const targetGroup = groupRows.length > 0 ? groupRows[0].exam_group : (session === '오전' ? 'A' : 'M'); // ⭐️ 학생이 아무도 없을 때 기본 조 설정
+            const sequenceSql = `SELECT COUNT(*) as count FROM students WHERE exam_group = ?`;
+            db.query(sequenceSql, [targetGroup], (err, sequenceRows) => {
+                if (err) return res.status(500).json({message: 'DB 오류'});
+                const newSequenceNum = sequenceRows[0].count + 1;
+                const examNumber = `${targetGroup}-${newSequenceNum}`;
+                db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, branchRows) => {
+                    if (err) return res.status(500).json({message: 'DB 오류'});
+                    const getBranchId = (callback) => {
+                        if (branchRows.length > 0) return callback(null, branchRows[0].id);
+                        db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
+                            if (err) return callback(err);
+                            callback(null, result.insertId);
+                        });
+                    };
+                    getBranchId((err, branchId) => {
+                        if (err) return res.status(500).json({message: 'DB 오류'});
+                        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '추가')`;
+                        db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup], (err, result) => {
+                            if (err) return res.status(500).json({message: 'DB 오류'});
+                            // ⭐️ 메시지를 더 명확하게 수정
+                            res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.\n\n부여된 수험번호: [${examNumber}]` });
+                        });
+                    });
+                });
+            });
+        });
+    } catch (error) {
+        console.error("🔥 현장 신규 등록 오류:", error);
+        res.status(500).json({ success: false, message: '서버 오류' });
+    }
 });
 
 // ✅ 서버 실행
