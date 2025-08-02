@@ -2052,23 +2052,38 @@ app.patch('/26susi/attendance/absent/:studentId', (req, res) => {
 });
 
 // --- API 6: 대체 학생 등록 ---
+// --- API 6: [대체 학생 등록] (수정 버전) ---
+// 기존 학생 정보를 새 학생 정보로 덮어쓰는 방식으로 변경
 app.post('/26susi/students/substitute', (req, res) => {
     const { oldStudentId, newStudent } = req.body;
-    db.query(`UPDATE students SET status = '대체' WHERE id = ?`, [oldStudentId], (err, result) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        
-        db.query('SELECT branch_id, exam_number, exam_group FROM students WHERE id = ?', [oldStudentId], (err, oldStudentRows) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-            if (oldStudentRows.length === 0) return res.status(404).json({message: '대체할 학생을 찾지 못했습니다.'});
-            
-            const oldStudent = oldStudentRows[0];
-            const { name, gender, school, grade } = newStudent;
-            const sql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status) VALUES (?, ?, ?, ?, ?, ?, ?, '정상')`;
-            db.query(sql, [name, gender, school, grade, oldStudent.branch_id, oldStudent.exam_number, oldStudent.exam_group], (err, result) => {
-                if (err) return res.status(500).json({ message: 'DB 오류' });
-                res.status(200).json({ success: true, message: `대체 학생 등록 완료. 수험번호: ${oldStudent.exam_number}` });
-            });
-        });
+    const { name, gender, school, grade } = newStudent;
+
+    if (!name || !gender || !school || !grade) {
+        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보(이름, 성별, 학교, 학년)를 입력해야 합니다.' });
+    }
+
+    const sql = `
+        UPDATE students 
+        SET 
+            student_name = ?, 
+            gender = ?, 
+            school = ?, 
+            grade = ?, 
+            status = '대체', 
+            attendance = '참석' 
+        WHERE id = ?
+    `;
+    const params = [name, gender, school, grade, oldStudentId];
+
+    db.query(sql, params, (err, result) => {
+        if (err) {
+            console.error("🔥 대체 학생 처리 오류:", err);
+            return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류가 발생했습니다.' });
+        }
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
+        }
+        res.status(200).json({ success: true, message: '대체 학생으로 교체 완료했습니다.' });
     });
 });
 
