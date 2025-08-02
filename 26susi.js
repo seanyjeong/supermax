@@ -1903,7 +1903,6 @@ app.post('/26susi/students', (req, res) => {
 // --- API 2: 조 편성 및 재배치 (안정성 강화 최종 버전) ---
 // =================================================================
 
-// [핵심 로직] 조 배정 실행 함수 (코드를 재사용하기 위해 분리)
 function executeFullAssignment(res, callback) {
     let morningCount = 0;
     let afternoonCount = 0;
@@ -1926,19 +1925,23 @@ function executeFullAssignment(res, callback) {
             
             let completed = 0;
             const groupCounters = {};
-            students.forEach((student) => {
+            // ⭐️ BUG FIX: 버그가 있던 forEach 루프를 수정
+            students.forEach((student, index) => { // 각 학생의 고유한 index를 사용해야 함
                 let groupNum = (session === '오전')
-                    ? (completed % TOTAL_GROUPS_PER_SESSION) + 1
-                    : (completed % TOTAL_GROUPS_PER_SESSION) + 13;
+                    ? (index % TOTAL_GROUPS_PER_SESSION) + 1  // 1 ~ 12
+                    : (index % TOTAL_GROUPS_PER_SESSION) + 13; // 13 ~ 24
 
-                groupCounters[groupNum] = (groupCounters[groupNum] || 0) + 1;
-                const sequenceNum = groupCounters[groupNum];
-                const groupLetter = String.fromCharCode(64 + groupNum);
+                // ⭐️ LOGIC CHANGE: 숫자를 문자로 변환
+                const groupLetter = String.fromCharCode(64 + groupNum); // 1->A, 13->M
+
+                groupCounters[groupLetter] = (groupCounters[groupLetter] || 0) + 1;
+                const sequenceNum = groupCounters[groupLetter];
                 const examNumber = `${groupLetter}-${sequenceNum}`;
                 
-                db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupNum, examNumber, student.id], (err, result) => {
+                // ⭐️ DB에 숫자(groupNum) 대신 문자(groupLetter)를 저장
+                db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupLetter, examNumber, student.id], (err, result) => {
                     completed++;
-                    if (err) console.error(`학생 ID ${student.id} 업데이트 오류:`, err); // 에러가 나도 멈추지 않고 계속 진행
+                    if (err) console.error(`학생 ID ${student.id} 업데이트 오류:`, err);
                     if (completed === students.length) {
                         sessionCallback(null, students.length);
                     }
@@ -1947,20 +1950,18 @@ function executeFullAssignment(res, callback) {
         });
     };
 
-    // 오전조 배정 후, 콜백으로 오후조 배정 실행
     assignSession('오전', (err, mCount) => {
         if (err) return callback(err);
         morningCount = mCount;
         assignSession('오후', (err, aCount) => {
             if (err) return callback(err);
             afternoonCount = aCount;
-            callback(null, morningCount + afternoonCount); // 최종적으로 총 배정 인원 수를 반환
+            callback(null, morningCount + afternoonCount);
         });
     });
 }
 
 // [조 배정 실행 API]
-// 조가 없는 학생들만 대상으로 배정
 app.post('/26susi/assign-all-groups', (req, res) => {
     executeFullAssignment(res, (err, totalCount) => {
         if (err) return res.status(500).json({ message: '조 배정 중 오류 발생' });
@@ -1972,36 +1973,16 @@ app.post('/26susi/assign-all-groups', (req, res) => {
 });
 
 // [전체 재배치 실행 API]
-// 모든 학생의 조를 초기화하고 다시 배정
 app.post('/26susi/reassign-all-groups', (req, res) => {
     db.query('UPDATE students SET exam_group = NULL, exam_number = NULL', (err, result) => {
         if (err) {
             console.error("🔥 재배치 초기화 오류:", err);
             return res.status(500).json({ message: '조 초기화 중 오류 발생' });
         }
-        
-        // 초기화 성공 후, 위에서 만든 조 배정 로직 실행
         executeFullAssignment(res, (err, totalCount) => {
             if (err) return res.status(500).json({ message: '초기화 후 재배정 중 오류 발생' });
             res.status(200).json({ success: true, message: `전체 재배치를 완료했습니다. 총 ${totalCount}명 배정.` });
         });
-    });
-});
-
-// --- API 2-2: [재배치 실행] ---
-// 모든 학생의 조를 초기화하고 처음부터 다시 배정
-app.post('/26susi/reassign-all-groups', (req, res) => {
-    // 1. 모든 학생의 조와 수험번호를 초기화
-    db.query('UPDATE students SET exam_group = NULL, exam_number = NULL', (err, result) => {
-        if (err) {
-            console.error("🔥 재배치 초기화 오류:", err);
-            return res.status(500).json({ message: '조 초기화 중 오류 발생' });
-        }
-        
-        // 2. 초기화 성공 후, 전체 배정 API를 내부적으로 호출하는 것과 같은 로직 실행
-        // (코드가 중복되므로, 실제로는 위 /assign-all-groups API를 호출하는 것이 더 좋지만, 설명을 위해 로직을 다시 넣음)
-        req.url = '/assign-all-groups'; // URL을 잠시 변경하여
-        app._router.handle(req, res);   // 위 API가 대신 처리하도록 함
     });
 });
 // --- API 3: 학생 정보 조회 (통합) ---
