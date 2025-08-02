@@ -1991,47 +1991,26 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 // --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
 // --- API 3: 학생 정보 조회 (통합) ---
 // 쿼리 파라미터에 따라 다르게 동작
-// 1. /students?view=all -> 전체 학생 조회
-// 2. /students?branchName=강남 -> 특정 지점 학생 조회
-app.get('/26susi/students', (req, res) => {
+/app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
 
-    // ⭐️ 참고: 이 API는 페이지네이션 기능이 적용된 최종 버전이야.
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 100; // 한 페이지에 100개씩
-    const offset = (page - 1) * limit;
-
-    let baseSql = `FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
-    let whereSql = '';
+    let sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id`;
     const params = [];
 
     if (view === 'all') {
-        // 전체 조회
+        sql += ' ORDER BY s.exam_number IS NULL, s.exam_number ASC';
     } else if (branchName) {
-        whereSql = ' WHERE b.branch_name = ?';
+        sql += ' WHERE b.branch_name = ? ORDER BY s.student_name ASC';
         params.push(branchName);
     } else {
-        return res.status(200).json({ success: true, data: [], total: 0 });
+        return res.status(200).json({ success: true, data: [] });
     }
 
-    const countSql = `SELECT COUNT(*) as total ${baseSql} ${whereSql}`;
-    // 수험번호 정렬 로직 추가
-    const dataSql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status ${baseSql} ${whereSql} ORDER BY s.exam_number IS NULL, s.exam_number ASC LIMIT ? OFFSET ?`;
-    
-    const dataParams = [...params, limit, offset];
-
-    db.query(countSql, params, (err, countResult) => {
-        if (err) return res.status(500).json({ message: '카운트 조회 오류' });
-        
-        const total = countResult[0].total;
-
-        db.query(dataSql, dataParams, (err, students) => {
-            if (err) return res.status(500).json({ message: '학생 데이터 조회 오류' });
-            res.status(200).json({ success: true, data: students, total: total, page: page, limit: limit });
-        });
+    db.query(sql, params, (err, students) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        res.status(200).json({ success: true, data: students });
     });
 });
-
 
 
 // --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
