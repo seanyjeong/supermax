@@ -2024,23 +2024,29 @@ app.post('/26susi/reassign-all-groups', (req, res) => {
 // --- API 3: 학생 정보 조회 (DB에서 직접 정렬하도록 수정) ---
 // --- API 3: 학생 정보 조회 (안정성 강화) ---
 // ⭐️ '/26susi' 경로를 다시 추가
+// --- API 3: 학생 정보 조회 (운영자/지점 페이지용) ---
 app.get('/26susi/students', (req, res) => {
     const { view, branchName } = req.query;
-    console.log(`[로그] 학생 조회 요청 받음: view=${view}, branchName=${branchName}`);
 
     let sql;
     const params = [];
+
+    // ⭐️ 이 정렬(ORDER BY) 부분이 핵심이야
+    const orderByClause = `
+        ORDER BY 
+            exam_number IS NULL, 
+            SUBSTRING_INDEX(exam_number, '-', 1), 
+            CAST(SUBSTRING_INDEX(exam_number, '-', -1) AS UNSIGNED)
+    `;
 
     if (view === 'all') {
         sql = `
             SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status 
             FROM students s LEFT JOIN branches b ON s.branch_id = b.id
-            ORDER BY 
-                s.exam_number IS NULL, 
-                SUBSTRING_INDEX(s.exam_number, '-', 1), 
-                CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED)
+            ${orderByClause}
         `;
     } else if (branchName) {
+        // 지점 페이지는 이름순 정렬이라 그대로 둬도 돼
         sql = `
             SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status 
             FROM students s LEFT JOIN branches b ON s.branch_id = b.id
@@ -2057,10 +2063,11 @@ app.get('/26susi/students', (req, res) => {
             console.error("🔥 학생 조회 SQL 쿼리 실행 중 에러 발생:", err);
             return res.status(500).json({ success: false, message: '학생 데이터 조회 중 서버에 오류가 발생했습니다.' });
         }
-        console.log(`[로그] ${students.length}명의 학생 데이터 조회 성공`);
         res.status(200).json({ success: true, data: students });
     });
 });
+
+
 // --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
 app.patch('/26susi/attendance/present/:studentId', (req, res) => {
     const { studentId } = req.params;
