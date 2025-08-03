@@ -2538,7 +2538,28 @@ app.patch('/26susi/tshirts/:id', (req, res) => {
     });
 });
 
+// --- API: [사전 현황판] 미확인 인원 명단 조회 ---
+app.get('/26susi/students/pending', (req, res) => {
+    const { branchName } = req.query; // ex: ?branchName=일산
+    if (!branchName) {
+        return res.status(400).json({ message: '지점 이름은 필수입니다.' });
+    }
 
+    const sql = `
+        SELECT s.student_name, s.exam_number
+        FROM students s
+        JOIN branches b ON s.branch_id = b.id
+        WHERE b.branch_name = ? AND (s.attendance = '미정' OR s.attendance IS NULL)
+        ORDER BY s.student_name;
+    `;
+    db.query(sql, [branchName], (err, results) => {
+        if (err) {
+            console.error("🔥 미확인 인원 조회 오류:", err);
+            return res.status(500).json({ message: 'DB 오류' });
+        }
+        res.status(200).json({ success: true, data: results });
+    });
+});
 
 // ✅ 서버 실행
 app.listen(port, () => {
