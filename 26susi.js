@@ -2486,22 +2486,7 @@ app.post('/26susi/students/substitute', (req, res) => {
     });
 });
 
-// --- API 7: [현장 신규 학생 추가] (티셔츠 목록 자동 추가) ---
-app.post('/26susi/students/add-new', (req, res) => {
-    // ... (이전 코드와 동일) ...
-    getBranchId((err, branchId) => {
-        const insertSql = `INSERT INTO students (..., status, attendance) VALUES (..., '추가', '참석')`;
-        db.query(insertSql, [params...], (err, result) => {
-            if (err) return res.status(500).json({message: 'DB 오류'});
-            
-            const newStudentId = result.insertId;
-            // ⭐️ 티셔츠 관리 목록에 새로 추가
-            db.query('INSERT INTO tshirt_management (student_id) VALUES (?)', [newStudentId], (err, tshirtResult) => {
-                res.status(201).json({ success: true, message: `신규 등록 완료! 수험번호: [${examNumber}]` });
-            });
-        });
-    });
-});
+
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
