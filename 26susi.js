@@ -2300,6 +2300,67 @@ app.get('/26susi/records/calculate-score', (req, res) => {
         res.status(200).json({ success: true, score: score });
     });
 });
+
+// --- API 15: [순위 시스템] 실시간 순위 조회 API (grade 조건 수정) ---
+app.get('/26susi/rankings', (req, res) => {
+    const { classType, gender, event } = req.query;
+
+    if (!classType || !gender || !event) {
+        return res.status(400).json({ message: '반, 성별, 종목 정보는 필수입니다.' });
+    }
+
+    // ⭐️ '반' 구분에 따른 '학년' 조건을 '1', '2', '3', 'N'에 맞게 수정
+    let gradeCondition = '';
+    if (classType === '선행반') {
+        gradeCondition = `s.grade IN ('1', '2')`;
+    } else if (classType === '입시반') {
+        gradeCondition = `s.grade = '3'`;
+    } else if (classType === 'N수반') {
+        gradeCondition = `s.grade = 'N'`;
+    } else {
+        return res.status(400).json({ message: '올바른 반 유형이 아닙니다.' });
+    }
+
+    let sql;
+    const params = [gender];
+
+    if (event === '종합') {
+        sql = `
+            SELECT 
+                s.student_name, b.branch_name, SUM(r.score) as score,
+                RANK() OVER (ORDER BY SUM(r.score) DESC) as ranking
+            FROM students s
+            JOIN records r ON s.id = r.student_id
+            JOIN branches b ON s.branch_id = b.id
+            WHERE ${gradeCondition} AND s.gender = ?
+            GROUP BY s.id
+            ORDER BY ranking ASC
+            LIMIT 50;
+        `;
+    } else { // 종목별 순위
+        sql = `
+            SELECT 
+                s.student_name, b.branch_name, r.score, r.record_value,
+                RANK() OVER (ORDER BY r.score DESC, r.record_value DESC) as ranking
+            FROM students s
+            JOIN records r ON s.id = r.student_id
+            JOIN branches b ON s.branch_id = b.id
+            WHERE ${gradeCondition} AND s.gender = ? AND r.event = ?
+            ORDER BY ranking ASC
+            LIMIT 50;
+        `;
+        params.push(event);
+    }
+
+    db.query(sql, params, (err, results) => {
+        if (err) {
+            console.error("🔥 실시간 순위 조회 오류:", err);
+            return res.status(500).json({ success: false, message: '순위 조회 중 서버 오류' });
+        }
+        res.status(200).json({ success: true, data: results });
+    });
+});
+
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
