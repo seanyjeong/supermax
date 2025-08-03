@@ -2513,16 +2513,20 @@ app.get('/26susi/dashboard/pre-event', (req, res) => {
 });
 
 // --- API 18: [티셔츠 관리] 목록 조회 API ---
+// --- API 18: [티셔츠 관리] 목록 조회 API (수정) ---
 app.get('/26susi/tshirts', (req, res) => {
     const sql = `
-        SELECT t.id, s.student_name, s.exam_number, b.branch_name, t.size, t.status
+        SELECT t.id, t.student_id, s.student_name, s.exam_number, b.branch_name, t.type, t.original_size, t.new_size, t.status
         FROM tshirt_management t
         JOIN students s ON t.student_id = s.id
         JOIN branches b ON s.branch_id = b.id
         ORDER BY b.branch_name, s.student_name;
     `;
     db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
+        if (err) {
+            console.error("🔥 티셔츠 목록 조회 오류:", err);
+            return res.status(500).json({ message: 'DB 오류' });
+        }
         res.status(200).json({ success: true, data: results });
     });
 });
