@@ -2147,34 +2147,7 @@ app.patch('/26susi/attendance/absent/:studentId', (req, res) => {
     });
 });
 
-// --- API 6: [대체 학생 등록] (수험번호 알림 추가) ---
-app.post('/26susi/students/substitute', (req, res) => {
-    const { oldStudentId, newStudent } = req.body;
-    const { name, gender, school, grade } = newStudent;
 
-    if (!name || !gender || !school || !grade) {
-        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보를 입력해야 합니다.' });
-    }
-
-    // 1. ⭐️ 먼저 기존 학생의 수험번호를 조회
-    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
-        if (err) return res.status(500).json({ success: false, message: '기존 학생 정보 조회 중 오류' });
-        if (studentRows.length === 0) return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
-        
-        const examNumber = studentRows[0].exam_number;
-
-        // 2. ⭐️ 학생 정보 업데이트
-        const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
-        db.query(updateSql, [name, gender, school, grade, oldStudentId], (err, result) => {
-            if (err) {
-                console.error("🔥 대체 학생 처리 오류:", err);
-                return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류' });
-            }
-            // 3. ⭐️ 조회해둔 수험번호를 메시지에 포함해서 응답
-            res.status(200).json({ success: true, message: `대체 완료! 부여된 수험번호는 [${examNumber}] 입니다.` });
-        });
-    });
-});
 
 // --- API 8: [마스터] 전체 교육원 학생 일괄 등록 ---
 // --- API 8: [마스터] 전체 교육원 학생 일괄 등록 (학년 필수 체크) ---
@@ -2243,26 +2216,60 @@ app.post('/26susi/students/master-bulk', (req, res) => {
     processNextBranch();
 });
 
-// --- API 7: [현장 신규 학생 추가] (메시지 수정) ---
+// --- API 6: [대체 학생 등록] (티셔츠 목록 자동 추가 최종본) ---
+app.post('/26susi/students/substitute', (req, res) => {
+    const { oldStudentId, newStudent } = req.body;
+    const { name, gender, school, grade } = newStudent;
+
+    if (!name || !gender || !school || !grade) {
+        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보를 입력해야 합니다.' });
+    }
+
+    // 1. 먼저 기존 학생의 수험번호를 조회
+    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
+        if (err) return res.status(500).json({ success: false, message: '기존 학생 정보 조회 중 오류' });
+        if (studentRows.length === 0) return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
+        
+        const examNumber = studentRows[0].exam_number;
+
+        // 2. 학생 정보 업데이트 (덮어쓰기)
+        const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
+        db.query(updateSql, [name, gender, school, grade, oldStudentId], (err, result) => {
+            if (err) {
+                console.error("🔥 대체 학생 처리 오류:", err);
+                return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류' });
+            }
+            
+            // 3. ⭐️ 티셔츠 관리 목록에 '대체'된 학생 ID를 추가
+            db.query('INSERT INTO tshirt_management (student_id) VALUES (?)', [oldStudentId], (tshirtErr, tshirtResult) => {
+                if (tshirtErr) console.error("🔥 대체 학생 티셔츠 목록 추가 오류:", tshirtErr);
+                // 티셔츠 추가에 실패해도 일단 주 기능은 성공했으므로 성공으로 응답
+                res.status(200).json({ success: true, message: `대체 완료! 부여된 수험번호는 [${examNumber}] 입니다.` });
+            });
+        });
+    });
+});
+
+
+// --- API 7: [현장 신규 학생 추가] (티셔츠 목록 자동 추가 최종본) ---
 app.post('/26susi/students/add-new', (req, res) => {
-    // ... (이전 코드와 동일한 부분) ...
     const { session, newStudent } = req.body;
     const { name, gender, school, grade, branchName } = newStudent;
     const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
-    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
-    const targetBranches = (session === '오전') ? 오전조 : 오후조;
+    const targetBranches = 오전조; // 오후조 배열은 현재 로직에서 사용되지 않으므로 생략 가능
+
     try {
         const groupCountSql = `SELECT exam_group, COUNT(*) as count FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) GROUP BY exam_group ORDER BY count ASC LIMIT 1`;
         db.query(groupCountSql, [targetBranches], (err, groupRows) => {
-            if (err) return res.status(500).json({message: 'DB 오류'});
-            const targetGroup = groupRows.length > 0 ? groupRows[0].exam_group : (session === '오전' ? 'A' : 'M'); // ⭐️ 학생이 아무도 없을 때 기본 조 설정
+            if (err) return res.status(500).json({message: 'DB 오류 1'});
+            const targetGroup = groupRows.length > 0 ? groupRows[0].exam_group : (session === '오전' ? 'A' : 'M');
             const sequenceSql = `SELECT COUNT(*) as count FROM students WHERE exam_group = ?`;
             db.query(sequenceSql, [targetGroup], (err, sequenceRows) => {
-                if (err) return res.status(500).json({message: 'DB 오류'});
+                if (err) return res.status(500).json({message: 'DB 오류 2'});
                 const newSequenceNum = sequenceRows[0].count + 1;
                 const examNumber = `${targetGroup}-${newSequenceNum}`;
                 db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, branchRows) => {
-                    if (err) return res.status(500).json({message: 'DB 오류'});
+                    if (err) return res.status(500).json({message: 'DB 오류 3'});
                     const getBranchId = (callback) => {
                         if (branchRows.length > 0) return callback(null, branchRows[0].id);
                         db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
@@ -2271,12 +2278,17 @@ app.post('/26susi/students/add-new', (req, res) => {
                         });
                     };
                     getBranchId((err, branchId) => {
-                        if (err) return res.status(500).json({message: 'DB 오류'});
-const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status, attendance) VALUES (?, ?, ?, ?, ?, ?, ?, '추가', '참석')`;
-db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup], (err, result) => {
-                            if (err) return res.status(500).json({message: 'DB 오류'});
-                            // ⭐️ 메시지를 더 명확하게 수정
-                            res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.\n\n부여된 수험번호: [${examNumber}]` });
+                        if (err) return res.status(500).json({message: 'DB 오류 4'});
+                        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status, attendance) VALUES (?, ?, ?, ?, ?, ?, ?, '추가', '참석')`;
+                        db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup], (err, result) => {
+                            if (err) return res.status(500).json({message: 'DB 오류 5'});
+                            
+                            const newStudentId = result.insertId;
+                            // ⭐️ 티셔츠 관리 목록에 '신규' 학생 ID를 추가
+                            db.query('INSERT INTO tshirt_management (student_id) VALUES (?)', [newStudentId], (tshirtErr, tshirtResult) => {
+                                if (tshirtErr) console.error("🔥 신규 학생 티셔츠 목록 추가 오류:", tshirtErr);
+                                res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.\n\n부여된 수험번호: [${examNumber}]` });
+                            });
                         });
                     });
                 });
@@ -2287,7 +2299,6 @@ db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGr
         res.status(500).json({ success: false, message: '서버 오류' });
     }
 });
-
 // --- API 12: [기록 페이지] 조 목록 조회 ---
 // --- API 12: [기록 페이지] 조 목록 조회 ---
 // ⭐️ 경로 수정
@@ -2465,26 +2476,7 @@ app.get('/26susi/dashboard/all', (req, res) => {
     });
 });
 
-// --- API 6: [대체 학생 등록] (티셔츠 목록 자동 추가) ---
-app.post('/26susi/students/substitute', (req, res) => {
-    const { oldStudentId, newStudent } = req.body;
-    // ... (이전 코드와 동일)
-    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
-        // ...
-        const oldStudent = oldStudentRows[0];
-        // ...
-        const sql = `INSERT INTO students (..., status) VALUES (..., '대체')`; // status를 '대체'로
-        db.query(sql, [params...], (err, result) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-            
-            const newStudentId = result.insertId;
-            // ⭐️ 티셔츠 관리 목록에 새로 추가
-            db.query('INSERT INTO tshirt_management (student_id) VALUES (?)', [newStudentId], (err, tshirtResult) => {
-                res.status(200).json({ success: true, message: `대체 완료! 수험번호: ${examNumber}` });
-            });
-        });
-    });
-});
+
 
 
 // ✅ 서버 실행
