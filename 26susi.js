@@ -2302,12 +2302,10 @@ app.get('/26susi/records/calculate-score', (req, res) => {
 });
 
 // --- API 15: [순위 시스템] 실시간 순위 조회 API (동점자/종목별 규칙 최종 수정) ---
+// --- API 15: [순위 시스템] (수험번호, 교육원 모두 포함) ---
 app.get('/26susi/rankings', (req, res) => {
     const { classType, gender, event } = req.query;
-
-    if (!classType || !gender || !event) {
-        return res.status(400).json({ message: '반, 성별, 종목 정보는 필수입니다.' });
-    }
+    if (!classType || !gender || !event) return res.status(400).json({ message: '반, 성별, 종목 정보는 필수입니다.' });
 
     let gradeCondition = '';
     if (classType === '선행반') gradeCondition = `s.grade IN ('1', '2')`;
@@ -2319,36 +2317,33 @@ app.get('/26susi/rankings', (req, res) => {
     const params = [gender];
 
     if (event === '종합') {
-        // ⭐️ 종합 순위: 동점자 발생 시 가중치 순서대로 정렬
         sql = `
             SELECT 
-                s.student_name, 
-                b.branch_name,
+                s.student_name, s.exam_number, b.branch_name,
                 SUM(r.score) as score,
                 RANK() OVER (
                     ORDER BY
-                        SUM(r.score) DESC, -- 1. 총점 (높은 순)
-                        MAX(CASE s.grade WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN 'N' THEN 4 ELSE 5 END) ASC, -- 2. 학년 (낮은 순)
-                        MAX(CASE WHEN r.event = '제멀' THEN r.record_value ELSE 0 END) DESC, -- 3. 제멀 기록 (높은 순)
-                        MAX(CASE WHEN r.event = '메디신볼' THEN r.record_value ELSE 0 END) DESC, -- 4. 메디신볼 기록 (높은 순)
-                        MIN(CASE WHEN r.event = '10m' THEN r.record_value ELSE 999 END) ASC, -- 5. 10m 기록 (낮은 순)
-                        MAX(CASE WHEN r.event = '배근력' THEN r.record_value ELSE 0 END) DESC -- 6. 배근력 기록 (높은 순)
+                        SUM(r.score) DESC,
+                        MAX(CASE s.grade WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN 'N' THEN 4 ELSE 5 END) ASC,
+                        MAX(CASE WHEN r.event = '제멀' THEN r.record_value ELSE 0 END) DESC,
+                        MAX(CASE WHEN r.event = '메디신볼' THEN r.record_value ELSE 0 END) DESC,
+                        MIN(CASE WHEN r.event = '10m' THEN r.record_value ELSE 999 END) ASC,
+                        MAX(CASE WHEN r.event = '배근력' THEN r.record_value ELSE 0 END) DESC
                 ) as ranking
             FROM students s
             JOIN records r ON s.id = r.student_id
             JOIN branches b ON s.branch_id = b.id
             WHERE ${gradeCondition} AND s.gender = ?
-            GROUP BY s.id, s.student_name, b.branch_name
+            GROUP BY s.id, s.student_name, s.exam_number, b.branch_name
             ORDER BY ranking ASC
             LIMIT 50;
         `;
     } else { // 종목별 순위
-        // ⭐️ 10m는 기록(record_value)이 낮을수록 순위가 높도록 동점자 처리
-        const recordOrder = (event === '10m') ? 'ASC' : 'DESC';
         sql = `
             SELECT 
-                s.student_name, b.branch_name, r.score, r.record_value,
-                RANK() OVER (ORDER BY r.score DESC, r.record_value ${recordOrder}) as ranking
+                s.student_name, s.exam_number, b.branch_name, 
+                r.score, r.record_value,
+                RANK() OVER (ORDER BY r.score DESC, r.record_value ${(event === '10m') ? 'ASC' : 'DESC'}) as ranking
             FROM students s
             JOIN records r ON s.id = r.student_id
             JOIN branches b ON s.branch_id = b.id
@@ -2358,12 +2353,8 @@ app.get('/26susi/rankings', (req, res) => {
         `;
         params.push(event);
     }
-
     db.query(sql, params, (err, results) => {
-        if (err) {
-            console.error("🔥 실시간 순위 조회 오류:", err);
-            return res.status(500).json({ success: false, message: '순위 조회 중 서버 오류' });
-        }
+        if (err) return res.status(500).json({ success: false, message: '순위 조회 중 서버 오류' });
         res.status(200).json({ success: true, data: results });
     });
 });
