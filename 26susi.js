@@ -2488,21 +2488,26 @@ app.get('/26susi/dashboard/all', (req, res) => {
 
 
 // --- API 17: [사전 대시보드] 지점별 출결 현황 API ---
+// --- API 17: [사전 현황판] (수정 버전) ---
 app.get('/26susi/dashboard/pre-event', (req, res) => {
     const sql = `
         SELECT 
             b.branch_name,
-            COUNT(s.id) as total,
+            COUNT(CASE WHEN s.attendance = '미정' OR s.attendance IS NULL THEN 1 END) as pending, -- ⭐️ '미확인' 인원수
             COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as present,
             COUNT(CASE WHEN s.attendance = '결석' THEN 1 END) as absent,
-            COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute
+            COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute,
+            COUNT(CASE WHEN s.status = '추가' THEN 1 END) as new_count -- ⭐️ 오타 수정 (new_student -> new_count)
         FROM branches b
         LEFT JOIN students s ON b.id = s.branch_id
         GROUP BY b.branch_name
         ORDER BY b.branch_name;
     `;
     db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
+        if (err) {
+            console.error("🔥 사전 현황판 데이터 조회 오류:", err);
+            return res.status(500).json({ message: 'DB 오류' });
+        }
         res.status(200).json({ success: true, data: results });
     });
 });
