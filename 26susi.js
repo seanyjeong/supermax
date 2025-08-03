@@ -2477,6 +2477,52 @@ app.get('/26susi/dashboard/all', (req, res) => {
 });
 
 
+// --- API 17: [사전 대시보드] 지점별 출결 현황 API ---
+app.get('/26susi/dashboard/pre-event', (req, res) => {
+    const sql = `
+        SELECT 
+            b.branch_name,
+            COUNT(s.id) as total,
+            COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as present,
+            COUNT(CASE WHEN s.attendance = '결석' THEN 1 END) as absent,
+            COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute
+        FROM branches b
+        LEFT JOIN students s ON b.id = s.branch_id
+        GROUP BY b.branch_name
+        ORDER BY b.branch_name;
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        res.status(200).json({ success: true, data: results });
+    });
+});
+
+// --- API 18: [티셔츠 관리] 목록 조회 API ---
+app.get('/26susi/tshirts', (req, res) => {
+    const sql = `
+        SELECT t.id, s.student_name, s.exam_number, b.branch_name, t.size, t.status
+        FROM tshirt_management t
+        JOIN students s ON t.student_id = s.id
+        JOIN branches b ON s.branch_id = b.id
+        ORDER BY b.branch_name, s.student_name;
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        res.status(200).json({ success: true, data: results });
+    });
+});
+
+// --- API 19: [티셔츠 관리] 사이즈/상태 업데이트 API ---
+app.patch('/26susi/tshirts/:id', (req, res) => {
+    const { id } = req.params;
+    const { size, status } = req.body;
+    const sql = `UPDATE tshirt_management SET size = ?, status = ? WHERE id = ?`;
+    db.query(sql, [size, status, id], (err, result) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        res.status(200).json({ success: true, message: '업데이트 완료' });
+    });
+});
+
 
 
 // ✅ 서버 실행
