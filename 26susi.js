@@ -2532,12 +2532,28 @@ app.get('/26susi/tshirts', (req, res) => {
 });
 
 // --- API 19: [티셔츠 관리] 사이즈/상태 업데이트 API ---
+// --- API 19: [티셔츠 관리] 사이즈/상태 업데이트 API (수정) ---
 app.patch('/26susi/tshirts/:id', (req, res) => {
     const { id } = req.params;
-    const { size, status } = req.body;
-    const sql = `UPDATE tshirt_management SET size = ?, status = ? WHERE id = ?`;
-    db.query(sql, [size, status, id], (err, result) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
+    // ⭐️ original_size, new_size를 모두 받도록 수정
+    const { original_size, new_size, status } = req.body;
+
+    // ⭐️ SET 부분을 새 DB 구조에 맞게 수정
+    const sql = `
+        UPDATE tshirt_management 
+        SET 
+            original_size = ?, 
+            new_size = ?, 
+            status = ? 
+        WHERE id = ?
+    `;
+    const params = [original_size, new_size, status, id];
+
+    db.query(sql, params, (err, result) => {
+        if (err) {
+            console.error("🔥 티셔츠 업데이트 오류:", err);
+            return res.status(500).json({ message: 'DB 업데이트 오류' });
+        }
         res.status(200).json({ success: true, message: '업데이트 완료' });
     });
 });
