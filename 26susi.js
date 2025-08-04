@@ -2581,6 +2581,94 @@ app.get('/26susi/students/pending', (req, res) => {
     });
 });
 
+// ✅ 이 부분을 복사해서 26susi.js 파일에 추가하세요.
+// 전체 학생 상세 상담내역 엑셀 다운로드를 위한 API
+app.get('/26susi/all_counsel_data_details', verifyToken, async (req, res) => {
+  try {
+    const userBranch = req.decoded.branch;
+    if (!userBranch) {
+      return res.status(403).json({ success: false, message: '지점 정보가 없는 사용자는 조회할 수 없습니다.' });
+    }
+
+    // 1. 해당 지점의 모든 학생 ID와 이름을 가져옴
+    const [students] = await db.query('SELECT 학생ID, 이름, 성별 FROM students WHERE 지점 = ?', [userBranch]);
+    if (students.length === 0) {
+      return res.json({ success: true, counselData: [] });
+    }
+    const studentIds = students.map(s => s.학생ID);
+    const studentMap = new Map(students.map(s => [s.학생ID, { 이름: s.이름, 성별: s.성별 }]));
+
+    // 2. 학생들의 모든 상담 대학 정보와 상담 메모를 한 번에 가져옴
+    const [counselColleges] = await db.query(`
+      SELECT 
+        cc.*, 
+        c.대학명, c.학과명, c.전형명
+      FROM counsel_colleges cc
+      JOIN colleges c ON cc.대학ID = c.대학ID
+      WHERE cc.학생ID IN (?)
+    `, [studentIds]);
+    
+    const [counselMemos] = await db.query('SELECT 학생ID, memo FROM counsel_memo WHERE 학생ID IN (?)', [studentIds]);
+    const memoMap = new Map(counselMemos.map(m => [m.학생ID, m.memo]));
+    
+    // 3. 실기ID를 기반으로 모든 실기 종목명을 미리 가져와 매핑해둠
+    const practicalIds = [...new Set(counselColleges.map(c => c.실기ID).filter(id => id))];
+    let eventMap = new Map();
+    if (practicalIds.length > 0) {
+      const [events] = await db.query('SELECT 실기ID, 종목명, 성별 FROM events WHERE 실기ID IN (?) ORDER BY event_order', [practicalIds]);
+      events.forEach(event => {
+        if (!eventMap.has(event.실기ID)) {
+          eventMap.set(event.실기ID, { 남: [], 여: [] });
+        }
+        eventMap.get(event.실기ID)[event.성별].push(event.종목명);
+      });
+    }
+
+    // 4. 최종적으로 프론트엔드에 보낼 데이터 구조로 재조립
+    const counselData = students.map(student => {
+      const studentColleges = counselColleges.filter(c => c.학생ID === student.학생ID);
+      const studentMemo = memoMap.get(student.학생ID) || '';
+
+      return {
+        학생ID: student.학생ID,
+        이름: student.이름,
+        memo: studentMemo,
+        colleges: studentColleges.map(college => {
+          const practical_events = [];
+          const eventNames = eventMap.get(college.실기ID)?.[student.성별] || [];
+
+          for (let i = 1; i <= 7; i++) {
+            if (eventNames[i - 1] && (college[`기록${i}`] || college[`점수${i}`])) {
+              practical_events.push({
+                종목명: eventNames[i - 1],
+                기록: college[`기록${i}`] || '',
+                점수: college[`점수${i}`] || ''
+              });
+            }
+          }
+
+          return {
+            대학명: college.대학명,
+            학과명: college.학과명,
+            전형명: college.전형명,
+            내신등급: college.내신등급,
+            내신점수: college.내신점수,
+            실기총점: college.실기총점,
+            합산점수: college.합산점수,
+            practical_events
+          };
+        })
+      };
+    });
+
+    res.json({ success: true, counselData });
+
+  } catch (error) {
+    console.error('전체 상담 데이터 조회 API 오류:', error);
+    res.status(500).json({ success: false, message: '서버 처리 중 오류가 발생했습니다.' });
+  }
+});
+
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
