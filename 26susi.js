@@ -1136,7 +1136,7 @@ app.post('/26susi_student_grade_update', authJWT, async (req, res) => {
 // ✅ isReverse 판별 함수
 const isReverseEvent = (eventName) => {
   const lower = eventName.toLowerCase();
-  return ['10', '20', 'run', '100', 'z', '달리기','벽치기'].some(keyword => lower.includes(keyword));
+  return ['10', '20', 'run', '100', 'z', '달리기','벽치기','런','에르고'].some(keyword => lower.includes(keyword));
 };
 
 // ✅ 1. 대학/학과 선택용 실기ID 목록
@@ -1229,7 +1229,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             }
 
             const studentRecord = parseFloat(input.기록);
-            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기'].some(k => input.종목명.toLowerCase().includes(k));
+            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런','에르고'].some(k => input.종목명.toLowerCase().includes(k));
 
             // ✅✅✅ 대학ID 155번(동국대) 특수 계산식 ✅✅✅
             if (Number(대학ID) === 155) {
