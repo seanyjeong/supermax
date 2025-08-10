@@ -2583,7 +2583,70 @@ app.get('/26susi/students/pending', (req, res) => {
 
 // ✅ 이 부분을 복사해서 26susi.js 파일에 추가하세요.
 // 전체 학생 상세 상담내역 엑셀 다운로드를 위한 API
+// --- API: [조별 진행 현황] 조회 ---
+app.get('/26susi/dashboard/group-progress', (req, res) => {
+    // 1. 조별로 '참석'한 총 인원수를 먼저 계산
+    const attendanceSql = `
+        SELECT exam_group, COUNT(id) as attended_count
+        FROM students
+        WHERE attendance = '참석' AND exam_group IS NOT NULL
+        GROUP BY exam_group;
+    `;
+    db.query(attendanceSql, (err, attendanceResults) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
 
+        // 2. 조별/종목별 기록 완료 인원수를 계산
+        const recordsSql = `
+            SELECT s.exam_group, r.event, COUNT(DISTINCT s.id) as completed_count
+            FROM records r
+            JOIN students s ON r.student_id = s.id
+            WHERE s.attendance = '참석' AND s.exam_group IS NOT NULL
+            GROUP BY s.exam_group, r.event;
+        `;
+        db.query(recordsSql, (err, recordsResults) => {
+            if (err) return res.status(500).json({ message: 'DB 오류' });
+
+            // 3. 4종목 모두 완료한 학생 수를 조별로 계산
+            const allCompletedSql = `
+                SELECT exam_group, COUNT(student_id) as all_completed_count
+                FROM (
+                    SELECT s.id as student_id, s.exam_group
+                    FROM records r
+                    JOIN students s ON r.student_id = s.id
+                    WHERE s.attendance = '참석' AND s.exam_group IS NOT NULL
+                    GROUP BY s.id, s.exam_group
+                    HAVING COUNT(DISTINCT r.event) = 4
+                ) as completed_students
+                GROUP BY exam_group;
+            `;
+            db.query(allCompletedSql, (err, allCompletedResults) => {
+                if (err) return res.status(500).json({ message: 'DB 오류' });
+
+                // 4. 모든 데이터를 취합해서 최종 결과물 생성
+                const progressData = {};
+                attendanceResults.forEach(row => {
+                    progressData[row.exam_group] = {
+                        attended: row.attended_count,
+                        allCompleted: 0,
+                        events: { '제멀': 0, '메디신볼': 0, '10m': 0, '배근력': 0 }
+                    };
+                });
+                recordsResults.forEach(row => {
+                    if (progressData[row.exam_group]) {
+                        progressData[row.exam_group].events[row.event] = row.completed_count;
+                    }
+                });
+                allCompletedResults.forEach(row => {
+                    if (progressData[row.exam_group]) {
+                        progressData[row.exam_group].allCompleted = row.all_completed_count;
+                    }
+                });
+
+                res.status(200).json({ success: true, data: progressData });
+            });
+        });
+    });
+});
 
 // ✅ 서버 실행
 app.listen(port, () => {
