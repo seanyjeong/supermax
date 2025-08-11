@@ -2650,40 +2650,27 @@ app.get('/26susi/dashboard/group-progress', (req, res) => {
 
 // --- API: [지점 리포트] 지점별 전체 학생 기록 및 순위 조회 ---
 // --- API: [지점 리포트] (성별 필터 및 종합 순위 추가 버전) ---
+// --- API: [지점 리포트] (지점 내 순위 계산) ---
 app.get('/26susi/branch-report', (req, res) => {
-    const { branchName, gender } = req.query;
-    if (!branchName) {
-        return res.status(400).json({ message: '지점 이름은 필수입니다.' });
-    }
+    const { branchName } = req.query;
+    if (!branchName) return res.status(400).json({ message: '지점 이름은 필수입니다.' });
 
-    // 1. 해당 지점의 학생 기본 정보와 종목별 기록/점수를 가져옴
-    let sql = `
+    const sql = `
         SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score
         FROM students s
         LEFT JOIN records r ON s.id = r.student_id
         JOIN branches b ON s.branch_id = b.id
-        WHERE b.branch_name = ?
-    `;
-    const params = [branchName];
-    // 성별 필터 적용
-    if (gender && (gender === '남' || gender === '여')) {
-        sql += ` AND s.gender = ?`;
-        params.push(gender);
-    }
-
-    db.query(sql, params, (err, results) => {
+        WHERE b.branch_name = ?`;
+    
+    db.query(sql, [branchName], (err, results) => {
         if (err) return res.status(500).json({ message: 'DB 오류' });
 
-        // 2. JS에서 데이터를 학생별로 재조립 및 총점 계산
         const studentsMap = new Map();
         results.forEach(row => {
             if (!studentsMap.has(row.id)) {
                 studentsMap.set(row.id, {
-                    id: row.id,
-                    name: row.student_name,
-                    gender: row.gender,
-                    totalScore: 0,
-                    records: {}
+                    id: row.id, name: row.student_name, gender: row.gender,
+                    totalScore: 0, records: {}
                 });
             }
             const student = studentsMap.get(row.id);
@@ -2694,33 +2681,75 @@ app.get('/26susi/branch-report', (req, res) => {
         });
 
         let studentsData = Array.from(studentsMap.values());
-
-        // 3. 종목별/종합별 순위 계산
         const EVENTS = ['제멀', '메디신볼', '10m', '배근력'];
-        
-        // 종합 순위
-        studentsData.sort((a, b) => b.totalScore - a.totalScore);
-        studentsData.forEach((student, i) => student.overallRank = i + 1);
 
-        // 종목별 순위
-        EVENTS.forEach(event => {
-            studentsData.sort((a, b) => {
-                const scoreA = a.records[event] ? a.records[event].score : -1;
-                const scoreB = b.records[event] ? b.records[event].score : -1;
-                if (scoreB !== scoreA) return scoreB - scoreA;
-                
-                const recordA = a.records[event] ? a.records[event].record : (event === '10m' ? 999 : -1);
-                const recordB = b.records[event] ? b.records[event].record : (event === '10m' ? 999 : -1);
-                return (event === '10m') ? recordA - recordB : recordB - recordA;
-            });
-            studentsData.forEach((student, i) => {
-                if (student.records[event]) {
-                    student.records[event].rank = i + 1;
-                }
+        ['남', '여'].forEach(gender => {
+            let genderGroup = studentsData.filter(s => s.gender === gender);
+            
+            genderGroup.sort((a, b) => b.totalScore - a.totalScore);
+            genderGroup.forEach((student, i) => student.branchOverallRank = i + 1);
+
+            EVENTS.forEach(event => {
+                genderGroup.sort((a, b) => {
+                    const scoreA = a.records[event] ? a.records[event].score : -1;
+                    const scoreB = b.records[event] ? b.records[event].score : -1;
+                    if (scoreB !== scoreA) return scoreB - scoreA;
+                    const recordA = a.records[event] ? a.records[event].record : (event === '10m' ? 999 : -1);
+                    const recordB = b.records[event] ? b.records[event].record : (event === '10m' ? 999 : -1);
+                    return (event === '10m') ? recordA - recordB : recordB - recordA;
+                });
+                genderGroup.forEach((student, i) => {
+                    if (student.records[event]) student.records[event].branchRank = i + 1;
+                });
             });
         });
         
         res.status(200).json({ success: true, data: studentsData });
+    });
+});
+// --- API: [전체 순위 조회] (리포트용) ---
+app.get('/26susi/all-ranks', (req, res) => {
+    const sql = `
+        WITH TotalScores AS (
+            SELECT s.id, s.gender, SUM(r.score) as total_score
+            FROM students s JOIN records r ON s.id = r.student_id
+            GROUP BY s.id, s.gender
+        ), OverallRanks AS (
+            SELECT id, RANK() OVER (PARTITION BY gender ORDER BY total_score DESC) as overall_rank
+            FROM TotalScores
+        ), EventRanks AS (
+            SELECT 
+                s.id, r.event,
+                RANK() OVER (PARTITION BY s.gender, r.event ORDER BY r.score DESC, r.record_value DESC) as event_rank
+            FROM students s JOIN records r ON s.id = r.student_id
+        )
+        SELECT 
+            s.id,
+            ovr.overall_rank,
+            evr_jemul.event_rank as jemul_rank,
+            evr_medball.event_rank as medball_rank,
+            evr_10m.event_rank as ten_m_rank,
+            evr_baegun.event_rank as baegun_rank
+        FROM students s
+        LEFT JOIN OverallRanks ovr ON s.id = ovr.id
+        LEFT JOIN EventRanks evr_jemul ON s.id = evr_jemul.id AND evr_jemul.event = '제멀'
+        LEFT JOIN EventRanks evr_medball ON s.id = evr_medball.id AND evr_medball.event = '메디신볼'
+        LEFT JOIN EventRanks evr_10m ON s.id = evr_10m.id AND evr_10m.event = '10m'
+        LEFT JOIN EventRanks evr_baegun ON s.id = evr_baegun.id AND evr_baegun.event = '배근력';
+    `;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
+        const rankMap = {};
+        results.forEach(row => {
+            rankMap[row.id] = {
+                overallRank: row.overall_rank,
+                '제멀': { rank: row.jemul_rank },
+                '메디신볼': { rank: row.medball_rank },
+                '10m': { rank: row.ten_m_rank },
+                '배근력': { rank: row.baegun_rank },
+            };
+        });
+        res.status(200).json({ success: true, data: rankMap });
     });
 });
 
