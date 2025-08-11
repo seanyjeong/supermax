@@ -2648,6 +2648,64 @@ app.get('/26susi/dashboard/group-progress', (req, res) => {
     });
 });
 
+// --- API: [지점 리포트] 지점별 전체 학생 기록 및 순위 조회 ---
+app.get('/26susi/branch-report', (req, res) => {
+    const { branchName } = req.query;
+    if (!branchName) {
+        return res.status(400).json({ message: '지점 이름은 필수입니다.' });
+    }
+
+    // 1. 해당 지점의 모든 학생 정보와 각 종목별 기록, 점수, '지점 내' 순위를 한 번에 계산
+    const sql = `
+        WITH BranchRecords AS (
+            SELECT
+                s.id as student_id,
+                s.student_name,
+                s.exam_number,
+                r.event,
+                r.record_value,
+                r.score,
+                RANK() OVER (
+                    PARTITION BY r.event 
+                    ORDER BY r.score DESC, r.record_value DESC
+                ) as event_rank
+            FROM students s
+            JOIN branches b ON s.branch_id = b.id
+            LEFT JOIN records r ON s.id = r.student_id
+            WHERE b.branch_name = ?
+        )
+        SELECT * FROM BranchRecords;
+    `;
+
+    db.query(sql, [branchName], (err, results) => {
+        if (err) {
+            console.error("🔥 지점 리포트 조회 오류:", err);
+            return res.status(500).json({ message: 'DB 오류' });
+        }
+
+        // 2. 결과를 학생별로 재조립
+        const studentsData = {};
+        results.forEach(row => {
+            if (!studentsData[row.student_id]) {
+                studentsData[row.student_id] = {
+                    name: row.student_name,
+                    examNumber: row.exam_number,
+                    records: {}
+                };
+            }
+            if (row.event) {
+                studentsData[row.student_id].records[row.event] = {
+                    record: row.record_value,
+                    score: row.score,
+                    rank: row.event_rank
+                };
+            }
+        });
+
+        res.status(200).json({ success: true, data: Object.values(studentsData) });
+    });
+});
+
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
