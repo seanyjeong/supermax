@@ -2649,60 +2649,78 @@ app.get('/26susi/dashboard/group-progress', (req, res) => {
 });
 
 // --- API: [지점 리포트] 지점별 전체 학생 기록 및 순위 조회 ---
+// --- API: [지점 리포트] (성별 필터 및 종합 순위 추가 버전) ---
 app.get('/26susi/branch-report', (req, res) => {
-    const { branchName } = req.query;
+    const { branchName, gender } = req.query;
     if (!branchName) {
         return res.status(400).json({ message: '지점 이름은 필수입니다.' });
     }
 
-    // 1. 해당 지점의 모든 학생 정보와 각 종목별 기록, 점수, '지점 내' 순위를 한 번에 계산
-    const sql = `
-        WITH BranchRecords AS (
-            SELECT
-                s.id as student_id,
-                s.student_name,
-                s.exam_number,
-                r.event,
-                r.record_value,
-                r.score,
-                RANK() OVER (
-                    PARTITION BY r.event 
-                    ORDER BY r.score DESC, r.record_value DESC
-                ) as event_rank
-            FROM students s
-            JOIN branches b ON s.branch_id = b.id
-            LEFT JOIN records r ON s.id = r.student_id
-            WHERE b.branch_name = ?
-        )
-        SELECT * FROM BranchRecords;
+    // 1. 해당 지점의 학생 기본 정보와 종목별 기록/점수를 가져옴
+    let sql = `
+        SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score
+        FROM students s
+        LEFT JOIN records r ON s.id = r.student_id
+        JOIN branches b ON s.branch_id = b.id
+        WHERE b.branch_name = ?
     `;
+    const params = [branchName];
+    // 성별 필터 적용
+    if (gender && (gender === '남' || gender === '여')) {
+        sql += ` AND s.gender = ?`;
+        params.push(gender);
+    }
 
-    db.query(sql, [branchName], (err, results) => {
-        if (err) {
-            console.error("🔥 지점 리포트 조회 오류:", err);
-            return res.status(500).json({ message: 'DB 오류' });
-        }
+    db.query(sql, params, (err, results) => {
+        if (err) return res.status(500).json({ message: 'DB 오류' });
 
-        // 2. 결과를 학생별로 재조립
-        const studentsData = {};
+        // 2. JS에서 데이터를 학생별로 재조립 및 총점 계산
+        const studentsMap = new Map();
         results.forEach(row => {
-            if (!studentsData[row.student_id]) {
-                studentsData[row.student_id] = {
+            if (!studentsMap.has(row.id)) {
+                studentsMap.set(row.id, {
+                    id: row.id,
                     name: row.student_name,
-                    examNumber: row.exam_number,
+                    gender: row.gender,
+                    totalScore: 0,
                     records: {}
-                };
+                });
             }
+            const student = studentsMap.get(row.id);
             if (row.event) {
-                studentsData[row.student_id].records[row.event] = {
-                    record: row.record_value,
-                    score: row.score,
-                    rank: row.event_rank
-                };
+                student.records[row.event] = { record: row.record_value, score: row.score };
+                student.totalScore += row.score;
             }
         });
 
-        res.status(200).json({ success: true, data: Object.values(studentsData) });
+        let studentsData = Array.from(studentsMap.values());
+
+        // 3. 종목별/종합별 순위 계산
+        const EVENTS = ['제멀', '메디신볼', '10m', '배근력'];
+        
+        // 종합 순위
+        studentsData.sort((a, b) => b.totalScore - a.totalScore);
+        studentsData.forEach((student, i) => student.overallRank = i + 1);
+
+        // 종목별 순위
+        EVENTS.forEach(event => {
+            studentsData.sort((a, b) => {
+                const scoreA = a.records[event] ? a.records[event].score : -1;
+                const scoreB = b.records[event] ? b.records[event].score : -1;
+                if (scoreB !== scoreA) return scoreB - scoreA;
+                
+                const recordA = a.records[event] ? a.records[event].record : (event === '10m' ? 999 : -1);
+                const recordB = b.records[event] ? b.records[event].record : (event === '10m' ? 999 : -1);
+                return (event === '10m') ? recordA - recordB : recordB - recordA;
+            });
+            studentsData.forEach((student, i) => {
+                if (student.records[event]) {
+                    student.records[event].rank = i + 1;
+                }
+            });
+        });
+        
+        res.status(200).json({ success: true, data: studentsData });
     });
 });
 
