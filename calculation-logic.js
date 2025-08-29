@@ -32,6 +32,7 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                 case 242:
                 case 209:
                 case 206:
+                case 238:
                     const eventData = Object.keys(종목별점수).map(name => ({ name, score: Number(종목별점수[name]) || 0, gam: Number(종목별감수[name]) || 0 }));
                     eventData.sort((a, b) => b.score - a.score);
                     const top3Events = eventData.slice(0, 3);
@@ -109,3 +110,4 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
 }
 
 module.exports = { calculateFinalScore };
+
