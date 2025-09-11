@@ -1443,23 +1443,29 @@ app.get('/26susi/announcement-dates', authJWT, async (req, res) => {
 // =================================================================
 
 // (신규) 최종 수합 페이지 데이터 조회
+// ✅ (수정) 최종 수합 페이지 데이터 조회 (지점 필터링 추가)
 app.get('/26susi_final_list', authJWT, async (req, res) => {
     const { college_id } = req.query;
+    const branch = req.user.branch; // <-- 1. 로그인한 원장님의 지점 정보 가져오기
+
     if (!college_id) {
         return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
     }
 
     try {
+        // ▼▼▼ 2. SQL 쿼리에 지점명(branch)으로 필터링하는 WHERE 조건 추가 ▼▼▼
         const sql = `
             SELECT 
                 s.이름, s.학년, s.성별,
-                f.* -- 확정대학정보 테이블의 모든 컬럼
-            FROM 확정대학정보 f
+                f.* FROM 확정대학정보 f
             JOIN 학생기초정보 s ON f.학생ID = s.학생ID
-            WHERE f.대학ID = ?
+            WHERE f.대학ID = ? AND s.지점명 = ? 
             ORDER BY f.합산점수 DESC, s.이름 ASC
         `;
-        const [rows] = await db.promise().query(sql, [college_id]);
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+        // 3. 쿼리 파라미터에 branch 추가
+        const [rows] = await db.query(sql, [college_id, branch]);
         res.json({ success: true, students: rows });
 
     } catch (err) {
