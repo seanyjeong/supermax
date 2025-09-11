@@ -2035,6 +2035,92 @@ app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
     }
 });
 
+// ✅ (신규) 모바일 실기 기록 페이지를 위한 API 2개 (경로 수정)
+
+// API 1: 특정 학생의 특정 대학에 대한 기존 실기 기록 조회
+app.get('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 수정
+    const { student_id, college_id } = req.query;
+    if (!student_id || !college_id) {
+        return res.status(400).json({ success: false, message: "필수 정보 누락" });
+    }
+    try {
+        const [rows] = await db.query(
+            "SELECT 기록1, 기록2, 기록3, 기록4, 기록5, 기록6, 기록7 FROM 확정대학정보 WHERE 학생ID = ? AND 대학ID = ?",
+            [student_id, college_id]
+        );
+        res.json({ success: true, records: rows[0] || {} });
+    } catch (err) {
+        console.error("모바일 기록 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+// API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
+app.post('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 수정
+    const { student_id, college_id, records } = req.body;
+    if (!student_id || !college_id || !records) {
+        return res.status(400).json({ success: false, message: "필수 정보 누락" });
+    }
+
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+        const [[studentInfo]] = await connection.query(
+            `SELECT s.성별, g.내신점수, d.실기ID, d.대학ID
+             FROM 학생기초정보 s
+             JOIN 대학정보 d ON d.대학ID = ?
+             LEFT JOIN 학생_내신정보 g ON g.학생ID = s.학생ID AND g.대학ID = d.대학ID
+             WHERE s.학생ID = ?`,
+            [college_id, student_id]
+        );
+        if (!studentInfo) throw new Error("학생 또는 대학 정보를 찾을 수 없습니다.");
+        
+        const [events] = await connection.query("SELECT DISTINCT 종목명 FROM `26수시실기배점` WHERE 실기ID = ? ORDER BY 종목명", [studentInfo.실기ID]);
+        const inputs = events.map((event, i) => ({
+            종목명: event.종목명,
+            기록: records[`기록${i+1}`] || null
+        }));
+
+        const [configRows] = await connection.query("SELECT * FROM `26수시실기총점반영` WHERE 대학ID = ?", [college_id]);
+        
+        const calculatedScores = calculateFinalScore(college_id, {}, studentInfo.내신점수 || 0, configRows[0] || {}, {}, inputs);
+
+        const sql = `
+            INSERT INTO 확정대학정보 (학생ID, 대학ID, 실기ID, 
+                기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
+                기록5, 점수5, 기록6, 점수6, 기록7, 점수7, 
+                실기총점, 합산점수)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2),
+                기록3=VALUES(기록3), 점수3=VALUES(점수3), 기록4=VALUES(기록4), 점수4=VALUES(점수4),
+                기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
+                기록7=VALUES(기록7), 점수7=VALUES(점수7),
+                실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수)
+        `;
+
+        const params = [student_id, college_id, studentInfo.실기ID];
+        for(let i = 0; i < 7; i++) {
+            const eventName = events[i] ? events[i].종목명 : null;
+            params.push(records[`기록${i+1}`] || null);
+            params.push(eventName ? calculatedScores.종목별점수[eventName] : null);
+        }
+        params.push(calculatedScores.실기총점, calculatedScores.합산점수);
+
+        await connection.query(sql, params);
+        await connection.commit();
+        res.json({ success: true, message: "기록이 저장되었습니다." });
+
+    } catch (err) {
+        await connection.rollback();
+        console.error("모바일 기록 저장 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류: " + err.message });
+    } finally {
+        connection.release();
+    }
+});
+
 
 // =================================================================
 // 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
