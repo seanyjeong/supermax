@@ -2004,6 +2004,30 @@ app.get('/26susi/branch_summary_by_university', authJWT, async (req, res) => {
     }
 });
 
+// ✅ (신규) 미수합 학생 목록 조회 API
+app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
+    const branch = req.user.branch; // 로그인한 원장 지점
+
+    try {
+        // SQL 쿼리를 사용해, '학생기초정보'에는 있지만 '확정대학정보'에는
+        // 한 번도 등장하지 않은 학생들을 찾는다.
+        const sql = `
+            SELECT s.이름, s.학년
+            FROM 학생기초정보 s
+            LEFT JOIN 확정대학정보 f ON s.학생ID = f.학생ID
+            WHERE s.지점명 = ? AND f.학생ID IS NULL
+            ORDER BY s.이름;
+        `;
+        const [rows] = await db.promise().query(sql, [branch]);
+        
+        res.json({ success: true, students: rows });
+
+    } catch (err) {
+        console.error("미수합 학생 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
 
 // =================================================================
 // 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
