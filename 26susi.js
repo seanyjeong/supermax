@@ -2061,83 +2061,15 @@ app.get('/26susi/mobile_records', authJWT, async (req, res) => {
 });
 
 // API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
-// ✅ (수정) PC버전과 동일한 완전한 점수 계산 로직을 탑재한 최종 버전
-app.post('/26susi/mobile_records', authJWT, async (req, res) => {
-    const { student_id, college_id, records } = req.body;
-    if (!student_id || !college_id || !records) {
+// ✅ (신규) 모바일에서 계산 완료된 학생 한 명의 데이터를 최종 저장하는 단순 API
+app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
+    const { studentData } = req.body;
+    if (!studentData || !studentData.학생ID || !studentData.대학ID) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
 
-    const connection = await db.promise().getConnection();
-    await connection.beginTransaction();
-
     try {
-        const [[studentInfo]] = await connection.query(
-            `SELECT s.성별, g.내신점수, d.실기ID, d.대학ID
-             FROM 학생기초정보 s
-             JOIN 대학정보 d ON d.대학ID = ?
-             LEFT JOIN 학생_내신정보 g ON g.학생ID = s.학생ID AND g.대학ID = d.대학ID
-             WHERE s.학생ID = ?`,
-            [college_id, student_id]
-        );
-        if (!studentInfo) throw new Error("학생 또는 대학 정보를 찾을 수 없습니다.");
-        if (!studentInfo.실기ID) throw new Error("실기 정보가 없는 전형입니다.");
-
-        const [events] = await connection.query("SELECT DISTINCT 종목명 FROM `26수시실기배점` WHERE 실기ID = ? ORDER BY 종목명", [studentInfo.실기ID]);
-        const inputs = events.map((event, i) => ({
-            종목명: event.종목명,
-            기록: records[`기록${i+1}`] || null
-        }));
-        
-        // ▼▼▼▼▼ 여기가 핵심 수정! (PC버전의 완전한 계산 로직을 그대로 가져옴) ▼▼▼▼▼
-        const scoreCalculationTasks = inputs.map(async (input) => {
-            if (input.기록 === null || input.기록 === '') return { [input.종목명]: 0 };
-            
-            const studentRecord = parseFloat(input.기록);
-            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런','에르고','앞뒤구르기'].some(k => input.종목명.toLowerCase().includes(k));
-
-            if (Number(college_id) === 155) { // 동국대 특수식
-                const [[formula_data]] = await connection.query("SELECT 최저기준, 최고기준, 기본점수, 최고점수 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? LIMIT 1", [studentInfo.실기ID, input.종목명, studentInfo.성별]);
-                if (formula_data) {
-                    const { 최저기준, 최고기준, 기본점수, 최고점수 } = formula_data;
-                    if (reverse && studentRecord < 최고기준) return { [input.종목명]: 최고점수 };
-                    if (reverse && studentRecord > 최저기준) return { [input.종목명]: 기본점수 };
-                    if (!reverse && studentRecord > 최고기준) return { [input.종목명]: 최고점수 };
-                    if (!reverse && studentRecord < 최저기준) return { [input.종목명]: 기본점수 };
-                    let score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
-                    return { [input.종목명]: parseFloat(score.toFixed(2)) };
-                }
-            }
-            
-            let sql;
-            if (reverse) {
-                sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) <= ? ORDER BY CAST(기록 AS DECIMAL(10,2)) DESC LIMIT 1`;
-            } else {
-                sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? >= CAST(기록 AS DECIMAL(10,2)) ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
-            }
-            
-            const [[row]] = await connection.query(sql, [studentInfo.실기ID, input.종목명, studentInfo.성별, input.기록]);
-            let scoreValue = 0;
-            if(row) {
-                scoreValue = row.배점;
-            } else {
-                 const [[maxScoreRow]] = await connection.query(`SELECT 기록, 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`, [studentInfo.실기ID, input.종목명, studentInfo.성별]);
-                 if(maxScoreRow) {
-                    if (reverse && studentRecord < parseFloat(maxScoreRow.기록)) scoreValue = maxScoreRow.배점;
-                    else if (!reverse && studentRecord > parseFloat(maxScoreRow.기록)) scoreValue = maxScoreRow.배점;
-                 }
-            }
-            const finalScore = !isNaN(parseFloat(scoreValue)) && isFinite(scoreValue) ? Number(scoreValue) : scoreValue;
-            return { [input.종목명]: finalScore };
-        });
-        
-        const individualScoresResults = await Promise.all(scoreCalculationTasks);
-        const 종목별점수 = individualScoresResults.reduce((acc, score) => ({ ...acc, ...score }), {});
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-        const [configRows] = await connection.query("SELECT * FROM `26수시실기총점반영` WHERE 대학ID = ?", [college_id]);
-        const calculatedScores = calculateFinalScore(college_id, 종목별점수, studentInfo.내신점수 || 0, configRows[0] || {}, {}, inputs);
-
+        // ON DUPLICATE KEY UPDATE를 사용해, 데이터가 있으면 덮어쓰고 없으면 새로 만듦
         const sql = `
             INSERT INTO 확정대학정보 (학생ID, 대학ID, 실기ID, 
                 기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
@@ -2152,29 +2084,24 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
                 실기총점=VALUES(실기총점), 합산점수=VALUES(합산점수)
         `;
 
-        const params = [student_id, college_id, studentInfo.실기ID];
-        for(let i = 0; i < 7; i++) {
-            const eventName = events[i] ? events[i].종목명 : null;
-            params.push(records[`기록${i+1}`] || null);
-            params.push(eventName ? calculatedScores.종목별점수[eventName] : null);
-        }
-        params.push(calculatedScores.실기총점, calculatedScores.합산점수);
+        const params = [
+            studentData.학생ID, studentData.대학ID, studentData.실기ID,
+            studentData.기록1 || null, studentData.점수1 || null,
+            studentData.기록2 || null, studentData.점수2 || null,
+            studentData.기록3 || null, studentData.점수3 || null,
+            studentData.기록4 || null, studentData.점수4 || null,
+            studentData.기록5 || null, studentData.점수5 || null,
+            studentData.기록6 || null, studentData.점수6 || null,
+            studentData.기록7 || null, studentData.점수7 || null,
+            studentData.실기총점, studentData.합산점수
+        ];
 
-        await connection.query(sql, params);
-        await connection.commit();
-
-        res.json({ 
-            success: true, 
-            message: "기록이 저장되었습니다.",
-            results: calculatedScores
-        });
+        await db.query(sql, params);
+        res.json({ success: true, message: "저장되었습니다." });
 
     } catch (err) {
-        await connection.rollback();
-        console.error("모바일 기록 저장 API 오류:", err);
+        console.error("단일 학생 기록 저장 API 오류:", err);
         res.status(500).json({ success: false, message: "서버 오류: " + err.message });
-    } finally {
-        if (connection) connection.release();
     }
 });
 
