@@ -2061,7 +2061,7 @@ app.get('/26susi/mobile_records', authJWT, async (req, res) => {
 });
 
 // API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
-// ✅ (신규) 모바일에서 계산 완료된 학생 한 명의 데이터를 최종 저장하는 단순 API
+// ✅ (수정) db.promise().query()를 사용하여 Promise 에러 해결
 app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
     const { studentData } = req.body;
     if (!studentData || !studentData.학생ID || !studentData.대학ID) {
@@ -2069,7 +2069,6 @@ app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
     }
 
     try {
-        // ON DUPLICATE KEY UPDATE를 사용해, 데이터가 있으면 덮어쓰고 없으면 새로 만듦
         const sql = `
             INSERT INTO 확정대학정보 (학생ID, 대학ID, 실기ID, 
                 기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4, 
@@ -2096,7 +2095,10 @@ app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
             studentData.실기총점, studentData.합산점수
         ];
 
-        await db.query(sql, params);
+        // ▼▼▼ 여기가 수정된 부분! .promise() 추가 ▼▼▼
+        await db.promise().query(sql, params);
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         res.json({ success: true, message: "저장되었습니다." });
 
     } catch (err) {
