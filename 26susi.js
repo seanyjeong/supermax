@@ -2056,7 +2056,8 @@ app.get('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 �
 });
 
 // API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
-app.post('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 수정
+// ✅ (수정) 모바일 기록 저장 후, 계산된 전체 결과를 반환하도록 변경
+app.post('/26susi/mobile_records', authJWT, async (req, res) => {
     const { student_id, college_id, records } = req.body;
     if (!student_id || !college_id || !records) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
@@ -2110,7 +2111,15 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 
 
         await connection.query(sql, params);
         await connection.commit();
-        res.json({ success: true, message: "기록이 저장되었습니다." });
+
+        // ▼▼▼ 여기가 핵심 수정! ▼▼▼
+        // 그냥 성공 메시지만 보내는 대신, 계산된 점수 결과를 'results'에 담아서 함께 보냄
+        res.json({ 
+            success: true, 
+            message: "기록이 저장되었습니다.",
+            results: calculatedScores
+        });
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     } catch (err) {
         await connection.rollback();
