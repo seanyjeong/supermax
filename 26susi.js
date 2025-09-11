@@ -2038,16 +2038,21 @@ app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
 // ✅ (신규) 모바일 실기 기록 페이지를 위한 API 2개 (경로 수정)
 
 // API 1: 특정 학생의 특정 대학에 대한 기존 실기 기록 조회
-app.get('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 수정
+// ✅ (수정) .promise()를 추가하여 에러 해결
+// API 1: 특정 학생의 특정 대학에 대한 기존 실기 기록 조회
+app.get('/26susi/mobile_records', authJWT, async (req, res) => {
     const { student_id, college_id } = req.query;
     if (!student_id || !college_id) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
     try {
-        const [rows] = await db.query(
+        // ▼▼▼ 여기가 수정된 부분! .promise() 추가 ▼▼▼
+        const [rows] = await db.promise().query(
             "SELECT 기록1, 기록2, 기록3, 기록4, 기록5, 기록6, 기록7 FROM 확정대학정보 WHERE 학생ID = ? AND 대학ID = ?",
             [student_id, college_id]
         );
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         res.json({ success: true, records: rows[0] || {} });
     } catch (err) {
         console.error("모바일 기록 조회 API 오류:", err);
@@ -2056,14 +2061,17 @@ app.get('/26susi/mobile_records', authJWT, async (req, res) => { // <-- 경로 �
 });
 
 // API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
-// ✅ (수정) 모바일 기록 저장 후, 계산된 전체 결과를 반환하도록 변경
+// ✅ (수정) .promise()를 추가하고 안정성을 보강한 최종 버전
 app.post('/26susi/mobile_records', authJWT, async (req, res) => {
     const { student_id, college_id, records } = req.body;
     if (!student_id || !college_id || !records) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
 
-    const connection = await db.getConnection();
+    // ▼▼▼ 여기가 핵심 수정! .promise() 추가 ▼▼▼
+    const connection = await db.promise().getConnection();
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+    
     await connection.beginTransaction();
 
     try {
@@ -2075,7 +2083,10 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
              WHERE s.학생ID = ?`,
             [college_id, student_id]
         );
-        if (!studentInfo) throw new Error("학생 또는 대학 정보를 찾을 수 없습니다.");
+        if (!studentInfo || !studentInfo.실기ID) {
+            // 실기ID가 없는 전형에 대한 예외 처리
+            throw new Error("실기 정보가 없는 전형이거나, 학생/대학 정보를 찾을 수 없습니다.");
+        }
         
         const [events] = await connection.query("SELECT DISTINCT 종목명 FROM `26수시실기배점` WHERE 실기ID = ? ORDER BY 종목명", [studentInfo.실기ID]);
         const inputs = events.map((event, i) => ({
@@ -2112,21 +2123,18 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
         await connection.query(sql, params);
         await connection.commit();
 
-        // ▼▼▼ 여기가 핵심 수정! ▼▼▼
-        // 그냥 성공 메시지만 보내는 대신, 계산된 점수 결과를 'results'에 담아서 함께 보냄
         res.json({ 
             success: true, 
             message: "기록이 저장되었습니다.",
             results: calculatedScores
         });
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     } catch (err) {
         await connection.rollback();
         console.error("모바일 기록 저장 API 오류:", err);
         res.status(500).json({ success: false, message: "서버 오류: " + err.message });
     } finally {
-        connection.release();
+        if(connection) connection.release();
     }
 });
 
