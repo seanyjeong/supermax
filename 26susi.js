@@ -1880,6 +1880,55 @@ function calculateScoreFromDB(event, gender, recordValue, callback) {
     });
 }
 
+// ✅ (신규) 학생별 최종 지원 현황 조회 API
+app.get('/26susi/student_application_status', authJWT, async (req, res) => {
+    // 1. 로그인한 원장님의 지점 정보를 가져옴
+    const branch = req.user.branch;
+
+    try {
+        // 2. 해당 지점의 모든 학생에 대해, 확정된 대학 정보를 모두 JOIN해서 가져옴
+        const sql = `
+            SELECT
+                s.학생ID, s.이름, s.학년,
+                d.대학명, d.학과명, d.전형명
+            FROM 학생기초정보 s
+            JOIN 확정대학정보 f ON s.학생ID = f.학생ID
+            JOIN 대학정보 d ON f.대학ID = d.대학ID
+            WHERE s.지점명 = ?
+            ORDER BY s.이름, d.대학명;
+        `;
+        const [rows] = await db.promise().query(sql, [branch]);
+
+        // 3. DB에서 가져온 데이터를 학생별로 그룹화해서 재정리
+        const studentMap = new Map();
+        rows.forEach(row => {
+            // 맵에 해당 학생이 없으면, 기본 틀을 만들어줌
+            if (!studentMap.has(row.학생ID)) {
+                studentMap.set(row.학생ID, {
+                    학생ID: row.학생ID,
+                    이름: row.이름,
+                    학년: row.학년,
+                    지원대학: [] // 지원 대학 목록을 담을 빈 배열
+                });
+            }
+            // 해당 학생의 지원대학 배열에 대학 정보를 추가
+            studentMap.get(row.학생ID).지원대학.push({
+                대학명: row.대학명,
+                학과명: row.학과명,
+                전형명: row.전형명
+            });
+        });
+
+        // 4. 맵을 배열로 변환해서 최종 결과 전송
+        const results = Array.from(studentMap.values());
+        res.json({ success: true, students: results });
+
+    } catch (err) {
+        console.error("학생별 지원 현황 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
 
 // =================================================================
 // 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
