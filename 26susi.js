@@ -2061,17 +2061,14 @@ app.get('/26susi/mobile_records', authJWT, async (req, res) => {
 });
 
 // API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
-// ✅ (수정) .promise()를 추가하고 안정성을 보강한 최종 버전
+// ✅ (수정) calculateFinalScore 함수를 호출하기 전, 종목별 점수를 미리 계산하도록 로직 보강
 app.post('/26susi/mobile_records', authJWT, async (req, res) => {
     const { student_id, college_id, records } = req.body;
     if (!student_id || !college_id || !records) {
         return res.status(400).json({ success: false, message: "필수 정보 누락" });
     }
 
-    // ▼▼▼ 여기가 핵심 수정! .promise() 추가 ▼▼▼
     const connection = await db.promise().getConnection();
-    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-    
     await connection.beginTransaction();
 
     try {
@@ -2083,20 +2080,42 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
              WHERE s.학생ID = ?`,
             [college_id, student_id]
         );
-        if (!studentInfo || !studentInfo.실기ID) {
-            // 실기ID가 없는 전형에 대한 예외 처리
-            throw new Error("실기 정보가 없는 전형이거나, 학생/대학 정보를 찾을 수 없습니다.");
-        }
-        
+        if (!studentInfo) throw new Error("학생 또는 대학 정보를 찾을 수 없습니다.");
+        if (!studentInfo.실기ID) throw new Error("실기 정보가 없는 전형입니다.");
+
         const [events] = await connection.query("SELECT DISTINCT 종목명 FROM `26수시실기배점` WHERE 실기ID = ? ORDER BY 종목명", [studentInfo.실기ID]);
         const inputs = events.map((event, i) => ({
             종목명: event.종목명,
             기록: records[`기록${i+1}`] || null
         }));
 
+        // ▼▼▼▼▼ 여기가 핵심 수정! ▼▼▼▼▼
+        // 1. 개별 종목 점수를 먼저 계산하기 위한 Promise 배열 생성
+        const scoreCalculationTasks = inputs.map(async (input) => {
+            if (!input.기록) return { [input.종목명]: 0 };
+
+            const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런','에르고','앞뒤구르기'].some(k => input.종목명.toLowerCase().includes(k));
+            let sql;
+            if (reverse) {
+                sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) <= ? ORDER BY CAST(기록 AS DECIMAL(10,2)) DESC LIMIT 1`;
+            } else {
+                sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? >= CAST(기록 AS DECIMAL(10,2)) ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
+            }
+            const [[row]] = await connection.query(sql, [studentInfo.실기ID, input.종목명, studentInfo.성별, input.기록]);
+            return { [input.종목명]: row ? Number(row.배점) : 0 };
+        });
+        
+        // 2. 모든 종목의 점수 계산을 병렬로 실행
+        const individualScoresResults = await Promise.all(scoreCalculationTasks);
+        
+        // 3. 계산된 결과를 하나의 `종목별점수` 객체로 합치기
+        const 종목별점수 = individualScoresResults.reduce((acc, score) => ({ ...acc, ...score }), {});
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         const [configRows] = await connection.query("SELECT * FROM `26수시실기총점반영` WHERE 대학ID = ?", [college_id]);
         
-        const calculatedScores = calculateFinalScore(college_id, {}, studentInfo.내신점수 || 0, configRows[0] || {}, {}, inputs);
+        // 이제 `종목별점수`가 채워진 상태로 만능 계산기 호출
+        const calculatedScores = calculateFinalScore(college_id, 종목별점수, studentInfo.내신점수 || 0, configRows[0] || {}, {}, inputs);
 
         const sql = `
             INSERT INTO 확정대학정보 (학생ID, 대학ID, 실기ID, 
@@ -2134,7 +2153,7 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
         console.error("모바일 기록 저장 API 오류:", err);
         res.status(500).json({ success: false, message: "서버 오류: " + err.message });
     } finally {
-        if(connection) connection.release();
+        if (connection) connection.release();
     }
 });
 
