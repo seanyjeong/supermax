@@ -1224,7 +1224,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
 
         // --- 1단계: 기록을 개별 점수로 변환 ---
         const scoreCalculationTasks = inputs.map(async (input) => {
-            if (input.기록 === null || input.기록 === '' || isNaN(studentRecord) || studentRecord === 0) {
+         if (input.기록 === null || input.기록 === '' || input.기록 == 0) { // '==' 로 0과 '0' 모두 처리
                 return { 종목명: input.종목명, 배점: 0 };
             }
 
