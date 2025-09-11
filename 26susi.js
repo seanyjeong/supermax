@@ -2061,7 +2061,7 @@ app.get('/26susi/mobile_records', authJWT, async (req, res) => {
 });
 
 // API 2: 모바일에서 입력한 실기 기록 저장 및 점수 자동 재계산
-// ✅ (수정) calculateFinalScore 함수를 호출하기 전, 종목별 점수를 미리 계산하도록 로직 보강
+// ✅ (수정) PC버전과 동일한 완전한 점수 계산 로직을 탑재한 최종 버전
 app.post('/26susi/mobile_records', authJWT, async (req, res) => {
     const { student_id, college_id, records } = req.body;
     if (!student_id || !college_id || !records) {
@@ -2088,33 +2088,54 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
             종목명: event.종목명,
             기록: records[`기록${i+1}`] || null
         }));
-
-        // ▼▼▼▼▼ 여기가 핵심 수정! ▼▼▼▼▼
-        // 1. 개별 종목 점수를 먼저 계산하기 위한 Promise 배열 생성
+        
+        // ▼▼▼▼▼ 여기가 핵심 수정! (PC버전의 완전한 계산 로직을 그대로 가져옴) ▼▼▼▼▼
         const scoreCalculationTasks = inputs.map(async (input) => {
-            if (!input.기록) return { [input.종목명]: 0 };
-
+            if (input.기록 === null || input.기록 === '') return { [input.종목명]: 0 };
+            
+            const studentRecord = parseFloat(input.기록);
             const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런','에르고','앞뒤구르기'].some(k => input.종목명.toLowerCase().includes(k));
+
+            if (Number(college_id) === 155) { // 동국대 특수식
+                const [[formula_data]] = await connection.query("SELECT 최저기준, 최고기준, 기본점수, 최고점수 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? LIMIT 1", [studentInfo.실기ID, input.종목명, studentInfo.성별]);
+                if (formula_data) {
+                    const { 최저기준, 최고기준, 기본점수, 최고점수 } = formula_data;
+                    if (reverse && studentRecord < 최고기준) return { [input.종목명]: 최고점수 };
+                    if (reverse && studentRecord > 최저기준) return { [input.종목명]: 기본점수 };
+                    if (!reverse && studentRecord > 최고기준) return { [input.종목명]: 최고점수 };
+                    if (!reverse && studentRecord < 최저기준) return { [input.종목명]: 기본점수 };
+                    let score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
+                    return { [input.종목명]: parseFloat(score.toFixed(2)) };
+                }
+            }
+            
             let sql;
             if (reverse) {
                 sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) <= ? ORDER BY CAST(기록 AS DECIMAL(10,2)) DESC LIMIT 1`;
             } else {
                 sql = `SELECT 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? >= CAST(기록 AS DECIMAL(10,2)) ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`;
             }
+            
             const [[row]] = await connection.query(sql, [studentInfo.실기ID, input.종목명, studentInfo.성별, input.기록]);
-            return { [input.종목명]: row ? Number(row.배점) : 0 };
+            let scoreValue = 0;
+            if(row) {
+                scoreValue = row.배점;
+            } else {
+                 const [[maxScoreRow]] = await connection.query(`SELECT 기록, 배점 FROM \`26수시실기배점\` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? ORDER BY CAST(배점 AS SIGNED) DESC LIMIT 1`, [studentInfo.실기ID, input.종목명, studentInfo.성별]);
+                 if(maxScoreRow) {
+                    if (reverse && studentRecord < parseFloat(maxScoreRow.기록)) scoreValue = maxScoreRow.배점;
+                    else if (!reverse && studentRecord > parseFloat(maxScoreRow.기록)) scoreValue = maxScoreRow.배점;
+                 }
+            }
+            const finalScore = !isNaN(parseFloat(scoreValue)) && isFinite(scoreValue) ? Number(scoreValue) : scoreValue;
+            return { [input.종목명]: finalScore };
         });
         
-        // 2. 모든 종목의 점수 계산을 병렬로 실행
         const individualScoresResults = await Promise.all(scoreCalculationTasks);
-        
-        // 3. 계산된 결과를 하나의 `종목별점수` 객체로 합치기
         const 종목별점수 = individualScoresResults.reduce((acc, score) => ({ ...acc, ...score }), {});
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
         const [configRows] = await connection.query("SELECT * FROM `26수시실기총점반영` WHERE 대학ID = ?", [college_id]);
-        
-        // 이제 `종목별점수`가 채워진 상태로 만능 계산기 호출
         const calculatedScores = calculateFinalScore(college_id, 종목별점수, studentInfo.내신점수 || 0, configRows[0] || {}, {}, inputs);
 
         const sql = `
@@ -2156,7 +2177,6 @@ app.post('/26susi/mobile_records', authJWT, async (req, res) => {
         if (connection) connection.release();
     }
 });
-
 
 // =================================================================
 // 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
