@@ -1507,7 +1507,6 @@ app.get('/26susi_counsel_candidates', authJWT, async (req, res) => {
 });
 
 // (신규) 최종 수합 페이지 전체 저장
-// ✅ (수정) 최종 수합 페이지 전체 저장 (개인별 실기일정 포함)
 app.post('/26susi_final_save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
     if (!college_id || !Array.isArray(studentData)) {
@@ -1518,42 +1517,59 @@ app.post('/26susi_final_save', authJWT, async (req, res) => {
     await connection.beginTransaction();
 
     try {
-        await connection.query("DELETE FROM 확정대학정보 WHERE 대학ID = ?", [college_id]);
+        // 1. 화면(프론트엔드)에서 보낸 학생들의 ID 목록을 만듦
+        const frontendStudentIds = studentData.map(s => s.학생ID);
 
+        // 2. 현재 데이터베이스에 저장된 학생들의 ID 목록을 가져옴
+        const [existingDbRows] = await connection.query(
+            "SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?",
+            [college_id]
+        );
+        const existingDbStudentIds = existingDbRows.map(row => row.학생ID);
+
+        // 3. 삭제해야 할 학생 ID들을 계산 (DB에는 있는데, 화면 목록에는 없는 학생)
+        const idsToDelete = existingDbStudentIds.filter(id => !frontendStudentIds.includes(id));
+
+        // 4. 삭제할 학생이 있으면 DELETE 쿼리 실행
+        if (idsToDelete.length > 0) {
+            await connection.query(
+                "DELETE FROM 확정대학정보 WHERE 대학ID = ? AND 학생ID IN (?)",
+                [college_id, idsToDelete]
+            );
+        }
+
+        // 5. 화면에 있는 학생 목록을 기준으로 한 명씩 추가(INSERT) 또는 수정(UPDATE)
+        // ON DUPLICATE KEY UPDATE 문법: INSERT를 시도하다가 PK가 겹치면(이미 있으면) UPDATE를 실행해주는 편리한 기능
         for (const student of studentData) {
-            // [수정] INSERT 문에 '실기일정' 추가
             const finalSql = `
                 INSERT INTO 확정대학정보 (
-                    학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 
+                    학생ID, 대학ID, 실기ID, 내신등급, 내신점수, 실기일정,
+                    최초합여부, 최종합여부, 합산점수, 실기총점, 
                     기록1, 점수1, 기록2, 점수2, 기록3, 점수3, 기록4, 점수4,
-                    기록5, 점수5, 기록6, 점수6, 기록7, 점수7,
-                    실기총점, 합산점수, 최초합여부, 최종합여부, 실기일정
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            
-            // [수정] 파라미터에 student.실기일정 추가
+                    기록5, 점수5, 기록6, 점수6, 기록7, 점수7
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    실기ID=VALUES(실기ID), 내신등급=VALUES(내신등급), 내신점수=VALUES(내신점수), 실기일정=VALUES(실기일정),
+                    최초합여부=VALUES(최초합여부), 최종합여부=VALUES(최종합여부), 합산점수=VALUES(합산점수), 실기총점=VALUES(실기총점),
+                    기록1=VALUES(기록1), 점수1=VALUES(점수1), 기록2=VALUES(기록2), 점수2=VALUES(점수2), 기록3=VALUES(기록3), 점수3=VALUES(점수3),
+                    기록4=VALUES(기록4), 점수4=VALUES(점수4), 기록5=VALUES(기록5), 점수5=VALUES(점수5), 기록6=VALUES(기록6), 점수6=VALUES(점수6),
+                    기록7=VALUES(기록7), 점수7=VALUES(점수7)
+            `;
             const finalParams = [
-                student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수,
+                student.학생ID, college_id, student.실기ID, student.내신등급, student.내신점수, student.실기일정,
+                student.최초합여부, student.최종합여부, student.합산점수, student.실기총점,
                 student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3, student.기록4, student.점수4,
-                student.기록5, student.점수5, student.기록6, student.점수6, student.기록7, student.점수7,
-                student.실기총점, student.합산점수, student.최초합여부, student.최종합여부, student.실기일정
-            ].map(v => v === undefined ? null : v);
+                student.기록5, student.점수5, student.기록6, student.점수6, student.기록7, student.점수7
+            ].map(v => v === undefined ? null : v); // student 객체에 없는 값은 기존 DB값 유지를 위해 null 처리
+            
             await connection.query(finalSql, finalParams);
-
-            if (student.내신등급 !== undefined || student.내신점수 !== undefined) {
-                const gradeSql = `
-                    INSERT INTO 학생_내신정보 (학생ID, 대학ID, 등급, 내신점수)
-                    VALUES (?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE 등급=VALUES(등급), 내신점수=VALUES(내신점수)`;
-                const gradeParams = [student.학생ID, college_id, student.내신등급, student.내신점수];
-                await connection.query(gradeSql, gradeParams);
-            }
         }
         
-        await connection.commit();
+        await connection.commit(); // 모든 작업이 성공하면 최종 반영
         res.json({ success: true, message: "성공적으로 저장되었습니다." });
 
     } catch (err) {
-        await connection.rollback();
+        await connection.rollback(); // 중간에 에러나면 모든 작업 취소
         console.error("최종 수합 저장 API 오류:", err);
         res.status(500).json({ success: false, message: '서버 DB 처리 중 오류가 발생했습니다.' });
     } finally {
