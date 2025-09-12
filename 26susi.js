@@ -1507,8 +1507,12 @@ app.get('/26susi_counsel_candidates', authJWT, async (req, res) => {
 });
 
 // (신규) 최종 수합 페이지 전체 저장
+// 26susi.js의 /26susi_final_save API를 이 코드로 통째로 교체해줘
+
 app.post('/26susi_final_save', authJWT, async (req, res) => {
     const { college_id, studentData } = req.body;
+    const branch = req.user.branch; // ★ 1. 현재 로그인한 원장의 지점 정보를 가져옴
+
     if (!college_id || !Array.isArray(studentData)) {
         return res.status(400).json({ success: false, message: "필수 데이터가 누락되었습니다." });
     }
@@ -1517,20 +1521,21 @@ app.post('/26susi_final_save', authJWT, async (req, res) => {
     await connection.beginTransaction();
 
     try {
-        // 1. 화면(프론트엔드)에서 보낸 학생들의 ID 목록을 만듦
         const frontendStudentIds = studentData.map(s => s.학생ID);
 
-        // 2. 현재 데이터베이스에 저장된 학생들의 ID 목록을 가져옴
+        // ★ 2. DB에서 학생 목록을 가져올 때 '현재 지점' 학생들만 가져오도록 쿼리 수정 (가장 중요한 변경점)
         const [existingDbRows] = await connection.query(
-            "SELECT 학생ID FROM 확정대학정보 WHERE 대학ID = ?",
-            [college_id]
+            `SELECT f.학생ID FROM 확정대학정보 f
+             JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+             WHERE f.대학ID = ? AND s.지점명 = ?`,
+            [college_id, branch] // ★ 3. 쿼리에 branch 변수 추가
         );
         const existingDbStudentIds = existingDbRows.map(row => row.학생ID);
 
-        // 3. 삭제해야 할 학생 ID들을 계산 (DB에는 있는데, 화면 목록에는 없는 학생)
         const idsToDelete = existingDbStudentIds.filter(id => !frontendStudentIds.includes(id));
-
-        // 4. 삭제할 학생이 있으면 DELETE 쿼리 실행
+        
+        // 이 부분부터는 이전과 동일하지만, 이제 idsToDelete 목록 자체가 안전해졌기 때문에
+        // 다른 지점 데이터를 실수로 지울 가능성이 원천 차단됨.
         if (idsToDelete.length > 0) {
             await connection.query(
                 "DELETE FROM 확정대학정보 WHERE 대학ID = ? AND 학생ID IN (?)",
@@ -1538,8 +1543,6 @@ app.post('/26susi_final_save', authJWT, async (req, res) => {
             );
         }
 
-        // 5. 화면에 있는 학생 목록을 기준으로 한 명씩 추가(INSERT) 또는 수정(UPDATE)
-        // ON DUPLICATE KEY UPDATE 문법: INSERT를 시도하다가 PK가 겹치면(이미 있으면) UPDATE를 실행해주는 편리한 기능
         for (const student of studentData) {
             const finalSql = `
                 INSERT INTO 확정대학정보 (
@@ -1560,16 +1563,16 @@ app.post('/26susi_final_save', authJWT, async (req, res) => {
                 student.최초합여부, student.최종합여부, student.합산점수, student.실기총점,
                 student.기록1, student.점수1, student.기록2, student.점수2, student.기록3, student.점수3, student.기록4, student.점수4,
                 student.기록5, student.점수5, student.기록6, student.점수6, student.기록7, student.점수7
-            ].map(v => v === undefined ? null : v); // student 객체에 없는 값은 기존 DB값 유지를 위해 null 처리
+            ].map(v => v === undefined ? null : v);
             
             await connection.query(finalSql, finalParams);
         }
         
-        await connection.commit(); // 모든 작업이 성공하면 최종 반영
+        await connection.commit();
         res.json({ success: true, message: "성공적으로 저장되었습니다." });
 
     } catch (err) {
-        await connection.rollback(); // 중간에 에러나면 모든 작업 취소
+        await connection.rollback();
         console.error("최종 수합 저장 API 오류:", err);
         res.status(500).json({ success: false, message: '서버 DB 처리 중 오류가 발생했습니다.' });
     } finally {
