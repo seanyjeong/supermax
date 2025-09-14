@@ -2054,7 +2054,8 @@ app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
     }
 });
 
-// [신규 API] 전체 지점 대상, 대학별 실시간 순위 조회
+// ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체해줘]
+
 app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
     const { college_id } = req.query;
     if (!college_id) {
@@ -2062,11 +2063,11 @@ app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
     }
 
     try {
-        // RANK() 함수로 합산점수 기준 실시간 순위를 매김
-        // JOIN을 통해 학생의 이름, '지점명', '성별'을 가져오는 것이 핵심!
+        // ▼▼▼▼▼ 여기가 수정된 핵심 부분 ▼▼▼▼▼
+        // 합산점수가 NULL이면 0으로 취급해서 정렬하고, 동점일 경우 내신점수로 2차 정렬
         const sql = `
             SELECT
-                RANK() OVER (ORDER BY f.합산점수 DESC) as 순위,
+                RANK() OVER (ORDER BY COALESCE(f.합산점수, 0) DESC, COALESCE(f.내신점수, 0) DESC) as 순위,
                 s.이름,
                 s.지점명,
                 s.성별,
@@ -2078,6 +2079,8 @@ app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
             WHERE f.대학ID = ?
             ORDER BY 순위 ASC;
         `;
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         const [rows] = await db.promise().query(sql, [college_id]);
         res.json({ success: true, ranking: rows });
 
