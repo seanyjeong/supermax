@@ -2054,6 +2054,39 @@ app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
     }
 });
 
+// [신규 API] 전체 지점 대상, 대학별 실시간 순위 조회
+app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
+    const { college_id } = req.query;
+    if (!college_id) {
+        return res.status(400).json({ success: false, message: "대학ID가 필요합니다." });
+    }
+
+    try {
+        // RANK() 함수로 합산점수 기준 실시간 순위를 매김
+        // JOIN을 통해 학생의 이름, '지점명', '성별'을 가져오는 것이 핵심!
+        const sql = `
+            SELECT
+                RANK() OVER (ORDER BY f.합산점수 DESC) as 순위,
+                s.이름,
+                s.지점명,
+                s.성별,
+                f.내신점수,
+                f.실기총점,
+                f.합산점수
+            FROM 확정대학정보 f
+            JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+            WHERE f.대학ID = ?
+            ORDER BY 순위 ASC;
+        `;
+        const [rows] = await db.promise().query(sql, [college_id]);
+        res.json({ success: true, ranking: rows });
+
+    } catch (err) {
+        console.error("실시간 순위 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
 // ✅ (신규) 모바일 실기 기록 페이지를 위한 API 2개 (경로 수정)
 
 // API 1: 특정 학생의 특정 대학에 대한 기존 실기 기록 조회
