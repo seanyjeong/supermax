@@ -2056,6 +2056,8 @@ app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
 
 // ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체해줘]
 
+// ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체해줘]
+
 app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
     const { college_id } = req.query;
     if (!college_id) {
@@ -2063,26 +2065,37 @@ app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
     }
 
     try {
-        // ▼▼▼▼▼ 여기가 수정된 핵심 부분 ▼▼▼▼▼
-        // 합산점수가 NULL이면 0으로 취급해서 정렬하고, 동점일 경우 내신점수로 2차 정렬
+        // --- 1. 대학의 '실기ID'를 먼저 조회 ---
+        const [collegeInfo] = await db.promise().query("SELECT 실기ID FROM 대학정보 WHERE 대학ID = ?", [college_id]);
+        const practical_id = collegeInfo[0]?.실기ID;
+        let events = [];
+
+        // --- 2. '실기ID'가 있으면, 해당 실기의 종목명들을 조회 ---
+        if (practical_id) {
+            const [eventRows] = await db.promise().query(
+                "SELECT DISTINCT 종목명 FROM `26수시실기배점` WHERE 실기ID = ? ORDER BY 종목명",
+                [practical_id]
+            );
+            events = eventRows.map(e => e.종목명);
+        }
+
+        // --- 3. 학생 순위와 함께 모든 기록/점수 데이터를 조회 ---
         const sql = `
             SELECT
                 RANK() OVER (ORDER BY COALESCE(f.합산점수, 0) DESC, COALESCE(f.내신점수, 0) DESC) as 순위,
-                s.이름,
-                s.지점명,
-                s.성별,
-                f.내신점수,
-                f.실기총점,
-                f.합산점수
+                s.이름, s.지점명, s.성별,
+                f.내신점수, f.실기총점, f.합산점수,
+                f.기록1, f.점수1, f.기록2, f.점수2, f.기록3, f.점수3, f.기록4, f.점수4,
+                f.기록5, f.점수5, f.기록6, f.점수6, f.기록7, f.점수7
             FROM 확정대학정보 f
             JOIN 학생기초정보 s ON f.학생ID = s.학생ID
             WHERE f.대학ID = ?
             ORDER BY 순위 ASC;
         `;
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+        const [rankingRows] = await db.promise().query(sql, [college_id]);
 
-        const [rows] = await db.promise().query(sql, [college_id]);
-        res.json({ success: true, ranking: rows });
+        // --- 4. 순위와 종목 목록을 함께 응답 ---
+        res.json({ success: true, ranking: rankingRows, events: events });
 
     } catch (err) {
         console.error("실시간 순위 조회 API 오류:", err);
