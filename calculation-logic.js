@@ -17,14 +17,24 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                 case 121:
                     실기총점 = rawSum + 20;
                     break;
-                case 257:
+                 case 257:
                 case 259:
-                    const X = rawSum; // X는 세 종목의 합
-                    실기총점 = (X / 3 - 80) * (7 / 6) + 560;
+                    const X = rawSum;
+                    if (X === 0) {
+                        실기총점 = 0;
+                    } else {
+                        실기총점 = (X / 3 - 80) * (7 / 6) + 560;
+                    }
                     break;
                 case 260:
-                    const Y =rawSum;
-                    실기총점 = (Y / 2 - 80) + 480;
+                    const Y = rawSum;
+                    // ▼▼▼▼▼ 여기가 추가로 수정된 부분 ▼▼▼▼▼
+                    if (Y === 0) {
+                        실기총점 = 0; // 합계가 0이면 총점도 0으로 처리
+                    } else {
+                        실기총점 = (Y / 2 - 80) + 480;
+                    }
+                    // ▲▲▲▲▲ 여기가 추가로 수정된 부분 ▲▲▲▲▲
                     break;
 
                 // [규칙] 상위 3개 종목 합산 후 비율 환산
@@ -110,4 +120,5 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
 }
 
 module.exports = { calculateFinalScore };
+
 
