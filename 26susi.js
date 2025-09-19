@@ -2212,6 +2212,30 @@ app.get('/26susi/branch-data-status', authJWT, async (req, res) => {
         res.status(500).json({ success: false, message: "서버 오류 발생" });
     }
 });
+
+// ✅ [26susi.js 파일에 이 API 코드를 추가해줘]
+
+// [신규 API] 특정 지점이 수합한 대학 ID 목록 조회
+app.get('/26susi/branch-assigned-colleges', authJWT, async (req, res) => {
+    const branch = req.user.branch; // 로그인한 사용자의 지점명
+
+    try {
+        // '확정대학정보'에서 해당 지점 학생이 포함된 모든 대학의 ID를 중복 없이 조회
+        const sql = `
+            SELECT DISTINCT f.대학ID
+            FROM 확정대학정보 f
+            JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+            WHERE s.지점명 = ?;
+        `;
+        const [rows] = await db.promise().query(sql, [branch]);
+        const collegeIds = rows.map(r => r.대학ID); // [123, 456, 789] 형태의 배열로 변환
+        res.json({ success: true, college_ids: collegeIds });
+
+    } catch (err) {
+        console.error("지점별 수합 대학 ID 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
 // =================================================================
 // 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
 // =================================================================
