@@ -2177,21 +2177,27 @@ app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
 
 // ✅ [26susi.js 파일에 이 API 코드를 추가해줘]
 
+// ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체해줘]
+
 // [신규 API] 지점별 데이터 입력 현황 대시보드
 app.get('/26susi/branch-data-status', authJWT, async (req, res) => {
     try {
-        // '확정대학정보'를 기준으로, 각 지점별로 몇 개의 '학생-대학' 데이터가 있는지 COUNT
-        // COUNT(f.학생ID)는 각 row를 세는 것과 동일하며, 이는 '학생-대학' 조합의 수를 의미함
+        // ▼▼▼▼▼ 여기가 수정된 핵심 부분 ▼▼▼▼▼
+        // COUNT(f.학생ID) -> COUNT(DISTINCT f.학생ID) 로 변경하여
+        // 중복을 제외한 순수 학생 인원수를 카운트함.
         const sql = `
             SELECT
                 s.지점명,
-                COUNT(f.학생ID) as 데이터_수
+                COUNT(DISTINCT f.학생ID) as 학생_수
             FROM 확정대학정보 f
             JOIN 학생기초정보 s ON f.학생ID = s.학생ID
             GROUP BY s.지점명
-            ORDER BY 데이터_수 DESC, s.지점명 ASC;
+            ORDER BY 학생_수 DESC, s.지점명 ASC;
         `;
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         const [rows] = await db.promise().query(sql);
+        // 응답 데이터의 키 이름을 'status'에서 'status'로 유지하고, 컬럼명만 '학생_수'로 변경
         res.json({ success: true, status: rows });
 
     } catch (err) {
