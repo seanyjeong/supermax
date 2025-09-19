@@ -2179,12 +2179,11 @@ app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
 
 // ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체해줘]
 
-// ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체해줘]
+// ✅ [26susi.js 파일의 기존 API를 이걸로 다시 한번 확인하고 교체해줘]
 
 app.get('/26susi/branch-data-status', authJWT, async (req, res) => {
     try {
-        // ▼▼▼▼▼ 여기가 수정된 핵심 부분 ▼▼▼▼▼
-        // 학생 수(DISTINCT)와 총 데이터 건수(COUNT)를 모두 계산하도록 쿼리 변경
+        // 학생 수(DISTINCT)와 총 데이터 건수(COUNT)를 모두 계산하는 쿼리
         const sql = `
             SELECT
                 w.지점명,
@@ -2204,8 +2203,7 @@ app.get('/26susi/branch-data-status', authJWT, async (req, res) => {
                 ) AS d ON w.지점명 = d.지점명
             ORDER BY 학생_수 DESC, 데이터_수 DESC, w.지점명 ASC;
         `;
-        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
+        
         const [rows] = await db.promise().query(sql);
         res.json({ success: true, status: rows });
 
