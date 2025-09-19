@@ -2175,6 +2175,30 @@ app.post('/26susi/save_single_student_record', authJWT, async (req, res) => {
     }
 });
 
+// ✅ [26susi.js 파일에 이 API 코드를 추가해줘]
+
+// [신규 API] 지점별 데이터 입력 현황 대시보드
+app.get('/26susi/branch-data-status', authJWT, async (req, res) => {
+    try {
+        // '확정대학정보'를 기준으로, 각 지점별로 몇 개의 '학생-대학' 데이터가 있는지 COUNT
+        // COUNT(f.학생ID)는 각 row를 세는 것과 동일하며, 이는 '학생-대학' 조합의 수를 의미함
+        const sql = `
+            SELECT
+                s.지점명,
+                COUNT(f.학생ID) as 데이터_수
+            FROM 확정대학정보 f
+            JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+            GROUP BY s.지점명
+            ORDER BY 데이터_수 DESC, s.지점명 ASC;
+        `;
+        const [rows] = await db.promise().query(sql);
+        res.json({ success: true, status: rows });
+
+    } catch (err) {
+        console.error("지점별 데이터 현황 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
 // =================================================================
 // 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
 // =================================================================
