@@ -2060,6 +2060,8 @@ app.get('/26susi/unassigned_students', authJWT, async (req, res) => {
 
 // ✅ [26susi.js 파일의 기존 API를 이걸로 교체하고 서버를 재시작해줘]
 
+// ✅ [26susi.js 파일의 기존 API를 이걸로 통째로 교체하고 서버를 재시작해줘]
+
 app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
     const { college_id } = req.query;
     if (!college_id) {
@@ -2079,15 +2081,15 @@ app.get('/26susi/realtime-rank-by-college', authJWT, async (req, res) => {
             events = eventRows.map(e => e.종목명);
         }
 
-        // ▼▼▼▼▼ 여기가 수정된 핵심 부분 (s.학생ID 추가) ▼▼▼▼▼
+        // ▼▼▼▼▼ 여기가 수정된 핵심 부분 (합/불 정보 추가) ▼▼▼▼▼
         const sql = `
             SELECT
                 RANK() OVER (ORDER BY COALESCE(f.합산점수, 0) DESC, COALESCE(f.내신점수, 0) DESC) as 순위,
-                s.학생ID, 
-                s.이름, s.지점명, s.성별, s.학년,
+                s.학생ID, s.이름, s.지점명, s.성별, s.학년,
                 f.내신점수, f.실기총점, f.합산점수,
                 f.기록1, f.점수1, f.기록2, f.점수2, f.기록3, f.점수3, f.기록4, f.점수4,
-                f.기록5, f.점수5, f.기록6, f.점수6, f.기록7, f.점수7
+                f.기록5, f.점수5, f.기록6, f.점수6, f.기록7, f.점수7,
+                f.최초합여부, f.최종합여부
             FROM 확정대학정보 f
             JOIN 학생기초정보 s ON f.학생ID = s.학생ID
             WHERE f.대학ID = ?
