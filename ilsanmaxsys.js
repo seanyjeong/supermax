@@ -1710,7 +1710,50 @@ const messages = students
 //   }
 // });
 
+// -------------------[시즌비 관리 API]-------------------
 
+// ✅ 시즌비 관리 대상 학생 목록 조회 (3학년/N수, 정시)
+router.get('/season-students', (req, res) => {
+  const sql = `
+    SELECT id, name, grade, school 
+    FROM students 
+    WHERE (grade = '3' OR grade = 'N') 
+      AND lesson_type = '정시' 
+      AND status = '재원'
+    ORDER BY grade, name
+  `;
+  dbAcademy.query(sql, (err, rows) => {
+    if (err) {
+      console.error('❌ 시즌비 대상 학생 조회 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    res.json(rows);
+  });
+});
+
+// ✅ 현재 저장된 모든 정시 시즌비 내역 조회
+router.get('/season-payments-all', (req, res) => {
+    // 특정 연도의 시즌비만 가져오려면 WHERE 조건 추가 가능 (예: WHERE start_month LIKE '2025%')
+    const sql = `SELECT * FROM season_payments WHERE season_type = '정시'`;
+    dbAcademy.query(sql, (err, rows) => {
+        if (err) {
+            console.error('❌ 전체 시즌비 내역 조회 실패:', err);
+            return res.status(500).json({ message: 'DB 오류' });
+        }
+        res.json(rows);
+    });
+});
+
+
+/*
+  🚨 중요: 시즌비 납부 학생은 월결제 로직에서 제외해야 해!
+  기존의 월별 결제 목록을 생성하는 '/payment-list'나 '/payment-status-summary' 같은 API를 수정해서,
+  season_payments 테이블에 해당 월에 유효한 '정시' 시즌비 납부 내역이 있는 학생은
+  리스트에서 제외하도록 로직을 추가해야 중복 과금을 막을 수 있어.
+  (예: LEFT JOIN season_payments ... WHERE sp.id IS NULL)
+*/
+
+// -------------------[시즌비 관리 API 끝]-------------------
 // 유틸성 DB Promise
 function dbQuery(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -1726,4 +1769,5 @@ function dbQuery(sql, params = []) {
  
   
     
+
 
