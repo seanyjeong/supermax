@@ -1618,97 +1618,97 @@ const messages = students
 
 
 
-// 3일마다 자정 23시 전체 m01 발송
-schedule.scheduleJob('0 23 * * *', async () => {
-  const firstSendDate = new Date('2025-07-16');  // 💡 시작 기준일: "오늘부터 시작"
-  const today = new Date();
+// // 3일마다 자정 23시 전체 m01 발송
+// // schedule.scheduleJob('0 23 * * *', async () => {
+//   const firstSendDate = new Date('2025-07-16');  // 💡 시작 기준일: "오늘부터 시작"
+//   const today = new Date();
 
-  // 일수 차이 계산
-  const diffDays = Math.floor((today - firstSendDate) / (1000 * 60 * 60 * 24));
-  if (diffDays % 3 !== 0) {
-    console.log(`[m01] 오늘은 3일 주기가 아님. (기준일로부터 ${diffDays}일 경과)`);
-    return;
-  }
+//   // 일수 차이 계산
+//   const diffDays = Math.floor((today - firstSendDate) / (1000 * 60 * 60 * 24));
+//   if (diffDays % 3 !== 0) {
+//     console.log(`[m01] 오늘은 3일 주기가 아님. (기준일로부터 ${diffDays}일 경과)`);
+//     return;
+//   }
 
-  const todayStr = today.toISOString().slice(0, 10);
-  try {
-    const students = await dbQuery(
-      `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`
-    );
+//   const todayStr = today.toISOString().slice(0, 10);
+//   try {
+//     const students = await dbQuery(
+//       `SELECT id, name, phone FROM students WHERE status='재원' AND phone IS NOT NULL`
+//     );
 
-    // 오늘 발송 기록 초기화 후 다시 insert
-    await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [todayStr]);
+//     // 오늘 발송 기록 초기화 후 다시 insert
+//     await dbQuery(`DELETE FROM mental_alarm_log WHERE alarm_date = ?`, [todayStr]);
 
-    const logs = students.map(s => [s.id, todayStr]);
-    if (logs.length > 0) {
-      await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
-    }
+//     const logs = students.map(s => [s.id, todayStr]);
+//     if (logs.length > 0) {
+//       await dbQuery(`INSERT INTO mental_alarm_log (student_id, alarm_date) VALUES ?`, [logs]);
+//     }
 
-    await sendAlimtalkBatch(students, 'm01');
-    console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
-  } catch (err) {
-    console.error('❌ [멘탈알림] m01 발송 오류:', err);
-  }
-});
-
-
+//     await sendAlimtalkBatch(students, 'm01');
+//     console.log(`✅ [멘탈알림] ${students.length}명 전체 m01 발송 완료`);
+//   } catch (err) {
+//     console.error('❌ [멘탈알림] m01 발송 오류:', err);
+//   }
+// });
 
 
 
-// 매일 오전 8시 미제출자 리마인드 (m02)
-schedule.scheduleJob('0 8 * * *', async () => {
-  try {
-    const alarmDate = new Date(Date.now() - 1000*60*60*24).toISOString().slice(0, 10);
-    if (alarmDate < '2025-07-14') return;
-    const targets = await dbQuery(
-      `SELECT student_id FROM mental_alarm_log WHERE alarm_date = ?`, [alarmDate]
-    );
-    if (!targets.length) return;
-    const submitted = await dbQuery(
-      `SELECT student_id FROM mental_check WHERE submitted_at = ?`, [alarmDate]
-    );
-    const submittedSet = new Set(submitted.map(r => r.student_id));
-    const remindIds = targets.map(r => r.student_id).filter(id => !submittedSet.has(id));
-    if (!remindIds.length) return;
-
-    // --- 이 부분 고침! ---
-    const remindStudents = await dbQuery(
-      `SELECT id, name, phone FROM students WHERE id IN (${remindIds.map(() => '?').join(',')})`, remindIds
-    );
-    // -------------------
-
-    if (!remindStudents.length) return;
-    await sendAlimtalkBatch(remindStudents, 'm02');
-    console.log(`✅ [멘탈알림] 리마인드 ${remindStudents.length}명 m02 발송 완료`);
-  } catch (e) {
-    console.error('❌ 멘탈알림 리마인드(m02) 오류:', e);
-  }
-});
 
 
-// -------------------[]-------------------
-setTimeout(() => {
-  console.log('=== 등록된 스케줄러 목록 ===');
-  Object.entries(schedule.scheduledJobs).forEach(([name, job]) => {
-    console.log(`- [${name}] next: ${job.nextInvocation()}`);
-  });
-}, 1000); // 서버 다 뜨고 1초 후!
+// // 매일 오전 8시 미제출자 리마인드 (m02)
+// schedule.scheduleJob('0 8 * * *', async () => {
+//   try {
+//     const alarmDate = new Date(Date.now() - 1000*60*60*24).toISOString().slice(0, 10);
+//     if (alarmDate < '2025-07-14') return;
+//     const targets = await dbQuery(
+//       `SELECT student_id FROM mental_alarm_log WHERE alarm_date = ?`, [alarmDate]
+//     );
+//     if (!targets.length) return;
+//     const submitted = await dbQuery(
+//       `SELECT student_id FROM mental_check WHERE submitted_at = ?`, [alarmDate]
+//     );
+//     const submittedSet = new Set(submitted.map(r => r.student_id));
+//     const remindIds = targets.map(r => r.student_id).filter(id => !submittedSet.has(id));
+//     if (!remindIds.length) return;
 
-// ilsanmaxsys.js에 추가
-router.get('/all-mental-check', async (req, res) => {
-  try {
-    const sql = `
-      SELECT m.*, s.name AS student_name
-      FROM mental_check m
-      LEFT JOIN students s ON m.student_id = s.id
-      ORDER BY m.submitted_at DESC, m.student_id
-    `;
-    const rows = await dbQuery(sql);
-    res.json(rows);
-  } catch (e) {
-    res.status(500).json({ message: 'DB 오류', error: e });
-  }
-});
+//     // --- 이 부분 고침! ---
+//     const remindStudents = await dbQuery(
+//       `SELECT id, name, phone FROM students WHERE id IN (${remindIds.map(() => '?').join(',')})`, remindIds
+//     );
+//     // -------------------
+
+//     if (!remindStudents.length) return;
+//     await sendAlimtalkBatch(remindStudents, 'm02');
+//     console.log(`✅ [멘탈알림] 리마인드 ${remindStudents.length}명 m02 발송 완료`);
+//   } catch (e) {
+//     console.error('❌ 멘탈알림 리마인드(m02) 오류:', e);
+//   }
+// });
+
+
+// // -------------------[]-------------------
+// setTimeout(() => {
+//   console.log('=== 등록된 스케줄러 목록 ===');
+//   Object.entries(schedule.scheduledJobs).forEach(([name, job]) => {
+//     console.log(`- [${name}] next: ${job.nextInvocation()}`);
+//   });
+// }, 1000); // 서버 다 뜨고 1초 후!
+
+// // ilsanmaxsys.js에 추가
+// router.get('/all-mental-check', async (req, res) => {
+//   try {
+//     const sql = `
+//       SELECT m.*, s.name AS student_name
+//       FROM mental_check m
+//       LEFT JOIN students s ON m.student_id = s.id
+//       ORDER BY m.submitted_at DESC, m.student_id
+//     `;
+//     const rows = await dbQuery(sql);
+//     res.json(rows);
+//   } catch (e) {
+//     res.status(500).json({ message: 'DB 오류', error: e });
+//   }
+// });
 
 
 // 유틸성 DB Promise
@@ -1726,3 +1726,4 @@ function dbQuery(sql, params = []) {
  
   
     
+
