@@ -1744,6 +1744,99 @@ router.get('/season-payments-all', (req, res) => {
     });
 });
 
+// ✅ 현재 저장된 모든 정시 시즌비 내역 조회 (수정)
+// -> 새로 추가된 컬럼들을 함께 조회하도록 수정
+router.get('/season-payments-all', (req, res) => {
+    const sql = `
+      SELECT 
+        id, student_id, season_type, start_month, end_month, 
+        amount, paid_at, payment_method, note,
+        discount_reason, cash_receipt_phone, cash_receipt_status 
+      FROM season_payments 
+      WHERE season_type = '정시'
+    `;
+    dbAcademy.query(sql, (err, rows) => {
+        if (err) {
+            console.error('❌ 전체 시즌비 내역 조회 실패:', err);
+            return res.status(500).json({ message: 'DB 오류' });
+        }
+        res.json(rows);
+    });
+});
+
+// ✅ 시즌비 등록 API 수정 (/register-season-payment)
+// -> 기존 코드를 찾아서 이걸로 완전히 교체해줘.
+// -> 할인 사유, 현금영수증 번호도 함께 저장하도록 수정
+router.post('/register-season-payment', (req, res) => {
+  const {
+    student_id,
+    season_type,
+    start_month,
+    end_month,
+    amount,
+    paid_at,
+    payment_method,
+    note,
+    discount_reason, // 추가
+    cash_receipt_phone // 추가
+  } = req.body;
+
+  if (!student_id || !season_type || !start_month || !end_month || !amount) {
+    return res.status(400).json({ message: '❗ 필수 항목 누락' });
+  }
+
+  const sql = `
+    INSERT INTO season_payments 
+    (student_id, season_type, start_month, end_month, amount, paid_at, payment_method, note, discount_reason, cash_receipt_phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      amount = VALUES(amount),
+      paid_at = VALUES(paid_at),
+      payment_method = VALUES(payment_method),
+      note = VALUES(note),
+      discount_reason = VALUES(discount_reason),
+      cash_receipt_phone = VALUES(cash_receipt_phone)
+  `;
+
+  const values = [
+      student_id, season_type, start_month, end_month, amount, paid_at, 
+      payment_method, note, discount_reason, cash_receipt_phone
+  ];
+
+  dbAcademy.query(sql, values, (err, result) => {
+    if (err) {
+      console.error('❌ 시즌비 등록 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    // INSERT와 UPDATE 경우 모두 payment_id를 반환하기 위한 로직
+    const paymentId = result.insertId === 0 ? req.body.payment_id : result.insertId;
+    res.json({ message: '✅ 시즌비 등록 완료', season_payment_id: paymentId });
+  });
+});
+
+
+// ✅ 현금영수증 처리상태 업데이트 API (신규 추가)
+router.patch('/season-payment/cash-receipt', (req, res) => {
+  const { payment_id, status } = req.body;
+
+  if (!payment_id) {
+    return res.status(400).json({ message: 'payment_id가 필요합니다.' });
+  }
+
+  const sql = `UPDATE season_payments SET cash_receipt_status = ? WHERE id = ?`;
+
+  dbAcademy.query(sql, [status, payment_id], (err, result) => {
+    if (err) {
+      console.error('❌ 현금영수증 상태 업데이트 실패:', err);
+      return res.status(500).json({ message: 'DB 오류' });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: '해당 결제 내역을 찾을 수 없습니다.' });
+    }
+    res.json({ message: '✅ 현금영수증 상태 업데이트 완료' });
+  });
+});
+
 
 /*
   🚨 중요: 시즌비 납부 학생은 월결제 로직에서 제외해야 해!
@@ -1769,5 +1862,6 @@ function dbQuery(sql, params = []) {
  
   
     
+
 
 
