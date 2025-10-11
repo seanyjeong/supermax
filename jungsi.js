@@ -116,6 +116,45 @@ app.post('/jungsi/rules/set', authMiddleware, async (req, res) => {
     }
 });
 
+app.post('/jungsi/scores/paste-and-save', authMiddleware, async (req, res) => {
+    const { U_ID, english_text, history_text } = req.body;
+
+    if (!U_ID) {
+        return res.status(400).json({ success: false, message: "U_ID가 필요합니다." });
+    }
+
+    // 텍스트를 JSON으로 변환하는 헬퍼 함수
+    const textToJson = (text) => {
+        if (!text || text.trim() === '') return null;
+        // 콤마, 탭, 공백, 줄바꿈 등 모든 공백 문자로 분리하고 빈 값은 제거
+        const scores = text.trim().split(/[\s,]+/).filter(Boolean);
+        const scoreJson = {};
+        scores.forEach((score, index) => {
+            if (index < 9) { // 최대 9등급까지만
+                scoreJson[String(index + 1)] = parseFloat(score);
+            }
+        });
+        return JSON.stringify(scoreJson);
+    };
+
+    try {
+        const englishJson = textToJson(english_text);
+        const historyJson = textToJson(history_text);
+
+        const sql = "UPDATE `26정시반영비율` SET `english_scores` = ?, `history_scores` = ? WHERE `U_ID` = ?";
+        const [result] = await db.query(sql, [englishJson, historyJson, U_ID]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: "해당 학과를 찾을 수 없습니다." });
+        }
+        res.json({ success: true, message: `U_ID ${U_ID} 학과의 등급별 점수가 저장되었습니다.` });
+
+    } catch (err) {
+        console.error("❌ 등급 점수 저장 오류:", err);
+        res.status(500).json({ success: false, message: "DB 오류" });
+    }
+});
+
 
 // ⭐️ 3. [웹페이지 제공 라우트]
 // '/setting' 주소로 접속하면 setting.html 파일을 보여줌
