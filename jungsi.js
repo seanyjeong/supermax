@@ -52,7 +52,7 @@ const db = mysql.createPool({
     host: '211.37.174.218',
     user: 'maxilsan',
     password: 'q141171616!',
-    database: 'jungsi_test', // jungsi 서버는 jungsi DB를 사용하도록 설정
+    database: 'jungsi', // jungsi 서버는 jungsi DB를 사용하도록 설정
     charset: 'utf8mb4',
     waitForConnections: true,
     connectionLimit: 10,
