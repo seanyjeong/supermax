@@ -85,6 +85,23 @@ app.post('/jungsi/rules/set', authMiddleware, async (req, res) => {
     }
 });
 
+// ... 기존 코드 아래에 추가 ...
+
+// [신규 API] 프론트엔드에 전체 학교 목록을 보내주는 API
+app.get('/jungsi/schools', authMiddleware, async (req, res) => {
+    try {
+        // '26정시기본' 테이블에서 계산에 필요한 최소 정보(ID, 대학명, 학과명)만 조회
+        const sql = "SELECT `U_ID`, `대학명`, `학과명` FROM `26정시기본` ORDER BY `대학명`, `학과명`";
+        const [schools] = await db.query(sql);
+
+        res.json({ success: true, schools: schools });
+
+    } catch (err) {
+        console.error("❌ 전체 학교 목록 조회 중 DB 오류:", err);
+        res.status(500).json({ success: false, message: "DB에서 학교 목록을 가져오는 중 오류가 발생했습니다." });
+    }
+});
+
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
