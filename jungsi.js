@@ -50,22 +50,19 @@ const db = mysql.createPool({
 // [API #1] 전체 학교 목록 조회 (⭐️ 업그레이드 버전)
 app.get('/jungsi/schools', authMiddleware, async (req, res) => {
     try {
-        // 'selection_rules' 컬럼도 함께 조회하도록 JOIN 쿼리로 변경
         const sql = `
             SELECT 
-                b.U_ID, 
-                b.대학명, 
-                b.학과명, 
-                r.selection_rules 
-            FROM \`26정시기본\` AS b
-            LEFT JOIN \`26정시반영비율\` AS r ON b.U_ID = r.U_ID
-            ORDER BY b.대학명, b.학과명
+                b.U_ID, b.대학명, b.학과명, 
+                r.selection_rules, r.english_scores, r.history_scores 
+            FROM \`26정시기본\` AS b 
+            LEFT JOIN \`26정시반영비율\` AS r ON b.U_ID = r.U_ID 
+            ORDER BY b.U_ID ASC
         `;
         const [schools] = await db.query(sql);
         res.json({ success: true, schools });
-    } catch (err) { 
-        console.error("❌ 학교 목록 조회 오류:", err); 
-        res.status(500).json({ success: false, message: "DB 오류" }); 
+    } catch (err) {
+        console.error("❌ 학교 목록 조회 오류:", err);
+        res.status(500).json({ success: false, message: "DB 오류" });
     }
 });
 
