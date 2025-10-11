@@ -14,7 +14,7 @@ app.use(express.json({ limit: '5mb' }));
 
 // ✅ MySQL 연결 설정
 const pool = mysql.createPool({
-  host: 'my8003.gabiadb.com',
+  host: '211.37.174.218',
   user: 'maxilsan',
   password: 'q141171616!',
   database: 'jungsi',
