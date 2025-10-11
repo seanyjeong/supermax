@@ -70,27 +70,51 @@ app.get('/jungsi/test', (req, res) => {
 // API 경로 중간에 authMiddleware 를 넣어주면, 이 API는 문지기의 검사를 통과해야만 실행됨!
 app.post('/jungsi/calculate', authMiddleware, async (req, res) => {
     
-    // 이 부분의 코드가 실행된다는 것은 이미 authMiddleware의 검증을 통과했다는 의미!
-    // 그리고 req.user 에는 26susi 서버가 발급한 토큰의 정보가 그대로 들어있어.
-    
-    const loginUserId = req.user.userid; // 로그인한 사용자의 아이디
-    const loginUserBranch = req.user.branch; // 로그인한 사용자의 지점
+    const loginUserId = req.user.userid;
 
-    console.log(`[계산 요청] ${loginUserBranch} 지점의 ${loginUserId} 님이 점수 계산을 요청했습니다.`);
-    
-    // 여기서부터 계산에 필요한 DB 조회 및 계산 로직을 구현하면 돼.
-    // 예를 들어, loginUserId를 가지고 학생 성적을 DB에서 조회하는 등...
-    
-    const mockCalculatedScore = 987.65; // 계산 결과 예시
+    // 1. 프론트엔드에서 계산할 학과의 'U_ID'를 받는다고 가정
+    const { U_ID } = req.body;
 
-    res.json({
-        success: true,
-        message: `${loginUserId}님의 계산 결과입니다.`,
-        score: mockCalculatedScore,
-        requesting_user: req.user // 토큰에서 어떤 정보가 넘어왔는지 확인용
-    });
+    if (!U_ID) {
+        return res.status(400).json({ success: false, message: "계산할 학과의 U_ID가 필요합니다." });
+    }
+
+    console.log(`[계산 요청] 사용자: ${loginUserId}, 학과 U_ID: ${U_ID}`);
+
+    try {
+        // 2. DB에서 '학과 기본 정보'와 '계산 공식'을 한번에 조회 (JOIN 쿼리)
+        const sql = `
+            SELECT 
+                b.university_name AS 대학명,
+                b.department_name AS 학과명,
+                r.* FROM \`26정시기본\` AS b
+            JOIN \`26정시반영비율\` AS r ON b.U_ID = r.U_ID
+            WHERE b.U_ID = ?
+        `;
+        
+        const [results] = await db.query(sql, [U_ID]);
+
+        // 3. 조회된 데이터가 있는지 확인
+        if (results.length === 0) {
+            return res.status(404).json({ success: false, message: "해당 학과의 정보를 찾을 수 없습니다." });
+        }
+        
+        // 4. (오늘은 여기까지!) 조회한 데이터를 그대로 응답으로 보내주기
+        const universityData = results[0];
+
+        console.log(`[조회 성공]`, universityData);
+
+        res.json({
+            success: true,
+            message: `U_ID ${U_ID} 학과 정보 조회 성공`,
+            data: universityData 
+        });
+
+    } catch (err) {
+        console.error("❌ 계산 정보 조회 중 DB 오류:", err);
+        res.status(500).json({ success: false, message: "DB 조회 중 서버 오류가 발생했습니다." });
+    }
 });
-
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
