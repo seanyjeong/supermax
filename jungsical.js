@@ -14,91 +14,93 @@ function calculateScore(formulaData, studentScores) {
     };
 
     // --- 1. 이 학교의 모든 규칙(설정값)을 변수에 저장 ---
-    const calcMethod = formulaData.계산방식 || '환산'; // '환산' 또는 '직접'
-    const suneungTotalScore = parseRatio(formulaData.수능); // 수능 총점 (예: 700)
-    
+    const calcMethod = formulaData.계산방식 || '환산';
+    const suneungTotalScore = parseRatio(formulaData.수능);
     const config = formulaData.score_config || {};
     const km_type = config.korean_math?.type || '백분위';
     const inq_type = config.inquiry?.type || '백분위';
     const eng_type = config.english?.type || 'grade_conversion';
 
-    // --- 2. 과목별 '학생의 원점수' 정하기 (어떤 점수를 쓸지 결정) ---
+    // --- 2. 학생의 성적표에서 과목별 정보 분리 ---
+    const studentSubjects = studentScores.subjects || [];
+    const getSubject = (name) => studentSubjects.find(s => s.name === name) || {};
+    const getInquirySubjects = () => studentSubjects.filter(s => s.name === '탐구');
+
+    const koreanInfo = getSubject('국어');
+    const mathInfo = getSubject('수학');
+    const englishInfo = getSubject('영어');
+    const historyInfo = getSubject('한국사');
+    const inquiryInfos = getInquirySubjects();
+
+    // --- 3. 과목별 '학생의 원점수' 정하기 (어떤 점수를 쓸지 결정) ---
     const scores = {
-        korean: km_type === '표준점수' ? studentScores.korean_std : studentScores.korean_percentile,
-        math: km_type === '표준점수' ? studentScores.math_std : studentScores.math_percentile
+        korean: km_type === '표준점수' ? (koreanInfo.std || 0) : (koreanInfo.percentile || 0),
+        math: km_type === '표준점수' ? (mathInfo.std || 0) : (mathInfo.percentile || 0)
     };
-
-    // [핵심 수정] '탐구수'를 보고 1과목 또는 2과목을 반영하도록 수정!
+    
+    // ⭐️ [핵심 수정] '탐구수'를 보고 과목 '객체'를 선택하고, 점수를 계산! ⭐️
     let inquiryScoreToUse = 0;
-    const inquiryCount = parseInt(formulaData.탐구수) || 2; // DB에 저장된 탐구 과목 수 (기본값 2)
+    let finalInquirySubjects = []; // 최종적으로 선택된 탐구 '과목 객체'들을 저장할 배열
 
-    if (inq_type === '표준점수') {
-        const inq1_std = studentScores.inquiry1_std || 0;
-        const inq2_std = studentScores.inquiry2_std || 0;
+    const inquiryCount = parseInt(formulaData.탐구수) || (inquiryInfos.length > 0 ? inquiryInfos.length : 1);
+    const scoreKey = (inq_type === '표준점수' || inq_type === '변환표준점수') ? 'std' : 'percentile';
+
+    if (inquiryInfos.length > 0) {
+        // 점수가 높은 순서대로 탐구 과목들을 정렬
+        const sortedInquiry = [...inquiryInfos].sort((a, b) => (b[scoreKey] || 0) - (a[scoreKey] || 0));
+
         if (inquiryCount === 1) {
-            inquiryScoreToUse = Math.max(inq1_std, inq2_std); // 1과목이면 둘 중 잘 본 거
+            finalInquirySubjects = [sortedInquiry[0]]; // 1과목이면 제일 잘 본 과목 '객체' 하나만 선택
         } else {
-            inquiryScoreToUse = (inq1_std + inq2_std) / 2; // 2과목이면 평균
+            finalInquirySubjects = sortedInquiry.slice(0, 2); // 2과목이면 둘 다 선택
         }
-    } else if (inq_type === '백분위') {
-        const inq1_percentile = studentScores.inquiry1_percentile || 0;
-        const inq2_percentile = studentScores.inquiry2_percentile || 0;
-        if (inquiryCount === 1) {
-            inquiryScoreToUse = Math.max(inq1_percentile, inq2_percentile); // 1과목이면 둘 중 잘 본 거
-        } else {
-            inquiryScoreToUse = (inq1_percentile + inq2_percentile) / 2; // 2과목이면 평균
-        }
-    } else if (inq_type === '변환표준점수') {
-        // (나중에 변환표준점수 테이블 조회 로직 추가)
-        // 일단 임시로 표준점수 로직과 동일하게 처리
-        const inq1_std = studentScores.inquiry1_std || 0;
-        const inq2_std = studentScores.inquiry2_std || 0;
-        if (inquiryCount === 1) {
-            inquiryScoreToUse = Math.max(inq1_std, inq2_std);
-        } else {
-            inquiryScoreToUse = (inq1_std + inq2_std) / 2;
-        }
+
+        // 선택된 과목들의 점수 합계를 구함
+        const totalInquiryScore = finalInquirySubjects.reduce((sum, subject) => sum + (subject[scoreKey] || 0), 0);
+        
+        // 최종적으로 사용할 탐구 점수 (평균 또는 단일 점수)
+        inquiryScoreToUse = totalInquiryScore / finalInquirySubjects.length;
     }
     scores.inquiry = inquiryScoreToUse;
 
+    console.log("-> 최종 선택된 탐구 과목:", finalInquirySubjects.map(s => s.subject));
+    // TODO: 여기서 `finalInquirySubjects` 배열을 순회하면서 `bonus_rules`에 있는 가산점 규칙을 적용해야 함.
+    // 예: for (const subject of finalInquirySubjects) { if (isBonusSubject(subject.subject)) { ... } }
 
-    // --- 3. [핵심 로직] '계산 방식'에 따라 과목별 점수 계산 ---
+
+    // --- 4. '계산 방식'에 따라 과목별 점수 계산 ---
     if (calcMethod === '직접') {
-        // [방식 A: 직접 계산] 학생 점수에 비율을 바로 곱하기
         console.log("-> '직접' 계산 방식을 사용합니다.");
         breakdown.korean = scores.korean * (parseRatio(formulaData.국어) / 100);
         breakdown.math = scores.math * (parseRatio(formulaData.수학) / 100);
         breakdown.inquiry = scores.inquiry * (parseRatio(formulaData.탐구) / 100);
-    } else {
-        // [방식 B: 환산 계산] (대부분의 학교)
+    } else { // '환산' 계산
         console.log("-> '환산' 계산 방식을 사용합니다.");
-        
         const maxScores = {
             korean: km_type === '표준점수' ? 200 : 100,
             math: km_type === '표준점수' ? 200 : 100,
             inquiry: (inq_type === '표준점수' || inq_type === '변환표준점수') ? 100 : 100
         };
-
         breakdown.korean = (suneungTotalScore * (parseRatio(formulaData.국어) / 100)) * (scores.korean / maxScores.korean);
         breakdown.math = (suneungTotalScore * (parseRatio(formulaData.수학) / 100)) * (scores.math / maxScores.math);
         breakdown.inquiry = (suneungTotalScore * (parseRatio(formulaData.탐구) / 100)) * (scores.inquiry / maxScores.inquiry);
     }
     
-    // --- 4. 영어 & 한국사 점수 계산 (보너스 점수) ---
+    // --- 5. 영어 & 한국사 점수 계산 ---
     breakdown.english = 0;
     if (eng_type === 'grade_conversion' && formulaData.english_scores) {
-        breakdown.english = formulaData.english_scores[studentScores.english_grade] || 0;
+        breakdown.english = formulaData.english_scores[englishInfo.grade] || 0;
     } else if (eng_type === 'fixed_max_score' && config.english?.max_score) {
-        const baseScore = formulaData.english_scores ? (formulaData.english_scores[studentScores.english_grade] || 0) : 0;
+        const baseScore = formulaData.english_scores ? (formulaData.english_scores[englishInfo.grade] || 0) : 0;
         breakdown.english = (config.english.max_score / 100) * baseScore;
     }
 
     breakdown.history = 0;
     if (formulaData.history_scores) {
-        breakdown.history = formulaData.history_scores[studentScores.history_grade] || 0;
+        breakdown.history = formulaData.history_scores[historyInfo.grade] || 0;
     }
 
-    // --- 5. 최종 합산 ---
+    // --- 6. 최종 합산 ---
     let finalScore = (breakdown.korean || 0) + (breakdown.math || 0) + (breakdown.inquiry || 0) + (breakdown.english || 0);
     finalScore += (breakdown.history || 0);
     
