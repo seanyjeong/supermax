@@ -116,42 +116,29 @@ app.post('/jungsi/rules/set', authMiddleware, async (req, res) => {
     }
 });
 
-app.post('/jungsi/scores/paste-and-save', authMiddleware, async (req, res) => {
-    const { U_ID, english_text, history_text } = req.body;
+// ⭐️⭐️⭐️ [초강력 신규 API] 대량의 등급 점수를 한 번에 저장하는 API ⭐️⭐️⭐️
+app.post('/jungsi/scores/bulk-save', authMiddleware, async (req, res) => {
+    const { scores_data } = req.body; // [{ U_ID, type, text }, { ... }] 형태의 배열
 
-    if (!U_ID) {
-        return res.status(400).json({ success: false, message: "U_ID가 필요합니다." });
+    if (!Array.isArray(scores_data)) {
+        return res.status(400).json({ success: false, message: "잘못된 데이터 형식입니다." });
     }
 
-    // 텍스트를 JSON으로 변환하는 헬퍼 함수
-    const textToJson = (text) => {
-        if (!text || text.trim() === '') return null;
-        // 콤마, 탭, 공백, 줄바꿈 등 모든 공백 문자로 분리하고 빈 값은 제거
-        const scores = text.trim().split(/[\s,]+/).filter(Boolean);
-        const scoreJson = {};
-        scores.forEach((score, index) => {
-            if (index < 9) { // 최대 9등급까지만
-                scoreJson[String(index + 1)] = parseFloat(score);
-            }
-        });
-        return JSON.stringify(scoreJson);
-    };
+    const textToJson = (text) => { /* 이전과 동일 */ if (!text || text.trim() === '') return null; const scores = text.trim().split(/[\s,]+/).filter(Boolean); const scoreJson = {}; scores.forEach((score, index) => { if (index < 9) { scoreJson[String(index + 1)] = isNaN(parseFloat(score)) ? score : parseFloat(score); }}); return JSON.stringify(scoreJson); };
 
     try {
-        const englishJson = textToJson(english_text);
-        const historyJson = textToJson(history_text);
+        // Promise.all로 모든 DB 업데이트를 동시에 실행 (엄청 빠름)
+        await Promise.all(scores_data.map(item => {
+            const englishJson = textToJson(item.english_text);
+            const historyJson = textToJson(item.history_text);
+            const sql = "UPDATE `26정시반영비율` SET `english_scores` = ?, `history_scores` = ? WHERE `U_ID` = ?";
+            return db.query(sql, [englishJson, historyJson, item.U_ID]);
+        }));
 
-        const sql = "UPDATE `26정시반영비율` SET `english_scores` = ?, `history_scores` = ? WHERE `U_ID` = ?";
-        const [result] = await db.query(sql, [englishJson, historyJson, U_ID]);
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: "해당 학과를 찾을 수 없습니다." });
-        }
-        res.json({ success: true, message: `U_ID ${U_ID} 학과의 등급별 점수가 저장되었습니다.` });
-
+        res.json({ success: true, message: `${scores_data.length}개 학과의 등급 점수가 모두 저장되었습니다!` });
     } catch (err) {
-        console.error("❌ 등급 점수 저장 오류:", err);
-        res.status(500).json({ success: false, message: "DB 오류" });
+        console.error("❌ 등급 점수 대량 저장 오류:", err);
+        res.status(500).json({ success: false, message: "DB 대량 저장 중 오류 발생" });
     }
 });
 
