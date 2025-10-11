@@ -71,8 +71,6 @@ app.get('/jungsi/test', (req, res) => {
 app.post('/jungsi/calculate', authMiddleware, async (req, res) => {
     
     const loginUserId = req.user.userid;
-
-    // 1. 프론트엔드에서 계산할 학과의 'U_ID'를 받는다고 가정
     const { U_ID } = req.body;
 
     if (!U_ID) {
@@ -82,26 +80,24 @@ app.post('/jungsi/calculate', authMiddleware, async (req, res) => {
     console.log(`[계산 요청] 사용자: ${loginUserId}, 학과 U_ID: ${U_ID}`);
 
     try {
-        // 2. DB에서 '학과 기본 정보'와 '계산 공식'을 한번에 조회 (JOIN 쿼리)
+        // ⭐️⭐️⭐️ 바로 이 부분! ⭐️⭐️⭐️
+        // 영어 컬럼 이름 대신, 실제 DB에 있는 한글 컬럼 이름을 사용하도록 수정
         const sql = `
             SELECT 
-                b.university_name AS 대학명,
-                b.department_name AS 학과명,
-                r.* FROM \`26정시기본\` AS b
+                b.*,  -- '26정시기본' 테이블의 모든 컬럼
+                r.* -- '26정시반영비율' 테이블의 모든 컬럼
+            FROM \`26정시기본\` AS b
             JOIN \`26정시반영비율\` AS r ON b.U_ID = r.U_ID
             WHERE b.U_ID = ?
         `;
         
         const [results] = await db.query(sql, [U_ID]);
 
-        // 3. 조회된 데이터가 있는지 확인
         if (results.length === 0) {
             return res.status(404).json({ success: false, message: "해당 학과의 정보를 찾을 수 없습니다." });
         }
         
-        // 4. (오늘은 여기까지!) 조회한 데이터를 그대로 응답으로 보내주기
         const universityData = results[0];
-
         console.log(`[조회 성공]`, universityData);
 
         res.json({
@@ -115,7 +111,6 @@ app.post('/jungsi/calculate', authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, message: "DB 조회 중 서버 오류가 발생했습니다." });
     }
 });
-
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
 });
