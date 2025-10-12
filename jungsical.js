@@ -9,8 +9,7 @@ function calculateScore(formulaData, studentScores) {
     const config = formulaData.score_config || {};
     const km_type = config.korean_math?.type || '백분위';
     const inq_type = config.inquiry?.type || '백분위';
-    const eng_type = config.english?.type || 'grade_conversion';
-
+    
     const studentSubjects = studentScores.subjects || [];
     const subjectsData = { '국어': studentSubjects.find(s=>s.name==='국어')||{}, '수학': studentSubjects.find(s=>s.name==='수학')||{}, '영어': studentSubjects.find(s=>s.name==='영어')||{}, '한국사': studentSubjects.find(s=>s.name==='한국사')||{}, '탐구': studentSubjects.filter(s=>s.name==='탐구') };
 
@@ -41,10 +40,12 @@ function calculateScore(formulaData, studentScores) {
     const selectionRules = formulaData.selection_rules;
     const schoolTotalScore = formulaData.총점 || 1000;
     const suneungRatio = (parseFloat(formulaData.수능) || 0) / 100;
+    
+    calculationLog.push(`[학교 정보] 총점:${schoolTotalScore}, 수능비율:${suneungRatio}`);
 
     // ⭐️ [분기] 선택 규칙(selection_rules) 유무에 따라 계산 방식 분리
     if (selectionRules && Object.keys(selectionRules).length > 0) {
-        // [A] 선택 규칙이 있을 경우
+        // [A] 선택 규칙이 있을 경우 (네가 만든 rank, mix 로직)
         calculationLog.push("\n---------- 선택 규칙 계산 ----------");
         const rulesArray = Array.isArray(selectionRules) ? selectionRules : [selectionRules];
         let usedSubjects = new Set();
@@ -67,12 +68,13 @@ function calculateScore(formulaData, studentScores) {
                     usedSubjects.add(subject.name);
                 });
             }
+            // TODO: select_ranked_weights 로직 추가
         });
         
         // 선택된 과목들의 점수를 최종 환산
         if (totalRatioSum > 0) {
             suneungScore = (calculatedScoreSum * (schoolTotalScore / totalRatioSum)) * suneungRatio;
-            calculationLog.push(`[선택과목 합산] (점수*비율 합:${calculatedScoreSum.toFixed(2)}) * (${schoolTotalScore}/${totalRatioSum}) * ${suneungRatio} = ${suneungScore.toFixed(3)}`);
+            calculationLog.push(`[선택과목 합산] (점수*비율 합:${calculatedScoreSum.toFixed(3)}) * (${schoolTotalScore} / ${totalRatioSum}) * ${suneungRatio} = ${suneungScore.toFixed(3)}`);
         }
 
     } else {
@@ -89,7 +91,7 @@ function calculateScore(formulaData, studentScores) {
         });
         if (totalRatioSum > 0) {
             suneungScore = (calculatedScoreSum * (schoolTotalScore / totalRatioSum)) * suneungRatio;
-            calculationLog.push(`[기본과목 합산] (점수*비율 합:${calculatedScoreSum.toFixed(2)}) * (${schoolTotalScore}/${totalRatioSum}) * ${suneungRatio} = ${suneungScore.toFixed(3)}`);
+            calculationLog.push(`[기본과목 합산] (점수*비율 합:${calculatedScoreSum.toFixed(3)}) * (${schoolTotalScore} / ${totalRatioSum}) * ${suneungRatio} = ${suneungScore.toFixed(3)}`);
         }
     }
 
@@ -107,6 +109,7 @@ function calculateScore(formulaData, studentScores) {
 
     return { totalScore: finalScore.toFixed(3), breakdown: {}, calculationLog };
 }
+
 
 module.exports = function(db, authMiddleware) {
     router.post('/calculate', authMiddleware, async (req, res) => {
