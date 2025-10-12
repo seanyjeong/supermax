@@ -1,131 +1,157 @@
-const express = require('express');
-const router = express.Router();
+function calculateScore(formulaDataRaw, studentScores) {
+  const log = [];
+  const safeParse = (v, fb=null) => (v==null||typeof v==='object') ? (v||fb) : (()=>{try{return JSON.parse(v);}catch{return fb;}})();
 
-function calculateScore(formulaData, studentScores) {
-    const calculationLog = [];
-    calculationLog.push("---------- 계산 시작 ----------");
+  // 0) JSON 컬럼 파싱
+  const formulaData = { ...formulaDataRaw };
+  formulaData.selection_rules = safeParse(formulaDataRaw.selection_rules, null);
+  formulaData.score_config    = safeParse(formulaDataRaw.score_config,   {}) || {};
+  formulaData.english_scores  = safeParse(formulaDataRaw.english_scores, null);
+  formulaData.history_scores  = safeParse(formulaDataRaw.history_scores, null);
 
-    // --- 1. 기본 정보 및 학생 점수 준비 ---
-    const config = formulaData.score_config || {};
-    const km_type = config.korean_math?.type || '백분위';
-    const inq_type = config.inquiry?.type || '백분위';
-    
-    const studentSubjects = studentScores.subjects || [];
-    const subjectsData = { '국어': studentSubjects.find(s=>s.name==='국어')||{}, '수학': studentSubjects.find(s=>s.name==='수학')||{}, '영어': studentSubjects.find(s=>s.name==='영어')||{}, '한국사': studentSubjects.find(s=>s.name==='한국사')||{}, '탐구': studentSubjects.filter(s=>s.name==='탐구') };
+  // 1) 학생 점수 수집
+  const subjects = studentScores.subjects || [];
+  const S = {
+    국어   : subjects.find(s=>s.name==='국어')   || {},
+    수학   : subjects.find(s=>s.name==='수학')   || {},
+    영어   : subjects.find(s=>s.name==='영어')   || {},
+    한국사 : subjects.find(s=>s.name==='한국사') || {},
+    탐구   : subjects.filter(s=>s.name==='탐구')
+  };
 
-    const rawScores = {
-        '국어': km_type === '표준점수' ? (subjectsData['국어'].std || 0) : (subjectsData['국어'].percentile || 0),
-        '수학': km_type === '표준점수' ? (subjectsData['수학'].std || 0) : (subjectsData['수학'].percentile || 0),
-        '영어': 0, // 영어는 아래에서 특별히 계산
-        '한국사': subjectsData['한국사'].grade || 9,
-        '탐구': 0
-    };
-    
-    // 영어 원점수 계산 (비율 계산에 참여하기 위한 점수)
-    if (formulaData.english_scores) {
-        rawScores.영어 = formulaData.english_scores[subjectsData['영어'].grade] || 0;
-    }
+  const cfg = formulaData.score_config || {};
+  const kmType  = cfg.korean_math?.type || '백분위';
+  const inqType = cfg.inquiry?.type     || '백분위';
 
-    const inquiryCount = parseInt(formulaData.탐구수) || 1;
-    const scoreKey = (inq_type === '표준점수' || inq_type === '변환표준점수') ? 'std' : 'percentile';
-    if (subjectsData['탐구'].length > 0) {
-        const sortedInquiry = [...subjectsData['탐구']].sort((a, b) => (b[scoreKey] || 0) - (a[scoreKey] || 0));
-        const selectedInquiry = sortedInquiry.slice(0, inquiryCount);
-        rawScores.탐구 = selectedInquiry.reduce((sum, s) => sum + (s[scoreKey] || 0), 0) / selectedInquiry.length;
-    }
-    calculationLog.push(`[학생 원점수] 국:${rawScores['국어']} 수:${rawScores['수학']} 영:${rawScores['영어']} 탐:${rawScores['탐구']}`);
+  // 1-1) 과목별 '원점수' (영어는 환산표, 탐구는 대표값 규칙)
+  const pickByType = (obj, type) => (type==='표준점수'||type==='변환표준점수') ? (obj.std||0) : (obj.percentile||0);
 
-    // --- 2. 수능 점수 계산 ---
-    let suneungScore = 0;
-    const selectionRules = formulaData.selection_rules;
-    const schoolTotalScore = formulaData.총점 || 1000;
-    const suneungRatio = (parseFloat(formulaData.수능) || 0) / 100;
-    
-    calculationLog.push(`[학교 정보] 총점:${schoolTotalScore}, 수능비율:${suneungRatio}`);
+  // 탐구 개별 점수 배열 (정렬용)
+  const inqKey = (inqType==='표준점수'||inqType==='변환표준점수') ? 'std' : 'percentile';
+  const inqArr = (S.탐구||[]).map((t,i)=>({idx:i, val: Number(t[inqKey]||0)})).sort((a,b)=>b.val-a.val);
 
-    // ⭐️ [분기] 선택 규칙(selection_rules) 유무에 따라 계산 방식 분리
-    if (selectionRules && Object.keys(selectionRules).length > 0) {
-        // [A] 선택 규칙이 있을 경우 (네가 만든 rank, mix 로직)
-        calculationLog.push("\n---------- 선택 규칙 계산 ----------");
-        const rulesArray = Array.isArray(selectionRules) ? selectionRules : [selectionRules];
-        let usedSubjects = new Set();
-        let calculatedScoreSum = 0;
-        let totalRatioSum = 0;
-
-        rulesArray.forEach((rule, index) => {
-            const candidateSubjects = rule.from
-                .filter(subjectName => !usedSubjects.has(subjectName))
-                .map(subjectName => ({ name: subjectName, score: rawScores[subjectName] }))
-                .sort((a, b) => b.score - a.score);
-            
-            if (rule.type === 'select_n') {
-                const selected = candidateSubjects.slice(0, rule.count);
-                calculationLog.push(`[규칙 ${index+1}: 상위 ${rule.count}개 선택] -> [${selected.map(s=>s.name).join(', ')}]`);
-                selected.forEach(subject => {
-                    const ratio = parseFloat(formulaData[subject.name]) || 0;
-                    calculatedScoreSum += subject.score * (ratio / 100);
-                    totalRatioSum += ratio;
-                    usedSubjects.add(subject.name);
-                });
-            }
-            // TODO: select_ranked_weights 로직 추가
-        });
-        
-        // 선택된 과목들의 점수를 최종 환산
-        if (totalRatioSum > 0) {
-            suneungScore = (calculatedScoreSum * (schoolTotalScore / totalRatioSum)) * suneungRatio;
-            calculationLog.push(`[선택과목 합산] (점수*비율 합:${calculatedScoreSum.toFixed(3)}) * (${schoolTotalScore} / ${totalRatioSum}) * ${suneungRatio} = ${suneungScore.toFixed(3)}`);
-        }
-
+  // 탐구수 규칙 적용: 대표점수
+  const inqCount = Math.max(1, parseInt(formulaData.탐구수||'1',10));
+  let inqRep = 0;
+  if (inqArr.length>0) {
+    if (inqCount===1) {
+      inqRep = inqArr[0].val;                       // 맥스
     } else {
-        // [B] 선택 규칙이 없을 경우 ('기본 비율' 계산)
-        calculationLog.push("\n---------- 기본 비율 계산 ----------");
-        let calculatedScoreSum = 0;
-        let totalRatioSum = 0;
-        ['국어', '수학', '영어', '탐구'].forEach(subjectName => {
-            const ratio = parseFloat(formulaData[subjectName]) || 0;
-            if (ratio > 0) {
-                calculatedScoreSum += rawScores[subjectName] * (ratio / 100);
-                totalRatioSum += ratio;
-            }
-        });
-        if (totalRatioSum > 0) {
-            suneungScore = (calculatedScoreSum * (schoolTotalScore / totalRatioSum)) * suneungRatio;
-            calculationLog.push(`[기본과목 합산] (점수*비율 합:${calculatedScoreSum.toFixed(3)}) * (${schoolTotalScore} / ${totalRatioSum}) * ${suneungRatio} = ${suneungScore.toFixed(3)}`);
-        }
+      const sel = inqArr.slice(0, Math.min(inqCount, inqArr.length));
+      inqRep = sel.reduce((s,x)=>s+x.val,0) / sel.length; // 평균
     }
+  }
 
-    // 3. 한국사 가/감점 적용
-    let historyScore = 0;
-    if (formulaData.history_scores) {
-        historyScore = formulaData.history_scores[subjectsData['한국사'].grade] || 0;
-        calculationLog.push(`\n[한국사] 가/감점: ${historyScore}점`);
+  // 영어 환산
+  let engConv = 0, engMax = 0;
+  if (formulaData.english_scores && S.영어?.grade != null) {
+    const g = String(S.영어.grade);
+    engConv = Number(formulaData.english_scores[g] ?? 0);
+    engMax  = Math.max(...Object.values(formulaData.english_scores).map(Number).filter(n=>!isNaN(n)), 0);
+  }
+
+  const raw = {
+    국어:  pickByType(S.국어, kmType),
+    수학:  pickByType(S.수학, kmType),
+    영어:  engConv,
+    한국사: S.한국사?.grade ?? 9,
+    탐구:  inqRep
+  };
+
+  log.push(`[원점수] 국:${raw.국어} 수:${raw.수학} 영(환산):${raw.영어} 탐(대표):${raw.탐구}`);
+
+  // 1-2) 과목별 만점(정규화 기준)
+  const kmMax = (cfg.korean_math?.max_score_method === 'fixed_200') ? 200 : 200; // 기본 200
+  const inqMax = (cfg.inquiry?.max_score_method === 'fixed_100') ? 100 : 100;   // 기본 100
+  const korMax = kmMax;
+  const mathMax = kmMax;
+  const engMaxSafe = engMax || 100; // 없으면 100 가정
+
+  const getMax = (name) => {
+    if (name==='국어') return korMax;
+    if (name==='수학') return mathMax;
+    if (name==='영어') return engMaxSafe;
+    if (name==='탐구') return inqMax;
+    return 100;
+  };
+
+  // 2) 총점/수능비율
+  const TOTAL = Number(formulaData.총점 || 1000);
+  const suneungRatio = (Number(formulaData.수능) || 0) / 100;
+  log.push(`[학교] 총점:${TOTAL}, 수능비율:${suneungRatio}`);
+
+  // 3) 선택 규칙 준비
+  const rules = (Array.isArray(formulaData.selection_rules) ? formulaData.selection_rules : (formulaData.selection_rules ? [formulaData.selection_rules] : []));
+  const ruledSubjectSet = new Set(); // select_ranked_weights에 등장한 과목들(중복 계산 방지)
+
+  // 3-1) 기본 비율(명시된 과목만) 계산 — 단, 선택 규칙 후보 과목은 제외
+  let baseSum = 0, baseRatioSum = 0;
+  const baseCandidates = ['국어','수학','영어','탐구'];
+  // 선택 규칙에 등장한 과목 수집
+  for (const r of rules) {
+    if (r?.type === 'select_ranked_weights' && Array.isArray(r.from)) {
+      r.from.forEach(n => ruledSubjectSet.add(n));
     }
+  }
+  for (const name of baseCandidates) {
+    const ratio = Number(formulaData[name] || 0);
+    if (ratio > 0 && !ruledSubjectSet.has(name)) {
+      baseSum += Number(raw[name]||0) * (ratio/100);
+      baseRatioSum += ratio;
+    }
+  }
+  let suneungBase = 0;
+  if (baseRatioSum > 0) {
+    suneungBase = (baseSum * (TOTAL / baseRatioSum)) * suneungRatio;
+    log.push(`[기본비율] 합:${baseSum.toFixed(3)} × (${TOTAL}/${baseRatioSum}) × ${suneungRatio} = ${suneungBase.toFixed(3)}`);
+  }
 
-    // 최종 합산
-    const finalScore = suneungScore + historyScore;
-    calculationLog.push(`\n---------- 최종 합산 ----------`);
-    calculationLog.push(`수능환산점수(${suneungScore.toFixed(3)}) + 한국사(${historyScore}) = ${finalScore.toFixed(3)}`);
+  // 3-2) select_ranked_weights 처리 (가중치는 총점에 대한 비율)
+  let suneungSelect = 0;
+  for (const [i, r] of rules.entries()) {
+    if (!r || r.type!=='select_ranked_weights' || !Array.isArray(r.from) || !Array.isArray(r.weights) || r.weights.length===0) continue;
 
-    return { totalScore: finalScore.toFixed(3), breakdown: {}, calculationLog };
+    // 후보 점수 구성: 탐구는 '대표점수', 영어는 환산, 나머지는 타입별
+    const cand = r.from.map(name => {
+      const sc = Number(raw[name] || 0);
+      const mx = getMax(name);
+      const norm = mx>0 ? Math.max(0, Math.min(1, sc / mx)) : 0; // 0~1
+      return { name, score: sc, max: mx, norm };
+    }).sort((a,b)=>b.score - a.score);
+
+    // 상위 N개(N = weights 길이) 선발 후 가중치*정규화 합
+    const N = Math.min(r.weights.length, cand.length);
+    const picked = cand.slice(0, N);
+    const wSum = picked.reduce((acc, c, idx) => acc + (Number(r.weights[idx]||0) * c.norm), 0);
+    const add = wSum * TOTAL * suneungRatio;
+
+    // 로그
+    log.push(`[규칙${i+1}] select_ranked_weights from=[${r.from.join(',')}]`);
+    picked.forEach((c, idx)=>log.push(`  - ${idx+1}위 ${c.name}: raw=${c.score}, max=${c.max}, norm=${c.norm.toFixed(4)}, weight=${r.weights[idx]}`));
+    log.push(`  -> 가중합=${wSum.toFixed(4)} × TOTAL(${TOTAL}) × 수능비율(${suneungRatio}) = ${add.toFixed(3)}`);
+
+    suneungSelect += add;
+  }
+
+  const suneungScore = suneungBase + suneungSelect;
+
+  // 4) 한국사 가/감점
+  let hist = 0;
+  if (formulaData.history_scores && S.한국사?.grade != null) {
+    const g = String(S.한국사.grade);
+    hist = Number(formulaData.history_scores[g] ?? 0);
+    log.push(`[한국사] 등급 ${g} → ${hist}점`);
+  }
+
+  // 5) 최종
+  const final = suneungScore + hist;
+  log.push(`===== 최종 =====`);
+  log.push(`수능점수(기본+선택) = ${suneungScore.toFixed(3)}  /  한국사 = ${hist}`);
+  log.push(`총점 = ${final.toFixed(3)}`);
+
+  return {
+    totalScore: final.toFixed(3),
+    breakdown: { base: suneungBase, select: suneungSelect, history: hist },
+    calculationLog: log
+  };
 }
-
-
-module.exports = function(db, authMiddleware) {
-    router.post('/calculate', authMiddleware, async (req, res) => {
-        const { U_ID, year, studentScores } = req.body;
-        if (!U_ID || !year || !studentScores) { return res.status(400).json({ success: false, message: "U_ID, year, studentScores가 모두 필요합니다." }); }
-        try {
-            const sql = `SELECT b.*, r.* FROM \`정시기본\` AS b JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 WHERE b.U_ID = ? AND b.학년도 = ?`;
-            const [results] = await db.query(sql, [U_ID, year]);
-            if (results.length === 0) { return res.status(404).json({ success: false, message: "해당 학과/학년도의 계산 공식을 찾을 수 없습니다." }); }
-            const formulaData = results[0];
-            const calculationResult = calculateScore(formulaData, studentScores);
-            res.json({ success: true, message: `[${year}학년도] U_ID ${U_ID} 학과 점수 계산 성공`, result: calculationResult });
-        } catch (err) {
-            console.error("❌ 계산 처리 중 오류:", err);
-            res.status(500).json({ success: false, message: "계산 중 서버 오류가 발생했습니다." });
-        }
-    });
-    return router;
-};
