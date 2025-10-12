@@ -62,7 +62,50 @@ app.post('/jungsi/calc-method/set', authMiddleware, async (req, res) => {
         console.error("❌ 계산 방식 저장 오류:", err);
         res.status(500).json({ success: false, message: "DB 오류" });
     }
+    
 });
+
+// ⭐️ 디버그 메모 조회 (특정 학년도 전체)
+app.get('/jungsi/debug-notes', authMiddleware, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year, 10);
+    if (!year) return res.status(400).json({ success: false, message: 'year가 필요합니다.' });
+
+    const [rows] = await db.query(
+      'SELECT U_ID, 학년도, is_correct, memo, updated_at FROM `정시디버그메모` WHERE 학년도 = ?',
+      [year]
+    );
+    // 맵으로 주면 프론트에서 쓰기 편함
+    const notesMap = {};
+    rows.forEach(r => { notesMap[r.U_ID] = { is_correct: r.is_correct, memo: r.memo || '', updated_at: r.updated_at }; });
+    res.json({ success: true, notes: notesMap });
+  } catch (err) {
+    console.error('❌ debug-notes 조회 오류:', err);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+});
+
+// ⭐️ 디버그 메모 저장/업데이트
+app.post('/jungsi/debug-notes/set', authMiddleware, async (req, res) => {
+  try {
+    const { U_ID, year, is_correct, memo } = req.body;
+    if (!U_ID || !year) return res.status(400).json({ success: false, message: 'U_ID, year가 필요합니다.' });
+    const status = (is_correct === 'Y' || is_correct === 'N' || is_correct === '?') ? is_correct : '?';
+    const text = (typeof memo === 'string') ? memo : '';
+
+    await db.query(
+      `INSERT INTO \`정시디버그메모\` (U_ID, 학년도, is_correct, memo)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE is_correct = VALUES(is_correct), memo = VALUES(memo)`
+      , [U_ID, year, status, text]
+    );
+    res.json({ success: true, message: '디버그 메모 저장 완료' });
+  } catch (err) {
+    console.error('❌ debug-notes 저장 오류:', err);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+});
+
 
 // --- 웹페이지 제공 라우트 ---
 app.get('/setting', (req, res) => { res.sendFile(path.join(__dirname, 'setting.html')); });
