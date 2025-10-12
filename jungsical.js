@@ -39,14 +39,10 @@ function resolveMaxScores(scoreConfig, englishScores) {
   const kmMethod = scoreConfig?.korean_math?.max_score_method || '';
   const inqMethod= scoreConfig?.inquiry?.max_score_method     || '';
 
-  // 국어·수학: 표준점수면 200, 백분위면 100
   const korMax  = (kmType === '표준점수' || kmMethod === 'fixed_200') ? 200 : 100;
   const mathMax = korMax;
-
-  // 탐구: 표준/변환표준이면 100, 백분위면 100 (일반적으로 동일)
   const inqMax  = (inqType === '표준점수' || inqType === '변환표준점수' || inqMethod === 'fixed_100') ? 100 : 100;
 
-  // 영어: 영어환산표 중 최댓값
   let engMax = 100;
   if (englishScores && typeof englishScores === 'object') {
     const vals = Object.values(englishScores).map(Number).filter(n => !Number.isNaN(n));
@@ -71,6 +67,88 @@ function evaluateSpecialFormula(formulaText, ctx, log) {
   // 계산
   const val = Function(`"use strict"; return (${replaced});`)();
   return Number(val) || 0;
+}
+
+/** 변환표준점수 키 탐지 */
+const readConvertedStd = (t) =>
+  Number(t?.converted_std ?? t?.vstd ?? t?.conv_std ?? t?.std ?? t?.percentile ?? 0);
+
+/** 특수공식 컨텍스트(플레이스홀더) 대량 생성: 새 공식이 와도 DB 문자열만 바꾸면 됨 */
+function buildSpecialContext(F, S) {
+  const ctx = {};
+
+  // 총점/수능비율
+  ctx.total = Number(F.총점 || 1000);
+  ctx.suneung_ratio = (Number(F.수능) || 0) / 100;
+
+  // 국/수 표준·백분위
+  ctx.kor_std  = Number(S.국어?.std || 0);
+  ctx.kor_pct  = Number(S.국어?.percentile || 0);
+  ctx.math_std = Number(S.수학?.std || 0);
+  ctx.math_pct = Number(S.수학?.percentile || 0);
+
+  // 영어: 등급→점수표, 그리고 '백분위 추정'도 제공(최대값 기준 스케일링)
+  ctx.eng_grade_score = 0;
+  if (F.english_scores && S.영어?.grade != null) {
+    const eg = String(S.영어.grade);
+    ctx.eng_grade_score = Number(F.english_scores[eg] ?? 0);
+    const vals = Object.values(F.english_scores).map(Number).filter(n => !Number.isNaN(n));
+    const engMax = vals.length ? Math.max(...vals) : 100;
+    ctx.eng_pct_est = engMax > 0 ? Math.min(100, Math.max(0, (ctx.eng_grade_score / engMax) * 100)) : 0;
+  } else {
+    ctx.eng_pct_est = 0;
+  }
+
+  // 한국사: 등급→가감점
+  ctx.hist_grade_score = 0;
+  if (F.history_scores && S.한국사?.grade != null) {
+    const hg = String(S.한국사.grade);
+    ctx.hist_grade_score = Number(F.history_scores[hg] ?? 0);
+  }
+
+  // 탐구: 변환표준/표준/백분위 정렬
+  const inqs = (S.탐구 || []);
+  const sortedConv = inqs.map((t, i) => ({ idx: i, conv: readConvertedStd(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
+                         .sort((a,b)=>b.conv-a.conv);
+  const sortedStd  = inqs.map((t, i) => ({ idx: i, std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
+                         .sort((a,b)=>b.std-a.std);
+  const sortedPct  = inqs.map((t, i) => ({ idx: i, pct: Number(t?.percentile || 0) }))
+                         .sort((a,b)=>b.pct-a.pct);
+
+  // 상위 1/2 합·평균 (변환표준/표준/백분위)
+  ctx.inq1_converted_std = sortedConv[0]?.conv || 0;
+  ctx.inq2_converted_std = sortedConv[1]?.conv || 0;
+  ctx.inq_sum2_converted_std = ctx.inq1_converted_std + ctx.inq2_converted_std;
+  ctx.inq_avg2_converted_std = (ctx.inq_sum2_converted_std) / (sortedConv.length >= 2 ? 2 : (sortedConv.length || 1));
+
+  ctx.inq1_std = sortedStd[0]?.std || 0;
+  ctx.inq2_std = sortedStd[1]?.std || 0;
+  ctx.inq_sum2_std = ctx.inq1_std + ctx.inq2_std;
+  ctx.inq_avg2_std = (ctx.inq_sum2_std) / (sortedStd.length >= 2 ? 2 : (sortedStd.length || 1));
+
+  ctx.inq1_percentile = sortedPct[0]?.pct || 0;
+  ctx.inq2_percentile = sortedPct[1]?.pct || 0;
+  ctx.inq_sum2_percentile = ctx.inq1_percentile + ctx.inq2_percentile;
+  ctx.inq_avg2_percentile = (ctx.inq_sum2_percentile) / (sortedPct.length >= 2 ? 2 : (sortedPct.length || 1));
+
+  // 상위3 관련(국/수/영추정/탐1 백분위 후보)
+  const kor_pct = ctx.kor_pct;
+  const math_pct = ctx.math_pct;
+  const inq1_pct = ctx.inq1_percentile;
+  const eng_pct_est = ctx.eng_pct_est;
+
+  // ① 국·수·탐1만 (영어 제외)
+  const top3_no_eng = [kor_pct, math_pct, inq1_pct].sort((a,b)=>b-a).slice(0,3);
+  ctx.top3_avg_pct_kor_math_inq1 = top3_no_eng.length ? (top3_no_eng.reduce((s,x)=>s+x,0)/top3_no_eng.length) : 0;
+
+  // ② 국·영·수·탐1 중 상위3 (영어 포함)
+  const top3_with_eng = [kor_pct, math_pct, inq1_pct, eng_pct_est].sort((a,b)=>b-a).slice(0,3);
+  ctx.top3_avg_pct_kor_eng_math_inq1 = top3_with_eng.length ? (top3_with_eng.reduce((s,x)=>s+x,0)/top3_with_eng.length) : 0;
+
+  // 별칭(aliases)도 지원: {top3_avg_pct} 같은 짧은 키로도 쓰게끔
+  ctx.top3_avg_pct = ctx.top3_avg_pct_kor_eng_math_inq1;
+
+  return ctx;
 }
 
 /* ========== 핵심 계산기 ========== */
@@ -101,53 +179,8 @@ function calculateScore(formulaDataRaw, studentScores) {
   if (F.계산유형 === '특수공식' && F.특수공식) {
     log.push('<< 특수공식 모드 >>');
 
-    // 표준점수/백분위 원자료
-    const kor_std   = Number(S.국어?.std || 0);
-    const kor_pct   = Number(S.국어?.percentile || 0);
-    const math_std  = Number(S.수학?.std || 0);
-    const math_pct  = Number(S.수학?.percentile || 0);
-
-    // 탐구: 변환표준점수 우선 → 없으면 std → percentile
-    const toConv = (t) => Number(t?.converted_std ?? t?.vstd ?? t?.conv_std ?? t?.std ?? t?.percentile ?? 0);
-    const inqSortedConv = (S.탐구 || [])
-      .map((t, i) => ({ idx: i, conv: toConv(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
-      .sort((a, b) => b.conv - a.conv);
-
-    const inq1_converted_std = inqSortedConv[0]?.conv || 0;
-    const inq2_converted_std = inqSortedConv[1]?.conv || 0;
-
-    // 보조 변수(원하면 수식에서 사용)
-    const inqSortedStd = [...(S.탐구 || [])].map((t,i)=>({std:Number(t?.std||0), pct:Number(t?.percentile||0)})).sort((a,b)=>b.std-a.std);
-    const inq1_std = inqSortedStd[0]?.std || 0;
-    const inq2_std = inqSortedStd[1]?.std || 0;
-
-    const inqSortedPct = [...(S.탐구 || [])].map((t,i)=>({pct:Number(t?.percentile||0)})).sort((a,b)=>b.pct-a.pct);
-    const inq1_percentile = inqSortedPct[0]?.pct || 0;
-    const inq2_percentile = inqSortedPct[1]?.pct || 0;
-
-    // 영어/한국사: 등급표 환산
-    let eng_grade_score = 0;
-    if (F.english_scores && S.영어?.grade != null) {
-      const eg = String(S.영어.grade);
-      eng_grade_score = Number(F.english_scores[eg] ?? 0);
-    }
-    let hist_grade_score = 0;
-    if (F.history_scores && S.한국사?.grade != null) {
-      const hg = String(S.한국사.grade);
-      hist_grade_score = Number(F.history_scores[hg] ?? 0);
-    }
-
-    // 컨텍스트 구성
-    const ctx = {
-      kor_std, kor_pct,
-      math_std, math_pct,
-      inq1_converted_std, inq2_converted_std,
-      inq1_std, inq2_std,
-      inq1_percentile, inq2_percentile,
-      eng_grade_score, hist_grade_score,
-      total: Number(F.총점 || 1000),
-      suneung_ratio: (Number(F.수능) || 0) / 100
-    };
+    // 컨텍스트 대량 생성(새 공식도 DB 문자열만 바꾸면 대응)
+    const ctx = buildSpecialContext(F, S);
 
     // 평가
     log.push(`[특수공식 원본] ${F.특수공식}`);
@@ -247,9 +280,6 @@ function calculateScore(formulaDataRaw, studentScores) {
   }
 
   // 4) 기본비율 계산 (남은 총점 사용)
-  // - 비율(%)가 명시된 과목만
-  // - select_ranked_weights.from에 포함된 과목은 기본비율에서 제외
-  // - select_n이 있으면: selectedBySelectN ∩ (비율>0)만 반영
   let baseRatioSum = 0;
   let baseNormWeighted = 0;
   const ratioOf = (name) => Number(F[name] || 0);
@@ -258,7 +288,6 @@ function calculateScore(formulaDataRaw, studentScores) {
   for (const name of candidatesBase) {
     const ratio = ratioOf(name);
     if (ratio <= 0) continue;
-
     if (selectWeightSubjects.size && selectWeightSubjects.has(name)) continue;
     if (selectNRules.length && !selectedBySelectN.has(name)) continue;
 
@@ -277,7 +306,7 @@ function calculateScore(formulaDataRaw, studentScores) {
 
   // 5) 선택가중(select_ranked_weights) 계산 (규칙 간 중복방지)
   let suneungSelect = 0;
-  const usedForWeights = new Set(); // 규칙 간 중복 방지
+  const usedForWeights = new Set();
 
   for (let i = 0; i < rules.length; i++) {
     const r = rules[i];
@@ -285,7 +314,6 @@ function calculateScore(formulaDataRaw, studentScores) {
       continue;
     }
 
-    // 후보 정렬(정규화 내림차순) + 이미 쓴 과목 제외
     const cand = r.from
       .filter(name => !usedForWeights.has(name))
       .map(name => ({ name, norm: normOf(name), raw: Number(raw[name] || 0), max: getMax(name) }))
@@ -293,8 +321,6 @@ function calculateScore(formulaDataRaw, studentScores) {
 
     const N = Math.min(cand.length, r.weights.length);
     const picked = cand.slice(0, N);
-
-    // 이번 규칙에서 사용한 과목들 마킹(교차 중복 금지)
     picked.forEach(p => usedForWeights.add(p.name));
 
     const wSum = picked.reduce((acc, c, idx) => acc + (Number(r.weights[idx] || 0) * c.norm), 0);
@@ -345,7 +371,6 @@ function calculateScore(formulaDataRaw, studentScores) {
 
 /* ========== 라우터 ========== */
 module.exports = function (db, authMiddleware) {
-  // 점수 계산
   router.post('/calculate', authMiddleware, async (req, res) => {
     const { U_ID, year, studentScores } = req.body;
     if (!U_ID || !year || !studentScores) {
