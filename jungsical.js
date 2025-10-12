@@ -20,7 +20,7 @@ const pickByType = (row, type) => {
 function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
   const key = (type === '표준점수' || type === '변환표준점수') ? 'std' : 'percentile';
   const arr = (inquiryRows || [])
-    .map((t, i) => ({ idx: i, val: Number(t?.[key] || 0) }))}
+    .map((t, i) => ({ idx: i, val: Number(t?.[key] || 0) }))
     .sort((a, b) => b.val - a.val);
 
   if (arr.length === 0) return { rep: 0, sorted: arr };
@@ -31,6 +31,7 @@ function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
   const avg = sel.reduce((s, x) => s + x.val, 0) / sel.length;
   return { rep: avg, sorted: arr };
 }
+
 
 // 과목 만점(정규화 기준) 산출
 function resolveMaxScores(scoreConfig, englishScores) {
