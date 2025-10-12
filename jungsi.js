@@ -106,6 +106,98 @@ app.post('/jungsi/debug-notes/set', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /jungsi/inquiry-conv/:U_ID/:year?kind=사탐|과탐
+app.get('/jungsi/inquiry-conv/:U_ID/:year', authMiddleware, async (req, res) => {
+  const { U_ID, year } = req.params;
+  const kind = req.query.kind; // optional
+  try {
+    let sql = `SELECT 계열, 백분위, 변환표준점수 FROM \`정시탐구변환표준\` WHERE U_ID=? AND 학년도=?`;
+    const params = [U_ID, year];
+    if (kind === '사탐' || kind === '과탐') { sql += ` AND 계열=?`; params.push(kind); }
+    sql += ` ORDER BY 계열, 백분위 DESC`;
+    const [rows] = await db.query(sql, params);
+
+    // 응답을 { '사탐': { percentile: score, ... }, '과탐': {...} } 형태로
+    const pack = {};
+    for (const r of rows) {
+      if (!pack[r.계열]) pack[r.계열] = {};
+      pack[r.계열][String(r.백분위)] = Number(r.변환표준점수);
+    }
+    res.json({ success: true, mappings: pack });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success:false, message:'조회 오류' });
+  }
+});
+
+// POST /jungsi/inquiry-conv/bulk-save
+// body: { year, U_ID, rows_text }
+// rows_text 예시(탭/개행 구분): 
+// "사탐\t100\t70\n사탐\t99\t69.08\n...\n과탐\t100\t70\n..."
+app.post('/jungsi/inquiry-conv/bulk-save', authMiddleware, async (req, res) => {
+  const { year, U_ID, rows_text } = req.body;
+  if (!year || !U_ID || !rows_text) {
+    return res.status(400).json({ success:false, message:'year, U_ID, rows_text 필요' });
+  }
+  const lines = rows_text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!lines.length) return res.json({ success:true, message:'저장할 데이터가 없습니다.' });
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const upSQL = `
+      INSERT INTO \`정시탐구변환표준\` (U_ID, 학년도, 계열, 백분위, 변환표준점수)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE 변환표준점수=VALUES(변환표준점수), updated_at=CURRENT_TIMESTAMP
+    `;
+
+    let count = 0;
+    for (const line of lines) {
+      const parts = line.split(/\t|,|\s+/).filter(Boolean); // 탭, 콤마, 공백 모두 허용
+      if (parts.length < 3) continue;
+      const kind = parts[0];
+      if (kind !== '사탐' && kind !== '과탐') continue;
+      const pct = parseInt(parts[1], 10);
+      const conv = Number(parts[2]);
+      if (Number.isNaN(pct) || Number.isNaN(conv)) continue;
+      await conn.query(upSQL, [U_ID, year, kind, pct, conv]);
+      count++;
+    }
+
+    await conn.commit();
+    res.json({ success:true, message:`${count}건 저장 완료` });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    res.status(500).json({ success:false, message:'저장 중 오류' });
+  } finally {
+    conn.release();
+  }
+});
+
+// GET /jungsi/inquiry-conv/schools/:year
+app.get('/jungsi/inquiry-conv/schools/:year', authMiddleware, async (req, res) => {
+  const { year } = req.params;
+  try {
+    const sql = `
+      SELECT U_ID, GROUP_CONCAT(DISTINCT 계열 ORDER BY 계열) AS 계열들, COUNT(*) AS cnt
+      FROM \`정시탐구변환표준\`
+      WHERE 학년도=?
+      GROUP BY U_ID
+      ORDER BY U_ID
+    `;
+    const [rows] = await db.query(sql, [year]);
+    res.json({ success:true, items: rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success:false, message:'목록 조회 오류' });
+  }
+});
+
+
+
+
 
 // --- 웹페이지 제공 라우트 ---
 app.get('/setting', (req, res) => { res.sendFile(path.join(__dirname, 'setting.html')); });
