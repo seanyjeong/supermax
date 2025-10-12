@@ -20,7 +20,7 @@ const pickByType = (row, type) => {
 function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
   const key = (type === '표준점수' || type === '변환표준점수') ? 'std' : 'percentile';
   const arr = (inquiryRows || [])
-    .map((t, i) => ({ idx: i, val: Number(t?.[key] || 0) }))
+    .map((t, i) => ({ idx: i, val: Number(t?.[key] || 0) }))}
     .sort((a, b) => b.val - a.val);
 
   if (arr.length === 0) return { rep: 0, sorted: arr };
@@ -64,7 +64,6 @@ function evaluateSpecialFormula(formulaText, ctx, log) {
     throw new Error('특수공식에 허용되지 않은 토큰이 포함되어 있습니다.');
   }
 
-  // 계산
   const val = Function(`"use strict"; return (${replaced});`)();
   return Number(val) || 0;
 }
@@ -73,7 +72,7 @@ function evaluateSpecialFormula(formulaText, ctx, log) {
 const readConvertedStd = (t) =>
   Number(t?.converted_std ?? t?.vstd ?? t?.conv_std ?? t?.std ?? t?.percentile ?? 0);
 
-/** 특수공식 컨텍스트(플레이스홀더) 대량 생성: 새 공식이 와도 DB 문자열만 바꾸면 됨 */
+/** 특수공식 컨텍스트(플레이스홀더) 대량 생성 */
 function buildSpecialContext(F, S) {
   const ctx = {};
 
@@ -87,7 +86,7 @@ function buildSpecialContext(F, S) {
   ctx.math_std = Number(S.수학?.std || 0);
   ctx.math_pct = Number(S.수학?.percentile || 0);
 
-  // 영어: 등급→점수표, 그리고 '백분위 추정'도 제공(최대값 기준 스케일링)
+  // 영어(등급표 환산 + 최대값으로 백분위 추정)
   ctx.eng_grade_score = 0;
   if (F.english_scores && S.영어?.grade != null) {
     const eg = String(S.영어.grade);
@@ -99,7 +98,7 @@ function buildSpecialContext(F, S) {
     ctx.eng_pct_est = 0;
   }
 
-  // 한국사: 등급→가감점
+  // 한국사(등급→가감점)
   ctx.hist_grade_score = 0;
   if (F.history_scores && S.한국사?.grade != null) {
     const hg = String(S.한국사.grade);
@@ -115,7 +114,7 @@ function buildSpecialContext(F, S) {
   const sortedPct  = inqs.map((t, i) => ({ idx: i, pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.pct-a.pct);
 
-  // 상위 1/2 합·평균 (변환표준/표준/백분위)
+  // Top1/Top2/Avg2 (변환표준/표준/백분위)
   ctx.inq1_converted_std = sortedConv[0]?.conv || 0;
   ctx.inq2_converted_std = sortedConv[1]?.conv || 0;
   ctx.inq_sum2_converted_std = ctx.inq1_converted_std + ctx.inq2_converted_std;
@@ -131,27 +130,54 @@ function buildSpecialContext(F, S) {
   ctx.inq_sum2_percentile = ctx.inq1_percentile + ctx.inq2_percentile;
   ctx.inq_avg2_percentile = (ctx.inq_sum2_percentile) / (sortedPct.length >= 2 ? 2 : (sortedPct.length || 1));
 
-  // 상위3 관련(국/수/영추정/탐1 백분위 후보)
+  // 상위3 평균(백분위): 국/수/탐1 (영어 포함/제외 둘 다)
   const kor_pct = ctx.kor_pct;
   const math_pct = ctx.math_pct;
   const inq1_pct = ctx.inq1_percentile;
   const eng_pct_est = ctx.eng_pct_est;
 
-  // ① 국·수·탐1만 (영어 제외)
   const top3_no_eng = [kor_pct, math_pct, inq1_pct].sort((a,b)=>b-a).slice(0,3);
   ctx.top3_avg_pct_kor_math_inq1 = top3_no_eng.length ? (top3_no_eng.reduce((s,x)=>s+x,0)/top3_no_eng.length) : 0;
 
-  // ② 국·영·수·탐1 중 상위3 (영어 포함)
   const top3_with_eng = [kor_pct, math_pct, inq1_pct, eng_pct_est].sort((a,b)=>b-a).slice(0,3);
   ctx.top3_avg_pct_kor_eng_math_inq1 = top3_with_eng.length ? (top3_with_eng.reduce((s,x)=>s+x,0)/top3_with_eng.length) : 0;
 
-  // 별칭(aliases)도 지원: {top3_avg_pct} 같은 짧은 키로도 쓰게끔
   ctx.top3_avg_pct = ctx.top3_avg_pct_kor_eng_math_inq1;
 
   return ctx;
 }
 
-/* ========== 핵심 계산기 ========== */
+/* ========= 변환표준 보조 ========= */
+// 백분위→변환표준점수 조회 (정확 일치 우선, 없으면 선형보간)
+function mapPercentileToConverted(mapObj, pct) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(pct)||0)));
+  if (!mapObj) return null;
+  if (mapObj[String(p)] != null) return Number(mapObj[String(p)]);
+
+  const keys = Object.keys(mapObj).map(k => parseInt(k,10)).filter(n=>!Number.isNaN(n)).sort((a,b)=>a-b);
+  if (!keys.length) return null;
+  if (p <= keys[0]) return Number(mapObj[String(keys[0])]);
+  if (p >= keys[keys.length-1]) return Number(mapObj[String(keys[keys.length-1])]);
+
+  let lo = keys[0], hi = keys[keys.length-1];
+  for (let i=1;i<keys.length;i++){
+    if (keys[i] >= p){ hi = keys[i]; lo = keys[i-1]; break; }
+  }
+  const y1 = Number(mapObj[String(lo)]);
+  const y2 = Number(mapObj[String(hi)]);
+  const t = (p - lo) / (hi - lo);
+  return y1 + (y2 - y1) * t;
+}
+
+// 과목명으로 사탐/과탐 추정(학생 데이터에 group/type 없을 때 대비)
+function guessInquiryGroup(subjectName='') {
+  const s = String(subjectName);
+  const sci = ['물리','화학','생명','지구'];
+  if (sci.some(w => s.includes(w))) return '과탐';
+  return '사탐'; // default
+}
+
+/* ========== 핵심 계산기(일반) ========== */
 function calculateScore(formulaDataRaw, studentScores) {
   const log = [];
   log.push('========== 계산 시작 ==========');
@@ -162,8 +188,8 @@ function calculateScore(formulaDataRaw, studentScores) {
   F.score_config           = safeParse(F.score_config,   {}) || {};
   F.english_scores         = safeParse(F.english_scores, null);
   F.history_scores         = safeParse(F.history_scores, null);
-  F.english_bonus_scores   = safeParse(F.english_bonus_scores, null); // (옵션) 영어 등급별 가/감점
-  const englishBonusFixed  = Number(F.english_bonus_fixed || 0);      // (옵션) 영어 고정 가/감점
+  F.english_bonus_scores   = safeParse(F.english_bonus_scores, null);
+  const englishBonusFixed  = Number(F.english_bonus_fixed || 0);
 
   // 1) 학생 과목 데이터 추출
   const subs = studentScores?.subjects || [];
@@ -178,19 +204,12 @@ function calculateScore(formulaDataRaw, studentScores) {
   // === [특수공식 분기] ===
   if (F.계산유형 === '특수공식' && F.특수공식) {
     log.push('<< 특수공식 모드 >>');
-
-    // 컨텍스트 대량 생성(새 공식도 DB 문자열만 바꾸면 대응)
     const ctx = buildSpecialContext(F, S);
-
-    // 평가
     log.push(`[특수공식 원본] ${F.특수공식}`);
     const specialValue = evaluateSpecialFormula(F.특수공식, ctx, log);
-
-    // 최종: 특수공식은 자체 스케일을 포함한다고 가정 (수능비율/총점 추가 곱하지 않음)
     const final = Number(specialValue) || 0;
     log.push('========== 최종 ==========');
     log.push(`특수공식 결과 = ${final.toFixed(3)}`);
-
     return {
       totalScore: final.toFixed(3),
       breakdown: { special: final },
@@ -207,7 +226,7 @@ function calculateScore(formulaDataRaw, studentScores) {
   const inquiryCount = Math.max(1, parseInt(F.탐구수 || '1', 10));
   const { rep: inqRep } = calcInquiryRepresentative(S.탐구, inqType, inquiryCount);
 
-  // 영어 환산 점수(기본비율/선택가중에 쓰일 영어 원점수)
+  // 영어 환산 점수
   let engConv = 0;
   if (F.english_scores && S.영어?.grade != null) {
     const g = String(S.영어.grade);
@@ -262,10 +281,10 @@ function calculateScore(formulaDataRaw, studentScores) {
     return acc;
   }, 0);
   const SW = Math.min(1, Math.max(0, selectWeightSum));
-  const TOTAL_select = TOTAL * SW;         // 선택가중 몫(정보용)
-  const TOTAL_base   = TOTAL * (1 - SW);   // 기본비율 몫
+  const TOTAL_select = TOTAL * SW;
+  const TOTAL_base   = TOTAL * (1 - SW);
 
-  // 3-2) select_n 필터: 기본비율에 포함될 과목 결정(정규화 상위 count)
+  // 3-2) select_n 필터
   const selectNRules = rules.filter(r => r?.type === 'select_n' && Array.isArray(r.from) && r.count);
   const selectedBySelectN = new Set();
   if (selectNRules.length) {
@@ -279,7 +298,7 @@ function calculateScore(formulaDataRaw, studentScores) {
     }
   }
 
-  // 4) 기본비율 계산 (남은 총점 사용)
+  // 4) 기본비율 계산
   let baseRatioSum = 0;
   let baseNormWeighted = 0;
   const ratioOf = (name) => Number(F[name] || 0);
@@ -304,7 +323,7 @@ function calculateScore(formulaDataRaw, studentScores) {
     log.push(`[기본비율] 반영 과목 없음(또는 남은총점=0)`);
   }
 
-  // 5) 선택가중(select_ranked_weights) 계산 (규칙 간 중복방지)
+  // 5) 선택가중(select_ranked_weights)
   let suneungSelect = 0;
   const usedForWeights = new Set();
 
@@ -344,7 +363,7 @@ function calculateScore(formulaDataRaw, studentScores) {
     log.push(`[한국사] 등급 ${hg} → ${historyScore}점`);
   }
 
-  // 6-1) 영어 가/감점 (등급 매핑 + 고정 보정)
+  // 6-1) 영어 가/감점
   let englishBonus = 0;
   if (F.english_bonus_scores && S.영어?.grade != null) {
     const eg = String(S.영어.grade);
@@ -369,8 +388,37 @@ function calculateScore(formulaDataRaw, studentScores) {
   };
 }
 
+/* ========== 변환표준 적용 래퍼 ========== */
+function calculateScoreWithConv(formulaDataRaw, studentScores, convMap, logHook) {
+  const cfg = safeParse(formulaDataRaw.score_config, {}) || {};
+  const inqType = cfg?.inquiry?.type || '백분위';
+
+  // 변환표준점수 타입이면, 탐구 각 과목에 converted_std 보충
+  if (inqType === '변환표준점수' && Array.isArray(studentScores?.subjects)) {
+    const cloned = JSON.parse(JSON.stringify(studentScores));
+    cloned.subjects = (cloned.subjects || []).map(sub => {
+      if (sub.name !== '탐구') return sub;
+      if (sub.converted_std != null) return sub; // 이미 있으면 유지
+      const group = sub.group || sub.type || guessInquiryGroup(sub.subject || '');
+      const pct = Number(sub.percentile || 0);
+      const conv = mapPercentileToConverted(convMap?.[group], pct);
+      if (conv != null) {
+        if (typeof logHook === 'function') {
+          logHook(`[변환표준] ${group} 백분위 ${pct} → 변표 ${conv.toFixed(2)} (자동보충)`);
+        }
+        return { ...sub, converted_std: conv, vstd: conv, std: conv }; // std에도 반영(본 엔진은 std를 읽음)
+      }
+      return sub;
+    });
+    studentScores = cloned;
+  }
+
+  return calculateScore(formulaDataRaw, studentScores);
+}
+
 /* ========== 라우터 ========== */
 module.exports = function (db, authMiddleware) {
+  // 점수 계산
   router.post('/calculate', authMiddleware, async (req, res) => {
     const { U_ID, year, studentScores } = req.body;
     if (!U_ID || !year || !studentScores) {
@@ -389,7 +437,30 @@ module.exports = function (db, authMiddleware) {
         return res.status(404).json({ success: false, message: '해당 학과/학년도 정보를 찾을 수 없습니다.' });
       }
       const formulaData = rows[0];
-      const result = calculateScore(formulaData, studentScores);
+
+      // 🔹 탐구 변환표준 맵 로딩
+      const [convRows] = await db.query(
+        `SELECT 계열, 백분위, 변환표준점수 FROM \`정시탐구변환표준\` WHERE U_ID=? AND 학년도=?`,
+        [U_ID, year]
+      );
+      const convMap = { '사탐': {}, '과탐': {} };
+      convRows.forEach(r => { convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); });
+
+      // 로그 후킹을 위해 계산기 한 번 더 감싸기
+      let logBuffer = [];
+      const result = calculateScoreWithConv(
+        formulaData,
+        studentScores,
+        convMap,
+        (msg) => logBuffer.push(msg)
+      );
+
+      // 변환 로그를 계산 로그 맨 앞에 삽입(있을 때만)
+      if (logBuffer.length && Array.isArray(result.calculationLog)) {
+        const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 ==========')); // 항상 0
+        result.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
+      }
+
       return res.json({ success: true, message: `[${year}] U_ID ${U_ID} 점수 계산 성공`, result });
     } catch (err) {
       console.error('❌ 계산 처리 중 오류:', err);
