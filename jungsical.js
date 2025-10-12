@@ -16,48 +16,33 @@ const pickByType = (row, type) => {
   return Number(row.percentile || 0);
 };
 
-// 과목명 헬퍼
-const kmSubjectNameForKorean = (row) => row?.subject || '국어';
-const kmSubjectNameForMath   = (row) => row?.subject || '수학';
-const inquirySubjectName     = (row) => row?.subject || '탐구';
-
 // 탐구 대표값 계산: 1개면 최대값, 2개면 평균(2초과는 상위 N 평균)
-// + 선택된 과목들(picked) 반환하여 highest_of_year 정규화에 사용
 function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
   const key = (type === '표준점수' || type === '변환표준점수') ? 'std' : 'percentile';
   const arr = (inquiryRows || [])
-    .map((t) => ({ row: t, subject: inquirySubjectName(t), val: Number(t?.[key] || 0) }))
+    .map((t) => ({ val: Number(t?.[key] || 0) }))
     .sort((a, b) => b.val - a.val);
 
-  if (arr.length === 0) return { rep: 0, sorted: arr, picked: [] };
+  if (arr.length === 0) return { rep: 0, sorted: arr };
   const n = Math.max(1, inquiryCount || 1);
-  const picked = arr.slice(0, Math.min(n, arr.length));
-  const rep = picked.reduce((s, x) => s + x.val, 0) / picked.length;
-  return { rep, sorted: arr, picked };
+  if (n === 1) return { rep: arr[0].val, sorted: arr };
+
+  const sel = arr.slice(0, Math.min(n, arr.length));
+  const avg = sel.reduce((s, x) => s + x.val, 0) / sel.length;
+  return { rep: avg, sorted: arr };
 }
 
 // 과목 만점(정규화 기준) 산출
-function resolveMaxScores(scoreConfig, englishScores, highestMap, S) {
-  const kmType    = scoreConfig?.korean_math?.type || '백분위';
-  const inqType   = scoreConfig?.inquiry?.type     || '백분위';
-  const kmMethod  = scoreConfig?.korean_math?.max_score_method || '';
-  const inqMethod = scoreConfig?.inquiry?.max_score_method     || '';
+function resolveMaxScores(scoreConfig, englishScores) {
+  const kmType   = scoreConfig?.korean_math?.type || '백분위';
+  const inqType  = scoreConfig?.inquiry?.type     || '백분위';
+  const kmMethod = scoreConfig?.korean_math?.max_score_method || '';
+  const inqMethod= scoreConfig?.inquiry?.max_score_method     || '';
 
-  // 기본값
-  let korMax  = (kmType === '표준점수' || kmMethod === 'fixed_200') ? 200 : 100;
-  let mathMax = korMax;
-  let inqMax  = (inqType === '표준점수' || inqType === '변환표준점수' || inqMethod === 'fixed_100') ? 100 : 100;
+  const korMax  = (kmType === '표준점수' || kmMethod === 'fixed_200') ? 200 : 100;
+  const mathMax = korMax;
+  const inqMax  = (inqType === '표준점수' || inqType === '변환표준점수' || inqMethod === 'fixed_100') ? 100 : 100;
 
-  // highest_of_year → 과목별 최고점 맵 사용
-  if (kmMethod === 'highest_of_year' && highestMap) {
-    const korKey  = kmSubjectNameForKorean(S?.국어);
-    const mathKey = kmSubjectNameForMath(S?.수학);
-    if (highestMap[korKey]  != null) korMax  = Number(highestMap[korKey]);
-    if (highestMap[mathKey] != null) mathMax = Number(highestMap[mathKey]);
-  }
-  // 탐구 highest_of_year는 대표값 정규화 시 per-subject로 처리(여기선 inqMax 그대로)
-
-  // 영어 max (등급 환산표 최대값)
   let engMax = 100;
   if (englishScores && typeof englishScores === 'object') {
     const vals = Object.values(englishScores).map(Number).filter(n => !Number.isNaN(n));
@@ -184,7 +169,7 @@ function mapPercentileToConverted(mapObj, pct) {
   return y1 + (y2 - y1) * t;
 }
 
-// 과목명으로 사탐/과탐 추정(학생 데이터에 group/type 없을 때 대비)
+// 과목명으로 사탐/과탐 추정
 function guessInquiryGroup(subjectName='') {
   const s = String(subjectName);
   const sci = ['물리','화학','생명','지구'];
@@ -192,8 +177,24 @@ function guessInquiryGroup(subjectName='') {
   return '사탐'; // default
 }
 
+/* ========= 영어 가산점 자동판단 ========= */
+/** 영어가 기본/선택 반영에 쓰이지 않으면 english_scores를 '가산점 맵'으로 간주 */
+function isEnglishBonusMode(F, rules) {
+  const baseRatio = Number(F['영어'] || 0);
+  const usedInBase = baseRatio > 0;
+
+  let usedInSelect = false;
+  const arr = Array.isArray(rules) ? rules : (rules ? [rules] : []);
+  for (const r of arr) {
+    if (!r || !Array.isArray(r.from)) continue;
+    if (r.from.includes('영어')) { usedInSelect = true; break; }
+  }
+  // 기본/선택 어디에도 없고, english_scores가 있으면 '가산점' 모드
+  return !usedInBase && !usedInSelect && !!F.english_scores;
+}
+
 /* ========== 핵심 계산기(일반) ========== */
-function calculateScore(formulaDataRaw, studentScores, highestMap) {
+function calculateScore(formulaDataRaw, studentScores) {
   const log = [];
   log.push('========== 계산 시작 ==========');
 
@@ -203,7 +204,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   F.score_config           = safeParse(F.score_config,   {}) || {};
   F.english_scores         = safeParse(F.english_scores, null);
   F.history_scores         = safeParse(F.history_scores, null);
-  F.english_bonus_scores   = safeParse(F.english_bonus_scores, null);
+  F.english_bonus_scores   = safeParse(F.english_bonus_scores, null); // (있으면 그대로 사용)
   const englishBonusFixed  = Number(F.english_bonus_fixed || 0);
 
   // 1) 학생 과목 데이터 추출
@@ -236,56 +237,49 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   const cfg     = F.score_config || {};
   const kmType  = cfg.korean_math?.type || '백분위';
   const inqType = cfg.inquiry?.type     || '백분위';
-  const inqMethod = cfg.inquiry?.max_score_method || '';
 
-  // 탐구 대표값(규칙) + picked (highest_of_year용)
+  // 탐구 대표값(규칙)
   const inquiryCount = Math.max(1, parseInt(F.탐구수 || '1', 10));
-  const { rep: inqRep, picked: inqPicked } = calcInquiryRepresentative(S.탐구, inqType, inquiryCount);
+  const { rep: inqRep } = calcInquiryRepresentative(S.탐구, inqType, inquiryCount);
 
-  // 영어 환산 점수
-  let engConv = 0;
-  if (F.english_scores && S.영어?.grade != null) {
+  // 규칙 로딩
+  const rules = Array.isArray(F.selection_rules)
+    ? F.selection_rules
+    : (F.selection_rules ? [F.selection_rules] : []);
+
+  // 영어 모드 결정
+  const englishIsBonus = isEnglishBonusMode(F, rules);
+
+  // 영어 환산 점수(과목 모드일 때만)
+  let engConvSubject = 0;
+  if (!englishIsBonus && F.english_scores && S.영어?.grade != null) {
     const g = String(S.영어.grade);
-    engConv = Number(F.english_scores[g] ?? 0);
+    engConvSubject = Number(F.english_scores[g] ?? 0);
+    log.push(`[영어] 과목 환산 사용: 등급 ${g} → ${engConvSubject}`);
   }
 
   // 원점수(과목당)
   const raw = {
     국어:   pickByType(S.국어, kmType),
     수학:   pickByType(S.수학, kmType),
-    영어:   engConv,
+    영어:   englishIsBonus ? 0 : engConvSubject,  // 가산점 모드면 과목점수는 0으로
     한국사: Number(S.한국사?.grade ?? 9),
     탐구:   inqRep
   };
-  log.push(`[원점수] 국:${raw.국어} / 수:${raw.수학} / 영(환산):${raw.영어} / 탐(대표):${raw.탐구}`);
+  log.push(`[원점수] 국:${raw.국어} / 수:${raw.수학} / 영(${englishIsBonus ? '가산점모드-과목반영X' : '환산'}):${englishIsBonus ? 0 : raw.영어} / 탐(대표):${raw.탐구}`);
 
   // 정규화 기준(과목 만점)
-  const { korMax, mathMax, engMax, inqMax } = resolveMaxScores(cfg, F.english_scores, highestMap, S);
+  const { korMax, mathMax, engMax, inqMax } = resolveMaxScores(cfg, F.english_scores);
   const getMax = (name) => {
     if (name === '국어') return korMax;
     if (name === '수학') return mathMax;
     if (name === '영어') return engMax;
-    if (name === '탐구') return inqMax; // 탐구 highest_of_year는 아래에서 별도 처리
+    if (name === '탐구') return inqMax;
     return 100;
   };
-
-  // 탐구 highest_of_year면 대표값의 분모를 '선택된 과목 최고점 평균'으로 사용
-  let inquiryRepMaxForNorm = inqMax;
-  if (inqMethod === 'highest_of_year' && highestMap && inqPicked.length) {
-    const ms = inqPicked
-      .map(x => Number(highestMap[x.subject] ?? NaN))
-      .filter(v => !Number.isNaN(v) && v > 0);
-    if (ms.length) {
-      inquiryRepMaxForNorm = ms.reduce((s,x)=>s+x,0) / ms.length;
-    }
-  }
-
   const normOf = (name) => {
     const sc = Number(raw[name] || 0);
-    let mx = getMax(name);
-    if (name === '탐구' && inqMethod === 'highest_of_year' && inquiryRepMaxForNorm > 0) {
-      mx = inquiryRepMaxForNorm;
-    }
+    const mx = getMax(name);
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
   };
 
@@ -293,11 +287,6 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   const TOTAL        = Number(F.총점 || 1000);
   const suneungRatio = (Number(F.수능) || 0) / 100;
   log.push(`[학교] 총점=${TOTAL}, 수능비율=${suneungRatio}`);
-
-  // 3) 규칙 로딩
-  const rules = Array.isArray(F.selection_rules)
-    ? F.selection_rules
-    : (F.selection_rules ? [F.selection_rules] : []);
 
   // 3-1) select_ranked_weights의 선택가중 합 및 대상 과목 집합
   const selectWeightSubjects = new Set();
@@ -366,7 +355,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
     const cand = r.from
       .filter(name => !usedForWeights.has(name))
-      .map(name => ({ name, norm: normOf(name), raw: Number(raw[name] || 0) }))
+      .map(name => ({ name, norm: normOf(name), raw: Number(raw[name] || 0), max: getMax(name) }))
       .sort((a, b) => b.norm - a.norm);
 
     const N = Math.min(cand.length, r.weights.length);
@@ -379,7 +368,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
     log.push(`[규칙${i+1}] select_ranked_weights from=[${r.from.join(', ')}] (weights=${r.weights.join(', ')})`);
     picked.forEach((c, idx) => log.push(
-      `  - ${idx + 1}위 ${c.name}: raw=${c.raw}, norm=${c.norm.toFixed(4)}, weight=${r.weights[idx]}`
+      `  - ${idx + 1}위 ${c.name}: raw=${c.raw}, max=${c.max}, norm=${c.norm.toFixed(4)}, weight=${r.weights[idx]}`
     ));
     log.push(`  -> 가중합=${wSum.toFixed(4)} × TOTAL(${TOTAL}) × 수능비율(${suneungRatio}) = ${add.toFixed(3)}`);
   }
@@ -394,13 +383,23 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     log.push(`[한국사] 등급 ${hg} → ${historyScore}점`);
   }
 
-  // 6-1) 영어 가/감점
+  // 6-1) 영어 가산점(자동 판단)
   let englishBonus = 0;
+
+  // ① 우선순위: english_bonus_scores(있으면 그대로 사용)
   if (F.english_bonus_scores && S.영어?.grade != null) {
     const eg = String(S.영어.grade);
-    englishBonus += Number(F.english_bonus_scores[eg] ?? 0);
-    log.push(`[영어 보정] 등급 ${eg} → ${Number(F.english_bonus_scores[eg] ?? 0)}점`);
+    const add = Number(F.english_bonus_scores[eg] ?? 0);
+    englishBonus += add;
+    log.push(`[영어 보정] (전용테이블) 등급 ${eg} → ${add}점`);
+  } else if (englishIsBonus && F.english_scores && S.영어?.grade != null) {
+    // ② 전용 컬럼 없고, 영어가 기본/선택에 안 쓰이면 english_scores를 가산점으로 사용
+    const eg = String(S.영어.grade);
+    const add = Number(F.english_scores[eg] ?? 0);
+    englishBonus += add;
+    log.push(`[영어 보정] (자동판단-가산점모드) 등급 ${eg} → ${add}점`);
   }
+
   if (englishBonusFixed) {
     englishBonus += englishBonusFixed;
     log.push(`[영어 보정] 고정 보정 ${englishBonusFixed}점`);
@@ -420,7 +419,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 }
 
 /* ========== 변환표준 적용 래퍼 ========== */
-function calculateScoreWithConv(formulaDataRaw, studentScores, convMap, logHook, highestMap) {
+function calculateScoreWithConv(formulaDataRaw, studentScores, convMap, logHook) {
   const cfg = safeParse(formulaDataRaw.score_config, {}) || {};
   const inqType = cfg?.inquiry?.type || '백분위';
 
@@ -445,25 +444,14 @@ function calculateScoreWithConv(formulaDataRaw, studentScores, convMap, logHook,
     studentScores = cloned;
   }
 
-  return calculateScore(formulaDataRaw, studentScores, highestMap);
-}
-
-/* ========== 최고표점 로딩 ========== */
-async function loadYearHighestMap(db, year, exam) {
-  const [rows] = await db.query(
-    'SELECT 과목명, 최고점 FROM `정시최고표점` WHERE 학년도=? AND 모형=?',
-    [year, exam]
-  );
-  const map = {};
-  rows.forEach(r => { map[r.과목명] = Number(r.최고점); });
-  return map;
+  return calculateScore(formulaDataRaw, studentScores);
 }
 
 /* ========== 라우터 ========== */
 module.exports = function (db, authMiddleware) {
   // 점수 계산
   router.post('/calculate', authMiddleware, async (req, res) => {
-    const { U_ID, year, studentScores, basis_exam } = req.body;
+    const { U_ID, year, studentScores } = req.body;
     if (!U_ID || !year || !studentScores) {
       return res.status(400).json({ success: false, message: 'U_ID, year, studentScores가 모두 필요합니다.' });
     }
@@ -481,7 +469,7 @@ module.exports = function (db, authMiddleware) {
       }
       const formulaData = rows[0];
 
-      // 탐구 변환표준 맵 로딩
+      // 🔹 탐구 변환표준 맵 로딩
       const [convRows] = await db.query(
         `SELECT 계열, 백분위, 변환표준점수 FROM \`정시탐구변환표준\` WHERE U_ID=? AND 학년도=?`,
         [U_ID, year]
@@ -489,29 +477,17 @@ module.exports = function (db, authMiddleware) {
       const convMap = { '사탐': {}, '과탐': {} };
       convRows.forEach(r => { convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); });
 
-      // highest_of_year가 필요하면 해당 모형 최고표점 로딩
-      const cfg = safeParse(formulaData.score_config, {}) || {};
-      const needYearMaxKorMath = (cfg?.korean_math?.max_score_method === 'highest_of_year');
-      const needYearMaxInq     = (cfg?.inquiry?.max_score_method     === 'highest_of_year');
-      const needYearMax = needYearMaxKorMath || needYearMaxInq;
-      const exam = basis_exam || cfg?.highest_exam || '수능';
-
-      let highestMap = null;
-      if (needYearMax) {
-        highestMap = await loadYearHighestMap(db, year, exam);
-      }
-
-      // 변표 로그 버퍼
+      // 변표 로그를 앞에 끼우기 위해 버퍼링
       let logBuffer = [];
       const result = calculateScoreWithConv(
         formulaData,
         studentScores,
         convMap,
-        (msg) => logBuffer.push(msg),
-        highestMap
+        (msg) => logBuffer.push(msg)
       );
 
       if (logBuffer.length && Array.isArray(result.calculationLog)) {
+        // "계산 시작" 직후에 변표 로그 삽입
         const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 ==========')); // 보통 0
         result.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
       }
@@ -527,8 +503,7 @@ module.exports = function (db, authMiddleware) {
   router.post('/debug-normalize', authMiddleware, (req, res) => {
     const cfg = safeParse(req.body?.score_config, {});
     const eng = safeParse(req.body?.english_scores, null);
-    // debug-normalize는 highestMap/S 미사용 간단 확인용
-    const maxes = resolveMaxScores(cfg, eng, null, {});
+    const maxes = resolveMaxScores(cfg, eng);
     res.json({ success: true, maxes });
   });
 
