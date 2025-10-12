@@ -195,6 +195,60 @@ app.get('/jungsi/inquiry-conv/schools/:year', authMiddleware, async (req, res) =
   }
 });
 
+// --- 최고표점 조회: 특정 학년도/모형(3월/6월/9월/수능) ---
+app.get('/jungsi/topmax/:year/:exam', authMiddleware, async (req, res) => {
+  const { year, exam } = req.params; // exam: '3월'|'6월'|'9월'|'수능'
+  try {
+    const [rows] = await db.query(
+      'SELECT 과목명, 최고점 FROM `정시최고표점` WHERE 학년도=? AND 모형=? ORDER BY 과목명',
+      [year, exam]
+    );
+    const map = {};
+    rows.forEach(r => { map[r.과목명] = Number(r.최고점); });
+    res.json({ success: true, year, exam, data: map });
+  } catch (e) {
+    console.error('❌ 최고표점 조회 오류:', e);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+});
+
+// --- 최고표점 벌크 저장(업서트) ---
+app.post('/jungsi/topmax/bulk-save', authMiddleware, async (req, res) => {
+  const { year, exam, scores } = req.body;
+  // scores: { "화법과작문": 132, "언어와매체": 134, ... } 형태
+  if (!year || !exam || !scores || typeof scores !== 'object') {
+    return res.status(400).json({ success:false, message:'year, exam, scores 필요' });
+  }
+  try {
+    const entries = Object.entries(scores).filter(([k,v]) => k && v !== '' && v != null);
+    if (!entries.length) return res.json({ success:true, message:'저장할 데이터가 없습니다.' });
+
+    const sql = `
+      INSERT INTO \`정시최고표점\` (학년도, 모형, 과목명, 최고점)
+      VALUES ${entries.map(()=>'(?,?,?,?)').join(',')}
+      ON DUPLICATE KEY UPDATE 최고점=VALUES(최고점), updated_at=NOW()
+    `;
+    const params = entries.flatMap(([sub, val]) => [year, exam, sub, Number(val)]);
+    await db.query(sql, params);
+    res.json({ success:true, message:`[${year}/${exam}] ${entries.length}개 저장 완료` });
+  } catch (e) {
+    console.error('❌ 최고표점 저장 오류:', e);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  }
+});
+
+// --- (선택) 과목 목록 제공: 프론트가 헤더 생성 용
+app.get('/jungsi/topmax/subjects', authMiddleware, (req, res) => {
+  const subjects = [
+    '화법과작문','언어와매체',
+    '확률과통계','미적분','기하',
+    '생활과윤리','윤리와사상','한국지리','세계지리','동아시아사','세계사','정치와법','경제','사회문화',
+    '생명과학1','생명과학2','화학1','화학2','물리1','물리2','지구과학1','지구과학2'
+  ];
+  res.json({ success:true, subjects });
+});
+
+
 
 
 
