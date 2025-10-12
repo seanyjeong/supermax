@@ -32,7 +32,6 @@ function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
   return { rep: avg, sorted: arr };
 }
 
-
 // 과목 만점(정규화 기준) 산출
 function resolveMaxScores(scoreConfig, englishScores) {
   const kmType   = scoreConfig?.korean_math?.type || '백분위';
@@ -108,11 +107,11 @@ function buildSpecialContext(F, S) {
 
   // 탐구: 변환표준/표준/백분위 정렬
   const inqs = (S.탐구 || []);
-  const sortedConv = inqs.map((t, i) => ({ idx: i, conv: readConvertedStd(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
+  const sortedConv = inqs.map((t) => ({ conv: readConvertedStd(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.conv-a.conv);
-  const sortedStd  = inqs.map((t, i) => ({ idx: i, std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
+  const sortedStd  = inqs.map((t) => ({ std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.std-a.std);
-  const sortedPct  = inqs.map((t, i) => ({ idx: i, pct: Number(t?.percentile || 0) }))
+  const sortedPct  = inqs.map((t) => ({ pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.pct-a.pct);
 
   // Top1/Top2/Avg2 (변환표준/표준/백분위)
@@ -407,7 +406,8 @@ function calculateScoreWithConv(formulaDataRaw, studentScores, convMap, logHook)
         if (typeof logHook === 'function') {
           logHook(`[변환표준] ${group} 백분위 ${pct} → 변표 ${conv.toFixed(2)} (자동보충)`);
         }
-        return { ...sub, converted_std: conv, vstd: conv, std: conv }; // std에도 반영(본 엔진은 std를 읽음)
+        // 본 엔진은 표준/변표 공통으로 'std'를 읽어오니, std에도 반영
+        return { ...sub, converted_std: conv, vstd: conv, std: conv };
       }
       return sub;
     });
@@ -447,7 +447,7 @@ module.exports = function (db, authMiddleware) {
       const convMap = { '사탐': {}, '과탐': {} };
       convRows.forEach(r => { convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); });
 
-      // 로그 후킹을 위해 계산기 한 번 더 감싸기
+      // 변표 로그를 앞에 끼우기 위해 버퍼링
       let logBuffer = [];
       const result = calculateScoreWithConv(
         formulaData,
@@ -456,9 +456,9 @@ module.exports = function (db, authMiddleware) {
         (msg) => logBuffer.push(msg)
       );
 
-      // 변환 로그를 계산 로그 맨 앞에 삽입(있을 때만)
       if (logBuffer.length && Array.isArray(result.calculationLog)) {
-        const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 ==========')); // 항상 0
+        // "계산 시작" 직후에 변표 로그 삽입
+        const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 =========='));
         result.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
       }
 
@@ -469,7 +469,7 @@ module.exports = function (db, authMiddleware) {
     }
   });
 
-  // (옵션) 정규화 기준 확인용
+  // 정규화 기준 확인용
   router.post('/debug-normalize', authMiddleware, (req, res) => {
     const cfg = safeParse(req.body?.score_config, {});
     const eng = safeParse(req.body?.english_scores, null);
