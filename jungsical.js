@@ -34,13 +34,19 @@ function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
 
 // 과목 만점(정규화 기준) 산출
 function resolveMaxScores(scoreConfig, englishScores) {
-  const kmMethod = scoreConfig?.korean_math?.max_score_method || 'fixed_200';
-  const inqMethod = scoreConfig?.inquiry?.max_score_method || 'fixed_100';
+  const kmType  = scoreConfig?.korean_math?.type || '백분위';
+  const inqType = scoreConfig?.inquiry?.type     || '백분위';
+  const kmMethod = scoreConfig?.korean_math?.max_score_method || '';
+  const inqMethod = scoreConfig?.inquiry?.max_score_method     || '';
 
-  const korMax  = kmMethod === 'fixed_200' ? 200 : 200;
+  // 국어·수학: 표준점수면 200, 백분위면 100
+  const korMax  = (kmType === '표준점수' || kmMethod === 'fixed_200') ? 200 : 100;
   const mathMax = korMax;
-  const inqMax  = inqMethod === 'fixed_100' ? 100 : 100;
 
+  // 탐구: 표준/변환표준이면 100, 백분위면 100 (일반적으로 동일)
+  const inqMax  = (inqType === '표준점수' || inqType === '변환표준점수') ? 100 : 100;
+
+  // 영어: 영어환산표 중 최댓값
   let engMax = 100;
   if (englishScores && typeof englishScores === 'object') {
     const vals = Object.values(englishScores).map(Number).filter(n => !Number.isNaN(n));
@@ -48,6 +54,7 @@ function resolveMaxScores(scoreConfig, englishScores) {
   }
   return { korMax, mathMax, engMax, inqMax };
 }
+
 
 /* ========== 핵심 계산기 ========== */
 function calculateScore(formulaDataRaw, studentScores) {
