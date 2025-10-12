@@ -21,6 +21,27 @@ const kmSubjectNameForKorean = (row) => row?.subject || '국어';
 const kmSubjectNameForMath   = (row) => row?.subject || '수학';
 const inquirySubjectName     = (row) => row?.subject || '탐구';
 
+// 영어 가산점(가감점/가점/감점) 모드 자동 감지
+function detectEnglishAsBonus(F) {
+  const kw = ['가산점','가감점','가점','감점'];
+  // 1) 명시 필드가 있다면 우선
+  if (typeof F?.영어처리 === 'string' && kw.some(k=>F.영어처리.includes(k))) return true;
+  if (typeof F?.영어비고 === 'string' && kw.some(k=>F.영어비고.includes(k))) return true;
+
+  // 2) 기타 텍스트 컬럼들에서 키워드 등장 + '영어' 맥락
+  for (const [k,v] of Object.entries(F)) {
+    if (typeof v !== 'string') continue;
+    if (k.includes('영어') || k.includes('비고') || k.includes('설명') || k.includes('기타')) {
+      if (v.includes('영어') && kw.some(t=>v.includes(t))) return true;
+    }
+  }
+
+  // 3) 힌트: 영어 비율이 0이고 english_scores가 있으면 가산점일 확률 높음
+  if ((Number(F?.영어 || 0) === 0) && F?.english_scores) return true;
+
+  return false;
+}
+
 // 탐구 대표값 계산: 1개면 최대값, 2개면 평균(2초과는 상위 N 평균)
 // + 선택된 과목들(picked) 반환하여 highest_of_year 정규화에 사용
 function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
@@ -227,6 +248,9 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   F.english_bonus_scores   = safeParse(F.english_bonus_scores, null);
   const englishBonusFixed  = Number(F.english_bonus_fixed || 0);
 
+  // 영어 가산점/가감점 자동 감지
+  const englishAsBonus = detectEnglishAsBonus(F);
+
   // 1) 학생 과목 데이터 추출
   const subs = studentScores?.subjects || [];
   const S = {
@@ -254,17 +278,18 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   }
   // === [특수공식 분기 끝] ===
 
-  const cfg     = F.score_config || {};
-  const kmType  = cfg.korean_math?.type || '백분위';
-  const inqType = cfg.inquiry?.type     || '백분위';
+  const cfg       = F.score_config || {};
+  const kmType    = cfg.korean_math?.type || '백분위';
+  const inqType   = cfg.inquiry?.type     || '백분위';
   const inqMethod = cfg.inquiry?.max_score_method || '';
 
   // 탐구 대표값(규칙) + picked (highest_of_year용)
   const inquiryCount = Math.max(1, parseInt(F.탐구수 || '1', 10));
   const { rep: inqRep, picked: inqPicked } = calcInquiryRepresentative(S.탐구, inqType, inquiryCount);
 
-  // 영어 환산 점수
+  // 영어 환산 점수 (과목 반영 모드일 때만 원점수로 사용)
   let engConv = 0;
+  let englishGradeBonus = 0;
   if (F.english_scores && S.영어?.grade != null) {
 
 
@@ -284,19 +309,26 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
 
     const g = String(S.영어.grade);
-    engConv = Number(F.english_scores[g] ?? 0);
-
+    if (englishAsBonus) {
+      englishGradeBonus = Number(F.english_scores[g] ?? 0);
+    } else {
+      engConv = Number(F.english_scores[g] ?? 0);
+    }
   }
 
   // 원점수(과목당)
   const raw = {
     국어:   pickByType(S.국어, kmType),
     수학:   pickByType(S.수학, kmType),
-    영어:   engConv,
+    영어:   englishAsBonus ? 0 : engConv, // 가산점 모드면 과목반영에서 제외
     한국사: Number(S.한국사?.grade ?? 9),
     탐구:   inqRep
   };
-  log.push(`[원점수] 국:${raw.국어} / 수:${raw.수학} / 영(환산):${raw.영어} / 탐(대표):${raw.탐구}`);
+  if (englishAsBonus) {
+    log.push(`[원점수] 국:${raw.국어} / 수:${raw.수학} / 영(가산점모드-과목반영X):0 / 탐(대표):${raw.탐구}`);
+  } else {
+    log.push(`[원점수] 국:${raw.국어} / 수:${raw.수학} / 영(환산):${raw.영어} / 탐(대표):${raw.탐구}`);
+  }
 
   // 정규화 기준(과목 만점)
   const { korMax, mathMax, engMax, inqMax } = resolveMaxScores(cfg, F.english_scores, highestMap, S);
@@ -360,6 +392,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   if (selectNRules.length) {
     for (const r of selectNRules) {
       const cand = r.from
+        .filter(name => !(englishAsBonus && name === '영어')) // 영어 가산점 모드면 후보에서 제외
         .map(name => ({ name, norm: normOf(name) }))
         .sort((a, b) => b.norm - a.norm);
       const picked = cand.slice(0, Math.min(Number(r.count) || 1, cand.length));
@@ -375,6 +408,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   const candidatesBase = ['국어', '수학', '영어', '탐구'];
 
   for (const name of candidatesBase) {
+    if (englishAsBonus && name === '영어') continue; // 가산점 모드면 과목 반영에서 제외
     const ratio = ratioOf(name);
     if (ratio <= 0) continue;
     if (selectWeightSubjects.size && selectWeightSubjects.has(name)) continue;
@@ -404,6 +438,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     }
 
     const cand = r.from
+      .filter(name => !(englishAsBonus && name === '영어')) // 영어 가산점 모드면 제외
       .filter(name => !usedForWeights.has(name))
       .map(name => ({ name, norm: normOf(name), raw: Number(raw[name] || 0) }))
       .sort((a, b) => b.norm - a.norm);
@@ -433,23 +468,25 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     log.push(`[한국사] 등급 ${hg} → ${historyScore}점`);
   }
 
-  // 6-1) 영어 가/감점
+  // 6-1) 영어 가/감점(자동판단)
   let englishBonus = 0;
 
-
+  // (A) 테이블에 english_bonus_scores가 있으면 그대로 반영
   if (F.english_bonus_scores && S.영어?.grade != null) {
     const eg = String(S.영어.grade);
     englishBonus += Number(F.english_bonus_scores[eg] ?? 0);
     log.push(`[영어 보정] 등급 ${eg} → ${Number(F.english_bonus_scores[eg] ?? 0)}점`);
+  }
 
-
-
-
-
-
+  // (B) 영어 가산점 모드 자동 판단 → english_scores(등급→점수)를 보너스로 사용
+  if (englishAsBonus && S.영어?.grade != null && F.english_scores) {
+    const eg = String(S.영어.grade);
+    englishBonus += englishGradeBonus;
+    log.push(`[영어 보정] (자동판단-가산점모드) 등급 ${eg} → ${englishGradeBonus}점`);
 
   }
 
+  // (C) 고정 보정
   if (englishBonusFixed) {
     englishBonus += englishBonusFixed;
     log.push(`[영어 보정] 고정 보정 ${englishBonusFixed}점`);
@@ -561,7 +598,7 @@ module.exports = function (db, authMiddleware) {
       );
 
       if (logBuffer.length && Array.isArray(result.calculationLog)) {
-
+        // "계산 시작" 직후에 변표 로그 삽입
         const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 ==========')); // 보통 0
         result.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
       }
