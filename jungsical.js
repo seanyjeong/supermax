@@ -34,17 +34,17 @@ function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
 
 // 과목 만점(정규화 기준) 산출
 function resolveMaxScores(scoreConfig, englishScores) {
-  const kmType  = scoreConfig?.korean_math?.type || '백분위';
-  const inqType = scoreConfig?.inquiry?.type     || '백분위';
+  const kmType   = scoreConfig?.korean_math?.type || '백분위';
+  const inqType  = scoreConfig?.inquiry?.type     || '백분위';
   const kmMethod = scoreConfig?.korean_math?.max_score_method || '';
-  const inqMethod = scoreConfig?.inquiry?.max_score_method     || '';
+  const inqMethod= scoreConfig?.inquiry?.max_score_method     || '';
 
   // 국어·수학: 표준점수면 200, 백분위면 100
   const korMax  = (kmType === '표준점수' || kmMethod === 'fixed_200') ? 200 : 100;
   const mathMax = korMax;
 
   // 탐구: 표준/변환표준이면 100, 백분위면 100 (일반적으로 동일)
-  const inqMax  = (inqType === '표준점수' || inqType === '변환표준점수') ? 100 : 100;
+  const inqMax  = (inqType === '표준점수' || inqType === '변환표준점수' || inqMethod === 'fixed_100') ? 100 : 100;
 
   // 영어: 영어환산표 중 최댓값
   let engMax = 100;
@@ -55,6 +55,23 @@ function resolveMaxScores(scoreConfig, englishScores) {
   return { korMax, mathMax, engMax, inqMax };
 }
 
+/** 안전한 특수공식 평가기: {변수} 치환 후 숫자/사칙연산만 허용 */
+function evaluateSpecialFormula(formulaText, ctx, log) {
+  const replaced = String(formulaText || '').replace(/\{([a-z0-9_]+)\}/gi, (_, k) => {
+    const v = Number(ctx[k] ?? 0);
+    log.push(`[특수공식 변수] ${k} = ${isFinite(v) ? v : 0}`);
+    return String(isFinite(v) ? v : 0);
+  });
+
+  // 허용 문자만 (숫자, + - * / ( ) . 공백)
+  if (!/^[0-9+\-*/().\s]+$/.test(replaced)) {
+    throw new Error('특수공식에 허용되지 않은 토큰이 포함되어 있습니다.');
+  }
+
+  // 계산
+  const val = Function(`"use strict"; return (${replaced});`)();
+  return Number(val) || 0;
+}
 
 /* ========== 핵심 계산기 ========== */
 function calculateScore(formulaDataRaw, studentScores) {
@@ -80,15 +97,84 @@ function calculateScore(formulaDataRaw, studentScores) {
     탐구   : subs.filter(s => s.name === '탐구')
   };
 
+  // === [특수공식 분기] ===
+  if (F.계산유형 === '특수공식' && F.특수공식) {
+    log.push('<< 특수공식 모드 >>');
+
+    // 표준점수/백분위 원자료
+    const kor_std   = Number(S.국어?.std || 0);
+    const kor_pct   = Number(S.국어?.percentile || 0);
+    const math_std  = Number(S.수학?.std || 0);
+    const math_pct  = Number(S.수학?.percentile || 0);
+
+    // 탐구: 변환표준점수 우선 → 없으면 std → percentile
+    const toConv = (t) => Number(t?.converted_std ?? t?.vstd ?? t?.conv_std ?? t?.std ?? t?.percentile ?? 0);
+    const inqSortedConv = (S.탐구 || [])
+      .map((t, i) => ({ idx: i, conv: toConv(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
+      .sort((a, b) => b.conv - a.conv);
+
+    const inq1_converted_std = inqSortedConv[0]?.conv || 0;
+    const inq2_converted_std = inqSortedConv[1]?.conv || 0;
+
+    // 보조 변수(원하면 수식에서 사용)
+    const inqSortedStd = [...(S.탐구 || [])].map((t,i)=>({std:Number(t?.std||0), pct:Number(t?.percentile||0)})).sort((a,b)=>b.std-a.std);
+    const inq1_std = inqSortedStd[0]?.std || 0;
+    const inq2_std = inqSortedStd[1]?.std || 0;
+
+    const inqSortedPct = [...(S.탐구 || [])].map((t,i)=>({pct:Number(t?.percentile||0)})).sort((a,b)=>b.pct-a.pct);
+    const inq1_percentile = inqSortedPct[0]?.pct || 0;
+    const inq2_percentile = inqSortedPct[1]?.pct || 0;
+
+    // 영어/한국사: 등급표 환산
+    let eng_grade_score = 0;
+    if (F.english_scores && S.영어?.grade != null) {
+      const eg = String(S.영어.grade);
+      eng_grade_score = Number(F.english_scores[eg] ?? 0);
+    }
+    let hist_grade_score = 0;
+    if (F.history_scores && S.한국사?.grade != null) {
+      const hg = String(S.한국사.grade);
+      hist_grade_score = Number(F.history_scores[hg] ?? 0);
+    }
+
+    // 컨텍스트 구성
+    const ctx = {
+      kor_std, kor_pct,
+      math_std, math_pct,
+      inq1_converted_std, inq2_converted_std,
+      inq1_std, inq2_std,
+      inq1_percentile, inq2_percentile,
+      eng_grade_score, hist_grade_score,
+      total: Number(F.총점 || 1000),
+      suneung_ratio: (Number(F.수능) || 0) / 100
+    };
+
+    // 평가
+    log.push(`[특수공식 원본] ${F.특수공식}`);
+    const specialValue = evaluateSpecialFormula(F.특수공식, ctx, log);
+
+    // 최종: 특수공식은 자체 스케일을 포함한다고 가정 (수능비율/총점 추가 곱하지 않음)
+    const final = Number(specialValue) || 0;
+    log.push('========== 최종 ==========');
+    log.push(`특수공식 결과 = ${final.toFixed(3)}`);
+
+    return {
+      totalScore: final.toFixed(3),
+      breakdown: { special: final },
+      calculationLog: log
+    };
+  }
+  // === [특수공식 분기 끝] ===
+
   const cfg     = F.score_config || {};
   const kmType  = cfg.korean_math?.type || '백분위';
   const inqType = cfg.inquiry?.type     || '백분위';
 
-  // 탐구 대표값
+  // 탐구 대표값(규칙)
   const inquiryCount = Math.max(1, parseInt(F.탐구수 || '1', 10));
   const { rep: inqRep } = calcInquiryRepresentative(S.탐구, inqType, inquiryCount);
 
-  // 영어 환산
+  // 영어 환산 점수(기본비율/선택가중에 쓰일 영어 원점수)
   let engConv = 0;
   if (F.english_scores && S.영어?.grade != null) {
     const g = String(S.영어.grade);
@@ -162,7 +248,7 @@ function calculateScore(formulaDataRaw, studentScores) {
 
   // 4) 기본비율 계산 (남은 총점 사용)
   // - 비율(%)가 명시된 과목만
-  // - select_ranked_weights.from에 포함된 과목은 기본비율에서 제외(중복 의미 방지)
+  // - select_ranked_weights.from에 포함된 과목은 기본비율에서 제외
   // - select_n이 있으면: selectedBySelectN ∩ (비율>0)만 반영
   let baseRatioSum = 0;
   let baseNormWeighted = 0;
@@ -173,10 +259,7 @@ function calculateScore(formulaDataRaw, studentScores) {
     const ratio = ratioOf(name);
     if (ratio <= 0) continue;
 
-    // 선택가중에 포함된 과목이면 기본비율에서 제외
     if (selectWeightSubjects.size && selectWeightSubjects.has(name)) continue;
-
-    // select_n 필터가 존재하면 그에 선정된 과목만 허용
     if (selectNRules.length && !selectedBySelectN.has(name)) continue;
 
     baseRatioSum += ratio;
