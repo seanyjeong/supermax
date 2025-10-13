@@ -249,6 +249,7 @@ app.get('/jungsi/topmax/subjects', authMiddleware, (req, res) => {
 });
 
 // ⭐ 총점(만점) 저장 - 업서트 버전
+// ⭐ 총점(만점) 저장 - 업서트 버전
 app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
   try {
     const { U_ID, year, total } = req.body;
@@ -265,12 +266,17 @@ app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
     `;
     await db.query(sql, [U_ID, year, t]);
 
-    return res.json({ success: true, message: \`[\${year}] U_ID \${U_ID} 총점=\${t} 저장(업서트) 완료\`, total: t });
+    return res.json({
+      success: true,
+      message: `[${year}] U_ID ${U_ID} 총점=${t} 저장(업서트) 완료`,
+      total: t
+    });
   } catch (err) {
     console.error('❌ 총점 저장 오류:', err);
     return res.status(500).json({ success: false, message: '총점 저장 중 서버 오류' });
   }
 });
+
 
 
 
