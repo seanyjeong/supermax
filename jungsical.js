@@ -480,7 +480,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   let historyScore = 0;
   if (!historyAsSubject && F.history_scores && S.한국사?.grade != null) {
     const hg = String(S.한국사.grade);
-    historyScore = Number(F.history_scores[hg] ?? 0);
+    historyScore = Number(F.history_scores[hg]) || 0;
     log.push(`[한국사] 등급 ${hg} → ${historyScore}점`);
   }
 
