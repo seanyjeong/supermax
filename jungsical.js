@@ -206,6 +206,7 @@ ctx.inq_avg2_converted_std = (ctx.inq_sum2_converted_std) / (sortedConv.length >
 
   ctx.top3_avg_pct = ctx.top3_avg_pct_kor_eng_math_inq1;
   ctx.max_kor_math_std = Math.max(ctx.kor_std, ctx.math_std);
+  ctx.max_kor_math_pct = Math.max(ctx.kor_pct, ctx.math_pct);
 
   return ctx;
 }
