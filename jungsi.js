@@ -248,30 +248,30 @@ app.get('/jungsi/topmax/subjects', authMiddleware, (req, res) => {
   res.json({ success:true, subjects });
 });
 
-// ⭐️ [신규 API] 총점(만점) 저장
+// ⭐ 총점(만점) 저장 - 업서트 버전
 app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
   try {
     const { U_ID, year, total } = req.body;
-    if (!U_ID || !year || typeof total !== 'number') {
-      return res.status(400).json({ success: false, message: 'U_ID, year, total(숫자)가 필요합니다.' });
+    const t = Number(total);
+    if (!U_ID || !year || !Number.isFinite(t) || t <= 0) {
+      return res.status(400).json({ success: false, message: 'U_ID, year, total(양수 숫자)가 필요합니다.' });
     }
-    if (![300, 500, 1000].includes(total) && (total < 100 || total > 2000)) {
-      // 필요시 허용 범위 조정
-      return res.status(400).json({ success: false, message: '허용되지 않는 총점 값입니다.' });
-    }
-    const [r] = await db.query(
-      'UPDATE `정시반영비율` SET `총점`=? WHERE `U_ID`=? AND `학년도`=?',
-      [total, U_ID, year]
-    );
-    if (r.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: '해당 학과/학년도를 찾을 수 없습니다.' });
-    }
-    res.json({ success: true, message: `[${year}] U_ID ${U_ID} 총점=${total} 저장 완료` });
+
+    // (U_ID, 학년도) 가 유니크 키라고 가정
+    const sql = `
+      INSERT INTO \`정시반영비율\` (U_ID, 학년도, 총점)
+      VALUES (?, ?, ?)
+      ON DUPLICATE KEY UPDATE 총점 = VALUES(총점), updated_at = NOW()
+    `;
+    await db.query(sql, [U_ID, year, t]);
+
+    return res.json({ success: true, message: \`[\${year}] U_ID \${U_ID} 총점=\${t} 저장(업서트) 완료\`, total: t });
   } catch (err) {
     console.error('❌ 총점 저장 오류:', err);
-    res.status(500).json({ success: false, message: 'DB 오류' });
+    return res.status(500).json({ success: false, message: '총점 저장 중 서버 오류' });
   }
 });
+
 
 
 
