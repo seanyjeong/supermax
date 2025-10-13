@@ -21,6 +21,12 @@ const kmSubjectNameForKorean = (row) => row?.subject || '국어';
 const kmSubjectNameForMath   = (row) => row?.subject || '수학';
 const inquirySubjectName     = (row) => row?.subject || '탐구';
 
+// ⭐ 총점 확정 도우미: DB 값 우선, 없으면 1000
+const resolveTotal = (F) => {
+  const t = Number(F?.총점);
+  return (Number.isFinite(t) && t > 0) ? t : 1000;
+};
+
 // 영어 가산점(가감점/가점/감점) 모드 자동 감지
 function detectEnglishAsBonus(F) {
   const kw = ['가산점','가감점','가점','감점'];
@@ -55,11 +61,6 @@ function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
   const picked = arr.slice(0, Math.min(n, arr.length));
   const rep = picked.reduce((s, x) => s + x.val, 0) / picked.length;
   return { rep, sorted: arr, picked };
-
-
-
-
-
 }
 
 // 과목 만점(정규화 기준) 산출
@@ -117,8 +118,8 @@ const readConvertedStd = (t) =>
 function buildSpecialContext(F, S) {
   const ctx = {};
 
-  // 총점/수능비율
-  ctx.total = Number(F.총점 || 1000);
+  // ⭐ 총점/수능비율 — 총점은 DB값 우선, 없으면 1000
+  ctx.total = resolveTotal(F);
   ctx.suneung_ratio = (Number(F.수능) || 0) / 100;
 
   // 국/수 표준·백분위
@@ -218,22 +219,6 @@ function guessInquiryGroup(subjectName='') {
   return '사탐'; // default
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* ========== 핵심 계산기(일반) ========== */
 function calculateScore(formulaDataRaw, studentScores, highestMap) {
   const log = [];
@@ -264,7 +249,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   // === [특수공식 분기] ===
   if (F.계산유형 === '특수공식' && F.특수공식) {
     log.push('<< 특수공식 모드 >>');
-    const ctx = buildSpecialContext(F, S);
+    const ctx = buildSpecialContext(F, S); // 내부에서 resolveTotal 사용
     log.push(`[특수공식 원본] ${F.특수공식}`);
     const specialValue = evaluateSpecialFormula(F.특수공식, ctx, log);
     const final = Number(specialValue) || 0;
@@ -291,23 +276,6 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   let engConv = 0;
   let englishGradeBonus = 0;
   if (F.english_scores && S.영어?.grade != null) {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     const g = String(S.영어.grade);
     if (englishAsBonus) {
       englishGradeBonus = Number(F.english_scores[g] ?? 0);
@@ -360,10 +328,10 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
   };
 
-  // 2) 학교 총점/수능비율
-  const TOTAL        = Number(F.총점 || 1000);
+  // 2) 학교 총점/수능비율 — ⭐ 총점은 DB값 우선
+  const TOTAL        = resolveTotal(F);
   const suneungRatio = (Number(F.수능) || 0) / 100;
-  log.push(`[학교] 총점=${TOTAL}, 수능비율=${suneungRatio}`);
+  log.push(`[학교] 총점=${TOTAL}, 수능비율=${suneungRatio} (DB총점 반영)`);
 
   // 3) 규칙 로딩
   const rules = Array.isArray(F.selection_rules)
@@ -448,6 +416,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     picked.forEach(p => usedForWeights.add(p.name));
 
     const wSum = picked.reduce((acc, c, idx) => acc + (Number(r.weights[idx] || 0) * c.norm), 0);
+    // ⚠️ 기존 로직 유지: TOTAL 사용 (기존 방식에 영향 없게)
     const add  = wSum * TOTAL * suneungRatio;
     suneungSelect += add;
 
@@ -483,7 +452,6 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     const eg = String(S.영어.grade);
     englishBonus += englishGradeBonus;
     log.push(`[영어 보정] (자동판단-가산점모드) 등급 ${eg} → ${englishGradeBonus}점`);
-
   }
 
   // (C) 고정 보정
@@ -565,7 +533,7 @@ module.exports = function (db, authMiddleware) {
       if (!rows || rows.length === 0) {
         return res.status(404).json({ success: false, message: '해당 학과/학년도 정보를 찾을 수 없습니다.' });
       }
-      const formulaData = rows[0];
+      const formulaData = rows[0]; // 총점은 여기 F.총점으로 온다(없으면 계산기에서 1000 처리)
 
       // 탐구 변환표준 맵 로딩
       const [convRows] = await db.query(
