@@ -180,7 +180,7 @@ function buildSpecialContext(F, S) {
   ctx.inq1_converted_std = sortedConv[0]?.conv || 0;
   ctx.inq2_converted_std = sortedConv[1]?.conv || 0;
   ctx.inq_sum2_converted_std = ctx.inq1_converted_std + ctx.inq2_converted_std;
-    ctx.inq_avg2_converted_std = (ctx.inq1_converted_std + ctx.inq2_converted_std)/2;
+ctx.inq_avg2_converted_std = (ctx.inq_sum2_converted_std) / (sortedConv.length >= 2 ? 2 : (sortedConv.length || 1));
 
   ctx.inq1_std = sortedStd[0]?.std || 0;
   ctx.inq2_std = sortedStd[1]?.std || 0;
