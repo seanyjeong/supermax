@@ -75,6 +75,7 @@ function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
 
 // 과목 만점(정규화 기준) 산출
 // 과목 만점(정규화 기준) 산출
+// 과목 만점(정규화 기준) 산출
 function resolveMaxScores(scoreConfig, englishScores, highestMap, S) {
   const kmType    = scoreConfig?.korean_math?.type || '백분위';
   const inqType   = scoreConfig?.inquiry?.type     || '백분위';
@@ -86,30 +87,30 @@ function resolveMaxScores(scoreConfig, englishScores, highestMap, S) {
   let mathMax = korMax;
   let inqMax  = (inqType === '표준점수' || inqType === '변환표준점수' || inqMethod === 'fixed_100') ? 100 : 100;
 
-  // highest_of_year → 과목별 최고점 맵 사용
+  // highest_of_year → 과목별 최고점 맵 사용 (국어/수학)
   if (kmMethod === 'highest_of_year' && highestMap) {
     const korKey  = kmSubjectNameForKorean(S?.국어);
     const mathKey = kmSubjectNameForMath(S?.수학);
     if (highestMap[korKey]  != null) korMax  = Number(highestMap[korKey]);
     if (highestMap[mathKey] != null) mathMax = Number(highestMap[mathKey]);
   }
-  // 탐구 highest_of_year는 대표값 정규화 시 per-subject로 처리(여기선 inqMax 그대로)
 
   // ⭐ 영어 max
-  // - fixed_max_score이면 config의 max_score(예: 200)를 그대로 사용
-  // - 그 외(등급환산 기반)는 english_scores의 최대값을 사용 (기존 동작 유지)
   let engMax = 100;
-  const engType = scoreConfig?.english?.type || 'grade_conversion';
-  if (engType === 'fixed_max_score') {
-    const fixed = Number(scoreConfig?.english?.max_score);
-    engMax = Number.isFinite(fixed) && fixed > 0 ? fixed : 100; // 안전한 기본값
-  } else if (englishScores && typeof englishScores === 'object') {
-    const vals = Object.values(englishScores).map(Number).filter(n => !Number.isNaN(n));
-    if (vals.length) engMax = Math.max(...vals);
+  // 1) 설정이 fixed_max_score면 무조건 그 값을 사용
+  if (scoreConfig?.english?.type === 'fixed_max_score' && Number(scoreConfig?.english?.max_score)) {
+    engMax = Number(scoreConfig.english.max_score);
+  } else {
+    // 2) 아니면 등급 환산표의 최대값 사용
+    if (englishScores && typeof englishScores === 'object') {
+      const vals = Object.values(englishScores).map(Number).filter(n => !Number.isNaN(n));
+      if (vals.length) engMax = Math.max(...vals);
+    }
   }
 
   return { korMax, mathMax, engMax, inqMax };
 }
+
 
 
 /** 안전한 특수공식 평가기: {변수} 치환 후 숫자/사칙연산만 허용 */
