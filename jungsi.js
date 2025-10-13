@@ -27,15 +27,15 @@ app.use('/jungsi', jungsicalRouter);
 app.get('/jungsi/schools/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
     try {
-        const sql = `
-            SELECT 
-                b.U_ID, b.대학명, b.학과명, 
-                r.selection_rules, r.bonus_rules, r.score_config, r.계산유형 
-            FROM \`정시기본\` AS b
-            LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
-            WHERE b.학년도 = ?
-            ORDER BY b.U_ID ASC
-        `;
+const sql = `
+  SELECT 
+      b.U_ID, b.대학명, b.학과명, b.군,   -- ★ 군 추가
+      r.selection_rules, r.bonus_rules, r.score_config, r.계산유형 
+  FROM \`정시기본\` AS b
+  LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
+  WHERE b.학년도 = ?
+  ORDER BY b.U_ID ASC
+`;
         const [schools] = await db.query(sql, [year]);
         res.json({ success: true, schools });
     } catch (err) {
