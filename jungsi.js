@@ -262,8 +262,7 @@ app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
     const sql = `
       INSERT INTO \`정시반영비율\` (U_ID, 학년도, 총점)
       VALUES (?, ?, ?)
-      ON DUPLICATE KEY UPDATE 총점 = VALUES(총점), updated_at = NOW()
-    `;
+      ON DUPLICATE KEY UPDATE 총점 = VALUES(총점)    `;
     await db.query(sql, [U_ID, year, t]);
 
     return res.json({
