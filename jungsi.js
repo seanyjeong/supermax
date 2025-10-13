@@ -43,12 +43,50 @@ const sql = `
         res.status(500).json({ success: false, message: "DB 오류" });
     }
 });
-app.post('/jungsi/school-details', authMiddleware, async (req, res) => { const { U_ID, year } = req.body; if (!U_ID || !year) { return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); } try { const sql = `SELECT b.*, r.* FROM \`정시기본\` AS b JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 WHERE b.U_ID = ? AND b.학년도 = ?`; const [results] = await db.query(sql, [U_ID, year]); if (results.length === 0) { return res.status(404).json({ success: false, message: "해당 학과/학년도 정보를 찾을 수 없습니다." }); } res.json({ success: true, data: results[0] }); } catch (err) { console.error("❌ 학과 상세 조회 오류:", err); res.status(500).json({ success: false, message: "DB 오류" }); } });
+app.post('/jungsi/school-details', authMiddleware, async (req, res) => { 
+    const { U_ID, year } = req.body; 
+    if (!U_ID || !year) { 
+        return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); 
+    } 
+    try { 
+        // ✅ [수정] 이 부분에 r.기타설정 추가
+        const sql = `SELECT b.*, r.* FROM \`정시기본\` AS b JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 WHERE b.U_ID = ? AND b.학년도 = ?`; 
+        
+        const [results] = await db.query(sql, [U_ID, year]); 
+        if (results.length === 0) { 
+            return res.status(404).json({ success: false, message: "해당 학과/학년도 정보를 찾을 수 없습니다." }); 
+        } 
+        res.json({ success: true, data: results[0] }); 
+    } catch (err) { 
+        console.error("❌ 학과 상세 조회 오류:", err); 
+        res.status(500).json({ success: false, message: "DB 오류" }); 
+    } 
+});
 app.post('/jungsi/rules/set', authMiddleware, async (req, res) => { const { U_ID, year, rules } = req.body; if (!U_ID || !year) { return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); } if (rules !== null && typeof rules !== 'object') { return res.status(400).json({ success: false, message: "규칙은 JSON 객체 또는 null이어야 합니다." }); } try { const sql = "UPDATE `정시반영비율` SET `selection_rules` = ? WHERE `U_ID` = ? AND `학년도` = ?"; const [result] = await db.query(sql, [JSON.stringify(rules), U_ID, year]); if (result.affectedRows === 0) { return res.status(404).json({ success: false, message: "해당 학과/학년도를 찾을 수 없습니다." }); } res.json({ success: true, message: `[${year}학년도] 선택 규칙이 저장되었습니다.` }); } catch (err) { console.error("❌ 규칙 저장 오류:", err); res.status(500).json({ success: false, message: "DB 오류" }); } });
 app.post('/jungsi/bonus-rules/set', authMiddleware, async (req, res) => { const { U_ID, year, rules } = req.body; if (!U_ID || !year) { return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); } if (rules !== null && typeof rules !== 'object') { return res.status(400).json({ success: false, message: "가산점 규칙은 JSON 객체 또는 null이어야 합니다." }); } try { const sql = "UPDATE `정시반영비율` SET `bonus_rules` = ? WHERE `U_ID` = ? AND `학년도` = ?"; const [result] = await db.query(sql, [JSON.stringify(rules), U_ID, year]); if (result.affectedRows === 0) { return res.status(404).json({ success: false, message: "해당 학과/학년도를 찾을 수 없습니다." }); } res.json({ success: true, message: `[${year}학년도] 가산점 규칙이 저장되었습니다.` }); } catch (err) { console.error("❌ 가산점 규칙 저장 오류:", err); res.status(500).json({ success: false, message: "DB 오류" }); } });
 app.post('/jungsi/score-config/set', authMiddleware, async (req, res) => { const { U_ID, year, config } = req.body; if (!U_ID || !year) { return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); } if (typeof config !== 'object') { return res.status(400).json({ success: false, message: "점수 반영 방식(config)은 JSON 객체여야 합니다." }); } try { const sql = "UPDATE `정시반영비율` SET `score_config` = ? WHERE `U_ID` = ? AND `학년도` = ?"; const [result] = await db.query(sql, [JSON.stringify(config), U_ID, year]); if (result.affectedRows === 0) { return res.status(404).json({ success: false, message: "해당 학과/학년도를 찾을 수 없습니다." }); } res.json({ success: true, message: `[${year}학년도] 점수 반영 방식이 저장되었습니다.` }); } catch (err) { console.error("❌ 점수 반영 방식 저장 오류:", err); res.status(500).json({ success: false, message: "DB 오류" }); } });
 app.post('/jungsi/special-formula/set', authMiddleware, async (req, res) => { const { U_ID, year, formula_type, formula_text } = req.body; if (!U_ID || !year) { return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); } try { const sql = "UPDATE `정시반영비율` SET `계산유형` = ?, `특수공식` = ? WHERE `U_ID` = ? AND `학년도` = ?"; const formulaToSave = (formula_type === '특수공식') ? formula_text : null; const [result] = await db.query(sql, [formula_type, formulaToSave, U_ID, year]); if (result.affectedRows === 0) { return res.status(404).json({ success: false, message: "해당 학과/학년도를 찾을 수 없습니다." }); } res.json({ success: true, message: `[${year}학년도] 계산 유형이 저장되었습니다.` }); } catch (err) { console.error("❌ 특수 공식 저장 오류:", err); res.status(500).json({ success: false, message: "DB 오류" }); } });
 
+app.post('/jungsi/other-settings/set', authMiddleware, async (req, res) => {
+    const { U_ID, year, settings } = req.body;
+    if (!U_ID || !year) {
+        return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." });
+    }
+    if (typeof settings !== 'object') {
+        return res.status(400).json({ success: false, message: "설정(settings)은 JSON 객체여야 합니다." });
+    }
+    try {
+        const sql = "UPDATE `정시반영비율` SET `기타설정` = ? WHERE `U_ID` = ? AND `학년도` = ?";
+        const [result] = await db.query(sql, [JSON.stringify(settings), U_ID, year]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: "해당 학과/학년도를 찾을 수 없습니다." });
+        }
+        res.json({ success: true, message: `[${year}학년도] 기타 설정이 저장되었습니다.` });
+    } catch (err) {
+        console.error("❌ 기타 설정 저장 오류:", err);
+        res.status(500).json({ success: false, message: "DB 오류" });
+    }
+});
 // ⭐️⭐️⭐️ [신규 API] 계산 방식('환산'/'직접') 저장 API ⭐️⭐️⭐️
 app.post('/jungsi/calc-method/set', authMiddleware, async (req, res) => {
     const { U_ID, year, method } = req.body;
