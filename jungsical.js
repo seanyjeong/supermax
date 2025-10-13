@@ -48,6 +48,16 @@ function detectEnglishAsBonus(F) {
   return false;
 }
 
+// ⭐ 규칙에 특정 과목이 "선택 반영 대상"으로 등장하는지 여부
+function isSubjectUsedInRules(name, rulesArr) {
+  const rules = Array.isArray(rulesArr) ? rulesArr : (rulesArr ? [rulesArr] : []);
+  for (const r of rules) {
+    if (!r || !Array.isArray(r.from)) continue;
+    if (r.from.includes(name)) return true;
+  }
+  return false;
+}
+
 // 탐구 대표값 계산: 1개면 최대값, 2개면 평균(2초과는 상위 N 평균)
 // + 선택된 과목들(picked) 반환하여 highest_of_year 정규화에 사용
 function calcInquiryRepresentative(inquiryRows, type, inquiryCount) {
@@ -284,12 +294,27 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     }
   }
 
+  // ===== 한국사: 선택 반영이면 과목처럼, 아니면 보너스 처리 =====
+  const rulesArray = Array.isArray(F.selection_rules)
+    ? F.selection_rules
+    : (F.selection_rules ? [F.selection_rules] : []);
+  const historyAppearsInRules = isSubjectUsedInRules('한국사', rulesArray);
+  const historyRatioPositive  = Number(F['한국사'] || 0) > 0; // 기본비율에 한국사 비율이 있는 경우
+  const historyAsSubject = historyAppearsInRules || historyRatioPositive;
+
+  // 과목으로 쓸 때의 한국사 환산 원점수(등급→점수)
+  let histConv = 0;
+  if (historyAsSubject && F.history_scores && S.한국사?.grade != null) {
+    const hg = String(S.한국사.grade);
+    histConv = Number(F.history_scores[hg] ?? 0);
+  }
+
   // 원점수(과목당)
   const raw = {
     국어:   pickByType(S.국어, kmType),
     수학:   pickByType(S.수학, kmType),
     영어:   englishAsBonus ? 0 : engConv, // 가산점 모드면 과목반영에서 제외
-    한국사: Number(S.한국사?.grade ?? 9),
+    한국사: historyAsSubject ? histConv : 0, // 선택반영이면 과목 점수로, 아니면 0
     탐구:   inqRep
   };
   if (englishAsBonus) {
@@ -297,14 +322,26 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   } else {
     log.push(`[원점수] 국:${raw.국어} / 수:${raw.수학} / 영(환산):${raw.영어} / 탐(대표):${raw.탐구}`);
   }
+  if (historyAsSubject) {
+    log.push(`[원점수] 한국사(과목반영): ${raw.한국사}`);
+  }
 
   // 정규화 기준(과목 만점)
   const { korMax, mathMax, engMax, inqMax } = resolveMaxScores(cfg, F.english_scores, highestMap, S);
+
+  // 한국사 만점(과목으로 반영할 때 정규화 분모): history_scores의 최대값
+  let histMax = 100;
+  if (F.history_scores && typeof F.history_scores === 'object') {
+    const vals = Object.values(F.history_scores).map(Number).filter(n => !Number.isNaN(n));
+    if (vals.length) histMax = Math.max(...vals);
+  }
+
   const getMax = (name) => {
     if (name === '국어') return korMax;
     if (name === '수학') return mathMax;
     if (name === '영어') return engMax;
     if (name === '탐구') return inqMax; // 탐구 highest_of_year는 아래에서 별도 처리
+    if (name === '한국사') return histMax;
     return 100;
   };
 
@@ -334,9 +371,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   log.push(`[학교] 총점=${TOTAL}, 수능비율=${suneungRatio} (DB총점 반영)`);
 
   // 3) 규칙 로딩
-  const rules = Array.isArray(F.selection_rules)
-    ? F.selection_rules
-    : (F.selection_rules ? [F.selection_rules] : []);
+  const rules = rulesArray;
 
   // 3-1) select_ranked_weights의 선택가중 합 및 대상 과목 집합
   const selectWeightSubjects = new Set();
@@ -373,10 +408,12 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   let baseRatioSum = 0;
   let baseNormWeighted = 0;
   const ratioOf = (name) => Number(F[name] || 0);
-  const candidatesBase = ['국어', '수학', '영어', '탐구'];
+
+  // ⭐ 한국사를 기본비율 후보에 포함 (단, 과목반영일 때만)
+  const candidatesBase = ['국어', '수학', '영어', '탐구', ...(historyAsSubject ? ['한국사'] : [])];
 
   for (const name of candidatesBase) {
-    if (englishAsBonus && name === '영어') continue; // 가산점 모드면 과목 반영에서 제외
+    if (englishAsBonus && name === '영어') continue; // 가산점 모드면 과목반영에서 제외
     const ratio = ratioOf(name);
     if (ratio <= 0) continue;
     if (selectWeightSubjects.size && selectWeightSubjects.has(name)) continue;
@@ -416,8 +453,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     picked.forEach(p => usedForWeights.add(p.name));
 
     const wSum = picked.reduce((acc, c, idx) => acc + (Number(r.weights[idx] || 0) * c.norm), 0);
-    // ⚠️ 기존 로직 유지: TOTAL 사용 (기존 방식에 영향 없게)
-    const add  = wSum * TOTAL * suneungRatio;
+    const add  = wSum * TOTAL * suneungRatio; // 기존 로직 유지
     suneungSelect += add;
 
     log.push(`[규칙${i+1}] select_ranked_weights from=[${r.from.join(', ')}] (weights=${r.weights.join(', ')})`);
@@ -429,9 +465,9 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
   const suneungScore = suneungBase + suneungSelect;
 
-  // 6) 한국사 가/감점
+  // 6) 한국사 가/감점 — 과목반영 중이면 보너스 제외
   let historyScore = 0;
-  if (F.history_scores && S.한국사?.grade != null) {
+  if (!historyAsSubject && F.history_scores && S.한국사?.grade != null) {
     const hg = String(S.한국사.grade);
     historyScore = Number(F.history_scores[hg] ?? 0);
     log.push(`[한국사] 등급 ${hg} → ${historyScore}점`);
