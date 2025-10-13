@@ -248,6 +248,32 @@ app.get('/jungsi/topmax/subjects', authMiddleware, (req, res) => {
   res.json({ success:true, subjects });
 });
 
+// ⭐️ [신규 API] 총점(만점) 저장
+app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
+  try {
+    const { U_ID, year, total } = req.body;
+    if (!U_ID || !year || typeof total !== 'number') {
+      return res.status(400).json({ success: false, message: 'U_ID, year, total(숫자)가 필요합니다.' });
+    }
+    if (![300, 500, 1000].includes(total) && (total < 100 || total > 2000)) {
+      // 필요시 허용 범위 조정
+      return res.status(400).json({ success: false, message: '허용되지 않는 총점 값입니다.' });
+    }
+    const [r] = await db.query(
+      'UPDATE `정시반영비율` SET `총점`=? WHERE `U_ID`=? AND `학년도`=?',
+      [total, U_ID, year]
+    );
+    if (r.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '해당 학과/학년도를 찾을 수 없습니다.' });
+    }
+    res.json({ success: true, message: `[${year}] U_ID ${U_ID} 총점=${total} 저장 완료` });
+  } catch (err) {
+    console.error('❌ 총점 저장 오류:', err);
+    res.status(500).json({ success: false, message: 'DB 오류' });
+  }
+});
+
+
 
 
 
