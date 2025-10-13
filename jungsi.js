@@ -248,37 +248,71 @@ app.get('/jungsi/topmax/subjects', authMiddleware, (req, res) => {
   res.json({ success:true, subjects });
 });
 
-// ⭐ 총점(만점) 저장 - 기존 행만 UPDATE (신규 행 생성 금지)
+// ⭐ 총점(만점) 저장 - 기존 행 UPDATE + 디버깅 로그 빵빵하게
 app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
+  const tag = '[TOTAL/SET]';
   try {
     const { U_ID, year, total } = req.body;
-    const t = Number(total);
-    if (!U_ID || !year || !Number.isFinite(t) || t <= 0) {
+    const uid = Number(U_ID);
+    const yr  = String(year);
+    const t   = Number(total);
+
+    console.log(`${tag} ▶ 요청 수신:`, { U_ID: uid, year: yr, total: t, rawBody: req.body });
+
+    if (!uid || !yr || !Number.isFinite(t) || t <= 0) {
+      console.log(`${tag} ✖ 유효성 실패`);
       return res.status(400).json({ success: false, message: 'U_ID, year, total(양수 숫자)가 필요합니다.' });
     }
 
-    // 기존 레코드만 업데이트. 매칭되는 행이 없으면 실패 반환.
-    // (중복행이 있을 경우 모두 업데이트됩니다. 한 개만 업데이트하려면 ORDER BY + LIMIT 1 사용)
-    const [r] = await db.query(
-      'UPDATE `정시반영비율` SET `총점`=? WHERE `U_ID`=? AND `학년도`=?',
-      [t, U_ID, year]
+    // 0) 현재 행 존재/값 확인
+    const [beforeRows] = await db.query(
+      'SELECT U_ID, 학년도, 총점 FROM `정시반영비율` WHERE U_ID=? AND 학년도=?',
+      [uid, yr]
     );
+    console.log(`${tag} ◀ BEFORE:`, beforeRows);
 
-    if (r.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: '해당 학과/학년도 레코드가 없어 총점 업데이트를 수행하지 않았습니다. (신규 생성은 하지 않습니다)'
-      });
+    if (!beforeRows.length) {
+      console.log(`${tag} ✖ 대상 행 없음 (신규 생성 금지 모드)`);
+      return res.status(404).json({ success: false, message: '대상 레코드가 없습니다. (신규 생성은 하지 않습니다)' });
     }
 
+    // 1) UPDATE 실행
+    const [upd] = await db.query(
+      'UPDATE `정시반영비율` SET `총점`=? WHERE `U_ID`=? AND `학년도`=?',
+      [t, uid, yr]
+    );
+    console.log(`${tag} ✅ UPDATE 결과:`, {
+      affectedRows: upd.affectedRows,
+      changedRows : upd.changedRows
+    });
+
+    // 1-1) 경고 메시지 확인
+    try {
+      const [warn] = await db.query('SHOW WARNINGS');
+      if (warn && warn.length) {
+        console.log(`${tag} ⚠ WARNINGS:`, warn);
+      }
+    } catch (_) {
+      // 호환 안 될 수 있음 – 무시
+    }
+
+    // 2) AFTER 확인
+    const [afterRows] = await db.query(
+      'SELECT U_ID, 학년도, 총점 FROM `정시반영비율` WHERE U_ID=? AND 학년도=?',
+      [uid, yr]
+    );
+    console.log(`${tag} ▶ AFTER:`, afterRows);
+
+    // 응답에도 before/after 같이 주면 프론트에서도 바로 확인 가능
     return res.json({
       success: true,
-      message: `[${year}] U_ID ${U_ID} 총점=${t} 업데이트 완료`,
-      total: t
+      message: `[${yr}] U_ID ${uid} 총점=${t} 업데이트 완료`,
+      before: beforeRows,
+      after : afterRows
     });
   } catch (err) {
     console.error('❌ 총점 저장(UPDATE) 오류:', err);
-    return res.status(500).json({ success: false, message: '총점 저장 중 서버 오류' });
+    return res.status(500).json({ success: false, message: '총점 저장 중 서버 오류', error: String(err && err.message) });
   }
 });
 
