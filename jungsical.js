@@ -101,14 +101,47 @@ function evaluateSpecialFormula(formulaText, ctx, log) {
 const readConvertedStd = (t) =>
   Number(t?.converted_std ?? t?.vstd ?? t?.conv_std ?? t?.std ?? t?.percentile ?? 0);
 
-function buildSpecialContext(F, S) {
+function buildSpecialContext(F, S, highestMap) {
   const ctx = {};
+
+  // 총점/비율
   ctx.total = resolveTotal(F);
   ctx.suneung_ratio = (Number(F.수능) || 0) / 100;
+
+  // 점수 설정/최고점 방식
+  const cfg = safeParse(F.score_config, {}) || {};
+  const kmMethod = cfg?.korean_math?.max_score_method || ''; // 'highest_of_year' | 'fixed_200' | ''
+  // 국/수 과목명 (최고표점 테이블 키)
+  const korKey  = kmSubjectNameForKorean(S?.국어);
+  const mathKey = kmSubjectNameForMath(S?.수학);
+
+  // 기본값: 200
+  let korMax  = 200;
+  let mathMax = 200;
+
+  if (kmMethod === 'highest_of_year' && highestMap) {
+    if (highestMap[korKey]  != null)  korMax  = Number(highestMap[korKey]);
+    if (highestMap[mathKey] != null)  mathMax = Number(highestMap[mathKey]);
+  } else if (kmMethod === 'fixed_200') {
+    korMax = 200;
+    mathMax = 200;
+  } // 그 외는 200 유지
+
+  // 0 또는 NaN 방지
+  if (!Number.isFinite(korMax)  || korMax  <= 0) korMax  = 1;
+  if (!Number.isFinite(mathMax) || mathMax <= 0) mathMax = 1;
+
+  // 컨텍스트에 주입 (★ 특수식에서 사용)
+  ctx.kor_max  = korMax;
+  ctx.math_max = mathMax;
+
+  // 국/수 표준·백분위
   ctx.kor_std  = Number(S.국어?.std || 0);
   ctx.kor_pct  = Number(S.국어?.percentile || 0);
   ctx.math_std = Number(S.수학?.std || 0);
   ctx.math_pct = Number(S.수학?.percentile || 0);
+
+  // 영어(등급 환산)
   ctx.eng_grade_score = 0;
   if (F.english_scores && S.영어?.grade != null) {
     const eg = String(S.영어.grade);
@@ -119,11 +152,15 @@ function buildSpecialContext(F, S) {
   } else {
     ctx.eng_pct_est = 0;
   }
+
+  // 한국사(등급→환산/감점)
   ctx.hist_grade_score = 0;
   if (F.history_scores && S.한국사?.grade != null) {
     const hg = String(S.한국사.grade);
     ctx.hist_grade_score = Number(F.history_scores[hg] || 0);
   }
+
+  // (이하 탐구·top3 등 기존 내용 그대로 유지 가능)
   const inqs = (S.탐구 || []);
   const sortedConv = inqs.map((t) => ({ conv: readConvertedStd(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.conv-a.conv);
@@ -143,6 +180,7 @@ function buildSpecialContext(F, S) {
   ctx.inq2_percentile = sortedPct[1]?.pct || 0;
   ctx.inq_sum2_percentile = ctx.inq1_percentile + ctx.inq2_percentile;
   ctx.inq_avg2_percentile = (ctx.inq_sum2_percentile) / (sortedPct.length >= 2 ? 2 : (sortedPct.length || 1));
+
   const kor_pct = ctx.kor_pct;
   const math_pct = ctx.math_pct;
   const inq1_pct = ctx.inq1_percentile;
@@ -152,10 +190,14 @@ function buildSpecialContext(F, S) {
   const top3_with_eng = [kor_pct, math_pct, inq1_pct, eng_pct_est].sort((a,b)=>b-a).slice(0,3);
   ctx.top3_avg_pct_kor_eng_math_inq1 = top3_with_eng.length ? (top3_with_eng.reduce((s,x)=>s+x,0)/top3_with_eng.length) : 0;
   ctx.top3_avg_pct = ctx.top3_avg_pct_kor_eng_math_inq1;
+
+  // 편의 파생
   ctx.max_kor_math_std = Math.max(ctx.kor_std, ctx.math_std);
   ctx.max_kor_math_pct = Math.max(ctx.kor_pct, ctx.math_pct);
+
   return ctx;
 }
+
 
 function mapPercentileToConverted(mapObj, pct) {
   const p = Math.max(0, Math.min(100, Math.round(Number(pct)||0)));
@@ -209,7 +251,8 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
   if (F.계산유형 === '특수공식' && F.특수공식) {
     log.push('<< 특수공식 모드 >>');
-    const ctx = buildSpecialContext(F, S);
+    const ctx = buildSpecialContext(F, S, highestMap); // 최고표점 맵 전달
+
     log.push(`[특수공식 원본] ${F.특수공식}`);
     const specialValue = evaluateSpecialFormula(F.특수공식, ctx, log);
     const final = Number(specialValue) || 0;
