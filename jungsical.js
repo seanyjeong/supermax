@@ -103,29 +103,28 @@ const readConvertedStd = (t) =>
 
 function buildSpecialContext(F, S, highestMap) {
   const ctx = {};
-
-  // 총점/비율
   ctx.total = resolveTotal(F);
   ctx.suneung_ratio = (Number(F.수능) || 0) / 100;
 
-  // 점수 설정/최고점 방식
   const cfg = safeParse(F.score_config, {}) || {};
-  const kmMethod = cfg?.korean_math?.max_score_method || ''; // 'highest_of_year' | 'fixed_200' | ''
-  // 국/수 과목명 (최고표점 테이블 키)
+  const kmMethod = cfg?.korean_math?.max_score_method || '';
+
   const korKey  = kmSubjectNameForKorean(S?.국어);
   const mathKey = kmSubjectNameForMath(S?.수학);
 
-  // 기본값: 200
+  // 1) 기본값
   let korMax  = 200;
   let mathMax = 200;
 
-  if (kmMethod === 'highest_of_year' && highestMap) {
-    if (highestMap[korKey]  != null)  korMax  = Number(highestMap[korKey]);
-    if (highestMap[mathKey] != null)  mathMax = Number(highestMap[mathKey]);
-  } else if (kmMethod === 'fixed_200') {
+  // 2) 설정 기반
+  if (kmMethod === 'fixed_200') {
     korMax = 200;
     mathMax = 200;
-  } // 그 외는 200 유지
+  } else if (kmMethod === 'highest_of_year') {
+    // 설정도 highest_of_year면 highestMap 시도 (없으면 아래 3번에서 다시 한 번 시도)
+    if (highestMap && highestMap[korKey] != null)  korMax  = Number(highestMap[korKey]);
+    if (highestMap && highestMap[mathKey] != null) mathMax = Number(highestMap[mathKey]);
+  }
 
   // 0 또는 NaN 방지
   if (!Number.isFinite(korMax)  || korMax  <= 0) korMax  = 1;
