@@ -1224,7 +1224,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
 
         // --- 1단계: 기록을 개별 점수로 변환 ---
         const scoreCalculationTasks = inputs.map(async (input) => {
-         if (input.기록 === null || input.기록 === '' || input.기록 == 0) { // '==' 로 0과 '0' 모두 처리
+         if (input.기록 === null || input.기록 === '' || input.기록 == 0) {
                 return { 종목명: input.종목명, 배점: 0 };
             }
 
@@ -1233,6 +1233,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
 
             // ✅✅✅ 대학ID 155번(동국대) 특수 계산식 ✅✅✅
             if (Number(대학ID) === 155) {
+                // ... (기존 동국대 로직은 그대로 유지)
                 const [[formula_data]] = await db.promise().query(
                     "SELECT 최저기준, 최고기준, 기본점수, 최고점수 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? LIMIT 1",
                     [실기ID, input.종목명, gender]
@@ -1241,56 +1242,46 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
                 if (formula_data) {
                     const { 최저기준, 최고기준, 기본점수, 최고점수 } = formula_data;
                     
-                    // 기록이 기준치를 벗어나는 경우 처리
                     if (reverse && studentRecord < 최고기준) return { 종목명: input.종목명, 배점: 최고점수 };
                     if (reverse && studentRecord > 최저기준) return { 종목명: input.종목명, 배점: 기본점수 };
                     if (!reverse && studentRecord > 최고기준) return { 종목명: input.종목명, 배점: 최고점수 };
                     if (!reverse && studentRecord < 최저기준) return { 종목명: input.종목명, 배점: 기본점수 };
                     
-                    // 점수 산출 공식 적용
-// 점수 산출 공식 적용
-                    let score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
-                    // ✅ 소수점 둘째 자리까지 반올림
-                    score = parseFloat(score.toFixed(2));
-                    return { 종목명: input.종목명, 배점: score };
+                    let score = (studentRecord - 최저기준) * (최고점수 - 기본점수) / (최고기준 - 최저기준) + 기본점수;
+                    score = parseFloat(score.toFixed(2));
+                    return { 종목명: input.종목명, 배점: score };
                 }
             }
 
-            // ✅✅✅ P/F 판정 로직 시작 ✅✅✅
-            // 실기ID 99번(청주대)일 경우, P/F 로직을 우선 적용
+            // ✅✅✅ P/F 판정 로직 시작 (실기ID 99번) ✅✅✅
             if (실기ID === 99) {
+                // ... (기존 P/F 로직은 그대로 유지)
                 const [[pf_row]] = await db.promise().query(
                     "SELECT 기록 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND 배점 = 'P' LIMIT 1",
                     [실기ID, input.종목명, gender]
                 );
 
-                if (!pf_row) return { 종목명: input.종목명, 배점: 'F' }; // 기준 기록이 없으면 Fail
+                if (!pf_row) return { 종목명: input.종목명, 배점: 'F' };
 
                 const benchmarkRecord = parseFloat(pf_row.기록);
                 const studentRecord = parseFloat(input.기록);
                 const reverse = ['10m', '20m', 'run', '100', 'z', '달리기','벽치기','런','에르고','앞뒤구르기'].some(k => input.종목명.toLowerCase().includes(k));
 
-                if (reverse) { // 기록이 낮을수록 좋은 종목
+                if (reverse) {
                     return { 종목명: input.종목명, 배점: studentRecord <= benchmarkRecord ? 'P' : 'F' };
-                } else { // 기록이 높을수록 좋은 종목
+                } else {
                     return { 종목명: input.종목명, 배점: studentRecord >= benchmarkRecord ? 'P' : 'F' };
                 }
             }
-            // ✅✅✅ P/F 판정 로직 끝 ✅✅✅
 
             // --- P/F 대학이 아닐 경우, 기존 숫자 점수 계산 로직 실행 ---
- 
-// --- P/F 대학이 아닐 경우, 기존 숫자 점수 계산 로직 실행 ---
-
             let sql;
             if (reverse) {
-                // 달리기처럼 기록이 낮을수록 좋은 종목의 경우 (구간 점수 방식)
                 sql = `
                     SELECT 배점 FROM \`26수시실기배점\`
                     WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND CAST(기록 AS DECIMAL(10,2)) <= ?
                     ORDER BY CAST(기록 AS DECIMAL(10,2)) DESC LIMIT 1`;
             } else {
-                // 멀리뛰기처럼 기록이 높을수록 좋은 종목의 경우 (기존 등급 달성 방식)
                 sql = `
                     SELECT 배점 FROM \`26수시실기배점\`
                     WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? AND ? >= CAST(기록 AS DECIMAL(10,2))
@@ -1301,10 +1292,8 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             
             let scoreValue = 0;
             if (row) {
-                // 배점표에서 점수를 찾았을 경우
                 scoreValue = row.배점;
             } else {
-                // 점수를 못 찾았을 때 -> 만점보다 잘한 경우인지 확인
                 const [[maxScoreRow]] = await db.promise().query(
                     `SELECT 기록, 배점 FROM \`26수시실기배점\` 
                      WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? 
@@ -1316,10 +1305,10 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
                     const bestBenchmark = parseFloat(maxScoreRow.기록);
                     const studentRecord = parseFloat(input.기록);
 
-                    if (reverse && studentRecord < bestBenchmark) { // 달리기: 학생 기록이 만점 기준보다 빠를 때
-                        scoreValue = maxScoreRow.배점; // 만점 부여
-                    } else if (!reverse && studentRecord > bestBenchmark) { // 던지기: 학생 기록이 만점 기준보다 멀리 갔을 때
-                        scoreValue = maxScoreRow.배점; // 만점 부여
+                    if (reverse && studentRecord < bestBenchmark) {
+                        scoreValue = maxScoreRow.배점;
+                    } else if (!reverse && studentRecord > bestBenchmark) {
+                        scoreValue = maxScoreRow.배점;
                     }
                 }
             }
@@ -1336,11 +1325,12 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
         individualScores.forEach(item => {
             종목별점수[item.종목명] = item.배점;
         });
-
-        // --- 2단계: 종목별 감수 계산 ---
+        
+        // --- 2단계: 종목별 감수 계산 (이 부분은 모든 대학에 공통으로 필요) ---
+        // ... (감수 계산 로직은 그대로 유지)
         const gamCalculationTasks = Object.keys(종목별점수).map(async (eventName) => {
             const studentScore = 종목별점수[eventName];
-            if (studentScore === 0 || isNaN(Number(studentScore))) return { 종목명: eventName, 감수: 0 }; // P/F 같은 문자 점수는 감수 0
+            if (studentScore === 0 || isNaN(Number(studentScore))) return { 종목명: eventName, 감수: 0 };
 
             const [scoreList] = await db.promise().query(
                 "SELECT 배점 FROM `26수시실기배점` WHERE 실기ID = ? AND 종목명 = ? AND 성별 = ? ORDER BY CAST(배점 AS SIGNED) DESC",
@@ -1360,7 +1350,28 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             종목별감수[item.종목명] = item.감수;
         });
 
-        // --- 3단계: 최종 점수 계산 (모듈 호출) ---
+        // ▼▼▼▼▼ 397번 대학 특수 로직 추가 ▼▼▼▼▼
+        if (Number(대학ID) === 397) {
+            // 1. 모든 종목의 점수를 합산
+            const sumOfScores = individualScores.reduce((acc, scoreObj) => acc + Number(scoreObj.배점 || 0), 0);
+            
+            // 2. 특수 공식 적용
+            const 실기총점 = (sumOfScores / 12) + 400;
+            const 합산점수 = 실기총점 + (내신점수 || 0);
+
+            // 3. 397번 대학의 경우 여기서 계산을 마치고 바로 결과를 응답
+            return res.json({
+                success: true,
+                종목별점수,
+                종목별감수,
+                총감수: 0, // 397번은 감수 개념이 없으므로 0으로 처리
+                실기총점: 실기총점,
+                합산점수: 합산점수
+            });
+        }
+        // ▲▲▲▲▲ 397번 대학 특수 로직 끝 ▲▲▲▲▲
+
+        // --- 3단계: 최종 점수 계산 (외부 모듈 호출 - 397번이 아닐 경우에만 실행) ---
         const finalScores = calculateFinalScore(대학ID, 종목별점수, 내신점수, config, 종목별감수, inputs);
 
         // --- 4단계: 모든 결과 한번에 전송 ---
