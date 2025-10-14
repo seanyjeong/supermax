@@ -1351,26 +1351,27 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
         });
 
         // ▼▼▼▼▼ 397번 대학 특수 로직 추가 ▼▼▼▼▼
-        if (Number(대학ID) === 397) {
-            // 1. 모든 종목의 점수를 합산
+          if (Number(대학ID) === 397) {
             const sumOfScores = individualScores.reduce((acc, scoreObj) => acc + Number(scoreObj.배점 || 0), 0);
             
-            // 2. 특수 공식 적용
-            const 실기총점 = (sumOfScores / 3 * 4) + 400;
-            const 합산점수 = 실기총점 + Number(내신점수 || 0);
+            // let으로 변경해서 재할당 가능하게 수정
+            let 실기총점 = (sumOfScores / 3 * 4) + 400;
+            let 합산점수 = 실기총점 + Number(내신점수 || 0);
+
+            // 소수점 처리
             실기총점 = parseFloat(실기총점.toFixed(2));
             합산점수 = parseFloat(합산점수.toFixed(2));
 
-            // 3. 397번 대학의 경우 여기서 계산을 마치고 바로 결과를 응답
             return res.json({
                 success: true,
                 종목별점수,
                 종목별감수,
-                총감수: 0, // 397번은 감수 개념이 없으므로 0으로 처리
+                총감수: 0,
                 실기총점: 실기총점,
                 합산점수: 합산점수
             });
         }
+        // ▲▲▲▲▲ 397번 대학 특수 로직 끝 ▲▲▲▲▲
         // ▲▲▲▲▲ 397번 대학 특수 로직 끝 ▲▲▲▲▲
 
         // --- 3단계: 최종 점수 계산 (외부 모듈 호출 - 397번이 아닐 경우에만 실행) ---
