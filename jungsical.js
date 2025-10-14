@@ -281,22 +281,29 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     return 100;
   };
 
-  let inquiryRepMaxForNorm = inqMax;
-  if (inqMethod === 'highest_of_year' && highestMap && inqPicked.length) {
-    const ms = inqPicked
-      .map(x => Number(highestMap[x.subject] ?? NaN))
-      .filter(v => !Number.isNaN(v) && v > 0);
-    if (ms.length) {
-      inquiryRepMaxForNorm = ms.reduce((s,x)=>s+x,0) / ms.length;
-    }
-  }
-
+  // ★★★ 탐구 highest_of_year 계산 방식 변경:
+  //      과목별 (점수 / 과목 최고점) 비율을 먼저 구한 뒤, 그 '비율'의 평균을 사용
   const normOf = (name) => {
-    const sc = Number(raw[name] || 0);
-    let mx = getMax(name);
-    if (name === '탐구' && inqMethod === 'highest_of_year' && inquiryRepMaxForNorm > 0) {
-      mx = inquiryRepMaxForNorm;
+    // 탐구: highest_of_year + 최고표점맵 + 선택된 과목 리스트가 있을 때
+    if (name === '탐구' && inqMethod === 'highest_of_year' && highestMap && inqPicked.length) {
+      const ratios = inqPicked.map(p => {
+        const top = Number(highestMap[p.subject] ?? NaN);
+        const v   = Number(p.val ?? NaN); // 변표/표준/백분위로 고른 점수 값
+        if (!Number.isFinite(top) || top <= 0 || !Number.isFinite(v)) return null;
+        return Math.max(0, Math.min(1, v / top));
+      }).filter(r => r != null);
+
+      if (ratios.length) {
+        const avg = ratios.reduce((s, r) => s + r, 0) / ratios.length;
+        log.push(`[탐구정규화] highest_of_year: ${inqPicked.map(p => `${p.subject}:${(Number(p.val)||0)}/${highestMap[p.subject] ?? '-'}`).join(', ')} → 평균비율=${avg.toFixed(4)}`);
+        return avg;
+      }
+      return 0;
     }
+
+    // 그 외(국/수/영/한국사, 또는 탐구 fixed 기준)
+    const sc = Number(raw[name] || 0);
+    const mx = getMax(name);
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
   };
 
