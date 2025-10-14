@@ -1356,7 +1356,7 @@ app.post('/26susi/calculate-final-score', authJWT, async (req, res) => {
             const sumOfScores = individualScores.reduce((acc, scoreObj) => acc + Number(scoreObj.배점 || 0), 0);
             
             // 2. 특수 공식 적용
-            const 실기총점 = (sumOfScores / 12) + 400;
+            const 실기총점 = (sumOfScores / 3 * 4) + 400;
             const 합산점수 = 실기총점 + Number(내신점수 || 0);
 
             // 3. 397번 대학의 경우 여기서 계산을 마치고 바로 결과를 응답
