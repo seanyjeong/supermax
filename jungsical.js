@@ -121,9 +121,14 @@ function buildSpecialContext(F, S, highestMap) {
     korMax = 200;
     mathMax = 200;
   } else if (kmMethod === 'highest_of_year') {
-    // 설정도 highest_of_year면 highestMap 시도 (없으면 아래 3번에서 다시 한 번 시도)
     if (highestMap && highestMap[korKey] != null)  korMax  = Number(highestMap[korKey]);
     if (highestMap && highestMap[mathKey] != null) mathMax = Number(highestMap[mathKey]);
+  }
+
+  // 3) ★ 특수공식 요구: highestMap이 있으면 설정과 무관하게 최우선으로 사용
+  if (highestMap) {
+    if (highestMap[korKey]  != null) korMax  = Number(highestMap[korKey]);
+    if (highestMap[mathKey] != null) mathMax = Number(highestMap[mathKey]);
   }
 
   // 0 또는 NaN 방지
@@ -159,7 +164,7 @@ function buildSpecialContext(F, S, highestMap) {
     ctx.hist_grade_score = Number(F.history_scores[hg] || 0);
   }
 
-  // (이하 탐구·top3 등 기존 내용 그대로 유지 가능)
+  // (이하 탐구·top3 등 기존 내용 유지)
   const inqs = (S.탐구 || []);
   const sortedConv = inqs.map((t) => ({ conv: readConvertedStd(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.conv-a.conv);
@@ -196,7 +201,6 @@ function buildSpecialContext(F, S, highestMap) {
 
   return ctx;
 }
-
 
 function mapPercentileToConverted(mapObj, pct) {
   const p = Math.max(0, Math.min(100, Math.round(Number(pct)||0)));
@@ -323,14 +327,12 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     return 100;
   };
 
-  // ★★★ 탐구 highest_of_year 계산 방식 변경:
-  //      과목별 (점수 / 과목 최고점) 비율을 먼저 구한 뒤, 그 '비율'의 평균을 사용
+  // ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
   const normOf = (name) => {
-    // 탐구: highest_of_year + 최고표점맵 + 선택된 과목 리스트가 있을 때
     if (name === '탐구' && inqMethod === 'highest_of_year' && highestMap && inqPicked.length) {
       const ratios = inqPicked.map(p => {
         const top = Number(highestMap[p.subject] ?? NaN);
-        const v   = Number(p.val ?? NaN); // 변표/표준/백분위로 고른 점수 값
+        const v   = Number(p.val ?? NaN);
         if (!Number.isFinite(top) || top <= 0 || !Number.isFinite(v)) return null;
         return Math.max(0, Math.min(1, v / top));
       }).filter(r => r != null);
@@ -343,7 +345,6 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
       return 0;
     }
 
-    // 그 외(국/수/영/한국사, 또는 탐구 fixed 기준)
     const sc = Number(raw[name] || 0);
     const mx = getMax(name);
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
@@ -535,8 +536,14 @@ module.exports = function (db, authMiddleware) {
       convRows.forEach(r => { convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); });
       
       const cfg = safeParse(formulaData.score_config, {}) || {};
+      // ★ 특수공식이면 무조건 최고표점 로딩
+      const mustLoadYearMax =
+        cfg?.korean_math?.max_score_method === 'highest_of_year' ||
+        cfg?.inquiry?.max_score_method     === 'highest_of_year' ||
+        (formulaData.계산유형 === '특수공식');
+
       let highestMap = null;
-      if (cfg?.korean_math?.max_score_method === 'highest_of_year' || cfg?.inquiry?.max_score_method === 'highest_of_year') {
+      if (mustLoadYearMax) {
         const exam = basis_exam || cfg?.highest_exam || '수능';
         highestMap = await loadYearHighestMap(db, year, exam);
       }
@@ -551,7 +558,7 @@ module.exports = function (db, authMiddleware) {
       );
 
       if (logBuffer.length && Array.isArray(result.calculationLog)) {
-        const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 =========='));
+        const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 ==========')); // 보통 0
         result.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
       }
 
