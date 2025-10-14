@@ -18,7 +18,7 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                     실기총점 = rawSum + 20;
                     break;
                  case 257:
-                case 259:
+                 case 259:
                     const X = rawSum;
                     if (X === 0) {
                         실기총점 = 0;
@@ -28,68 +28,89 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
                     break;
                 case 260:
                     const Y = rawSum;
-                    // ▼▼▼▼▼ 여기가 추가로 수정된 부분 ▼▼▼▼▼
                     if (Y === 0) {
-                        실기총점 = 0; // 합계가 0이면 총점도 0으로 처리
+                        실기총점 = 0;
                     } else {
                         실기총점 = (Y / 2 - 80) + 480;
                     }
-                    // ▲▲▲▲▲ 여기가 추가로 수정된 부분 ▲▲▲▲▲
                     break;
 
-                // [규칙] 상위 3개 종목 합산 후 비율 환산
+                // ▼▼▼▼▼ 여기가 핵심 수정 부분 ▼▼▼▼▼
+
+                // [신규 규칙] ID 238: 기본점수 80 + ((상위 3종목 합) / 3 * 3.2)
+                case 238:
+                    { // 변수 스코프를 위해 중괄호 추가
+                        const eventData = Object.keys(종목별점수).map(name => ({ name, score: Number(종목별점수[name]) || 0, gam: Number(종목별감수[name]) || 0 }));
+                        eventData.sort((a, b) => b.score - a.score);
+                        const top3Events = eventData.slice(0, 3);
+                        const top3Sum = top3Events.reduce((sum, event) => sum + event.score, 0);
+                        총감수 = top3Events.reduce((sum, event) => sum + event.gam, 0);
+                        
+                        실기총점 = 80 + ((top3Sum / 3) * 3.2);
+                        break;
+                    }
+
+                // [신규 규칙] ID 232, 242: 기본점수 160 + ((상위 3종목 합) / 3 * 6.4)
                 case 232:
                 case 242:
+                    { // 변수 스코프를 위해 중괄호 추가
+                        const eventData = Object.keys(종목별점수).map(name => ({ name, score: Number(종목별점수[name]) || 0, gam: Number(종목별감수[name]) || 0 }));
+                        eventData.sort((a, b) => b.score - a.score);
+                        const top3Events = eventData.slice(0, 3);
+                        const top3Sum = top3Events.reduce((sum, event) => sum + event.score, 0);
+                        총감수 = top3Events.reduce((sum, event) => sum + event.gam, 0);
+
+                        실기총점 = 160 + ((top3Sum / 3) * 6.4);
+                        break;
+                    }
+
+                // [기존 규칙 유지] ID 209, 206: 상위 3개 종목 합산 후 비율 환산
                 case 209:
                 case 206:
-                case 238:
-                    const eventData = Object.keys(종목별점수).map(name => ({ name, score: Number(종목별점수[name]) || 0, gam: Number(종목별감수[name]) || 0 }));
-                    eventData.sort((a, b) => b.score - a.score);
-                    const top3Events = eventData.slice(0, 3);
-                    const top3Sum = top3Events.reduce((sum, event) => sum + event.score, 0);
-                    총감수 = top3Events.reduce((sum, event) => sum + event.gam, 0);
-                    
-                    if (config.기준총점 > 0 && config.실기반영총점 > 0) {
-                        실기총점 = (top3Sum / config.기준총점) * config.실기반영총점;
-                    } else {
-                        실기총점 = top3Sum;
+                    {
+                        const eventData = Object.keys(종목별점수).map(name => ({ name, score: Number(종목별점수[name]) || 0, gam: Number(종목별감수[name]) || 0 }));
+                        eventData.sort((a, b) => b.score - a.score);
+                        const top3Events = eventData.slice(0, 3);
+                        const top3Sum = top3Events.reduce((sum, event) => sum + event.score, 0);
+                        총감수 = top3Events.reduce((sum, event) => sum + event.gam, 0);
+                        
+                        if (config.기준총점 > 0 && config.실기반영총점 > 0) {
+                            실기총점 = (top3Sum / config.기준총점) * config.실기반영총점;
+                        } else {
+                            실기총점 = top3Sum;
+                        }
+                        break;
                     }
-                    break;
+                
+                // ▲▲▲▲▲ 여기가 핵심 수정 부분 ▲▲▲▲▲
 
-                // [규칙] 100m 또는 25m왕복달리기 중 하나만 반영 (단순 합산과 동일)
                 case 248:
                     실기총점 = rawSum;
                     break;
                 
-                // [규칙] 단순합산 + 기본점수 30점
                 case 270:
                     실기총점 = rawSum + 30;
                     break;
                     
-                
-                // [규칙] 단순합산 * 0.75
                 case 332:
                 case 333:
                     실기총점 = rawSum * 0.75;
                     break;
                 
-                // [규칙] 단순합산 + 기본점수 10점
                 case 334:
                 case 335:
                 case 336:
                     실기총점 = rawSum + 10;
                     break;
                 
-                // [규칙] P(Pass) 개수 * 100 + 200
-              case 338:
-                    // 최종 정리된 규칙: '종목별점수' 결과값에서 'P' 또는 'PASS'의 개수를 셈
+                 case 338:
                     const passCount = Object.values(종목별점수).filter(score => {
                         const scoreStr = String(score).toUpperCase();
                         return scoreStr === 'P' || scoreStr === 'PASS';
                     }).length;
                     
                     실기총점 = (passCount * 100) + 200;
-                    총감수 = 0; // 이 계산 방식에서는 감수가 의미 없음
+                    총감수 = 0;
                     break;
                 default:
                     실기총점 = rawSum;
@@ -120,5 +141,3 @@ function calculateFinalScore(대학ID, 종목별점수, 내신점수, config, �
 }
 
 module.exports = { calculateFinalScore };
-
-
