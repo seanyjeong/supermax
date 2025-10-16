@@ -244,11 +244,7 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.inq2_social_boost = (inq2 && inq2.group === '사탐') ? 1.05 : 1.0;
 })();
 
-  // 안전 숫자 헬퍼
-const pickPos = (...vals) => {
-  for (const v of vals) { const n = Number(v); if (isFinite(n) && n > 0) return n; }
-  return 1; // 분모 0 방지
-};
+
 
 
 
@@ -263,8 +259,7 @@ const inq2Subj = inqSorted[1]?.subject || '';
 ctx.inq1_max_std = pickPos(highestMap?.[inq1Subj], cfg?.max_scores?.inq1, 70);
 ctx.inq2_max_std = pickPos(highestMap?.[inq2Subj], cfg?.max_scores?.inq2, 70);
 
-// 디버그
-logHook?.(`[탐구 최고표점] ${inq1Subj}:${ctx.inq1_max_std}, ${inq2Subj}:${ctx.inq2_max_std}`);
+
 
 
 
