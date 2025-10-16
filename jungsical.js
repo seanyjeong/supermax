@@ -143,6 +143,13 @@ function buildSpecialContext(F, S, highestMap) {
 ctx.ratio_kor  = Number(F['국어'] || 0);
 ctx.ratio_math = Number(F['수학'] || 0);
 ctx.ratio_inq  = Number(F['탐구'] || 0);
+//중앙대때매
+    ctx.ratio_kor_norm  = ctx.ratio_kor  / 100; // 50 → 0.5
+  ctx.ratio_math_norm = ctx.ratio_math / 100;
+  ctx.ratio_inq_norm  = ctx.ratio_inq  / 100;
+    ctx.ratio5_kor  = ctx.ratio_kor_norm  * 5;
+  ctx.ratio5_math = ctx.ratio_math_norm * 5;
+  ctx.ratio5_inq  = ctx.ratio_inq_norm  * 5;
 
 
   // 국/수 표준·백분위
