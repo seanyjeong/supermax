@@ -625,7 +625,7 @@ module.exports = function (db, authMiddleware) {
       }
 
 const formulaData = rows[0];
-formulaData.탐구변표 = convMap; // 이 한 줄을 추가!
+
 
       const [convRows] = await db.query(
         `SELECT 계열, 백분위, 변환표준점수 FROM \`정시탐구변환표준\` WHERE U_ID=? AND 학년도=?`,
@@ -633,6 +633,8 @@ formulaData.탐구변표 = convMap; // 이 한 줄을 추가!
       );
       const convMap = { '사탐': {}, '과탐': {} };
       convRows.forEach(r => { convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); });
+
+      formulaData.탐구변표 = convMap; // 이 한 줄을 추가!
       
       const cfg = safeParse(formulaData.score_config, {}) || {};
       // ★ 특수공식이면 무조건 최고표점 로딩
