@@ -199,6 +199,20 @@ function buildSpecialContext(F, S, highestMap) {
   ctx.max_kor_math_std = Math.max(ctx.kor_std, ctx.math_std);
   ctx.max_kor_math_pct = Math.max(ctx.kor_pct, ctx.math_pct);
 
+   const items_pct = [
+    Number(ctx.kor_pct || 0),
+    Number(ctx.math_pct || 0),
+    Number(ctx.inq1_percentile || 0),
+    Number(ctx.inq2_percentile || 0),
+  ].map(v => Math.max(0, Math.min(100, v)));
+
+  items_pct.sort((a,b) => b - a);
+  // 상위 2개 비율 합 = (p1/100) + (p2/100)
+  ctx.top2_sum_norm_pct_kmi2 = ((items_pct[0] || 0) + (items_pct[1] || 0)) / 100;
+
+  // (옵션) 원하면 백분위 “생 점수” 상위2 합(0~200)도 노출
+  ctx.top2_sum_raw_pct_kmi2  = (items_pct[0] || 0) + (items_pct[1] || 0);
+
   return ctx;
 }
 
