@@ -399,8 +399,32 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     return 100;
   };
 
-  // ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
+// ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
   const normOf = (name) => {
+    // [수정] 변환표준점수일 경우, 최고 변표로 나누도록 로직 분기
+    if (name === '탐구' && inqMethod === 'highest_of_year' && inqType === '변환표준점수') {
+      if (!F.탐구변표 || inqPicked.length === 0) return 0; // 변표 데이터 없으면 0점 처리
+
+      // 학생의 탐구 계열을 찾음 (첫 번째 과목 기준)
+      const firstInquiry = S.탐구.find(sub => sub.subject === inqPicked[0].subject);
+      const group = firstInquiry?.group || firstInquiry?.type || guessInquiryGroup(firstInquiry?.subject || '');
+
+      // 해당 계열의 변표 테이블에서 최고점을 찾음
+      const convTableForGroup = F.탐구변표[group];
+      if (!convTableForGroup) return 0;
+      
+      const maxConvScore = Math.max(...Object.values(convTableForGroup).map(Number).filter(n => !isNaN(n)));
+
+      if (maxConvScore > 0) {
+        const studentAvgConvScore = inqRep; // calcInquiryRepresentative에서 계산된 학생의 평균 변표
+        const result = studentAvgConvScore / maxConvScore;
+        log.push(`[탐구정규화-변표] highest_of_year: 학생평균변표(${studentAvgConvScore.toFixed(2)}) / ${group}최고변표(${maxConvScore.toFixed(2)}) → 비율=${result.toFixed(4)}`);
+        return result;
+      }
+      return 0;
+    }
+    
+    // [기존 로직] 표준점수 기반 highest_of_year
     if (name === '탐구' && inqMethod === 'highest_of_year' && highestMap && inqPicked.length) {
       const ratios = inqPicked.map(p => {
         const top = Number(highestMap[p.subject] ?? NaN);
@@ -411,12 +435,13 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
       if (ratios.length) {
         const avg = ratios.reduce((s, r) => s + r, 0) / ratios.length;
-        log.push(`[탐구정규화] highest_of_year: ${inqPicked.map(p => `${p.subject}:${(Number(p.val)||0)}/${highestMap[p.subject] ?? '-'}`).join(', ')} → 평균비율=${avg.toFixed(4)}`);
+        log.push(`[탐구정규화-표준] highest_of_year: ${inqPicked.map(p => `${p.subject}:${(Number(p.val)||0)}/${highestMap[p.subject] ?? '-'}`).join(', ')} → 평균비율=${avg.toFixed(4)}`);
         return avg;
       }
       return 0;
     }
 
+    // [기존 로직] 그 외 모든 과목
     const sc = Number(raw[name] || 0);
     const mx = getMax(name);
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
@@ -598,7 +623,9 @@ module.exports = function (db, authMiddleware) {
       if (!rows || rows.length === 0) {
         return res.status(404).json({ success: false, message: '해당 학과/학년도 정보를 찾을 수 없습니다.' });
       }
-      const formulaData = rows[0];
+
+const formulaData = rows[0];
+formulaData.탐구변표 = convMap; // 이 한 줄을 추가!
 
       const [convRows] = await db.query(
         `SELECT 계열, 백분위, 변환표준점수 FROM \`정시탐구변환표준\` WHERE U_ID=? AND 학년도=?`,
