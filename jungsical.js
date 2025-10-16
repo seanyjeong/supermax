@@ -139,6 +139,12 @@ function buildSpecialContext(F, S, highestMap) {
   ctx.kor_max  = korMax;
   ctx.math_max = mathMax;
 
+  // 반영비율(%) 그대로 넣고, 공식에서 ×5 하도록 설계
+ctx.ratio_kor  = Number(F['국어'] || 0);
+ctx.ratio_math = Number(F['수학'] || 0);
+ctx.ratio_inq  = Number(F['탐구'] || 0);
+
+
   // 국/수 표준·백분위
   ctx.kor_std  = Number(S.국어?.std || 0);
   ctx.kor_pct  = Number(S.국어?.percentile || 0);
@@ -212,6 +218,25 @@ function buildSpecialContext(F, S, highestMap) {
 
   // (옵션) 원하면 백분위 “생 점수” 상위2 합(0~200)도 노출
   ctx.top2_sum_raw_pct_kmi2  = (items_pct[0] || 0) + (items_pct[1] || 0);
+
+  // 탐구 상위 2개 과목의 '사탐' 여부 판정 → 과목별 5% 가산(=1.05)
+(function attachSocialBoost() {
+  const inqs = (S.탐구 || []);
+  // 과목/그룹 식별 가능한 튜플로 만들고 변환표준점수 기준으로 정렬
+  const tuples = inqs.map(t => ({
+    subject: t.subject || '',
+    group: t.group || t.type || guessInquiryGroup(t.subject || ''),
+    conv: readConvertedStd(t)
+  })).sort((a,b) => b.conv - a.conv);
+
+  const inq1 = tuples[0];
+  const inq2 = tuples[1];
+
+  // 사탐이면 1.05, 아니면 1.0
+  ctx.inq1_social_boost = (inq1 && inq1.group === '사탐') ? 1.05 : 1.0;
+  ctx.inq2_social_boost = (inq2 && inq2.group === '사탐') ? 1.05 : 1.0;
+})();
+
 
   return ctx;
 }
