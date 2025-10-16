@@ -332,9 +332,9 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     const specialValue = evaluateSpecialFormula(F.특수공식, ctx, log);
     const final = Number(specialValue) || 0;
     log.push('========== 최종 ==========');
-    log.push(`특수공식 결과 = ${final.toFixed(3)}`);
+    log.push(`특수공식 결과 = ${final.toFixed(2)}`);
     return {
-      totalScore: final.toFixed(3),
+      totalScore: final.toFixed(2),
       breakdown: { special: final },
       calculationLog: log
     };
@@ -495,7 +495,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   }
 
   const rawSuneungTotal = baseBeforeRatio + selectBeforeRatio;
-  log.push(`[수능원본점수] 기본=${baseBeforeRatio.toFixed(3)}, 선택=${selectBeforeRatio.toFixed(3)}, 합계=${rawSuneungTotal.toFixed(3)} (비율적용 전)`);
+  log.push(`[수능원본점수] 기본=${baseBeforeRatio.toFixed(3)}, 선택=${selectBeforeRatio.toFixed(2)}, 합계=${rawSuneungTotal.toFixed(2)} (비율적용 전)`);
 
   let historyScore = 0;
   if (!historyAsSubject && F.history_scores && S.한국사?.grade != null) {
@@ -531,8 +531,8 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
   const final = finalSuneungScore + historyScore + englishBonus;
   log.push('========== 최종 ==========');
-  log.push(`수능점수(최종) = ${finalSuneungScore.toFixed(3)} / 한국사(후반영) = ${historyScore} / 영어보정 = ${englishBonus}`);
-  log.push(`총점 = ${final.toFixed(3)}`);
+  log.push(`수능점수(최종) = ${finalSuneungScore.toFixed(2)} / 한국사(후반영) = ${historyScore} / 영어보정 = ${englishBonus}`);
+  log.push(`총점 = ${final.toFixed(2)}`);
 
   return {
     totalScore: final.toFixed(3),
