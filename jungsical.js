@@ -495,7 +495,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   }
 
   const rawSuneungTotal = baseBeforeRatio + selectBeforeRatio;
-  log.push(`[수능원본점수] 기본=${baseBeforeRatio.toFixed(3)}, 선택=${selectBeforeRatio.toFixed(2)}, 합계=${rawSuneungTotal.toFixed(2)} (비율적용 전)`);
+  log.push(`[수능원본점수] 기본=${baseBeforeRatio.toFixed(2)}, 선택=${selectBeforeRatio.toFixed(2)}, 합계=${rawSuneungTotal.toFixed(2)} (비율적용 전)`);
 
   let historyScore = 0;
   if (!historyAsSubject && F.history_scores && S.한국사?.grade != null) {
@@ -535,7 +535,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   log.push(`총점 = ${final.toFixed(2)}`);
 
   return {
-    totalScore: final.toFixed(3),
+    totalScore: final.toFixed(2),
     breakdown: { base: baseBeforeRatio * suneungRatio, select: selectBeforeRatio * suneungRatio, history: historyScore, english_bonus: englishBonus },
     calculationLog: log
   };
