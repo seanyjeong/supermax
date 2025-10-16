@@ -248,16 +248,6 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
 
 
 
-// 탐구 상위 2과목 기준으로 과목별 최고점 주입
-const inqSorted = (S.탐구 || [])
-  .map(t => ({ subject: t.subject || '', std: Number(t.std || 0) }))
-  .sort((a,b) => b.std - a.std);
-
-const inq1Subj = inqSorted[0]?.subject || '';
-const inq2Subj = inqSorted[1]?.subject || '';
-
-ctx.inq1_max_std = pickPos(highestMap?.[inq1Subj], cfg?.max_scores?.inq1, 70);
-ctx.inq2_max_std = pickPos(highestMap?.[inq2Subj], cfg?.max_scores?.inq2, 70);
 
 
 
