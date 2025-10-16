@@ -178,19 +178,37 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   }
 
   // (이하 탐구·top3 등 기존 내용 유지)
+// (이하 탐구·top3 등 기존 내용 유지)
   const inqs = (S.탐구 || []);
   const sortedConv = inqs.map((t) => ({ conv: readConvertedStd(t), std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.conv-a.conv);
-  const sortedStd  = inqs.map((t) => ({ std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
+  
+  // ▼▼▼ [수정] 과목명(subject)을 포함시켜야 최고표점 맵에서 찾을 수 있습니다.
+  const sortedStd  = inqs.map((t) => ({ subject: t?.subject || '', std: Number(t?.std || 0), pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.std-a.std);
+  
   const sortedPct  = inqs.map((t) => ({ pct: Number(t?.percentile || 0) }))
                          .sort((a,b)=>b.pct-a.pct);
+                         
   ctx.inq1_converted_std = sortedConv[0]?.conv || 0;
   ctx.inq2_converted_std = sortedConv[1]?.conv || 0;
   ctx.inq_sum2_converted_std = ctx.inq1_converted_std + ctx.inq2_converted_std;
   ctx.inq_avg2_converted_std = (ctx.inq_sum2_converted_std) / (sortedConv.length >= 2 ? 2 : (sortedConv.length || 1));
+  
   ctx.inq1_std = sortedStd[0]?.std || 0;
   ctx.inq2_std = sortedStd[1]?.std || 0;
+  
+  // ▼▼▼ [추가] 탐구 과목별 최고표점을 highestMap에서 가져와 컨텍스트에 추가합니다.
+  if (highestMap) {
+      const inq1_subject = sortedStd[0]?.subject;
+      const inq2_subject = sortedStd[1]?.subject;
+      ctx.inq1_max_std = Number(highestMap[inq1_subject] || 0);
+      ctx.inq2_max_std = Number(highestMap[inq2_subject] || 0);
+  } else {
+      ctx.inq1_max_std = 0; // highestMap이 없을 경우를 대비
+      ctx.inq2_max_std = 0;
+  }
+  
   ctx.inq_sum2_std = ctx.inq1_std + ctx.inq2_std;
   ctx.inq_avg2_std = (ctx.inq_sum2_std) / (sortedStd.length >= 2 ? 2 : (sortedStd.length || 1));
   ctx.inq1_percentile = sortedPct[0]?.pct || 0;
