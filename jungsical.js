@@ -201,17 +201,74 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   
   ctx.inq1_std = sortedStd[0]?.std || 0;
   ctx.inq2_std = sortedStd[1]?.std || 0;
+
   
-  // ▼▼▼ [추가] 탐구 과목별 최고표점을 highestMap에서 가져와 컨텍스트에 추가합니다.
+// ▼▼▼ [수정] 탐구 과목별 최고표점 로직 수정
+  
+  let inq1_max = 0;
+  let inq2_max = 0;
+  
+  // [1순위] highestMap (표준점수) 기준으로 기본 설정
   if (highestMap) {
       const inq1_subject = sortedStd[0]?.subject;
       const inq2_subject = sortedStd[1]?.subject;
-      ctx.inq1_max_std = Number(highestMap[inq1_subject] || 0);
-      ctx.inq2_max_std = Number(highestMap[inq2_subject] || 0);
-  } else {
-      ctx.inq1_max_std = 0; // highestMap이 없을 경우를 대비
-      ctx.inq2_max_std = 0;
+      inq1_max = Number(highestMap[inq1_subject] || 0);
+      inq2_max = Number(highestMap[inq2_subject] || 0);
   }
+
+  // [2순위] 만약 '변환표준점수' 테이블(F.탐구변표)이 있다면,
+  // '변표'의 최고점을 찾아 덮어쓴다.
+  const convTable = F.탐구변표; // 라우터에서 설정해준 convMap
+  
+  if (convTable && (Object.keys(convTable['사탐']).length > 0 || Object.keys(convTable['과탐']).length > 0)) {
+      
+      const inq1_subject = sortedStd[0]?.subject;
+      const inq2_subject = sortedStd[1]?.subject;
+      
+      // 학생이 선택한 과목의 계열(사탐/과탐)을 추측
+      const inq1_group = guessInquiryGroup(inq1_subject || ''); 
+      const inq2_group = guessInquiryGroup(inq2_subject || ''); 
+
+      let maxConv_inq1 = 0;
+      let maxConv_inq2 = 0;
+
+      // 해당 계열의 변표 테이블에서 최고점을 찾는다
+      if (convTable[inq1_group]) {
+          const vals = Object.values(convTable[inq1_group]).map(Number).filter(n => !isNaN(n));
+          if (vals.length > 0) maxConv_inq1 = Math.max(...vals);
+      }
+      
+      // 학생이 2과목을 봤다면, 두 번째 과목도 동일하게 처리
+      if (inq2_subject && convTable[inq2_group]) {
+          const vals = Object.values(convTable[inq2_group]).map(Number).filter(n => !isNaN(n));
+          if (vals.length > 0) maxConv_inq2 = Math.max(...vals);
+      } else if (inq2_subject) {
+          // 2과목을 봤는데 변표 테이블이 없는 경우 (예: 사탐+과탐 혼합 시)
+          // 1과목 만점을 그대로 따라가거나, 0으로 둘 수 있음. 1과목 만점을 따라가도록 설정.
+          maxConv_inq2 = maxConv_inq1; 
+      } else {
+          // 1과목만 반영하는 경우, 2번째 만점은 0으로 처리 (공식에서 {inq2_max_std} 안 쓰면 됨)
+          maxConv_inq2 = 0; 
+      }
+      
+      // ★ (중요) 학생이 본 과목이 2개인데 둘 다 '사탐'이면
+      // maxConv_inq1, maxConv_inq2 둘 다 '사탐 최고변표'로 동일하게 설정됨.
+      if (inq1_subject && inq2_subject && inq1_group === inq2_group) {
+         maxConv_inq2 = maxConv_inq1;
+      }
+
+
+      // 변표 최고점을 찾았으면 (0보다 크면) 기존 표준점수 만점을 덮어쓴다.
+      if (maxConv_inq1 > 0) inq1_max = maxConv_inq1;
+      // 2과목 반영 시 (maxConv_inq2가 0보다 클 때만 덮어쓰기)
+      if (maxConv_inq2 > 0) inq2_max = maxConv_inq2;
+  }
+  
+  // 컨텍스트에 최종 할당
+  ctx.inq1_max_std = inq1_max;
+  ctx.inq2_max_std = inq2_max;
+  
+  // ▲▲▲ [수정 완료]
   
   ctx.inq_sum2_std = ctx.inq1_std + ctx.inq2_std;
   ctx.inq_avg2_std = (ctx.inq_sum2_std) / (sortedStd.length >= 2 ? 2 : (sortedStd.length || 1));
