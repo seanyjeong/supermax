@@ -497,48 +497,66 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   };
 
 // ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
+// ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
   const normOf = (name) => {
-    // [수정] 변환표준점수일 경우, 최고 변표로 나누도록 로직 분기
-    if (name === '탐구' && inqMethod === 'highest_of_year' && inqType === '변환표준점수') {
-      if (!F.탐구변표 || inqPicked.length === 0) return 0; // 변표 데이터 없으면 0점 처리
+    
+    // [통합 로직] 'highest_of_year' (표준/변표)
+    if (name === '탐구' && inqMethod === 'highest_of_year') {
+        
+        // 1. S.탐구 (모든 탐구 과목)를 가져와 각각 정규화 점수를 계산
+        const allInquiryNormalized = S.탐구.map(sub => {
+            const subject = sub.subject || '';
+            let val = 0;
+            let top = 0;
+            let normalized = 0;
 
-      // 학생의 탐구 계열을 찾음 (첫 번째 과목 기준)
-      const firstInquiry = S.탐구.find(sub => sub.subject === inqPicked[0].subject);
-      const group = firstInquiry?.group || firstInquiry?.type || guessInquiryGroup(firstInquiry?.subject || '');
+            if (inqType === '변환표준점수') {
+                // (A) 변표 로직
+                if (!F.탐구변표) return null;
+                const group = sub.group || sub.type || guessInquiryGroup(subject);
+                const convTableForGroup = F.탐구변표[group];
+                if (!convTableForGroup || Object.keys(convTableForGroup).length === 0) return null;
+                
+                const maxConvScore = Math.max(...Object.values(convTableForGroup).map(Number).filter(n => !isNaN(n)));
+                val = readConvertedStd(sub); // 학생의 변표
+                top = maxConvScore; // 변표 최고점
+                
+            } else if (inqType === '표준점수') {
+                // (B) 표준점수 로직
+                if (!highestMap) return null;
+                val = Number(sub.std || 0);
+                top = Number(highestMap[subject] ?? NaN);
+            } else {
+                // (C) 백분위 등... (highest_of_year는 표점/변표만 지원)
+                return null; 
+            }
 
-      // 해당 계열의 변표 테이블에서 최고점을 찾음
-      const convTableForGroup = F.탐구변표[group];
-      if (!convTableForGroup) return 0;
-      
-      const maxConvScore = Math.max(...Object.values(convTableForGroup).map(Number).filter(n => !isNaN(n)));
+            if (!Number.isFinite(top) || top <= 0 || !Number.isFinite(val)) return null;
+            normalized = Math.max(0, Math.min(1, val / top));
+            
+            return { subject, val, top, normalized };
 
-      if (maxConvScore > 0) {
-        const studentAvgConvScore = inqRep; // calcInquiryRepresentative에서 계산된 학생의 평균 변표
-        const result = studentAvgConvScore / maxConvScore;
-        log.push(`[탐구정규화-변표] highest_of_year: 학생평균변표(${studentAvgConvScore.toFixed(2)}) / ${group}최고변표(${maxConvScore.toFixed(2)}) → 비율=${result.toFixed(4)}`);
-        return result;
-      }
-      return 0;
+        }).filter(r => r != null); // 유효한 계산만 남김
+        
+        // 2. 정규화 점수(normalized) 기준으로 내림차순 정렬
+        allInquiryNormalized.sort((a, b) => b.normalized - a.normalized);
+
+        // 3. 상위 N개 선택 (DB에서 가져온 inquiryCount 사용)
+        const n = Math.max(1, inquiryCount || 1);
+        const pickedNormalized = allInquiryNormalized.slice(0, Math.min(n, allInquiryNormalized.length));
+
+        if (pickedNormalized.length) {
+            // 4. 상위 N개의 정규화 점수(normalized)를 평균냄
+            const avg = pickedNormalized.reduce((s, r) => s + r.normalized, 0) / pickedNormalized.length;
+            log.push(`[탐구정규화-정렬] highest_of_year (Top${n}): ${pickedNormalized.map(p => `${p.subject}:${p.normalized.toFixed(4)} [${p.val}/${p.top}]`).join(', ')} → 평균비율=${avg.toFixed(4)}`);
+            return avg;
+        }
+        
+        log.push(`[탐구정규화-정렬] FAILED. (inqType: ${inqType}, highestMap: ${!!highestMap}, F.탐구변표: ${!!F.탐구변표})`);
+        return 0; // 계산 실패
     }
     
-    // [기존 로직] 표준점수 기반 highest_of_year
-    if (name === '탐구' && inqMethod === 'highest_of_year' && highestMap && inqPicked.length) {
-      const ratios = inqPicked.map(p => {
-        const top = Number(highestMap[p.subject] ?? NaN);
-        const v   = Number(p.val ?? NaN);
-        if (!Number.isFinite(top) || top <= 0 || !Number.isFinite(v)) return null;
-        return Math.max(0, Math.min(1, v / top));
-      }).filter(r => r != null);
-
-      if (ratios.length) {
-        const avg = ratios.reduce((s, r) => s + r, 0) / ratios.length;
-        log.push(`[탐구정규화-표준] highest_of_year: ${inqPicked.map(p => `${p.subject}:${(Number(p.val)||0)}/${highestMap[p.subject] ?? '-'}`).join(', ')} → 평균비율=${avg.toFixed(4)}`);
-        return avg;
-      }
-      return 0;
-    }
-
-    // [기존 로직] 그 외 모든 과목
+    // [기존 로직] 'highest_of_year'가 아닌 경우 (fixed_100, etc.)
     const sc = Number(raw[name] || 0);
     const mx = getMax(name);
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
