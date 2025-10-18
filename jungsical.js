@@ -288,8 +288,35 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.top3_avg_pct = ctx.top3_avg_pct_kor_eng_math_inq1;
 
   // 편의 파생
-  ctx.max_kor_math_std = Math.max(ctx.kor_std, ctx.math_std);
-  ctx.max_kor_math_pct = Math.max(ctx.kor_pct, ctx.math_pct);
+  // ▼▼▼ [수정] 'score_config'에서 수학 가산점 정보 읽어오기
+  const mathSubject = S.수학?.subject || '';
+  let mathBonus = 1.0; // 기본값 (가산점 없음)
+
+  // F.score_config에 math_bonus 설정이 있는지 확인
+  const bonusConfig = F.score_config?.math_bonus; // 예: {"미적분": 1.1, "기하": 1.1}
+  
+  if (bonusConfig && typeof bonusConfig === 'object' && bonusConfig[mathSubject]) {
+      // 학생이 선택한 과목(mathSubject)이 bonusConfig에 있으면
+      // 해당 multiplier 값을 가져옴
+      mathBonus = Number(bonusConfig[mathSubject]) || 1.0;
+  }
+  
+  // 1. 표준점수(표점) 가산점 적용
+  const math_std_bonused = ctx.math_std * mathBonus;
+  ctx.math_std_bonused = math_std_bonused; 
+  ctx.max_kor_math_std = Math.max(ctx.kor_std, math_std_bonused);
+
+  // 2. 백분위 가산점 적용
+  let math_pct_bonused = ctx.math_pct * mathBonus; 
+  
+  // (만약) 대학이 100점을 넘지 못하게 막는다면 (백분위만 해당)
+  if (F.score_config?.math_bonus_cap_100 === true) {
+       math_pct_bonused = Math.min(100, math_pct_bonused);
+  }
+  
+  ctx.math_pct_bonused = math_pct_bonused;
+  ctx.max_kor_math_pct = Math.max(ctx.kor_pct, math_pct_bonused);
+  // ▲▲▲ [수정 완료]
 
    const items_pct = [
     Number(ctx.kor_pct || 0),
