@@ -159,12 +159,16 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.math_pct = Number(S.수학?.percentile || 0);
 
   // 영어(등급 환산)
+// 영어(등급 환산)
   ctx.eng_grade_score = 0;
   if (F.english_scores && S.영어?.grade != null) {
     const eg = String(S.영어.grade);
     ctx.eng_grade_score = Number(F.english_scores[eg] ?? 0);
     const vals = Object.values(F.english_scores).map(Number).filter(n => !Number.isNaN(n));
     const engMax = vals.length ? Math.max(...vals) : 100;
+    
+    ctx.eng_max = engMax; // ★★★ 이거 한 줄만 추가!!! ★★★
+    
     ctx.eng_pct_est = engMax > 0 ? Math.min(100, Math.max(0, (ctx.eng_grade_score / engMax) * 100)) : 0;
   } else {
     ctx.eng_pct_est = 0;
