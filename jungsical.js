@@ -287,34 +287,43 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.top3_avg_pct_kor_eng_math_inq1 = top3_with_eng.length ? (top3_with_eng.reduce((s,x)=>s+x,0)/top3_with_eng.length) : 0;
   ctx.top3_avg_pct = ctx.top3_avg_pct_kor_eng_math_inq1;
 
-  // 편의 파생
-  // ▼▼▼ [수정] 'score_config'에서 수학 가산점 정보 읽어오기
+// 편의 파생
+  
+  // ▼▼▼ [수정] 'F.bonus_rules' (DB)에서 수학 가산점 정보 읽어오기
   const mathSubject = S.수학?.subject || '';
   let mathBonus = 1.0; // 기본값 (가산점 없음)
-
-  // F.score_config에 math_bonus 설정이 있는지 확인
-  const bonusConfig = F.score_config?.math_bonus; // 예: {"미적분": 1.1, "기하": 1.1}
   
-  if (bonusConfig && typeof bonusConfig === 'object' && bonusConfig[mathSubject]) {
-      // 학생이 선택한 과목(mathSubject)이 bonusConfig에 있으면
-      // 해당 multiplier 값을 가져옴
-      mathBonus = Number(bonusConfig[mathSubject]) || 1.0;
+  // F.bonus_rules가 JSON 문자열일 수 있으므로 파싱
+  const bonusRules = safeParse(F.bonus_rules, []); 
+  
+  if (Array.isArray(bonusRules)) {
+      for (const rule of bonusRules) {
+          // "percent_bonus" 타입이고, "subjects" 배열이 있고, "value"가 있는지 확인
+          if (rule && rule.type === 'percent_bonus' && Array.isArray(rule.subjects) && rule.subjects.includes(mathSubject)) {
+              
+              // 학생이 선택한 과목(mathSubject)이 rule.subjects 배열에 포함되면
+              // 가산점 '비율'(value, 예: 0.1)을 가져와서 1을 더함 (배율, 예: 1.1)
+              mathBonus = 1.0 + (Number(rule.value) || 0);
+              break; // 첫 번째 일치하는 규칙만 적용
+          }
+      }
   }
   
   // 1. 표준점수(표점) 가산점 적용
   const math_std_bonused = ctx.math_std * mathBonus;
-  ctx.math_std_bonused = math_std_bonused; 
+  ctx.math_std_bonused = math_std_bonused; // (혹시 모르니 변수로 빼둠)
   ctx.max_kor_math_std = Math.max(ctx.kor_std, math_std_bonused);
 
   // 2. 백분위 가산점 적용
   let math_pct_bonused = ctx.math_pct * mathBonus; 
   
-  // (만약) 대학이 100점을 넘지 못하게 막는다면 (백분위만 해당)
+  // (참고) 백분위 100점 상한선(cap)은 score_config에 설정할 수 있음
+  // (이건 UI에 없지만, 로직은 넣어두는 게 안전함)
   if (F.score_config?.math_bonus_cap_100 === true) {
        math_pct_bonused = Math.min(100, math_pct_bonused);
   }
   
-  ctx.math_pct_bonused = math_pct_bonused;
+  ctx.math_pct_bonused = math_pct_bonused; // (혹시 모르니 변수로 빼둠)
   ctx.max_kor_math_pct = Math.max(ctx.kor_pct, math_pct_bonused);
   // ▲▲▲ [수정 완료]
 
