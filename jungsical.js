@@ -1,6 +1,7 @@
 // jungsical.js
 const express = require('express');
 const router = express.Router();
+const silgical = require('./silgical.js'); // ⭐️ 실기 계산기 불러오기
 
 /* ========== 유틸 ========== */
 const safeParse = (v, fb = null) => {
@@ -100,6 +101,13 @@ function evaluateSpecialFormula(formulaText, ctx, log) {
 
 const readConvertedStd = (t) =>
   Number(t?.converted_std ?? t?.vstd ?? t?.conv_std ?? t?.std ?? t?.percentile ?? 0);
+
+function guessInquiryGroup(subjectName='') {
+  const s = String(subjectName);
+  const sci = ['물리','화학','생명','지구'];
+  if (sci.some(w => s.includes(w))) return '과탐';
+  return '사탐';
+}
 
 function buildSpecialContext(F, S, highestMap) {
   const ctx = {};
@@ -359,15 +367,6 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.inq2_social_boost = (inq2 && inq2.group === '사탐') ? 1.05 : 1.0;
 })();
 
-
-
-
-
-
-
-
-
-
   return ctx;
 }
 
@@ -389,17 +388,10 @@ function mapPercentileToConverted(mapObj, pct) {
   return y1 + (y2 - y1) * t;
 }
 
-function guessInquiryGroup(subjectName='') {
-  const s = String(subjectName);
-  const sci = ['물리','화학','생명','지구'];
-  if (sci.some(w => s.includes(w))) return '과탐';
-  return '사탐';
-}
-
 /* ========== 핵심 계산기(일반) ========== */
 function calculateScore(formulaDataRaw, studentScores, highestMap) {
   const log = [];
-  log.push('========== 계산 시작 ==========');
+  log.push('========== 수능 계산 시작 =========='); // ⭐️ 계산 시작 로그 수정
 
   const F = { ...formulaDataRaw };
   F.selection_rules        = safeParse(F.selection_rules, null);
@@ -428,13 +420,20 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     log.push(`[특수공식 원본] ${F.특수공식}`);
     const specialValue = evaluateSpecialFormula(F.특수공식, ctx, log);
     const final = Number(specialValue) || 0;
-    log.push('========== 최종 ==========');
+    log.push('========== 수능 최종 =========='); // ⭐️ 최종 로그 수정
     log.push(`특수공식 결과 = ${final.toFixed(2)}`);
     return {
       totalScore: final.toFixed(2),
       breakdown: { special: final },
       calculationLog: log
     };
+  }
+  
+  // ⭐️ 실기 비율이 100% (수능 0%)인 경우 계산 스킵
+  const suneungRatio = (Number(F.수능) || 0) / 100;
+  if (suneungRatio <= 0) {
+      log.push('[패스] 수능 반영 비율 0%');
+      return { totalScore: 0, breakdown: {}, calculationLog: log };
   }
 
   const cfg       = F.score_config || {};
@@ -563,7 +562,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   };
 
   const TOTAL        = resolveTotal(F);
-  const suneungRatio = (Number(F.수능) || 0) / 100;
+  // const suneungRatio = (Number(F.수능) || 0) / 100; // ⭐️ 맨 위로 이동
   log.push(`[학교] 총점=${TOTAL}, 수능비율=${suneungRatio} (DB총점 반영)`);
 
   const rules = rulesArray;
@@ -670,9 +669,9 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
   }
 
   const final = finalSuneungScore + historyScore + englishBonus;
-  log.push('========== 최종 ==========');
+  log.push('========== 수능 최종 =========='); // ⭐️ 최종 로그 수정
   log.push(`수능점수(최종) = ${finalSuneungScore.toFixed(2)} / 한국사(후반영) = ${historyScore} / 영어보정 = ${englishBonus}`);
-  log.push(`총점 = ${final.toFixed(2)}`);
+  log.push(`수능 총점 = ${final.toFixed(2)}`); // ⭐️ 최종 로그 수정
 
   return {
     totalScore: final.toFixed(2),
@@ -721,12 +720,25 @@ async function loadYearHighestMap(db, year, exam) {
 
 /* ========== 라우터 ========== */
 module.exports = function (db, authMiddleware) {
+  
+  // ⭐️ [핵심] '/calculate' API (수능 + 실기) 통합 계산
   router.post('/calculate', authMiddleware, async (req, res) => {
+    // 1. 요청에서 학생 점수 데이터 가져오기
+    // studentScores 객체에 S.gender ('남'/'여'), S.practicals (배열)가 포함되어 있다고 가정
+    // S.practicals = [{event: "100m", value: "12.5"}, {event: "제멀", value: "280"}]
     const { U_ID, year, studentScores, basis_exam } = req.body;
+
     if (!U_ID || !year || !studentScores) {
-      return res.status(400).json({ success: false, message: 'U_ID, year, studentScores가 모두 필요합니다.' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: 'U_ID, year, studentScores가 모두 필요합니다.',
+        });
     }
+
     try {
+      // 2. [공통] 학교 정보(F) 로딩 (수능+실기 비율, 실기총점 포함)
       const sql = `
         SELECT b.*, r.*
         FROM \`정시기본\` AS b
@@ -736,52 +748,113 @@ module.exports = function (db, authMiddleware) {
       `;
       const [rows] = await db.query(sql, [U_ID, year]);
       if (!rows || rows.length === 0) {
-        return res.status(404).json({ success: false, message: '해당 학과/학년도 정보를 찾을 수 없습니다.' });
+        return res
+          .status(404)
+          .json({
+            success: false,
+            message: '해당 학과/학년도 정보를 찾을 수 없습니다.',
+          });
       }
+      const formulaData = rows[0]; // (F)
+      formulaData.U_ID = Number(U_ID); // ⭐️ U_ID를 F 객체에 명시적으로 추가 (silgical 예외처리용)
 
-const formulaData = rows[0];
-
-
+      // 3. [수능용] 변환표준점수(convMap) 로딩 (기존과 동일)
       const [convRows] = await db.query(
         `SELECT 계열, 백분위, 변환표준점수 FROM \`정시탐구변환표준\` WHERE U_ID=? AND 학년도=?`,
         [U_ID, year]
       );
       const convMap = { '사탐': {}, '과탐': {} };
-      convRows.forEach(r => { convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); });
+      convRows.forEach(
+        (r) =>
+          (convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수))
+      );
+      formulaData.탐구변표 = convMap;
 
-      formulaData.탐구변표 = convMap; // 이 한 줄을 추가!
-      
+      // 4. [수능용] 최고표준점수(highestMap) 로딩 (기존과 동일)
       const cfg = safeParse(formulaData.score_config, {}) || {};
-      // ★ 특수공식이면 무조건 최고표점 로딩
       const mustLoadYearMax =
         cfg?.korean_math?.max_score_method === 'highest_of_year' ||
-        cfg?.inquiry?.max_score_method     === 'highest_of_year' ||
-        (formulaData.계산유형 === '특수공식');
+        cfg?.inquiry?.max_score_method === 'highest_of_year' ||
+        formulaData.계산유형 === '특수공식';
 
       let highestMap = null;
       if (mustLoadYearMax) {
         const exam = basis_exam || cfg?.highest_exam || '수능';
         highestMap = await loadYearHighestMap(db, year, exam);
       }
-      
+
+      // 5. ⭐️ [실기용] 실기 배점 '데이터' 로딩 ⭐️
+      const [practicalRows] = await db.query(
+        `SELECT id, 종목명, 성별, 기록, 배점 FROM \`정시실기배점\` WHERE U_ID = ? AND 학년도 = ? ORDER BY 종목명, 성별, id`,
+        [U_ID, year]
+      );
+      // F 객체에 실기 배점표 '배열'을 통째로 넣어줌
+      formulaData.실기배점 = practicalRows || [];
+
+      // --- 계산 실행 ---
+
       let logBuffer = [];
-      const result = calculateScoreWithConv(
-        formulaData,
-        studentScores,
+      const logHook = (msg) => logBuffer.push(msg);
+
+      // (A) 수능 점수 계산
+      const suneungResult = calculateScoreWithConv(
+        formulaData, // (F)
+        studentScores, // (S)
         convMap,
-        (msg) => logBuffer.push(msg),
+        logHook,
         highestMap
       );
 
-      if (logBuffer.length && Array.isArray(result.calculationLog)) {
-        const idx = result.calculationLog.findIndex(x => String(x).includes('========== 계산 시작 ==========')); // 보통 0
-        result.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
-      }
+      // (B) ⭐️ 실기 점수 계산 ⭐️
+      const practicalResult = silgical.calculateScore(
+        formulaData, // (F에 U_ID, 실기비율, 실기총점, 실기배점 배열이 모두 들어있음)
+        studentScores // (S에 학생 성별, 실기 기록이 들어있음)
+      );
 
-      return res.json({ success: true, message: `[${year}] U_ID ${U_ID} 점수 계산 성공`, result });
+      // (C) ⭐️ 최종 합산 ⭐️
+      const finalTotal =
+        Number(suneungResult.totalScore) +
+        Number(practicalResult.totalScore);
+
+      // (D) 로그 합치기 및 결과 반환
+      // (변표 로그가 있으면 수능 로그에 먼저 붙임)
+      if (logBuffer.length && Array.isArray(suneungResult.calculationLog)) {
+        const idx = suneungResult.calculationLog.findIndex(x => String(x).includes('========== 수능 계산 시작 =========='));
+        suneungResult.calculationLog.splice((idx >= 0 ? idx + 1 : 1), 0, ...logBuffer);
+      }
+      const combinedLog = [
+        ...suneungResult.calculationLog,
+        '=======================================',
+        ...practicalResult.calculationLog,
+        '=======================================',
+        '========== 최종 합산 ==========',
+        `총점 = ${Number(suneungResult.totalScore).toFixed(2)} (수능) + ${Number(
+          practicalResult.totalScore
+        ).toFixed(3)} (실기) = ${finalTotal.toFixed(3)}`,
+      ];
+
+      return res.json({
+        success: true,
+        message: `[${year}] U_ID ${U_ID} 점수 계산 성공 (수능+실기)`,
+        result: {
+          totalScore: finalTotal.toFixed(3),
+          suneungPart: suneungResult.totalScore, // 수능 반영 점수
+          practicalPart: practicalResult.totalScore, // 실기 반영 점수
+          suneungBreakdown: suneungResult.breakdown,
+          practicalBreakdown: practicalResult.breakdown,
+          calculationLog: combinedLog,
+        },
+      });
     } catch (err) {
       console.error('❌ 계산 처리 중 오류:', err);
-      return res.status(500).json({ success: false, message: '계산 중 서버 오류' });
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message: '계산 중 서버 오류',
+          error: err.message,
+          stack: err.stack,
+        });
     }
   });
 
@@ -791,6 +864,108 @@ const formulaData = rows[0];
     const maxes = resolveMaxScores(cfg, eng, null, {});
     res.json({ success: true, maxes });
   });
+  
+  // ---------------------------------------------------
+  // ⭐️ [신규] 실기 배점표 관리 API (CRUD) ⭐️
+  // ---------------------------------------------------
+
+  // [R] READ: 실기 배점표 불러오기
+  router.get('/practical-scores/:U_ID/:year', authMiddleware, async (req, res) => {
+    const { U_ID, year } = req.params;
+    try {
+      const [rows] = await db.query(
+        // id를 꼭 가져와야 프론트에서 삭제/수정 가능
+        'SELECT id, 종목명, 성별, 기록, 배점 FROM `정시실기배점` WHERE U_ID = ? AND 학년도 = ? ORDER BY 종목명, 성별, id',
+        [U_ID, year]
+      );
+      res.json({ success: true, scores: rows });
+    } catch (err) {
+      console.error('❌ 실기 배점표 조회 오류:', err);
+      res.status(500).json({ success: false, message: 'DB 오류' });
+    }
+  });
+
+  // [C] CREATE: 실기 배점 '한 줄' 추가
+  router.post('/practical-scores/save', authMiddleware, async (req, res) => {
+    const { U_ID, 학년도, 종목명, 성별, 기록, 배점 } = req.body;
+    if (!U_ID || !학년도 || !종목명 || !성별 || 기록 == null || 배점 == null) {
+      return res.status(400).json({ success: false, message: '모든 필드가 필요합니다.' });
+    }
+    if (성별 !== '남' && 성별 !== '여') {
+       return res.status(400).json({ success: false, message: '성별은 "남" 또는 "여"만 가능합니다.' });
+    }
+    try {
+      const [result] = await db.query(
+        'INSERT INTO `정시실기배점` (U_ID, 학년도, 종목명, 성별, 기록, 배점) VALUES (?, ?, ?, ?, ?, ?)',
+        [U_ID, 학년도, 종목명, 성별, String(기록), String(배점)]
+      );
+      res.json({ success: true, message: '저장 완료', newId: result.insertId });
+    } catch (err) {
+      console.error('❌ 실기 배점 저장 오류:', err);
+      res.status(500).json({ success: false, message: 'DB 오류' });
+    }
+  });
+
+  // [D] DELETE: 실기 배점 '한 줄' 삭제
+  router.delete('/practical-scores/delete/:id', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    try {
+      const [result] = await db.query('DELETE FROM `정시실기배점` WHERE id = ?', [id]);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: '항목을 찾을 수 없습니다.' });
+      }
+      res.json({ success: true, message: '삭제 완료' });
+    } catch (err) {
+      console.error('❌ 실기 배점 삭제 오류:', err);
+      res.status(500).json({ success: false, message: 'DB 오류' });
+    }
+  });
+  
+  // [C-Bulk] BULK CREATE: 엑셀 복붙용 대량 저장
+  router.post('/practical-scores/bulk-save', authMiddleware, async (req, res) => {
+    const { U_ID, year, eventName, gender, rows_text } = req.body;
+    if (!U_ID || !year || !eventName || !gender || !rows_text) {
+      return res.status(400).json({ success: false, message: 'U_ID, year, eventName, gender, rows_text가 모두 필요합니다.' });
+    }
+    if (gender !== '남' && gender !== '여') {
+       return res.status(400).json({ success: false, message: '성별은 "남" 또는 "여"만 가능합니다.' });
+    }
+    
+    const lines = rows_text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!lines.length) return res.json({ success: true, message: '저장할 데이터가 없습니다.' });
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      
+      const sql = 'INSERT INTO `정시실기배점` (U_ID, 학년도, 종목명, 성별, 기록, 배점) VALUES (?, ?, ?, ?, ?, ?)';
+      let count = 0;
+      
+      // 텍스트 영역에는 "기록"과 "배점"만 넣음 (탭 또는 콤마로 구분)
+      for (const line of lines) {
+        const parts = line.split(/\t|,/); // 탭 또는 콤마로 구분
+        if (parts.length < 2) continue;
+        
+        const record = parts[0].trim();
+        const score = parts[1].trim();
+        
+        if (record === '' || score === '') continue;
+        
+        await conn.query(sql, [U_ID, year, eventName, gender, record, score]);
+        count++;
+      }
+      
+      await conn.commit();
+      res.json({ success: true, message: `${count}건 저장 완료` });
+    } catch (e) {
+      await conn.rollback();
+      console.error('❌ 실기 배점 벌크 저장 오류:', e);
+      res.status(500).json({ success: false, message: 'DB 오류' });
+    } finally {
+      conn.release();
+    }
+  });
+  
 
   return router;
 };
