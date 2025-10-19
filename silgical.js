@@ -11,7 +11,7 @@ const router = express.Router();
  */
 function getEventRules(eventName) {
   const LOW_IS_BETTER_KEYWORDS = [
-    '달리기', 'm', 'run', '런', '왕복', '초', '오래',
+   'm', 'run', '런', '왕복', '초', '벽',
   ];
   let method = 'higher_is_better';
   if (LOW_IS_BETTER_KEYWORDS.some((k) => eventName.includes(k))) {
@@ -26,10 +26,10 @@ function getEventRules(eventName) {
 
 /**
  * [규칙 2] 학생 기록으로 '배점 등급' 찾기
- * ⭐️ (수정) 종목별 기본점수(baseScore)는 0점으로 고정
+ * (종목별 기본점수는 0점으로 고정)
  */
 function lookupScore(studentRecord, method, scoreTable) {
-  const baseScore = 0; // ⭐️ [수정] 종목별 기본점수는 0으로 고정
+  const baseScore = 0; // ⭐️ 종목별 기본점수는 0으로 고정
 
   if (!scoreTable || scoreTable.length === 0) {
     return String(baseScore); // 배점표 없으면 0점
@@ -142,7 +142,7 @@ function calculateScore(F, S) {
   const studentRecords = S?.practicals || [];
   const allScoreData = F?.실기배점 || [];
 
-  log.push(`[정보] 학교총점=${SCHOOL_TOTAL}, 실기만점(DB)=${PRACTICAL_MAX}, 실기비율=${practicalRatio}, ⭐️학교총기본점수=${schoolTotalBaseScore}⭐️`);
+  log.push(`[정보] 학교총점=${SCHOOL_TOTAL}, 실기만점(DB)=${PRACTICAL_MAX}, 실기비율=${practicalRatio}, ⭐️학교기본점수(추가)=${schoolTotalBaseScore}⭐️`);
 
   if (PRACTICAL_MAX <= 0) {
     log.push(`[오류] '정시반영비율.실기총점'이 0입니다. 계산 불가.`);
@@ -181,16 +181,14 @@ function calculateScore(F, S) {
     rawPracticalSum += score;
   });
 
-  log.push(`[결과] 실기 원점수 합계 (조정 전): ${rawPracticalSum} / ${PRACTICAL_MAX}`);
+  log.push(`[결과] 종목 합계: ${rawPracticalSum}점`);
   
-  // ⭐️ [신규] 원점수 합계가 '학교 총 기본점수'보다 낮은지 체크
-  let finalRawScore = rawPracticalSum;
-  if (rawPracticalSum < schoolTotalBaseScore) {
-    finalRawScore = schoolTotalBaseScore;
-    log.push(`[조정] 원점수(${rawPracticalSum})가 학교 총 기본점수(${schoolTotalBaseScore})보다 낮아, ${schoolTotalBaseScore}점으로 조정됨.`);
-  }
+  // ⭐️ [신규] 종목 합계에 '학교 기본점수'를 더함
+  const finalRawScore = rawPracticalSum + schoolTotalBaseScore;
+  log.push(`[조정] 종목 합계(${rawPracticalSum}) + 기본 점수(${schoolTotalBaseScore}) = ${finalRawScore}점`);
 
   log.push(`[결과] 실기 원점수 합계 (최종): ${finalRawScore} / ${PRACTICAL_MAX}`);
+
 
   // 5. 최종 점수 환산
   // (⭐️ 수정: rawPracticalSum 대신 finalRawScore 사용)
@@ -212,8 +210,8 @@ function calculateScore(F, S) {
   return {
     totalScore: finalPracticalScore.toFixed(3),
     breakdown: { 
-        practical_raw_sum_before_base: rawPracticalSum, // (로그용) 조정 전 원점수
-        practical_raw_sum: finalRawScore // (로그용) 조정 후 최종 원점수
+        practical_raw_sum_before_base: rawPracticalSum, // (로그용) 기본점수 더하기 전
+        practical_raw_sum: finalRawScore // (로그용) 기본점수 더한 후
     },
     calculationLog: log,
   };
