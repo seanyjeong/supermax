@@ -18,10 +18,14 @@ const db = mysql.createPool({ host: '211.37.174.218', user: 'maxilsan', password
 
 // ⭐️ [핵심 1] jungsical.js 파일(계산기 부품)을 불러온다.
 const jungsicalRouter = require('./jungsical.js')(db, authMiddleware);
+// ⭐️ [신규] silgical.js 파일(실기 계산기 부품)을 불러온다.
+const silgicalRouter = require('./silgical.js')(db, authMiddleware); //
 
 // --- API 목록 ---
 // ⭐️ [핵심 2] '/jungsi' 라는 주소로 들어오는 모든 요청은 jungsicalRouter(계산기 부품)에게 넘긴다.
 app.use('/jungsi', jungsicalRouter);
+app.use('/silgi', silgicalRouter);
+
 // --- API 목록 ---
 // [API #1] 특정 '학년도'의 전체 학교 목록 조회 (모든 규칙 포함 버전)
 app.get('/jungsi/schools/:year', authMiddleware, async (req, res) => {
