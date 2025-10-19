@@ -47,22 +47,39 @@ const sql = `
         res.status(500).json({ success: false, message: "DB 오류" });
     }
 });
+// jungsi.js 파일에서 이 부분을 찾아서 교체
+
 app.post('/jungsi/school-details', authMiddleware, async (req, res) => { 
     const { U_ID, year } = req.body; 
     if (!U_ID || !year) { 
         return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); 
     } 
+    
     try { 
-        // ✅ [수정] 이 부분에 r.기타설정 추가
-        const sql = `SELECT b.*, r.* FROM \`정시기본\` AS b JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 WHERE b.U_ID = ? AND b.학년도 = ?`; 
+        // 1. (기존) 기본 정보 + 반영 비율 조회
+        const baseSql = `SELECT b.*, r.* FROM \`정시기본\` AS b JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 WHERE b.U_ID = ? AND b.학년도 = ?`;
+        const [baseResults] = await db.query(baseSql, [U_ID, year]); 
         
-        const [results] = await db.query(sql, [U_ID, year]); 
-        if (results.length === 0) { 
+        if (baseResults.length === 0) { 
             return res.status(404).json({ success: false, message: "해당 학과/학년도 정보를 찾을 수 없습니다." }); 
         } 
-        res.json({ success: true, data: results[0] }); 
+        
+        // ⭐️ 기본 데이터를 변수에 저장
+        const schoolData = baseResults[0];
+
+        // 2. (신규) 실기 배점표 조회
+        // (참고: 네 테이블 구조에 'index' 같은 정렬용 컬럼이 있다면 ORDER BY에 추가해)
+        const scoreTableSql = "SELECT * FROM `정시실기배점` WHERE U_ID = ? AND 학년도 = ? ORDER BY 종목명, 성별, 기록"; // 👈 정시실기배점 테이블 조회
+        const [scoreTableRows] = await db.query(scoreTableSql, [U_ID, year]);
+
+        // 3. (신규) 1번 결과에 2번 배점표 배열을 '실기배점' 키로 합치기
+        schoolData.실기배점 = scoreTableRows; // 👈 이게 핵심!
+
+        // 4. 합쳐진 데이터를 전송
+        res.json({ success: true, data: schoolData }); 
+
     } catch (err) { 
-        console.error("❌ 학과 상세 조회 오류:", err); 
+        console.error("❌ 학과 상세 조회(배점표 포함) 오류:", err);
         res.status(500).json({ success: false, message: "DB 오류" }); 
     } 
 });
