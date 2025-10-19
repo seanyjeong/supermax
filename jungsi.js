@@ -165,6 +165,30 @@ app.post('/jungsi/debug-notes/set', authMiddleware, async (req, res) => {
   }
 });
 
+
+
+// ⭐️ [신규 API] 미달 처리 규칙 ('0점'/'최하점') 저장 API
+app.post('/jungsi/oor-rule/set', authMiddleware, async (req, res) => {
+    const { U_ID, year, rule } = req.body;
+    if (!U_ID || !year || !rule) { 
+        return res.status(400).json({ success: false, message: "U_ID, 학년도(year), 규칙(rule)이 필요합니다." }); 
+    }
+    if (rule !== '0점' && rule !== '최하점') {
+        return res.status(400).json({ success: false, message: "규칙은 '0점' 또는 '최하점' 이어야 합니다." });
+    }
+    try {
+        const sql = "UPDATE `정시반영비율` SET `미달처리` = ? WHERE `U_ID` = ? AND `학년도` = ?";
+        const [result] = await db.query(sql, [rule, U_ID, year]);
+        if (result.affectedRows === 0) { 
+            return res.status(404).json({ success: false, message: "해당 학과/학년도를 찾을 수 없습니다." }); 
+        }
+        res.json({ success: true, message: `[${year}학년도] 미달 처리 규칙이 저장되었습니다.` });
+    } catch (err) {
+        console.error("❌ 미달 처리 규칙 저장 오류:", err);
+        res.status(500).json({ success: false, message: "DB 오류" });
+    }
+});
+
 // GET /jungsi/inquiry-conv/:U_ID/:year?kind=사탐|과탐
 app.get('/jungsi/inquiry-conv/:U_ID/:year', authMiddleware, async (req, res) => {
   const { U_ID, year } = req.params;
