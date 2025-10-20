@@ -1114,6 +1114,85 @@ app.get('/jungsi/score-configs/:year', authMiddleware, async (req, res) => {
     }
 });
 
+그래, 좋아! 👍 기존 API 건드리는 것보다 새로 만드는 게 깔끔할 수 있지.
+
+/jungsi/overview-configs/:year 라는 새 API를 만들어서 score_config_overview.html 페이지 전용으로 쓰자. 이 API는 DB에서 score_config가 문자열이든 객체든 알아서 처리해서 보내줄 거야.
+
+1. jungsi.js 수정 (새 API 추가)
+app.listen(...) 바로 전에 아래 새 API 코드를 추가해 줘.
+
+JavaScript
+
+// jungsi.js 파일에 이 코드를 추가
+
+// ... (기존 API들) ...
+
+// ⭐️ [신규 API] 점수 설정 개요 페이지 전용 데이터 조회
+app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
+    const { year } = req.params;
+    if (!year) {
+        return res.status(400).json({ success: false, message: '학년도 파라미터가 필요합니다.' });
+    }
+
+    try {
+        // 정시기본 정보와 정시반영비율 정보를 JOIN
+        const sql = `
+            SELECT
+                b.U_ID, b.대학명, b.학과명,
+                r.score_config, -- 점수 설정 (문자열 또는 객체일 수 있음)
+                r.총점          -- 총점
+            FROM \`정시기본\` AS b
+            LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
+            WHERE b.학년도 = ?
+            ORDER BY b.U_ID ASC;
+        `;
+        const [configs] = await db.query(sql, [year]);
+
+        // score_config 처리 및 최종 데이터 포맷팅
+        const formattedConfigs = configs.map(item => {
+            let parsedConfig = {}; // 기본값 빈 객체
+
+            if (item.score_config) {
+                if (typeof item.score_config === 'object' && item.score_config !== null) {
+                    // 1. 이미 객체인 경우
+                    parsedConfig = item.score_config;
+                } else if (typeof item.score_config === 'string') {
+                    // 2. 문자열인 경우 파싱 시도
+                    try {
+                        parsedConfig = JSON.parse(item.score_config);
+                        // 파싱 결과가 객체가 아닐 경우 대비 (예: "null" 문자열)
+                        if (typeof parsedConfig !== 'object' || parsedConfig === null) {
+                             parsedConfig = {};
+                        }
+                    } catch (e) {
+                        // 3. 파싱 실패 시
+                        console.warn(`[API /overview-configs] U_ID ${item.U_ID}의 score_config 문자열 파싱 실패:`, item.score_config);
+                        parsedConfig = {}; // 빈 객체 사용
+                    }
+                } else {
+                    // 4. 예상치 못한 타입
+                     console.warn(`[API /overview-configs] U_ID ${item.U_ID}의 score_config 타입 이상함:`, typeof item.score_config);
+                     parsedConfig = {};
+                }
+            }
+
+            return {
+                U_ID: item.U_ID,
+                대학명: item.대학명,
+                학과명: item.학과명,
+                score_config: parsedConfig, // 처리된 객체
+                총점: item.총점 ? Number(item.총점) : 1000 // 총점 없으면 기본 1000
+            };
+        });
+
+        res.json({ success: true, configs: formattedConfigs });
+
+    } catch (err) {
+        console.error('❌ 개요 설정 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
