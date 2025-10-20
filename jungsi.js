@@ -864,6 +864,91 @@ app.post('/jungsi/students/scores/bulk-set-wide', authMiddleware, async (req, re
     }
 });
 
+app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
+    const { branch } = req.user; // 토큰에서 지점 이름
+    if (!branch) {
+        return res.status(403).json({ success: false, message: '토큰에 지점 정보가 없습니다.' });
+    }
+
+    const { 학년도, students } = req.body; // students는 [{ student_name, school_name, grade, gender }, ...] 배열
+
+    // 필수 값 및 형식 검사
+    if (!학년도 || !Array.isArray(students) || students.length === 0) {
+        return res.status(400).json({ success: false, message: '학년도와 학생 정보 배열(students)은 필수입니다.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction(); // 트랜잭션 시작
+
+        let insertedCount = 0;
+        const insertErrors = []; // 오류 발생 학생 저장
+
+        // INSERT 쿼리 (학생기본정보 테이블)
+        const sql = `
+            INSERT INTO \`학생기본정보\` 
+                (학년도, branch_name, student_name, school_name, grade, gender) 
+             VALUES (?, ?, ?, ?, ?, ?)
+        `;
+
+        // 학생 배열 반복 처리
+        for (const student of students) {
+            // 각 학생 정보 유효성 검사 (서버에서도 한 번 더)
+            if (!student.student_name || !student.grade || !student.gender) {
+                insertErrors.push({ name: student.student_name || '이름 없음', reason: '필수 정보 누락' });
+                continue; // 다음 학생으로 건너뛰기
+            }
+
+            try {
+                // INSERT 실행 파라미터 준비
+                const params = [
+                    학년도,
+                    branch, // 토큰에서 가져온 지점 이름 사용
+                    student.student_name,
+                    student.school_name || null, // 학교명은 없을 수 있음
+                    student.grade,
+                    student.gender
+                ];
+                // 쿼리 실행
+                const [result] = await conn.query(sql, params);
+                if (result.affectedRows > 0) {
+                    insertedCount++; // 성공 카운트 증가
+                }
+            } catch (err) {
+                 // 중복 등의 DB 오류 발생 시 로깅하고 건너뛰기
+                 console.error(`[Bulk Add Error] Student: ${student.student_name}, Error: ${err.message}`);
+                 insertErrors.push({ name: student.student_name, reason: err.code === 'ER_DUP_ENTRY' ? '중복 의심' : 'DB 오류' });
+            }
+        }
+
+        // 모든 학생 처리 후 커밋 (최종 반영)
+        await conn.commit();
+
+        // 결과 메시지 생성
+        let message = `총 ${insertedCount}명의 학생을 추가했습니다.`;
+        if (insertErrors.length > 0) {
+            message += ` (${insertErrors.length}명 오류 발생)`;
+        }
+
+        // 성공 응답 전송 (201 Created)
+        res.status(201).json({
+            success: true,
+            message: message,
+            insertedCount: insertedCount,
+            errors: insertErrors // 어떤 학생이 왜 실패했는지 정보 전달
+        });
+
+    } catch (err) {
+        // 트랜잭션 자체의 오류 발생 시 롤백 (모든 작업 취소)
+        await conn.rollback();
+        console.error('❌ 학생 일괄 추가 API 트랜잭션 오류:', err);
+        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message });
+    } finally {
+        // DB 커넥션 반환
+        conn.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
