@@ -743,8 +743,36 @@ app.post('/jungsi/students/scores/bulk-set-wide', authMiddleware, async (req, re
         const [allCuts] = await conn.query('SELECT * FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ?', [학년도, '수능']); const cutsMap = new Map(); allCuts.forEach(c => { const k = c.선택과목명; if (!cutsMap.has(k)) cutsMap.set(k, []); cutsMap.get(k).push(c); });
         const updatedResults = []; let updatedCount = 0;
 
-        const sql = `INSERT INTO \`학생수능성적\` (student_id, 학년도, 입력유형, 국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급, 수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급, 영어_원점수, 영어_등급, 한국사_원점수, 한국사_등급, 탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급, 탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE 입력유형=VALUES(입력유형), 국어_선택과목=VALUES(국어_선택과목), 국어_원점수=VALUES(국어_원점수), 국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급), 수학_선택과목=VALUES(수학_선택과목), 수학_원점수=VALUES(수학_원점수), 수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급), 영어_원점수=VALUES(영어_원점수), 영어_등급=VALUES(영어_등급), 한국사_원점수=VALUES(한국사_원점수), 한국사_등급=VALUES(한국사_등급), 탐구1_선택과목=VALUES(탐구1_선택과목), 탐구1_원점수=VALUES(탐구1_원점수), 탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급), 탐구2_선택과목=VALUES(탐구2_선택과목), 탐구2_원점수=VALUES(탐구2_원점수), 탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급);`;
+        
+const sql = `
+                INSERT INTO \`학생수능성적\` (
+                    student_id, 학년도, 입력유형,
+                    국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급,
+                    수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급,
+                    영어_원점수, 영어_등급,
+                    한국사_원점수, 한국사_등급,
+                    탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급,
+                    탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    입력유형=VALUES(입력유형), 국어_선택과목=VALUES(국어_선택과목), 국어_원점수=VALUES(국어_원점수), 국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급),
+                    수학_선택과목=VALUES(수학_선택과목), 수학_원점수=VALUES(수학_원점수), 수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급),
+                    영어_원점수=VALUES(영어_원점수), 영어_등급=VALUES(영어_등급), 한국사_원점수=VALUES(한국사_원점수), 한국사_등급=VALUES(한국사_등급),
+                    탐구1_선택과목=VALUES(탐구1_선택과목), 탐구1_원점수=VALUES(탐구1_원점수), 탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급),
+                    탐구2_선택과목=VALUES(탐구2_선택과목), 탐구2_원점수=VALUES(탐구2_원점수), 탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급);
+            `;
 
+            // --- ⭐️ 수정: params 배열 직접 생성 ⭐️ ---
+            const params = [
+                savedData.student_id, savedData.학년도, savedData.입력유형,
+                savedData.국어_선택과목, savedData.국어_원점수, savedData.국어_표준점수, savedData.국어_백분위, savedData.국어_등급,
+                savedData.수학_선택과목, savedData.수학_원점수, savedData.수학_표준점수, savedData.수학_백분위, savedData.수학_등급,
+                savedData.영어_원점수, savedData.영어_등급,
+                savedData.한국사_원점수, savedData.한국사_등급,
+                savedData.탐구1_선택과목, savedData.탐구1_원점수, savedData.탐구1_표준점수, savedData.탐구1_백분위, savedData.탐구1_등급,
+                savedData.탐구2_선택과목, savedData.탐구2_원점수, savedData.탐구2_표준점수, savedData.탐구2_백분위, savedData.탐구2_등급
+            ];
         for (const studentData of studentScores) {
             const student_id = studentData.student_id; const scores = studentData.scores;
             if (!validStudentIdSet.has(student_id)) { console.warn(`[Bulk Save] 건너뛰기: ${student_id}`); continue; }
