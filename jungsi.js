@@ -667,18 +667,24 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
     }
 });
 
+// 지점 학생 목록 + 기존 성적 불러오기 (학년도 필터 추가)
 app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
-    const { branch } = req.user; // 토큰에서 지점 이름 가져오기
+    const { branch } = req.user; // 토큰에서 지점 이름
+    const { year } = req.query; // URL 쿼리에서 학년도 가져오기 (예: ?year=2027)
+
     if (!branch) {
         return res.status(403).json({ success: false, message: '토큰에 지점 정보가 없습니다.' });
     }
+    if (!year) {
+         return res.status(400).json({ success: false, message: '학년도(year) 파라미터가 필요합니다.' });
+    }
 
     try {
-        // 학생 기본 정보와 학생 수능 성적을 LEFT JOIN으로 가져옴
+        // 학생 기본 정보와 학생 수능 성적을 LEFT JOIN으로 가져옴 (학년도 기준)
         const sql = `
-            SELECT 
+            SELECT
                 b.student_id, b.student_name, b.school_name, b.grade, b.gender,
-                s.입력유형, 
+                s.입력유형,
                 s.국어_선택과목, s.국어_원점수, s.국어_표준점수, s.국어_백분위, s.국어_등급,
                 s.수학_선택과목, s.수학_원점수, s.수학_표준점수, s.수학_백분위, s.수학_등급,
                 s.영어_원점수, s.영어_등급,
@@ -686,25 +692,17 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
                 s.탐구1_선택과목, s.탐구1_원점수, s.탐구1_표준점수, s.탐구1_백분위, s.탐구1_등급,
                 s.탐구2_선택과목, s.탐구2_원점수, s.탐구2_표준점수, s.탐구2_백분위, s.탐구2_등급
             FROM 학생기본정보 b
-            LEFT JOIN 학생수능성적 s ON b.student_id = s.student_id AND b.학년도 = s.학년도 -- 학년도 조건 추가
-            WHERE b.branch_name = ? 
-              AND b.학년도 = ? -- 현재 작업 학년도 필터 (예: '2026')
-            ORDER BY b.student_name ASC; 
+            LEFT JOIN 학생수능성적 s ON b.student_id = s.student_id AND b.학년도 = s.학년도 -- JOIN 조건에 학년도 추가
+            WHERE b.branch_name = ?
+              AND b.학년도 = ?  -- WHERE 절에도 학년도 조건 추가
+            ORDER BY b.student_name ASC;
         `;
-        // TODO: 학년도를 어떻게 결정할지? 일단 '2026'으로 하드코딩
-        const currentYear = '2026'; 
-        const [students] = await db.query(sql, [branch, currentYear]);
+        const [students] = await db.query(sql, [branch, year]); // 파라미터로 year 전달
 
-        // 프론트엔드가 쓰기 편하게 가공 (선택사항)
+        // 프론트엔드가 쓰기 편하게 가공 (성적 정보 없으면 null)
         const formattedStudents = students.map(s => {
-            return {
-                student_id: s.student_id,
-                student_name: s.student_name,
-                school_name: s.school_name,
-                grade: s.grade,
-                gender: s.gender,
-                // 성적 정보가 있으면 scores 객체로 묶어주기
-                scores: s.입력유형 ? { 
+            // scores 객체 생성 로직 (null 처리 포함)
+            const scoresData = s.입력유형 ? {
                     입력유형: s.입력유형,
                     국어_선택과목: s.국어_선택과목, 국어_원점수: s.국어_원점수, 국어_표준점수: s.국어_표준점수, 국어_백분위: s.국어_백분위, 국어_등급: s.국어_등급,
                     수학_선택과목: s.수학_선택과목, 수학_원점수: s.수학_원점수, 수학_표준점수: s.수학_표준점수, 수학_백분위: s.수학_백분위, 수학_등급: s.수학_등급,
@@ -712,7 +710,15 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
                     한국사_원점수: s.한국사_원점수, 한국사_등급: s.한국사_등급,
                     탐구1_선택과목: s.탐구1_선택과목, 탐구1_원점수: s.탐구1_원점수, 탐구1_표준점수: s.탐구1_표준점수, 탐구1_백분위: s.탐구1_백분위, 탐구1_등급: s.탐구1_등급,
                     탐구2_선택과목: s.탐구2_선택과목, 탐구2_원점수: s.탐구2_원점수, 탐구2_표준점수: s.탐구2_표준점수, 탐구2_백분위: s.탐구2_백분위, 탐구2_등급: s.탐구2_등급
-                } : null // 성적 없으면 null
+                } : null;
+
+            return {
+                student_id: s.student_id,
+                student_name: s.student_name,
+                school_name: s.school_name,
+                grade: s.grade,
+                gender: s.gender,
+                scores: scoresData
             };
         });
 
@@ -723,7 +729,6 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, message: '서버 오류 발생' });
     }
 });
-
 
 // ⭐️ [신규 API 2] 여러 학생 성적 일괄 저장/변환 (Bulk)
 app.post('/jungsi/students/scores/bulk-set-wide', authMiddleware, async (req, res) => {
