@@ -440,7 +440,7 @@ const {
 // ⭐️⭐️⭐️ [신규 API] 가채점 성적 저장 (Wide 포맷) ⭐️⭐️⭐️
 app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
     // 1. 토큰에서 branch 이름(branch_name) 가져오기
-    const { branch } = req.user; // 토큰 payload가 { ..., branch: '지점명', ... } 형태라고 가정
+    const { branch } = req.user; // 예: '일산'
     if (!branch) {
         // 인증 실패: 토큰에 지점 이름 정보가 없음
         return res.status(403).json({ success: false, message: '토큰에 지점 정보(branch name)가 없습니다.' });
@@ -464,7 +464,7 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
         // 3. [학생기본정보] 테이블 처리 (신규/수정)
         if (currentStudentId) {
             // (수정 시나리오)
-            // (보안) 이 학생이 현재 원장 지점 소속인지 DB에서 확인 (branch 이름 기준)
+            // (보안) branch_name 기준으로 소유권 확인
             const [ownerCheck] = await conn.query(
                 'SELECT student_id FROM `학생기본정보` WHERE student_id = ? AND branch_name = ?', // 👈 branch_name 컬럼 사용
                 [currentStudentId, branch] // 👈 branch 이름(문자열) 사용
@@ -482,7 +482,7 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
             );
         } else {
             // (신규 생성 시나리오)
-            // ⭐️ 수정: branch_id 대신 branch_name 컬럼에 branch(이름) 저장
+            // ⭐️ 수정: branch_name 컬럼에 branch(이름) 저장
             const [insertResult] = await conn.query(
                 `INSERT INTO \`학생기본정보\` 
                     (학년도, branch_name, student_name, school_name, grade, gender) 
@@ -493,13 +493,9 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
         }
 
         // 4. [점수 처리] 및 5. [학생수능성적] 테이블 저장 (이 부분은 이전과 동일)
-        // ... (등급컷 로드, interpolateScore 호출, savedData 객체 생성, 최종 INSERT/UPDATE 쿼리) ...
-        // (이 부분은 branch_id/branch_name과 직접 관련 없으므로 그대로 두면 됨)
-
-        // (기존 코드와 동일한 점수 처리 로직 시작)
         const [allCuts] = await conn.query(
             'SELECT 선택과목명, 원점수, 표준점수, 백분위, 등급 FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ?',
-            [학년도, '수능']
+            [학년도, '수능'] // (모형은 '수능'으로 가정)
         );
         const cutsMap = new Map();
         allCuts.forEach(cut => {
@@ -508,27 +504,22 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
             cutsMap.get(key).push(cut);
         });
 
-        const savedData = { /* ... scores 객체와 변환된 점수들 ... */ }; // (기존과 동일하게 savedData 객체 채우기)
-        
-        // (savedData 객체 채우는 상세 로직 - 기존 코드 재사용)
-        savedData.student_id = currentStudentId;
-        savedData.학년도 = 학년도;
-        savedData.입력유형 = 입력유형;
-        savedData.국어_선택과목= scores.국어_선택과목; savedData.국어_원점수= scores.국어_원점수;
-        savedData.수학_선택과목= scores.수학_선택과목; savedData.수학_원점수= scores.수학_원점수;
-        savedData.영어_원점수= scores.영어_원점수; savedData.한국사_원점수= scores.한국사_원점수;
-        savedData.탐구1_선택과목= scores.탐구1_선택과목; savedData.탐구1_원점수= scores.탐구1_원점수;
-        savedData.탐구2_선택과목= scores.탐구2_선택과목; savedData.탐구2_원점수= scores.탐구2_원점수;
-        // (계산될 값 초기화)
-        savedData.국어_표준점수= null; savedData.국어_백분위= null; savedData.국어_등급= null;
-        savedData.수학_표준점수= null; savedData.수학_백분위= null; savedData.수학_등급= null;
-        savedData.영어_등급= null; savedData.한국사_등급= null;
-        savedData.탐구1_표준점수= null; savedData.탐구1_백분위= null; savedData.탐구1_등급= null;
-        savedData.탐구2_표준점수= null; savedData.탐구2_백분위= null; savedData.탐구2_등급= null;
-
+        // (savedData 객체 생성 및 채우기 - 이전과 동일)
+        const savedData = { 
+            student_id: currentStudentId, 학년도: 학년도, 입력유형: 입력유형,
+            국어_선택과목: scores.국어_선택과목, 국어_원점수: scores.국어_원점수,
+            수학_선택과목: scores.수학_선택과목, 수학_원점수: scores.수학_원점수,
+            영어_원점수: scores.영어_원점수, 한국사_원점수: scores.한국사_원점수,
+            탐구1_선택과목: scores.탐구1_선택과목, 탐구1_원점수: scores.탐구1_원점수,
+            탐구2_선택과목: scores.탐구2_선택과목, 탐구2_원점수: scores.탐구2_원점수,
+            국어_표준점수: null, 국어_백분위: null, 국어_등급: null,
+            수학_표준점수: null, 수학_백분위: null, 수학_등급: null,
+            영어_등급: null, 한국사_등급: null,
+            탐구1_표준점수: null, 탐구1_백분위: null, 탐구1_등급: null,
+            탐구2_표준점수: null, 탐구2_백분위: null, 탐구2_등급: null,
+        };
         if (scores.영어_원점수 != null) savedData.영어_등급 = getEnglishGrade(scores.영어_원점수);
         if (scores.한국사_원점수 != null) savedData.한국사_등급 = getHistoryGrade(scores.한국사_원점수);
-
         const relativeSubjects = [
             { prefix: '국어', score: scores.국어_원점수, subject: scores.국어_선택과목 },
             { prefix: '수학', score: scores.수학_원점수, subject: scores.수학_선택과목 },
@@ -544,15 +535,13 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
                 savedData[`${s.prefix}_등급`] = estimated.grade;
             }
         }
-        // (savedData 객체 채우기 끝)
-
 
         // 5. [학생수능성적] 테이블 저장 (UPSERT - 기존과 동일)
         const sql = `
-            INSERT INTO \`학생수능성적\` ( /* ... 컬럼 목록 ... */ ) VALUES ( /* ... ? 목록 ... */ )
+            INSERT INTO \`학생수능성적\` ( /* ... 컬럼 목록 ... */ ) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE /* ... 업데이트 목록 ... */
         `;
-        // (기존과 동일한 파라미터 배열 생성)
         const params = [
             savedData.student_id, savedData.학년도, savedData.입력유형,
             savedData.국어_선택과목, savedData.국어_원점수, savedData.국어_표준점수, savedData.국어_백분위, savedData.국어_등급,
@@ -562,9 +551,8 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
             savedData.탐구1_선택과목, savedData.탐구1_원점수, savedData.탐구1_표준점수, savedData.탐구1_백분위, savedData.탐구1_등급,
             savedData.탐구2_선택과목, savedData.탐구2_원점수, savedData.탐구2_표준점수, savedData.탐구2_백분위, savedData.탐구2_등급
         ];
-        await conn.query(sql, params); // (기존과 동일하게 실행)
-        // (기존 코드와 동일한 점수 처리 로직 끝)
-
+        await conn.query(sql, params); 
+        
         // 6. 모든 작업 성공!
         await conn.commit();
         
@@ -577,8 +565,8 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
 
     } catch (err) {
         await conn.rollback();
-        console.error('❌ 가채점 저장 API 오류:', err);
-        res.status(500).json({ success: false, message: '서버 오류 발생' });
+        console.error('❌ 가채점 저장 API 오류:', err); 
+        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message }); 
     } finally {
         conn.release();
     }
