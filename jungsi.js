@@ -536,12 +536,28 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
             }
         }
 
-        // 5. [학생수능성적] 테이블 저장 (UPSERT - 기존과 동일)
+     // 5. [학생수능성적] 테이블 저장 (UPSERT - 컬럼명/업데이트 구문 명시)
         const sql = `
-            INSERT INTO \`학생수능성적\` ( /* ... 컬럼 목록 ... */ ) 
+            INSERT INTO \`학생수능성적\` (
+                student_id, 학년도, 입력유형,
+                국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급,
+                수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급,
+                영어_원점수, 영어_등급,
+                한국사_원점수, 한국사_등급,
+                탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급,
+                탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE /* ... 업데이트 목록 ... */
-        `;
+            ON DUPLICATE KEY UPDATE
+                입력유형=VALUES(입력유형),
+                국어_선택과목=VALUES(국어_선택과목), 국어_원점수=VALUES(국어_원점수), 국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급),
+                수학_선택과목=VALUES(수학_선택과목), 수학_원점수=VALUES(수학_원점수), 수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급),
+                영어_원점수=VALUES(영어_원점수), 영어_등급=VALUES(영어_등급),
+                한국사_원점수=VALUES(한국사_원점수), 한국사_등급=VALUES(한국사_등급),
+                탐구1_선택과목=VALUES(탐구1_선택과목), 탐구1_원점수=VALUES(탐구1_원점수), 탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급),
+                탐구2_선택과목=VALUES(탐구2_선택과목), 탐구2_원점수=VALUES(탐구2_원점수), 탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급);
+        `; // ⭐️ 세미콜론 추가 (선택사항이지만 권장)
+
         const params = [
             savedData.student_id, savedData.학년도, savedData.입력유형,
             savedData.국어_선택과목, savedData.국어_원점수, savedData.국어_표준점수, savedData.국어_백분위, savedData.국어_등급,
@@ -551,7 +567,14 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
             savedData.탐구1_선택과목, savedData.탐구1_원점수, savedData.탐구1_표준점수, savedData.탐구1_백분위, savedData.탐구1_등급,
             savedData.탐구2_선택과목, savedData.탐구2_원점수, savedData.탐구2_표준점수, savedData.탐구2_백분위, savedData.탐구2_등급
         ];
-        await conn.query(sql, params); 
+
+        // ⭐️ 디버깅 로그 추가: 실행될 SQL과 파라미터 확인
+        console.log("--- [DEBUG] Executing SQL ---");
+        console.log("SQL:", sql);
+        console.log("Params:", params);
+        console.log("----------------------------");
+
+        await conn.query(sql, params);
         
         // 6. 모든 작업 성공!
         await conn.commit();
