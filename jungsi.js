@@ -1067,7 +1067,8 @@ app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, re
 
 
 
-// ⭐️ [신규 API] 점수 설정 개요 페이지 전용 데이터 조회
+// jungsi.js 파일의 /jungsi/overview-configs/:year API 부분을 이걸로 교체
+
 app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
     if (!year) {
@@ -1075,53 +1076,37 @@ app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
     }
 
     try {
-        // 정시기본 정보와 정시반영비율 정보를 JOIN
+        // --- ⭐️ 수정: SELECT 목록에 r.계산유형 추가 ---
         const sql = `
             SELECT
                 b.U_ID, b.대학명, b.학과명,
-                r.score_config, -- 점수 설정 (문자열 또는 객체일 수 있음)
-                r.총점          -- 총점
+                r.score_config,
+                r.총점,
+                r.계산유형 -- ⭐️ 계산 유형 컬럼 추가
             FROM \`정시기본\` AS b
             LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
             WHERE b.학년도 = ?
             ORDER BY b.U_ID ASC;
         `;
+        // --- ⭐️ 수정 끝 ---
         const [configs] = await db.query(sql, [year]);
 
-        // score_config 처리 및 최종 데이터 포맷팅
         const formattedConfigs = configs.map(item => {
-            let parsedConfig = {}; // 기본값 빈 객체
-
+            let parsedConfig = {};
+            // ... (score_config 파싱 로직은 동일) ...
             if (item.score_config) {
-                if (typeof item.score_config === 'object' && item.score_config !== null) {
-                    // 1. 이미 객체인 경우
-                    parsedConfig = item.score_config;
-                } else if (typeof item.score_config === 'string') {
-                    // 2. 문자열인 경우 파싱 시도
-                    try {
-                        parsedConfig = JSON.parse(item.score_config);
-                        // 파싱 결과가 객체가 아닐 경우 대비 (예: "null" 문자열)
-                        if (typeof parsedConfig !== 'object' || parsedConfig === null) {
-                             parsedConfig = {};
-                        }
-                    } catch (e) {
-                        // 3. 파싱 실패 시
-                        console.warn(`[API /overview-configs] U_ID ${item.U_ID}의 score_config 문자열 파싱 실패:`, item.score_config);
-                        parsedConfig = {}; // 빈 객체 사용
-                    }
-                } else {
-                    // 4. 예상치 못한 타입
-                     console.warn(`[API /overview-configs] U_ID ${item.U_ID}의 score_config 타입 이상함:`, typeof item.score_config);
-                     parsedConfig = {};
-                }
+                if (typeof item.score_config === 'object' && item.score_config !== null) { parsedConfig = item.score_config; }
+                else if (typeof item.score_config === 'string') { try { parsedConfig = JSON.parse(item.score_config); if (typeof parsedConfig !== 'object' || parsedConfig === null) { parsedConfig = {}; } } catch (e) { console.warn(`[API /overview-configs] U_ID ${item.U_ID} score_config 파싱 실패:`, item.score_config); parsedConfig = {}; } }
+                else { console.warn(`[API /overview-configs] U_ID ${item.U_ID} score_config 타입 이상함:`, typeof item.score_config); parsedConfig = {}; }
             }
 
             return {
                 U_ID: item.U_ID,
                 대학명: item.대학명,
                 학과명: item.학과명,
-                score_config: parsedConfig, // 처리된 객체
-                총점: item.총점 ? Number(item.총점) : 1000 // 총점 없으면 기본 1000
+                score_config: parsedConfig,
+                총점: item.총점 ? Number(item.총점) : 1000,
+                계산유형: item.계산유형 || '기본비율' // ⭐️ 계산유형 값 추가 (없으면 '기본비율'로 가정)
             };
         });
 
@@ -1132,6 +1117,8 @@ app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
+
+// ... (다른 API들 및 app.listen) ...
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
