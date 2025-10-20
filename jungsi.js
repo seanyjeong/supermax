@@ -399,7 +399,79 @@ app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
   }
 });
 
+// ⭐️ [신규 API] 특정 조건의 등급컷 데이터 불러오기
+app.get('/jungsi/grade-cuts/get', authMiddleware, async (req, res) => {
+    const { year, exam_type, subject } = req.query;
+    if (!year || !exam_type || !subject) {
+        return res.status(400).json({ success: false, message: '학년도, 모형, 과목명 파라미터가 필요합니다.' });
+    }
 
+    try {
+        const [rows] = await db.query(
+            `SELECT 원점수, 표준점수, 백분위, 등급 
+             FROM \`정시예상등급컷\` 
+             WHERE 학년도 = ? AND 모형 = ? AND 선택과목명 = ? 
+             ORDER BY 원점수 DESC`, // 원점수 높은 순으로 정렬
+            [year, exam_type, subject]
+        );
+        res.json({ success: true, cuts: rows });
+    } catch (err) {
+        console.error('❌ 등급컷 불러오기 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// ⭐️ [신규 API] 등급컷 데이터 벌크 저장 (덮어쓰기)
+app.post('/jungsi/grade-cuts/set-bulk', authMiddleware, async (req, res) => {
+    // (보안 강화) 관리자만 이 기능을 사용하게 하려면 여기서 req.user 체크 필요
+    // if (!isAdmin(req.user)) return res.status(403).json({...});
+
+    const { year, exam_type, subject, cuts } = req.body;
+    if (!year || !exam_type || !subject || !Array.isArray(cuts) || cuts.length === 0) {
+        return res.status(400).json({ success: false, message: '필수 데이터(학년도, 모형, 과목명, cuts 배열)가 누락되었거나 형식이 잘못되었습니다.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. 해당 조건의 기존 데이터 삭제
+        await conn.query(
+            'DELETE FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ? AND 선택과목명 = ?',
+            [year, exam_type, subject]
+        );
+
+        // 2. 새로운 데이터 벌크 INSERT
+        const values = cuts.map(cut => [
+            year,
+            exam_type,
+            subject,
+            cut.원점수,
+            cut.표준점수,
+            cut.백분위,
+            cut.등급
+        ]);
+
+        if (values.length > 0) {
+            await conn.query(
+                `INSERT INTO \`정시예상등급컷\` 
+                    (학년도, 모형, 선택과목명, 원점수, 표준점수, 백분위, 등급) 
+                 VALUES ?`,
+                [values] // 배열의 배열 형태로 전달
+            );
+        }
+
+        await conn.commit();
+        res.json({ success: true, message: `총 ${cuts.length}건의 등급컷 데이터가 저장되었습니다.` });
+
+    } catch (err) {
+        await conn.rollback();
+        console.error('❌ 등급컷 저장 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+    } finally {
+        conn.release();
+    }
+});
 
 
 
@@ -594,6 +666,8 @@ app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
         conn.release();
     }
 });
+
+
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
