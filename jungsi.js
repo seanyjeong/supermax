@@ -1114,19 +1114,6 @@ app.get('/jungsi/score-configs/:year', authMiddleware, async (req, res) => {
     }
 });
 
-그래, 좋아! 👍 기존 API 건드리는 것보다 새로 만드는 게 깔끔할 수 있지.
-
-/jungsi/overview-configs/:year 라는 새 API를 만들어서 score_config_overview.html 페이지 전용으로 쓰자. 이 API는 DB에서 score_config가 문자열이든 객체든 알아서 처리해서 보내줄 거야.
-
-1. jungsi.js 수정 (새 API 추가)
-app.listen(...) 바로 전에 아래 새 API 코드를 추가해 줘.
-
-JavaScript
-
-// jungsi.js 파일에 이 코드를 추가
-
-// ... (기존 API들) ...
-
 // ⭐️ [신규 API] 점수 설정 개요 페이지 전용 데이터 조회
 app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
