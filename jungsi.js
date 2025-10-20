@@ -949,6 +949,105 @@ app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
     }
 });
 
+// ⭐️ [신규 API] 학생 정보 수정
+app.put('/jungsi/students/update/:student_id', authMiddleware, async (req, res) => {
+    const { branch } = req.user; // 토큰에서 지점 이름
+    const { student_id } = req.params; // URL 경로에서 학생 ID 가져오기
+    // 프론트에서 보낸 수정된 정보
+    const { student_name, school_name, grade, gender } = req.body;
+
+    // 필수 값 검사
+    if (!student_name || !grade || !gender) {
+        return res.status(400).json({ success: false, message: '이름, 학년, 성별은 필수 입력 항목입니다.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. (보안) 수정하려는 학생이 진짜 이 지점 소속인지 확인
+        const [ownerCheck] = await conn.query(
+            'SELECT student_id FROM `학생기본정보` WHERE student_id = ? AND branch_name = ?',
+            [student_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await conn.rollback(); // 롤백하고
+            return res.status(403).json({ success: false, message: '수정 권한이 없는 학생입니다.' }); // 거부
+        }
+
+        // 2. 학생 정보 업데이트 실행
+        const sql = `
+            UPDATE \`학생기본정보\` SET 
+                student_name = ?, 
+                school_name = ?, 
+                grade = ?, 
+                gender = ?
+            WHERE student_id = ? 
+        `;
+        const params = [student_name, school_name || null, grade, gender, student_id];
+        const [result] = await conn.query(sql, params);
+
+        // 3. 커밋 (최종 반영)
+        await conn.commit();
+
+        if (result.affectedRows > 0) {
+            res.json({ success: true, message: '학생 정보가 수정되었습니다.' });
+        } else {
+            // 이 경우는 거의 없지만 (ownerCheck에서 걸러지므로)
+            res.status(404).json({ success: false, message: '해당 학생을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        await conn.rollback(); // 에러 시 롤백
+        console.error('❌ 학생 수정 API 오류:', err);
+        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message });
+    } finally {
+        conn.release(); // 커넥션 반환
+    }
+});
+
+
+// ⭐️ [신규 API] 학생 정보 삭제
+app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, res) => {
+    const { branch } = req.user; // 토큰에서 지점 이름
+    const { student_id } = req.params; // URL 경로에서 학생 ID 가져오기
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. (보안) 삭제하려는 학생이 진짜 이 지점 소속인지 확인
+        const [ownerCheck] = await conn.query(
+            'SELECT student_id FROM `학생기본정보` WHERE student_id = ? AND branch_name = ?',
+            [student_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await conn.rollback();
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 학생입니다.' });
+        }
+
+        // 2. 학생 정보 삭제 실행 (ON DELETE CASCADE 설정 덕분에 관련 성적도 자동 삭제됨)
+        const sql = 'DELETE FROM `학생기본정보` WHERE student_id = ?';
+        const [result] = await conn.query(sql, [student_id]);
+
+        // 3. 커밋
+        await conn.commit();
+
+        if (result.affectedRows > 0) {
+            res.json({ success: true, message: '학생 정보가 삭제되었습니다.' });
+        } else {
+            res.status(404).json({ success: false, message: '해당 학생을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        await conn.rollback();
+        console.error('❌ 학생 삭제 API 오류:', err);
+        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message });
+    } finally {
+        conn.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
