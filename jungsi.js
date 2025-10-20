@@ -1065,54 +1065,7 @@ app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, re
     }
 });
 
-app.get('/jungsi/score-configs/:year', authMiddleware, async (req, res) => {
-    const { year } = req.params;
-    if (!year) {
-        return res.status(400).json({ success: false, message: '학년도 파라미터가 필요합니다.' });
-    }
 
-    try {
-        // 정시기본 정보와 정시반영비율 정보를 JOIN하여 필요한 컬럼만 선택
-        const sql = `
-            SELECT 
-                b.U_ID, b.대학명, b.학과명, 
-                r.score_config, -- 점수 설정 JSON (또는 null)
-                r.총점          -- 총점 (또는 null)
-            FROM \`정시기본\` AS b
-            LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
-            WHERE b.학년도 = ?
-            ORDER BY b.U_ID ASC; -- ID 순 정렬
-        `;
-        const [configs] = await db.query(sql, [year]);
-
-        // score_config가 JSON 문자열일 수 있으므로 파싱 시도
-        const formattedConfigs = configs.map(item => {
-            let parsedConfig = null;
-            if (item.score_config) {
-                try {
-                    parsedConfig = JSON.parse(item.score_config);
-                } catch (e) {
-                    console.warn(`[API /score-configs] U_ID ${item.U_ID}의 score_config 파싱 실패:`, item.score_config);
-                    // 파싱 실패 시 원본 문자열이나 빈 객체 반환 (선택)
-                    parsedConfig = {}; 
-                }
-            }
-            return {
-                U_ID: item.U_ID,
-                대학명: item.대학명,
-                학과명: item.학과명,
-                score_config: parsedConfig || {}, // 파싱된 객체 또는 빈 객체
-                총점: item.총점 ? Number(item.총점) : 1000 // 총점 없으면 기본 1000
-            };
-        });
-
-        res.json({ success: true, configs: formattedConfigs });
-
-    } catch (err) {
-        console.error('❌ 점수 설정 조회 API 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
-    }
-});
 
 // ⭐️ [신규 API] 점수 설정 개요 페이지 전용 데이터 조회
 app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
