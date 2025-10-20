@@ -1069,7 +1069,7 @@ app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, re
 
 // jungsi.js 파일의 /jungsi/overview-configs/:year API 부분을 이걸로 교체
 
-app.get('/jungsi/overview-configs/:year', authMiddleware, async (req, res) => {
+app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     const { year } = req.params;
     if (!year) {
         return res.status(400).json({ success: false, message: '학년도 파라미터가 필요합니다.' });
