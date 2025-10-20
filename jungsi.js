@@ -412,6 +412,211 @@ app.post('/jungsi/total/set', authMiddleware, async (req, res) => {
 app.get('/setting', (req, res) => { res.sendFile(path.join(__dirname, 'setting.html')); });
 app.get('/bulk-editor', (req, res) => { res.sendFile(path.join(__dirname, 'scores_bulk_editor.html')); });
 
+// ⭐️ [신규] 1단계에서 만든 헬퍼 함수들 불러오기
+const { 
+  interpolateScore, 
+  getEnglishGrade, 
+  getHistoryGrade 
+} = require('./utils/scoreEstimator.js');
+
+// ... (기존의 다른 app.get, app.post 코드들) ...
+
+
+// ⭐️⭐️⭐️ [신규 API] 가채점 성적 저장 (Wide 포맷) ⭐️⭐️⭐️
+app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
+    // 1. 26수시 로그인 기반으로 원장(지점) 정보 가져오기
+    // authMiddleware가 req.user에 { userid, branch_id } 등을 넣어준다고 가정
+    const { branch_id } = req.user;
+    if (!branch_id) {
+        return res.status(403).json({ success: false, message: '지점 관리자만 접근 가능합니다.' });
+    }
+
+    // 2. 프론트에서 보낸 데이터 받기
+    const {
+        student_id, // (신규 생성이면 null, 수정이면 숫자)
+        학년도,
+        student_name,
+        school_name,
+        grade,
+        gender,
+        입력유형, // 'raw'
+        scores // { 국어_선택과목: ..., 국어_원점수: ... }
+    } = req.body;
+
+    if (!학년도 || !student_name || !scores) {
+         return res.status(400).json({ success: false, message: '학년도, 학생명, 성적 정보는 필수입니다.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        let currentStudentId = student_id;
+
+        // 3. [학생기본정보] 테이블 처리 (신규/수정)
+        if (currentStudentId) {
+            // (수정)
+            // (보안) 이 학생이 현재 원장 지점 소속인지 확인
+            const [ownerCheck] = await conn.query(
+                'SELECT student_id FROM `학생기본정보` WHERE student_id = ? AND branch_id = ?',
+                [currentStudentId, branch_id]
+            );
+            if (ownerCheck.length === 0) {
+                await conn.rollback();
+                return res.status(403).json({ success: false, message: '수정 권한이 없는 학생입니다.' });
+            }
+            
+            await conn.query(
+                `UPDATE \`학생기본정보\` SET 
+                    student_name = ?, school_name = ?, grade = ?, gender = ?
+                 WHERE student_id = ?`,
+                [student_name, school_name, grade, gender, currentStudentId]
+            );
+        } else {
+            // (신규)
+            const [insertResult] = await conn.query(
+                `INSERT INTO \`학생기본정보\` 
+                    (학년도, branch_id, student_name, school_name, grade, gender)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
+                [학년도, branch_id, student_name, school_name, grade, gender]
+            );
+            currentStudentId = insertResult.insertId; // ⭐️ 새로 생성된 학생 ID
+        }
+
+        // 4. [점수 처리] (Wide 포맷)
+        
+        // 4-1. 변환에 필요한 등급컷 DB에서 가져오기
+        const [allCuts] = await conn.query(
+            'SELECT 선택과목명, 원점수, 표준점수, 백분위, 등급 FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ?',
+            [학년도, '수능'] // (모형은 '수능'으로 고정. 나중에 바꿀 수 있음)
+        );
+
+        // 4-2. 과목별로 찾기 쉽게 데이터 재가공
+        const cutsMap = new Map();
+        allCuts.forEach(cut => {
+            const key = cut.선택과목명;
+            if (!cutsMap.has(key)) {
+                cutsMap.set(key, []);
+            }
+            cutsMap.get(key).push(cut);
+        });
+
+        // 4-3. ⭐️ 최종 저장될 객체 (savedData) 만들기 ⭐️
+        const savedData = {
+            student_id: currentStudentId,
+            학년도: 학년도,
+            입력유형: 입력유형,
+            
+            // 원본 데이터 복사
+            국어_선택과목: scores.국어_선택과목,
+            국어_원점수: scores.국어_원점수,
+            수학_선택과목: scores.수학_선택과목,
+            수학_원점수: scores.수학_원점수,
+            영어_원점수: scores.영어_원점수,
+            한국사_원점수: scores.한국사_원점수,
+            탐구1_선택과목: scores.탐구1_선택과목,
+            탐구1_원점수: scores.탐구1_원점수,
+            탐구2_선택과목: scores.탐구2_선택과목,
+            탐구2_원점수: scores.탐구2_원점수,
+
+            // (계산될) 변환 데이터 초기화
+            국어_표준점수: null, 국어_백분위: null, 국어_등급: null,
+            수학_표준점수: null, 수학_백분위: null, 수학_등급: null,
+            영어_등급: null,
+            한국사_등급: null,
+            탐구1_표준점수: null, 탐구1_백분위: null, 탐구1_등급: null,
+            탐구2_표준점수: null, 탐구2_백분위: null, 탐구2_등급: null,
+        };
+
+        // 4-4. ⭐️ 변환 로직 실행 ⭐️
+        
+        // [절대평가]
+        if (scores.영어_원점수 != null) {
+            savedData.영어_등급 = getEnglishGrade(scores.영어_원점수);
+        }
+        if (scores.한국사_원점수 != null) {
+            savedData.한국사_등급 = getHistoryGrade(scores.한국사_원점수);
+        }
+
+        // [상대평가]
+        const relativeSubjects = [
+            { prefix: '국어', score: scores.국어_원점수, subject: scores.국어_선택과목 },
+            { prefix: '수학', score: scores.수학_원점수, subject: scores.수학_선택과목 },
+            { prefix: '탐구1', score: scores.탐구1_원점수, subject: scores.탐구1_선택과목 },
+            { prefix: '탐구2', score: scores.탐구2_원점수, subject: scores.탐구2_선택과목 },
+        ];
+
+        for (const s of relativeSubjects) {
+            if (s.score != null && s.subject && cutsMap.has(s.subject)) {
+                const cuts = cutsMap.get(s.subject);
+                const estimated = interpolateScore(s.score, cuts);
+                
+                savedData[`${s.prefix}_표준점수`] = estimated.std;
+                savedData[`${s.prefix}_백분위`] = estimated.pct;
+                savedData[`${s.prefix}_등급`] = estimated.grade;
+            }
+        }
+
+        // 5. [학생수능성적] 테이블에 저장 (UPSERT)
+        // (컬럼이 20개가 넘어서 좀 길어짐)
+        const sql = `
+            INSERT INTO \`학생수능성적\` (
+                student_id, 학년도, 입력유형,
+                국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급,
+                수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급,
+                영어_원점수, 영어_등급,
+                한국사_원점수, 한국사_등급,
+                탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급,
+                탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급
+            )
+            VALUES (
+                ?, ?, ?, 
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?,
+                ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?
+            )
+            ON DUPLICATE KEY UPDATE
+                입력유형=VALUES(입력유형),
+                국어_선택과목=VALUES(국어_선택과목), 국어_원점수=VALUES(국어_원점수), 국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급),
+                수학_선택과목=VALUES(수학_선택과목), 수학_원점수=VALUES(수학_원점수), 수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급),
+                영어_원점수=VALUES(영어_원점수), 영어_등급=VALUES(영어_등급),
+                한국사_원점수=VALUES(한국사_원점수), 한국사_등급=VALUES(한국사_등급),
+                탐구1_선택과목=VALUES(탐구1_선택과목), 탐구1_원점수=VALUES(탐구1_원점수), 탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급),
+                탐구2_선택과목=VALUES(탐구2_선택과목), 탐구2_원점수=VALUES(탐구2_원점수), 탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급)
+        `;
+
+        await conn.query(sql, [
+            savedData.student_id, savedData.학년도, savedData.입력유형,
+            savedData.국어_선택과목, savedData.국어_원점수, savedData.국어_표준점수, savedData.국어_백분위, savedData.국어_등급,
+            savedData.수학_선택과목, savedData.수학_원점수, savedData.수학_표준점수, savedData.수학_백분위, savedData.수학_등급,
+            savedData.영어_원점수, savedData.영어_등급,
+            savedData.한국사_원점수, savedData.한국사_등급,
+            savedData.탐구1_선택과목, savedData.탐구1_원점수, savedData.탐구1_표준점수, savedData.탐구1_백분위, savedData.탐구1_등급,
+            savedData.탐구2_선택과목, savedData.탐구2_원점수, savedData.탐구2_표준점수, savedData.탐구2_백분위, savedData.탐구2_등급
+        ]);
+
+        // 6. 모든 작업 성공!
+        await conn.commit();
+        
+        res.json({ 
+            success: true, 
+            message: '가채점 저장 및 변환 완료', 
+            student_id: currentStudentId, // (프론트에서 수정 모드로 전환할 수 있게 ID 반환)
+            savedData: savedData // (디버깅용으로 저장된 데이터 반환)
+        });
+
+    } catch (err) {
+        await conn.rollback();
+        console.error('❌ 가채점 저장 API 오류:', err);
+        res.status(500).json({ success: false, message: '서버 오류 발생' });
+    } finally {
+        conn.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
