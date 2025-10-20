@@ -732,141 +732,43 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
 
 // ⭐️ [신규 API 2] 여러 학생 성적 일괄 저장/변환 (Bulk)
 app.post('/jungsi/students/scores/bulk-set-wide', authMiddleware, async (req, res) => {
-    const { branch } = req.user; // 인증된 지점 이름
-    const { 학년도, 입력유형, studentScores } = req.body; // 프론트에서 보낸 데이터
-
-    if (!학년도 || !입력유형 || !Array.isArray(studentScores) || studentScores.length === 0) {
-        return res.status(400).json({ success: false, message: '학년도, 입력유형, 학생 성적 배열(studentScores)은 필수입니다.' });
-    }
+    const { branch } = req.user; const { 학년도, 입력유형, studentScores } = req.body;
+    if (!학년도 || !입력유형 || !Array.isArray(studentScores) || studentScores.length === 0) return res.status(400).json({ success: false, message: '필수 정보 누락.' });
 
     const conn = await db.getConnection();
     try {
         await conn.beginTransaction();
-
-        // (선택사항) 보안 강화: 요청한 student_id들이 진짜 해당 branch 소속인지 미리 확인
         const studentIds = studentScores.map(s => s.student_id);
-        const [validStudents] = await conn.query(
-            'SELECT student_id FROM 학생기본정보 WHERE branch_name = ? AND student_id IN (?)',
-            [branch, studentIds]
-        );
-        const validStudentIdSet = new Set(validStudents.map(s => s.student_id));
-        
-        // 등급컷 데이터 한 번에 로드
-        const [allCuts] = await conn.query(
-            'SELECT 선택과목명, 원점수, 표준점수, 백분위, 등급 FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ?',
-            [학년도, '수능'] // 모형은 '수능'으로 가정
-        );
-        const cutsMap = new Map();
-        allCuts.forEach(cut => {
-            const key = cut.선택과목명;
-            if (!cutsMap.has(key)) cutsMap.set(key, []);
-            cutsMap.get(key).push(cut);
-        });
+        const [validStudents] = await conn.query('SELECT student_id FROM 학생기본정보 WHERE branch_name = ? AND student_id IN (?)', [branch, studentIds]); const validStudentIdSet = new Set(validStudents.map(s => s.student_id));
+        const [allCuts] = await conn.query('SELECT * FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ?', [학년도, '수능']); const cutsMap = new Map(); allCuts.forEach(c => { const k = c.선택과목명; if (!cutsMap.has(k)) cutsMap.set(k, []); cutsMap.get(k).push(c); });
+        const updatedResults = []; let updatedCount = 0;
 
-        // 업데이트된 결과를 담을 배열
-        const updatedResults = [];
-        let updatedCount = 0;
+        const sql = `INSERT INTO \`학생수능성적\` (student_id, 학년도, 입력유형, 국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급, 수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급, 영어_원점수, 영어_등급, 한국사_원점수, 한국사_등급, 탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급, 탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE 입력유형=VALUES(입력유형), 국어_선택과목=VALUES(국어_선택과목), 국어_원점수=VALUES(국어_원점수), 국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급), 수학_선택과목=VALUES(수학_선택과목), 수학_원점수=VALUES(수학_원점수), 수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급), 영어_원점수=VALUES(영어_원점수), 영어_등급=VALUES(영어_등급), 한국사_원점수=VALUES(한국사_원점수), 한국사_등급=VALUES(한국사_등급), 탐구1_선택과목=VALUES(탐구1_선택과목), 탐구1_원점수=VALUES(탐구1_원점수), 탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급), 탐구2_선택과목=VALUES(탐구2_선택과목), 탐구2_원점수=VALUES(탐구2_원점수), 탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급);`;
 
-        // 각 학생 데이터 처리
         for (const studentData of studentScores) {
-            const student_id = studentData.student_id;
-            const scores = studentData.scores; // { 국어_선택과목: ..., 국어_원점수: ... }
-
-            // 보안 체크: 해당 지점 학생이 아니면 건너뛰기
-            if (!validStudentIdSet.has(student_id)) {
-                console.warn(`[Bulk Save] student_id ${student_id}는 ${branch} 지점 소속이 아니므로 건너<0xEB><0><0x8E>니다.`);
-                continue; 
-            }
-
-            // savedData 객체 생성 및 점수 변환 (set-wide API와 동일 로직)
-            const savedData = { 
-                student_id: student_id, 학년도: 학년도, 입력유형: 입력유형,
-                // ... (scores 객체 값 복사) ...
-                국어_선택과목: scores.국어_선택과목, 국어_원점수: scores.국어_원점수,
-                수학_선택과목: scores.수학_선택과목, 수학_원점수: scores.수학_원점수,
-                영어_원점수: scores.영어_원점수, 한국사_원점수: scores.한국사_원점수,
-                탐구1_선택과목: scores.탐구1_선택과목, 탐구1_원점수: scores.탐구1_원점수,
-                탐구2_선택과목: scores.탐구2_선택과목, 탐구2_원점수: scores.탐구2_원점수,
-                 // (계산될 값 초기화)
-                국어_표준점수: null, 국어_백분위: null, 국어_등급: null,
-                수학_표준점수: null, 수학_백분위: null, 수학_등급: null,
-                영어_등급: null, 한국사_등급: null,
-                탐구1_표준점수: null, 탐구1_백분위: null, 탐구1_등급: null,
-                탐구2_표준점수: null, 탐구2_백분위: null, 탐구2_등급: null,
-            };
-
-            // 가채점('raw')일 경우 변환 실행
+            const student_id = studentData.student_id; const scores = studentData.scores;
+            if (!validStudentIdSet.has(student_id)) { console.warn(`[Bulk Save] 건너뛰기: ${student_id}`); continue; }
+            const savedData = { student_id: student_id, 학년도: 학년도, 입력유형: 입력유형, ...scores };
+            savedData.국어_표준점수=null; savedData.국어_백분위=null; savedData.국어_등급=null; savedData.수학_표준점수=null; savedData.수학_백분위=null; savedData.수학_등급=null; savedData.영어_등급=null; savedData.한국사_등급=null; savedData.탐구1_표준점수=null; savedData.탐구1_백분위=null; savedData.탐구1_등급=null; savedData.탐구2_표준점수=null; savedData.탐구2_백분위=null; savedData.탐구2_등급=null;
             if (입력유형 === 'raw') {
-                if (scores.영어_원점수 != null) savedData.영어_등급 = getEnglishGrade(scores.영어_원점수);
-                if (scores.한국사_원점수 != null) savedData.한국사_등급 = getHistoryGrade(scores.한국사_원점수);
-                const relativeSubjects = [
-                    { prefix: '국어', score: scores.국어_원점수, subject: scores.국어_선택과목 },
-                    { prefix: '수학', score: scores.수학_원점수, subject: scores.수학_선택과목 },
-                    { prefix: '탐구1', score: scores.탐구1_원점수, subject: scores.탐구1_선택과목 },
-                    { prefix: '탐구2', score: scores.탐구2_원점수, subject: scores.탐구2_선택과목 },
-                ];
-                for (const s of relativeSubjects) {
-                    if (s.score != null && s.subject && cutsMap.has(s.subject)) {
-                        const cuts = cutsMap.get(s.subject);
-                        const estimated = interpolateScore(s.score, cuts);
-                        savedData[`${s.prefix}_표준점수`] = estimated.std;
-                        savedData[`${s.prefix}_백분위`] = estimated.pct;
-                        savedData[`${s.prefix}_등급`] = estimated.grade;
-                    }
-                }
-            } else { // 실채점('official')일 경우, 프론트에서 받은 표/백/등급을 그대로 사용 (null 체크 필요)
-                savedData.국어_표준점수 = scores.국어_표준점수 || null;
-                savedData.국어_백분위 = scores.국어_백분위 || null;
-                savedData.국어_등급 = scores.국어_등급 || getEnglishGrade(scores.영어_원점수); // 영어는 등급 직접 계산
-                savedData.수학_표준점수 = scores.수학_표준점수 || null;
-                savedData.수학_백분위 = scores.수학_백분위 || null;
-                savedData.수학_등급 = scores.수학_등급 || null;
-                savedData.영어_등급 = scores.영어_등급 || getEnglishGrade(scores.영어_원점수); // 영어 등급
-                savedData.한국사_등급 = scores.한국사_등급 || getHistoryGrade(scores.한국사_원점수); // 한국사 등급
-                savedData.탐구1_표준점수 = scores.탐구1_표준점수 || null;
-                savedData.탐구1_백분위 = scores.탐구1_백분위 || null;
-                savedData.탐구1_등급 = scores.탐구1_등급 || null;
-                savedData.탐구2_표준점수 = scores.탐구2_표준점수 || null;
-                savedData.탐구2_백분위 = scores.탐구2_백분위 || null;
-                savedData.탐구2_등급 = scores.탐구2_등급 || null;
+                if (scores.영어_원점수 != null) savedData.영어_등급 = getEnglishGrade(scores.영어_원점수); if (scores.한국사_원점수 != null) savedData.한국사_등급 = getHistoryGrade(scores.한국사_원점수);
+                const subjects = [{ p: '국어', s: scores.국어_원점수, subj: scores.국어_선택과목 }, { p: '수학', s: scores.수학_원점수, subj: scores.수학_선택과목 }, { p: '탐구1', s: scores.탐구1_원점수, subj: scores.탐구1_선택과목 }, { p: '탐구2', s: scores.탐구2_원점수, subj: scores.탐구2_선택과목 }];
+                subjects.forEach(item => { if (item.s != null && item.subj && cutsMap.has(item.subj)) { const est = interpolateScore(item.s, cutsMap.get(item.subj)); savedData[`${item.p}_표준점수`] = est.std; savedData[`${item.p}_백분위`] = est.pct; savedData[`${item.p}_등급`] = est.grade; } });
+            } else { /* 실채점 로직 (필요시 추가) */
+                savedData.국어_표준점수=scores.국어_표준점수||null; savedData.국어_백분위=scores.국어_백분위||null; savedData.국어_등급=scores.국어_등급||null;
+                savedData.수학_표준점수=scores.수학_표준점수||null; savedData.수학_백분위=scores.수학_백분위||null; savedData.수학_등급=scores.수학_등급||null;
+                savedData.영어_등급=scores.영어_등급||getEnglishGrade(scores.영어_원점수); savedData.한국사_등급=scores.한국사_등급||getHistoryGrade(scores.한국사_원점수);
+                savedData.탐구1_표준점수=scores.탐구1_표준점수||null; savedData.탐구1_백분위=scores.탐구1_백분위||null; savedData.탐구1_등급=scores.탐구1_등급||null;
+                savedData.탐구2_표준점수=scores.탐구2_표준점수||null; savedData.탐구2_백분위=scores.탐구2_백분위||null; savedData.탐구2_등급=scores.탐구2_등급||null;
             }
-
-            // 학생수능성적 테이블에 UPSERT (set-wide API와 동일 SQL)
-            const sql = `
-                INSERT INTO \`학생수능성적\` (...) VALUES (...) 
-                ON DUPLICATE KEY UPDATE ... 
-            `; // (SQL 쿼리는 set-wide와 동일)
-             const params = [
-                savedData.student_id, savedData.학년도, savedData.입력유형,
-                savedData.국어_선택과목, savedData.국어_원점수, savedData.국어_표준점수, savedData.국어_백분위, savedData.국어_등급,
-                savedData.수학_선택과목, savedData.수학_원점수, savedData.수학_표준점수, savedData.수학_백분위, savedData.수학_등급,
-                savedData.영어_원점수, savedData.영어_등급,
-                savedData.한국사_원점수, savedData.한국사_등급,
-                savedData.탐구1_선택과목, savedData.탐구1_원점수, savedData.탐구1_표준점수, savedData.탐구1_백분위, savedData.탐구1_등급,
-                savedData.탐구2_선택과목, savedData.탐구2_원점수, savedData.탐구2_표준점수, savedData.탐구2_백분위, savedData.탐구2_등급
-            ];
+            const params = Object.values(savedData); // 객체 값을 배열로
             await conn.query(sql, params);
-
-            updatedResults.push(savedData); // 결과 배열에 추가
-            updatedCount++;
+            updatedResults.push(savedData); updatedCount++;
         }
-
-        // 모든 학생 처리 완료 후 커밋
         await conn.commit();
-
-        res.json({ 
-            success: true, 
-            message: `총 ${updatedCount}명의 학생 성적을 저장/변환했습니다.`,
-            updatedData: updatedResults // (선택) 업데이트된 데이터 반환
-        });
-
-    } catch (err) {
-        await conn.rollback();
-        console.error('❌ 학생 성적 벌크 저장 API 오류:', err);
-        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message });
-    } finally {
-        conn.release();
-    }
+        res.json({ success: true, message: `총 ${updatedCount}명 저장/변환 완료.`, updatedData: updatedResults });
+    } catch (err) { await conn.rollback(); console.error('❌ 학생 성적 벌크 저장 API 오류:', err); res.status(500).json({ success: false, message: '서버 오류.', error: err.message }); }
+    finally { conn.release(); }
 });
 
 app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
