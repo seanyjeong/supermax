@@ -1118,7 +1118,27 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     }
 });
 
-// ... (다른 API들 및 app.listen) ...
+app.get('/jungsi/public/schools/:year', /* authMiddleware 없음! */ async (req, res) => {
+    const { year } = req.params;
+    try {
+        // 내용은 위 API와 동일
+        const sql = `
+          SELECT b.U_ID, b.대학명, b.학과명, b.군, r.실기,
+                 r.selection_rules, r.bonus_rules, r.score_config, r.계산유형
+          FROM \`정시기본\` AS b
+          LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
+          WHERE b.학년도 = ?
+          ORDER BY b.U_ID ASC
+        `;
+        const [schools] = await db.query(sql, [year]);
+        // 간단 로깅 (선택 사항)
+        console.log(`[Public API] /public/schools/${year} 호출됨.`);
+        res.json({ success: true, schools });
+    } catch (err) {
+        console.error("❌ 공개 학교 목록 조회 오류:", err);
+        res.status(500).json({ success: false, message: "DB 오류" });
+    }
+});
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
