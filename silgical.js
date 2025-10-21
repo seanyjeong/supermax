@@ -114,22 +114,27 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     }
 
     // 4b. [3순위] 숫자 비교 ("12.20" 등)
-    if (numericLevels.length > 0) {
+if (numericLevels.length > 0) {
       if (method === 'lower_is_better') {
-        numericLevels.sort((a, b) => a.record - b.record); // 오름차순 (기록 낮은게 좋음)
+        
+        // ⭐️ [수정] 네가 말한 "최소값" 규칙 적용
+        // (예: 9.71, 9.61, 9.51 순으로 정렬)
+        numericLevels.sort((a, b) => b.record - a.record); 
         for (const level of numericLevels) {
-          if (studentValueNum <= level.record) return level.grade;
+          // ⭐️ [수정] 학생 기록이 DB 기록보다 "크거나 같으면" (더 느리면)
+          // (예: 9.6 >= 9.51 (130점) -> true)
+          if (studentValueNum >= level.record) return level.grade; 
         }
-        // (수정) 기준표 최상(예: 12.0초)보다 잘했을 때 -> 만점
-        if (studentValueNum < numericLevels[0].record) {
-          return numericLevels[0].grade;
+        // ⭐️ [수정] 배점표 최고 기록(예: 9.51)보다 잘했을 때 (예: 9.50)
+        if (studentValueNum < numericLevels[numericLevels.length - 1].record) {
+          return numericLevels[numericLevels.length - 1].grade; // 만점
         }
-      } else {
-        numericLevels.sort((a, b) => b.record - a.record); // 내림차순 (기록 높은게 좋음)
+
+      } else { // higher_is_better (이건 기존 로직 유지)
+        numericLevels.sort((a, b) => b.record - a.record);
         for (const level of numericLevels) {
           if (studentValueNum >= level.record) return level.grade;
         }
-        // (수정) 기준표 최상(예: 300m)보다 잘했을 때 -> 만점
         if (studentValueNum > numericLevels[0].record) {
           return numericLevels[0].grade;
         }
