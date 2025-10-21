@@ -23,6 +23,16 @@ function getEventRules(eventName) {
   return { method };
 }
 
+// ⭐️ [신규 헬퍼] 배점표에서 해당 종목의 '최고 배점(만점)'을 찾음
+function findMaxScore(scoreTable) {
+    if (!scoreTable || scoreTable.length === 0) return 0;
+    // 배점(숫자)만 추출해서 최대값을 찾음
+    const max = scoreTable
+        .map(l => Number(l.배점))
+        .filter(n => !Number.isNaN(n))
+        .reduce((max, current) => Math.max(max, current), 0);
+    return max;
+}
 
 /**
  * ⭐️ [규칙 2] 학생 기록으로 '배점 등급' 찾기
@@ -101,9 +111,7 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   }
 
   // 5. ⭐️ [4순위] 어디에도 해당 안 됨 (기준 미달 또는 "F"인데 배점표에 없는 경우)
-  // 
   if (outOfRangeRule === '최하점') {
-    // 배점표(numericLevels)에 있는 숫자 배점 중 가장 낮은 점수를 찾음
     const allScores = numericLevels
       .map(l => Number(l.grade))
       .filter(n => !Number.isNaN(n));
@@ -112,7 +120,6 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
       const minScore = Math.min(...allScores);
       return String(minScore);
     } else {
-      // 숫자 배점이 하나도 없으면 (e.g., "PASS"/"FAIL"만 있으면) 0점
       return '0';
     }
   } else {
@@ -125,16 +132,13 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
  * [규칙 3] '배점 등급'을 '최종 점수'로 환산
  */
 function convertGradeToScore(grade, U_ID, eventName) {
-  // --- (1% 예외 학교 하드코딩 ... ) ---
-  
-  // --- 99% 일반 학교 ---
-  // "PASS", "FAIL", "실격" 등 숫자가 아닌 값이 오면 0점
+  // ... (하드코딩 예외 처리) ...
   const score = Number(grade);
   return Number.isNaN(score) ? 0 : score;
 }
 
 /**
- * ⭐️ [메인] 실기 점수 계산 함수
+ * ⭐️ [메인] 실기 점수 계산 함수 (수정됨)
  */
 function calculateScore(F, S) {
   // F: 학교정보 (정시반영비율.* + 실기배점 배열)
@@ -145,16 +149,16 @@ function calculateScore(F, S) {
   const practicalRatio = (Number(F.실기) || 0) / 100;
   if (practicalRatio <= 0) {
     log.push('[패스] 실기 반영 비율 0%');
-    return { totalScore: 0, breakdown: {}, calculationLog: log };
+    return { 
+        totalScore: 0, 
+        breakdown: { events: [], practical_raw_sum: 0, total_deduction: 0 }, 
+        calculationLog: log 
+    };
   }
 
   const SCHOOL_TOTAL = Number(F?.총점) > 0 ? Number(F.총점) : 1000;
-  const PRACTICAL_MAX = Number(F.실기총점) || 0;
-  
-  // ⭐️ '그냥 더하는' 학교 총 기본점수
+  const PRACTICAL_MAX = Number(F.실기총점) || 0; // 예: 400점 만점
   const schoolTotalBaseScore = Number(F.기본점수) || 0;
-  
-  // ⭐️ [신규] '미달 시 처리' 규칙 (없으면 '0점'이 기본)
   const schoolOutOfRangeRule = F.미달처리 || '0점'; 
 
   const studentGender = S?.gender || '';
@@ -162,7 +166,7 @@ function calculateScore(F, S) {
   const allScoreData = F?.실기배점 || [];
 
   log.push(`[정보] 학교총점=${SCHOOL_TOTAL}, 실기만점(DB)=${PRACTICAL_MAX}, 실기비율=${practicalRatio}`);
-  log.push(`[정보] 학교기본점수(추가)=${schoolTotalBaseScore}, ⭐️미달처리규칙=${schoolOutOfRangeRule}⭐️`);
+  log.push(`[정보] 학교기본점수(추가)=${schoolTotalBaseScore}, 미달처리규칙=${schoolOutOfRangeRule}`);
 
 
   if (PRACTICAL_MAX <= 0) {
@@ -175,6 +179,7 @@ function calculateScore(F, S) {
   }
 
   let rawPracticalSum = 0; // 학생이 받은 실기 점수 총합
+  const eventBreakdowns = []; // ⭐️ [신규] 종목별 내역
 
   studentRecords.forEach((record) => {
     const eventName = record.event;
@@ -185,23 +190,36 @@ function calculateScore(F, S) {
       (r) => r.종목명 === eventName && r.성별 === studentGender
     );
 
-    // ⭐️ [수정] '미달처리' 규칙을 lookupScore에 전달
-    const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
+    // ⭐️ [신규] 해당 종목의 배점표 상 만점 찾기
+    const eventMaxScore = findMaxScore(scoreTable);
     
+    const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
     const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
 
     log.push(
-      `[${eventName}] (규칙: ${method}) 기록: ${eventValue} → 배점: "${rawGrade}" → 환산: ${score}점`
+      `[${eventName}] (규칙: ${method}) 기록: ${eventValue} → 배점: "${rawGrade}" → 환산: ${score}점 / (종목만점: ${eventMaxScore}점)`
     );
     rawPracticalSum += score;
+    
+    // ⭐️ [신규] 종목별 상세 내역 저장
+    eventBreakdowns.push({
+        event: eventName,
+        record: eventValue,
+        score: score,
+        max_score: eventMaxScore,
+        deduction: score - eventMaxScore // (예: 90 - 100 = -10)
+    });
   });
 
   log.push(`[결과] 종목 합계: ${rawPracticalSum}점`);
   
-  // ⭐️ [수정] 종목 합계에 '학교 기본점수'를 더함
-  const finalRawScore = rawPracticalSum + schoolTotalBaseScore;
+  const finalRawScore = rawPracticalSum + schoolTotalBaseScore; // 학생이 받은 최종 원점수 (기본점수 포함)
   log.push(`[조정] 종목 합계(${rawPracticalSum}) + 기본 점수(${schoolTotalBaseScore}) = ${finalRawScore}점`);
   log.push(`[결과] 실기 원점수 합계 (최종): ${finalRawScore} / ${PRACTICAL_MAX}`);
+
+  // ⭐️ [신규] 총 감점 계산 (학생 원점수 - 실기 만점)
+  const totalDeduction = finalRawScore - PRACTICAL_MAX; // (예: 380 - 400 = -20)
+  log.push(`[결과] 총 감점: ${totalDeduction}점`);
 
   // 5. 최종 점수 환산
   const rawPracticalTotal = (finalRawScore / PRACTICAL_MAX) * SCHOOL_TOTAL;
@@ -219,11 +237,13 @@ function calculateScore(F, S) {
     )} * ${practicalRatio} = ${finalPracticalScore.toFixed(3)}`
   );
 
+  // ⭐️ [수정] 반환 객체에 상세 내역(breakdown) 추가
   return {
     totalScore: finalPracticalScore.toFixed(3),
     breakdown: { 
-        practical_raw_sum_before_base: rawPracticalSum,
-        practical_raw_sum: finalRawScore
+        events: eventBreakdowns,
+        practical_raw_sum: finalRawScore,
+        total_deduction: totalDeduction
     },
     calculationLog: log,
   };
@@ -250,7 +270,8 @@ module.exports = (db, authMiddleware) => {
     }
 
     try {
-      const silgiResult = calculateScore(F_data, S_data);
+      // ⭐️ calculateScore가 이제 상세 내역(breakdown)을 포함한 result를 반환
+      const silgiResult = calculateScore(F_data, S_data); 
       res.json({
         success: true,
         message: '실기 계산 완료',
