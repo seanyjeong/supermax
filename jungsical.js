@@ -420,6 +420,64 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     한국사 : subs.find(s => s.name === '한국사') || {},
     탐구   : subs.filter(s => s.name === '탐구')
   };
+  if (F.U_ID === 148 || F.U_ID === 149) {
+    log.push(`<< U_ID ${F.U_ID}번 대학 하드코딩 로직 실행 >>`);
+
+    // 1. 등급 -> 점수 변환표 (국/수/영/탐 공통)
+    const gradeToScoreMap = {
+        1: 100, 2: 93, 3: 86, 4: 79, 5: 72, 6: 65, 7: 58, 8: 51, 9: 44
+    };
+    const defaultScore = 0; // 등급 없거나 맵에 없으면 0점 처리
+
+    // 2. 각 영역 등급 가져오기 (없으면 9등급)
+    const korGrade = S.국어?.grade || 9;
+    const mathGrade = S.수학?.grade || 9;
+    const engGrade = S.영어?.grade || 9;
+
+    // 3. 탐구 처리: 더 잘 본 1과목 등급 찾기
+    let bestInqGrade = 9; // 기본값 9등급
+    if (S.탐구 && S.탐구.length > 0) {
+        // 등급만 추출해서 오름차순 정렬 (1등급이 가장 좋음)
+        const inquiryGrades = S.탐구.map(t => t.grade || 9).sort((a, b) => a - b);
+        bestInqGrade = inquiryGrades[0]; // 가장 좋은 등급 (첫 번째 요소)
+    }
+
+    // 4. 각 영역 점수로 변환
+    const korScore = gradeToScoreMap[korGrade] || defaultScore;
+    const mathScore = gradeToScoreMap[mathGrade] || defaultScore;
+    const engScore = gradeToScoreMap[engGrade] || defaultScore;
+    const inqScore = gradeToScoreMap[bestInqGrade] || defaultScore; // 잘 본 탐구 1과목 점수
+
+    log.push(` -> 국:${korGrade}등급(${korScore}점), 수:${mathGrade}등급(${mathScore}점), 영:${engGrade}등급(${engScore}점), 탐(Best):${bestInqGrade}등급(${inqScore}점)`);
+
+    // 5. 상위 2개 영역 점수 선택 및 합산
+    const scoresToSelect = [korScore, mathScore, engScore, inqScore];
+    scoresToSelect.sort((a, b) => b - a); // 내림차순 정렬
+    const top2Sum = scoresToSelect[0] + scoresToSelect[1]; // 상위 2개 합산
+    log.push(` -> 상위 2개 영역 합: ${scoresToSelect[0]} + ${scoresToSelect[1]} = ${top2Sum}점`);
+
+    // 6. 한국사 점수 계산 (DB의 history_scores 사용)
+    let histScore = 0;
+    const histGrade = S.한국사?.grade;
+    if (histGrade && F.history_scores) {
+        histScore = Number(F.history_scores[String(histGrade)] || 0);
+        log.push(` -> 한국사: ${histGrade}등급 → ${histScore}점 (가산)`);
+    } else {
+        log.push(` -> 한국사: 등급 정보 없거나 환산표 없음 → 0점`);
+    }
+
+    // 7. 최종 점수 계산 (상위 2개 합 + 한국사)
+    const finalScore = top2Sum + histScore;
+    log.push(` -> 최종 점수(200점 만점 + 한국사): ${top2Sum} + ${histScore} = ${finalScore.toFixed(2)}점`);
+    log.push('========== 최종 ==========');
+
+    // 8. 결과 반환
+    return {
+        totalScore: finalScore.toFixed(2),
+        breakdown: { top2: top2Sum, history: histScore }, // 세부 점수
+        calculationLog: log
+    };
+  }
 
   if (F.계산유형 === '특수공식' && F.특수공식) {
     log.push('<< 특수공식 모드 >>');
