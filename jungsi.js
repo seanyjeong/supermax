@@ -1145,6 +1145,365 @@ app.get('/jungsi/public/schools/:year', /* authMiddleware 없음! */ async (req,
     }
 });
 
+// =============================================
+// 정시_상담목록 API (counsel.html 용)
+// =============================================
+
+// --- 상담 목록 조회 (특정 학생, 특정 학년도) ---
+// GET /jungsi/counseling/wishlist/:student_id/:year
+app.get('/jungsi/counseling/wishlist/:student_id/:year', authMiddleware, async (req, res) => {
+    const { student_id, year } = req.params;
+    const { branch } = req.user;
+
+    try {
+        // 보안: 해당 학생이 이 지점 소속인지 확인
+        const [ownerCheck] = await db.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ? AND 학년도 = ?',
+            [student_id, branch, year]
+        );
+        if (ownerCheck.length === 0) {
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        }
+
+        // 상담 목록 조회 (대학 정보 포함 JOIN)
+        const sql = `
+            SELECT
+                wl.*,
+                jb.대학명, jb.학과명
+            FROM 정시_상담목록 wl
+            JOIN 정시기본 jb ON wl.대학학과_ID = jb.U_ID AND wl.학년도 = jb.학년도
+            WHERE wl.학생_ID = ? AND wl.학년도 = ?
+            ORDER BY FIELD(wl.모집군, '가', '나', '다'), wl.수정일시 DESC
+        `;
+        const [wishlistItems] = await db.query(sql, [student_id, year]);
+
+        // JSON 데이터는 클라이언트에서 필요시 파싱하도록 그대로 전달
+        // wishlistItems.forEach(item => {
+        //     item.상담_실기기록 = safeParse(item.상담_실기기록, null);
+        // });
+
+        res.json({ success: true, wishlist: wishlistItems });
+
+    } catch (err) {
+        console.error('❌ 상담 목록 조회 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' }); // 500 에러 응답
+    }
+});
+
+// --- 상담 목록 추가/수정 (Upsert) ---
+// POST /jungsi/counseling/wishlist/set
+app.post('/jungsi/counseling/wishlist/set', authMiddleware, async (req, res) => {
+    const { 학생_ID, 학년도, 모집군, 대학학과_ID, 상담_내신점수, 상담_실기기록, 상담_계산총점, 메모 } = req.body;
+    const { branch } = req.user;
+
+    // 필수 값 검사
+    if (!학생_ID || !학년도 || !모집군 || !대학학과_ID) {
+        return res.status(400).json({ success: false, message: '학생ID, 학년도, 모집군, 대학학과ID는 필수 항목입니다.' });
+    }
+
+    try {
+        // 군별 개수 제한 확인 (3개 초과 방지)
+        // 먼저 해당 대학이 이미 있는지 확인 (수정 case)
+        const [existing] = await db.query(
+            'SELECT 상담목록_ID FROM 정시_상담목록 WHERE 학생_ID = ? AND 학년도 = ? AND 모집군 = ? AND 대학학과_ID = ?',
+            [학생_ID, 학년도, 모집군, 대학학과_ID]
+        );
+        // 없다면 (신규 추가 case), 현재 군 개수 확인
+        if (existing.length === 0) {
+             const [countResult] = await db.query(
+                'SELECT COUNT(*) as count FROM 정시_상담목록 WHERE 학생_ID = ? AND 학년도 = ? AND 모집군 = ?',
+                [학생_ID, 학년도, 모집군]
+             );
+             if (countResult[0].count >= 3) {
+                 return res.status(400).json({ success: false, message: `${모집군}에는 최대 3개까지만 추가할 수 있습니다.` });
+             }
+        }
+
+        // 보안: 해당 학생이 이 지점 소속인지 확인
+        const [ownerCheck] = await db.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ?',
+            [학생_ID, branch]
+        );
+        if (ownerCheck.length === 0) {
+            return res.status(403).json({ success: false, message: '저장 권한이 없는 학생입니다.' });
+        }
+
+        // Upsert 실행
+        const sql = `
+            INSERT INTO 정시_상담목록
+                (학생_ID, 학년도, 모집군, 대학학과_ID, 상담_내신점수, 상담_실기기록, 상담_계산총점, 메모)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                상담_내신점수 = VALUES(상담_내신점수), 상담_실기기록 = VALUES(상담_실기기록),
+                상담_계산총점 = VALUES(상담_계산총점), 메모 = VALUES(메모), 수정일시 = CURRENT_TIMESTAMP
+        `;
+        // JSON 데이터는 문자열로 변환, null 가능 값 처리
+        const params = [
+            학생_ID, 학년도, 모집군, 대학학과_ID,
+            상담_내신점수 === undefined || 상담_내신점수 === null ? null : Number(상담_내신점수),
+            상담_실기기록 === undefined || 상담_실기기록 === null ? null : JSON.stringify(상담_실기기록),
+            상담_계산총점 === undefined || 상담_계산총점 === null ? null : Number(상담_계산총점),
+            메모 === undefined || 메모 === null ? null : String(메모)
+        ];
+        const [result] = await db.query(sql, params);
+
+        res.json({ success: true, message: '상담 목록에 저장/수정되었습니다.', insertedId: result.insertId, affectedRows: result.affectedRows });
+
+    } catch (err) {
+        console.error('❌ 상담 목록 저장/수정 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 저장/수정 중 오류가 발생했습니다.' }); // 500 에러 응답
+    }
+});
+
+// --- 상담 목록 삭제 ---
+// DELETE /jungsi/counseling/wishlist/:wishlist_id
+app.delete('/jungsi/counseling/wishlist/:wishlist_id', authMiddleware, async (req, res) => {
+    const { wishlist_id } = req.params;
+    const { branch } = req.user;
+
+    const conn = await db.getConnection(); // 트랜잭션 사용이 안전
+    try {
+        await conn.beginTransaction();
+
+        // 보안: 삭제하려는 항목이 해당 지점 학생 소유인지 확인
+        const [ownerCheck] = await conn.query(
+            `SELECT wl.상담목록_ID
+             FROM 정시_상담목록 wl
+             JOIN 학생기본정보 si ON wl.학생_ID = si.student_id
+             WHERE wl.상담목록_ID = ? AND si.branch_name = ?`,
+            [wishlist_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await conn.rollback(); // 롤백!
+            return res.status(403).json({ success: false, message: '삭제 권한이 없습니다.' });
+        }
+
+        // 삭제 실행
+        const [result] = await conn.query('DELETE FROM 정시_상담목록 WHERE 상담목록_ID = ?', [wishlist_id]);
+
+        await conn.commit(); // 커밋!
+
+        if (result.affectedRows > 0) {
+            res.json({ success: true, message: '상담 목록에서 삭제되었습니다.' });
+        } else {
+            // 삭제할 데이터가 없었던 경우 (이미 삭제되었거나 ID 오류)
+            res.status(404).json({ success: false, message: '삭제할 항목을 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        await conn.rollback(); // 롤백!
+        console.error('❌ 상담 목록 삭제 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류가 발생했습니다.' }); // 500 에러 응답
+    } finally {
+        conn.release(); // 커넥션 반환
+    }
+});
+
+// =============================================
+// 정시_최종지원 API (final_apply.html 용)
+// =============================================
+
+// --- 최종 지원 내역 조회 (특정 학생, 특정 학년도) ---
+// GET /jungsi/final-apply/:student_id/:year
+app.get('/jungsi/final-apply/:student_id/:year', authMiddleware, async (req, res) => {
+    const { student_id, year } = req.params;
+    const { branch } = req.user;
+    try {
+        // 보안: 해당 학생 소유권 확인
+        const [ownerCheck] = await db.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ? AND 학년도 = ?',
+            [student_id, branch, year]
+        );
+        if (ownerCheck.length === 0) {
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        }
+
+        // 최종 지원 내역 조회 (대학 정보 포함 JOIN)
+        const sql = `
+            SELECT
+                fa.*,
+                jb.대학명, jb.학과명
+            FROM 정시_최종지원 fa
+            JOIN 정시기본 jb ON fa.대학학과_ID = jb.U_ID AND fa.학년도 = jb.학년도
+            WHERE fa.학생_ID = ? AND fa.학년도 = ?
+            ORDER BY FIELD(fa.모집군, '가', '나', '다')
+        `;
+        const [applications] = await db.query(sql, [student_id, year]);
+
+        // JSON 데이터는 클라이언트에서 파싱하도록 그대로 전달
+        // applications.forEach(app => {
+        //     app.지원_실기기록 = safeParse(app.지원_실기기록, null);
+        //     app.지원_실기상세 = safeParse(app.지원_실기상세, null);
+        // });
+
+        res.json({ success: true, applications: applications });
+    } catch (err) {
+        console.error('❌ 최종 지원 내역 조회 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' }); // 500 에러 응답
+    }
+});
+
+// --- 최종 지원 내역 추가/수정 (군별 Upsert) ---
+// POST /jungsi/final-apply/set
+app.post('/jungsi/final-apply/set', authMiddleware, async (req, res) => {
+    const {
+        학생_ID, 학년도, 모집군, 대학학과_ID,
+        지원_내신점수, 지원_실기기록, 지원_실기총점, 지원_실기상세,
+        결과_1단계, 결과_최초, 결과_최종, 최종등록_여부, 메모
+    } = req.body;
+    const { branch } = req.user;
+
+    // 필수 값 검사
+    if (!학생_ID || !학년도 || !모집군 || !대학학과_ID) {
+        return res.status(400).json({ success: false, message: '학생ID, 학년도, 모집군, 대학학과ID는 필수 항목입니다.' });
+    }
+
+    try {
+        // 보안: 해당 학생 소유권 확인
+        const [ownerCheck] = await db.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ?',
+            [학생_ID, branch]
+        );
+        if (ownerCheck.length === 0) {
+            return res.status(403).json({ success: false, message: '저장 권한이 없는 학생입니다.' });
+        }
+
+        // Upsert 실행 (학생_ID, 학년도, 모집군 기준으로 중복 시 업데이트)
+        const sql = `
+            INSERT INTO 정시_최종지원
+                (학생_ID, 학년도, 모집군, 대학학과_ID, 지원_내신점수, 지원_실기기록, 지원_실기총점, 지원_실기상세,
+                 결과_1단계, 결과_최초, 결과_최종, 최종등록_여부, 메모)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                대학학과_ID = VALUES(대학학과_ID), 지원_내신점수 = VALUES(지원_내신점수),
+                지원_실기기록 = VALUES(지원_실기기록), 지원_실기총점 = VALUES(지원_실기총점), 지원_실기상세 = VALUES(지원_실기상세),
+                결과_1단계 = VALUES(결과_1단계), 결과_최초 = VALUES(결과_최초), 결과_최종 = VALUES(결과_최종),
+                최종등록_여부 = VALUES(최종등록_여부), 메모 = VALUES(메모), 수정일시 = CURRENT_TIMESTAMP
+        `;
+        // null 가능 값 및 JSON 문자열 변환 처리
+        const params = [
+            학생_ID, 학년도, 모집군, 대학학과_ID,
+            지원_내신점수 === undefined || 지원_내신점수 === null ? null : Number(지원_내신점수),
+            지원_실기기록 === undefined || 지원_실기기록 === null ? null : JSON.stringify(지원_실기기록),
+            지원_실기총점 === undefined || 지원_실기총점 === null ? null : Number(지원_실기총점),
+            지원_실기상세 === undefined || 지원_실기상세 === null ? null : JSON.stringify(지원_실기상세),
+            결과_1단계 === undefined || 결과_1단계 === null ? '해당없음' : String(결과_1단계),
+            결과_최초 === undefined || 결과_최초 === null ? '미정' : String(결과_최초),
+            결과_최종 === undefined || 결과_최종 === null ? '미정' : String(결과_최종),
+            최종등록_여부 === undefined || 최종등록_여부 === null ? false : Boolean(최종등록_여부),
+            메모 === undefined || 메모 === null ? null : String(메모)
+        ];
+        const [result] = await db.query(sql, params);
+
+        res.json({ success: true, message: '최종 지원 내역이 저장/수정되었습니다.', affectedRows: result.affectedRows });
+
+    } catch (err) {
+        console.error('❌ 최종 지원 내역 저장/수정 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 저장/수정 중 오류가 발생했습니다.' }); // 500 에러 응답
+    }
+});
+
+// --- 최종 지원 결과만 업데이트 ---
+// PUT /jungsi/final-apply/status/:application_id (application_id는 최종지원_ID)
+app.put('/jungsi/final-apply/status/:application_id', authMiddleware, async (req, res) => {
+    const { application_id } = req.params;
+    const { 결과_1단계, 결과_최초, 결과_최종, 최종등록_여부, 메모 } = req.body; // 업데이트할 필드만 받음
+    const { branch } = req.user;
+
+    // 업데이트할 필드 객체 생성
+    const updates = {};
+    if (결과_1단계 !== undefined) updates.결과_1단계 = 결과_1단계 === null ? '해당없음' : String(결과_1단계);
+    if (결과_최초 !== undefined) updates.결과_최초 = 결과_최초 === null ? '미정' : String(결과_최초);
+    if (결과_최종 !== undefined) updates.결과_최종 = 결과_최종 === null ? '미정' : String(결과_최종);
+    if (최종등록_여부 !== undefined) updates.최종등록_여부 = 최종등록_여부 === null ? false : Boolean(최종등록_여부);
+    if (메모 !== undefined) updates.메모 = 메모 === null ? null : String(메모);
+
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ success: false, message: '수정할 결과 정보가 없습니다.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 보안: 해당 지원 내역이 이 지점 학생 소유인지 확인
+        const [ownerCheck] = await conn.query(
+            `SELECT fa.최종지원_ID
+             FROM 정시_최종지원 fa
+             JOIN 학생기본정보 si ON fa.학생_ID = si.student_id
+             WHERE fa.최종지원_ID = ? AND si.branch_name = ?`,
+            [application_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await conn.rollback();
+            return res.status(403).json({ success: false, message: '수정 권한이 없습니다.' });
+        }
+
+        // UPDATE 쿼리 생성 (백틱 사용)
+        const setClauses = Object.keys(updates).map(key => `\`${key}\` = ?`).join(', ');
+        const sql = `UPDATE 정시_최종지원 SET ${setClauses}, 수정일시 = CURRENT_TIMESTAMP WHERE 최종지원_ID = ?`;
+        const params = [...Object.values(updates), application_id];
+
+        const [result] = await conn.query(sql, params);
+        await conn.commit();
+
+        if (result.affectedRows > 0) {
+            res.json({ success: true, message: '지원 결과가 업데이트되었습니다.' });
+        } else {
+            res.status(404).json({ success: false, message: '해당 지원 내역을 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        await conn.rollback();
+        console.error('❌ 지원 결과 업데이트 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 업데이트 중 오류가 발생했습니다.' }); // 500 에러 응답
+    } finally {
+        conn.release();
+    }
+});
+
+// --- 최종 지원 내역 삭제 (군 단위로 삭제) ---
+// DELETE /jungsi/final-apply/:student_id/:year/:gun
+app.delete('/jungsi/final-apply/:student_id/:year/:gun', authMiddleware, async (req, res) => {
+    const { student_id, year, gun } = req.params; // ⭐️ 파라미터 이름 gun
+    const { branch } = req.user;
+
+    // ⭐️ 모집군 파라미터 이름 'gun' -> DB 컬럼명 '모집군' 에 맞게 사용
+    const 모집군 = gun;
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 보안: 해당 학생 소유권 확인
+        const [ownerCheck] = await conn.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ? AND 학년도 = ?',
+            [student_id, branch, year]
+        );
+        if (ownerCheck.length === 0) {
+            await conn.rollback();
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 학생입니다.' });
+        }
+
+        // 삭제 실행
+        const [result] = await conn.query(
+            'DELETE FROM 정시_최종지원 WHERE 학생_ID = ? AND 학년도 = ? AND 모집군 = ?',
+            [student_id, year, 모집군] // ⭐️ 모집군 변수 사용
+        );
+        await conn.commit();
+
+        if (result.affectedRows > 0) {
+            res.json({ success: true, message: `[${year} ${모집군}] 최종 지원 내역이 삭제되었습니다.` }); // ⭐️ 모집군 변수 사용
+        } else {
+            res.json({ success: true, message: '삭제할 최종 지원 내역이 없습니다.' });
+        }
+    } catch (err) {
+        await conn.rollback();
+        console.error('❌ 최종 지원 내역 삭제 오류:', err); // 에러 로그
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류가 발생했습니다.' }); // 500 에러 응답
+    } finally {
+        conn.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
