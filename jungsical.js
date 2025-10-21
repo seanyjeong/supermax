@@ -777,6 +777,73 @@ async function loadYearHighestMap(db, year, exam) {
 
 /* ========== 라우터 ========== */
 module.exports = function (db, authMiddleware) {
+// -----------------------------------------------------------------
+  // ⭐️ [신규 API 1] 대학/학과 목록 (calculator.html용)
+  // -----------------------------------------------------------------
+  router.get('/university-list', authMiddleware, async (req, res) => {
+    const { year } = req.query;
+    if (!year) {
+      return res.status(400).json({ success: false, message: 'year가 필요합니다.' });
+    }
+    try {
+      const [rows] = await db.query(
+        'SELECT U_ID, university, department FROM `정시기본` WHERE 학년도 = ? ORDER BY university, department',
+        [year]
+      );
+      res.json({ success: true, list: rows });
+    } catch (err) {
+      console.error('❌ 대학 목록 로딩 중 오류:', err);
+      return res.status(500).json({ success: false, message: '대학 목록 로딩 중 서버 오류' });
+    }
+  });
+
+  // -----------------------------------------------------------------
+  // ⭐️ [신규 API 2] 학과 상세 요강 (calculator.html용)
+  // -----------------------------------------------------------------
+  router.get('/formula-details', authMiddleware, async (req, res) => {
+    const { U_ID, year } = req.query;
+    if (!U_ID || !year) {
+      return res.status(400).json({ success: false, message: 'U_ID, year가 모두 필요합니다.' });
+    }
+    try {
+      // 1. 수능/내신 반영 비율 (기본 + 반영비율 테이블)
+      const sql = `
+        SELECT b.*, r.*
+        FROM \`정시기본\` AS b
+        JOIN \`정시반영비율\` AS r
+          ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
+        WHERE b.U_ID = ? AND b.학년도 = ?
+      `;
+      const [formulaRows] = await db.query(sql, [U_ID, year]);
+      if (!formulaRows || formulaRows.length === 0) {
+        return res.status(404).json({ success: false, message: '해당 학과/학년도 정보를 찾을 수 없습니다.' });
+      }
+      
+      const formulaData = formulaRows[0];
+
+      // 2. 실기 배점표 (실기배점 테이블)
+      // (참고: silgical.js 로직을 위해 '학년도'로도 필터링하는 것이 안전함)
+      const [silgiRows] = await db.query(
+        'SELECT * FROM `실기배점` WHERE U_ID = ? AND 학년도 = ?',
+        [U_ID, year]
+      );
+      formulaData.실기배점 = silgiRows || []; // ⭐️ F_data에 실기배점표 주입
+
+      // 3. (선택) 내신 배점표 (정시내신배점 테이블)
+      const [naeshinRows] = await db.query(
+        'SELECT * FROM `정시내신배점` WHERE U_ID = ? AND 학년도 = ?',
+        [U_ID, year]
+      );
+      formulaData.내신배점 = naeshinRows || []; // ⭐️ F_data에 내신배점표 주입
+
+      return res.json({ success: true, formula: formulaData });
+
+    } catch (err) {
+      console.error('❌ 학과 상세 요강 로딩 중 오류:', err);
+      return res.status(500).json({ success: false, message: '학과 요강 로딩 중 서버 오류' });
+    }
+  });
+  
   router.post('/calculate', authMiddleware, async (req, res) => {
     const { U_ID, year, studentScores, basis_exam } = req.body;
     if (!U_ID || !year || !studentScores) {
