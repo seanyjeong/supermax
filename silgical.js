@@ -11,7 +11,7 @@ const router = express.Router();
  */
 function getEventRules(eventName) {
   const LOW_IS_BETTER_KEYWORDS = [
-     'm', 'run', '런', '왕복', '초', '벽','지그',''z'
+     'm', 'run', '런', '왕복', '초', '벽','지그','z'
   ];
   let method = 'higher_is_better';
   if (LOW_IS_BETTER_KEYWORDS.some((k) => eventName.includes(k))) {
