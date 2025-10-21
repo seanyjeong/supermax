@@ -425,54 +425,59 @@ app.get('/jungsi/grade-cuts/get', authMiddleware, async (req, res) => {
 });
 
 // ⭐️ [신규 API] 등급컷 데이터 벌크 저장 (덮어쓰기)
-app.post('/jungsi/grade-cuts/set-bulk', authMiddleware, async (req, res) => {
-    // (보안 강화) 관리자만 이 기능을 사용하게 하려면 여기서 req.user 체크 필요
-    // if (!isAdmin(req.user)) return res.status(403).json({...});
-
+app.post('/jungsi/grade-cuts/set-bulk', authMiddleware, async (req, res, next) => {
+    
+    // 1. 요청 바디에서 데이터 추출
     const { year, exam_type, subject, cuts } = req.body;
-    if (!year || !exam_type || !subject || !Array.isArray(cuts) || cuts.length === 0) {
-        return res.status(400).json({ success: false, message: '필수 데이터(학년도, 모형, 과목명, cuts 배열)가 누락되었거나 형식이 잘못되었습니다.' });
+
+    // 2. 유효성 검사: cuts 배열이 비어있는지 확인
+    if (!cuts || !Array.isArray(cuts) || cuts.length === 0) {
+        // 400 Bad Request
+        return res.status(400).json({ 
+            success: false, 
+            message: '저장할 등급컷 데이터(cuts)가 없습니다.' 
+        });
     }
 
-    const conn = await db.getConnection();
     try {
-        await conn.beginTransaction();
-
-        // 1. 해당 조건의 기존 데이터 삭제
-        await conn.query(
-            'DELETE FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ? AND 선택과목명 = ?',
-            [year, exam_type, subject]
-        );
-
-        // 2. 새로운 데이터 벌크 INSERT
+        // 3. DB에 Bulk Insert하기 위한 'values' 배열 생성
         const values = cuts.map(cut => [
             year,
             exam_type,
             subject,
-            cut.원점수,
+            cut.원점수,     // `idx_unique_cut` 키의 일부
             cut.표준점수,
             cut.백분위,
             cut.등급
         ]);
 
-        if (values.length > 0) {
-            await conn.query(
-                `INSERT INTO \`정시예상등급컷\` 
-                    (학년도, 모형, 선택과목명, 원점수, 표준점수, 백분위, 등급) 
-                 VALUES ?`,
-                [values] // 배열의 배열 형태로 전달
-            );
-        }
+        // 4. 🚀 핵심 SQL 쿼리: INSERT ... ON DUPLICATE KEY UPDATE
+        const sql = `
+            INSERT INTO \`정시예상등급컷\` 
+                (학년도, 모형, 선택과목명, 원점수, 표준점수, 백분위, 등급) 
+            VALUES ?  -- ? 하나로 [values] 배열 전체를 넘김
+            ON DUPLICATE KEY UPDATE
+                표준점수 = VALUES(표준점수),
+                백분위 = VALUES(백분위),
+                등급 = VALUES(등급)
+        `;
 
-        await conn.commit();
-        res.json({ success: true, message: `총 ${cuts.length}건의 등급컷 데이터가 저장되었습니다.` });
+        // 5. 쿼리 실행 (db 변수는 상단에서 require한 DB 커넥션)
+        const [result] = await db.query(sql, [values]);
+
+        // 6. 성공 응답
+        res.json({ 
+            success: true, 
+            message: `[${year} ${exam_type} ${subject}] 등급컷 ${result.affectedRows}건이 성공적으로 저장/업데이트되었습니다.` 
+        });
 
     } catch (err) {
-        await conn.rollback();
-        console.error('❌ 등급컷 저장 API 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
-    } finally {
-        conn.release();
+        // 7. DB 에러 처리 (로그 남기기)
+        console.error(`[set-bulk] 등급컷 저장 중 DB 오류 발생:`, err);
+        
+        // jungsi.js:459:24 에러 로그를 남기기 위해 next(err) 호출
+        // (파일 맨 마지막에 에러 핸들링 미들웨어가 있어야 함)
+        next(err); 
     }
 });
 
