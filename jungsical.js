@@ -111,6 +111,7 @@ function buildSpecialContext(F, S, highestMap) {
 
   const korKey  = kmSubjectNameForKorean(S?.국어);
   const mathKey = kmSubjectNameForMath(S?.수학);
+  const kme_pct = [ctx.kor_pct, ctx.math_pct, ctx.eng_pct_est].sort((a, b) => b - a); ctx.top2_sum_raw_pct_kme = (kme_pct[0] || 0) + (kme_pct[1] || 0);
 
   // 1) 기본값
   let korMax  = 200;
