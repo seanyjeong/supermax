@@ -778,24 +778,26 @@ async function loadYearHighestMap(db, year, exam) {
 /* ========== 라우터 ========== */
 module.exports = function (db, authMiddleware) {
 // -----------------------------------------------------------------
-  // ⭐️ [신규 API 1] 대학/학과 목록 (calculator.html용)
+  // ⭐️ [신규 API 1] 대학/학과 목록 (calculator.html용) - v2 (군 정보 추가)
   // -----------------------------------------------------------------
- router.get('/university-list', authMiddleware, async (req, res) => {
+  router.get('/university-list', authMiddleware, async (req, res) => {
     const { year } = req.query;
     if (!year) {
       return res.status(400).json({ success: false, message: 'year가 필요합니다.' });
     }
     try {
-      // ⭐️ (수정) university -> 대학명, department -> 학과명
+      // ⭐️ (수정) '군' 컬럼 추가
       const [rows] = await db.query(
-        'SELECT U_ID, 대학명, 학과명 FROM `정시기본` WHERE 학년도 = ? ORDER BY 대학명, 학과명',
+        'SELECT U_ID, 대학명, 학과명, 군 FROM `정시기본` WHERE 학년도 = ? ORDER BY 군, 대학명, 학과명',
         [year]
       );
-      // ⭐️ (수정) 프론트엔드와 이름을 맞추기 위해 컬럼명 변경 (AS 사용)
+      
+      // ⭐️ (수정) 프론트엔드로 'gun' 정보 전달
       const list = rows.map(r => ({
           U_ID: r.U_ID,
-          university: r.대학명, // 프론트엔드 JS가 'university'를 사용함
-          department: r.학과명  // 프론트엔드 JS가 'department'를 사용함
+          university: r.대학명, 
+          department: r.학과명,
+          gun: r.군 // ⭐️ '군' 정보 추가 (예: "가군", "나군")
       }));
       
       res.json({ success: true, list: list });
@@ -805,7 +807,6 @@ module.exports = function (db, authMiddleware) {
       return res.status(500).json({ success: false, message: '대학 목록 로딩 중 서버 오류' });
     }
   });
-
   // -----------------------------------------------------------------
   // ⭐️ [신규 API 2] 학과 상세 요강 (calculator.html용)
   // -----------------------------------------------------------------
