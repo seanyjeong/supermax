@@ -498,69 +498,64 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
 
 // ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
 // ★★★ 탐구 highest_of_year 계산 방식 변경: 점수/각 과목 최고점 → 비율 평균
-  const normOf = (name) => {
-    
-    // [통합 로직] 'highest_of_year' (표준/변표)
+// ★★★ 탐구 highest_of_year 계산 방식 변경 + 한국사 100점 만점 처리 ★★★
+const normOf = (name) => {
+
+    // --- ⭐️ [추가] 한국사 과목 반영 시 100점 만점 처리 ⭐️ ---
+    if (name === '한국사' && historyAsSubject) {
+        const sc = Number(raw[name] || 0); // 학생 한국사 환산 점수 (예: 90)
+        log.push(`[정규화 조정] 한국사(과목 반영) 점수 ${sc}를 100점 만점 기준으로 정규화`);
+        // 무조건 100으로 나눔
+        return 100 > 0 ? Math.max(0, Math.min(1, sc / 100)) : 0;
+    }
+    // --- ⭐️ [추가] 끝 ⭐️ ---
+
+
+    // [기존 탐구] 'highest_of_year' (표준/변표)
     if (name === '탐구' && inqMethod === 'highest_of_year') {
-        
         // 1. S.탐구 (모든 탐구 과목)를 가져와 각각 정규화 점수를 계산
         const allInquiryNormalized = S.탐구.map(sub => {
             const subject = sub.subject || '';
-            let val = 0;
-            let top = 0;
-            let normalized = 0;
-
+            let val = 0; let top = 0; let normalized = 0;
             if (inqType === '변환표준점수') {
                 // (A) 변표 로직
                 if (!F.탐구변표) return null;
                 const group = sub.group || sub.type || guessInquiryGroup(subject);
                 const convTableForGroup = F.탐구변표[group];
                 if (!convTableForGroup || Object.keys(convTableForGroup).length === 0) return null;
-                
                 const maxConvScore = Math.max(...Object.values(convTableForGroup).map(Number).filter(n => !isNaN(n)));
-                val = readConvertedStd(sub); // 학생의 변표
-                top = maxConvScore; // 변표 최고점
-                
+                val = readConvertedStd(sub); top = maxConvScore;
             } else if (inqType === '표준점수') {
                 // (B) 표준점수 로직
                 if (!highestMap) return null;
-                val = Number(sub.std || 0);
-                top = Number(highestMap[subject] ?? NaN);
-            } else {
-                // (C) 백분위 등... (highest_of_year는 표점/변표만 지원)
-                return null; 
-            }
-
+                val = Number(sub.std || 0); top = Number(highestMap[subject] ?? NaN);
+            } else { return null; } // (C) 백분위 등 highest_of_year 미지원
             if (!Number.isFinite(top) || top <= 0 || !Number.isFinite(val)) return null;
             normalized = Math.max(0, Math.min(1, val / top));
-            
             return { subject, val, top, normalized };
+        }).filter(r => r != null);
 
-        }).filter(r => r != null); // 유효한 계산만 남김
-        
-        // 2. 정규화 점수(normalized) 기준으로 내림차순 정렬
+        // 2. 정규화 점수 기준 정렬
         allInquiryNormalized.sort((a, b) => b.normalized - a.normalized);
-
-        // 3. 상위 N개 선택 (DB에서 가져온 inquiryCount 사용)
+        // 3. 상위 N개 선택
         const n = Math.max(1, inquiryCount || 1);
         const pickedNormalized = allInquiryNormalized.slice(0, Math.min(n, allInquiryNormalized.length));
-
+        // 4. 평균 계산 및 반환
         if (pickedNormalized.length) {
-            // 4. 상위 N개의 정규화 점수(normalized)를 평균냄
             const avg = pickedNormalized.reduce((s, r) => s + r.normalized, 0) / pickedNormalized.length;
             log.push(`[탐구정규화-정렬] highest_of_year (Top${n}): ${pickedNormalized.map(p => `${p.subject}:${p.normalized.toFixed(4)} [${p.val}/${p.top}]`).join(', ')} → 평균비율=${avg.toFixed(4)}`);
             return avg;
         }
-        
-        log.push(`[탐구정규화-정렬] FAILED. (inqType: ${inqType}, highestMap: ${!!highestMap}, F.탐구변표: ${!!F.탐구변표})`);
-        return 0; // 계산 실패
+        log.push(`[탐구정규화-정렬] FAILED.`); return 0; // 계산 실패
     }
-    
-    // [기존 로직] 'highest_of_year'가 아닌 경우 (fixed_100, etc.)
+
+    // [나머지 모든 경우] (한국사 가/감점 포함, 탐구 highest_of_year 아닐 때 등)
+    // 원래 정의된 만점(mx) 기준으로 정규화
     const sc = Number(raw[name] || 0);
-    const mx = getMax(name);
+    const mx = getMax(name); // getMax 함수는 그대로 사용
     return mx > 0 ? Math.max(0, Math.min(1, sc / mx)) : 0;
-  };
+};
+// ★★★ 수정 끝 ★★★
 
   const TOTAL        = resolveTotal(F);
   const suneungRatio = (Number(F.수능) || 0) / 100;
