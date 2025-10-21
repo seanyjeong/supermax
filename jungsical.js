@@ -343,11 +343,6 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.top2_sum_raw_pct_kmi2  = (items_pct[0] || 0) + (items_pct[1] || 0);
 
   
-// 국어, 수학, 영어(추정) 백분위 계산 후 상위 2개 합 계산
-const kme_pct = [ctx.kor_pct, ctx.math_pct, ctx.eng_pct_est].sort((a, b) => b - a);
-ctx.top2_sum_raw_pct_kme = (kme_pct[0] || 0) + (kme_pct[1] || 0);
-log.push(`[특수공식 준비] 국/수/영(추정) 백분위: ${ctx.kor_pct}/${ctx.math_pct}/${ctx.eng_pct_est.toFixed(2)} -> 상위 2개 합: ${ctx.top2_sum_raw_pct_kme}`); // 확인용 로그 추가 (선택사항)
-  
   // 탐구 상위 2개 과목의 '사탐' 여부 판정 → 과목별 5% 가산(=1.05)
 (function attachSocialBoost() {
   const inqs = (S.탐구 || []);
