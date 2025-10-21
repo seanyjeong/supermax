@@ -780,17 +780,26 @@ module.exports = function (db, authMiddleware) {
 // -----------------------------------------------------------------
   // ⭐️ [신규 API 1] 대학/학과 목록 (calculator.html용)
   // -----------------------------------------------------------------
-  router.get('/university-list', authMiddleware, async (req, res) => {
+ router.get('/university-list', authMiddleware, async (req, res) => {
     const { year } = req.query;
     if (!year) {
       return res.status(400).json({ success: false, message: 'year가 필요합니다.' });
     }
     try {
+      // ⭐️ (수정) university -> 대학명, department -> 학과명
       const [rows] = await db.query(
-        'SELECT U_ID, university, department FROM `정시기본` WHERE 학년도 = ? ORDER BY university, department',
+        'SELECT U_ID, 대학명, 학과명 FROM `정시기본` WHERE 학년도 = ? ORDER BY 대학명, 학과명',
         [year]
       );
-      res.json({ success: true, list: rows });
+      // ⭐️ (수정) 프론트엔드와 이름을 맞추기 위해 컬럼명 변경 (AS 사용)
+      const list = rows.map(r => ({
+          U_ID: r.U_ID,
+          university: r.대학명, // 프론트엔드 JS가 'university'를 사용함
+          department: r.학과명  // 프론트엔드 JS가 'department'를 사용함
+      }));
+      
+      res.json({ success: true, list: list });
+
     } catch (err) {
       console.error('❌ 대학 목록 로딩 중 오류:', err);
       return res.status(500).json({ success: false, message: '대학 목록 로딩 중 서버 오류' });
