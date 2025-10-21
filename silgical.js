@@ -11,7 +11,7 @@ const router = express.Router();
  */
 function getEventRules(eventName) {
   const LOW_IS_BETTER_KEYWORDS = [
-    '달리기', 'm', 'run', '런', '왕복', '초', '오래',
+     'm', 'run', '런', '왕복', '초', '벽','지그',''z'
   ];
   let method = 'higher_is_better';
   if (LOW_IS_BETTER_KEYWORDS.some((k) => eventName.includes(k))) {
@@ -36,8 +36,7 @@ function findMaxScore(scoreTable) {
 }
 
 /**
- * ⭐️ [신규 헬퍼] 네가 말한 "감수" (급간 레벨)를 찾음
- * (예: 96점이 [100, 98, 96] 배열에서 2번째 인덱스(2감)인지 찾음)
+ * ⭐️ [신규 헬퍼] "감수" (급간 레벨)를 찾음
  */
 function lookupDeductionLevel(studentScore, scoreTable) {
     if (!scoreTable || scoreTable.length === 0) return 0;
@@ -62,7 +61,7 @@ function lookupDeductionLevel(studentScore, scoreTable) {
 
 /**
  * ⭐️ [규칙 2] 학생 기록으로 '배점 등급' 찾기
- * (기존과 동일)
+ * (수정) "최소값" 규칙 적용 (달리기)
  */
 function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   // 1. 배점표가 아예 없으면 0점
@@ -114,11 +113,10 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     }
 
     // 4b. [3순위] 숫자 비교 ("12.20" 등)
-if (numericLevels.length > 0) {
+    if (numericLevels.length > 0) {
       if (method === 'lower_is_better') {
         
-        // ⭐️ [수정] 네가 말한 "최소값" 규칙 적용
-        // (예: 9.71, 9.61, 9.51 순으로 정렬)
+        // ⭐️ [수정] "최소값" 규칙 적용 (예: 9.71, 9.61, 9.51 순으로 정렬)
         numericLevels.sort((a, b) => b.record - a.record); 
         for (const level of numericLevels) {
           // ⭐️ [수정] 학생 기록이 DB 기록보다 "크거나 같으면" (더 느리면)
@@ -207,11 +205,24 @@ function calculateScore(F, S) {
 
   let rawPracticalSum = 0;
   const eventBreakdowns = [];
-  let totalDeductionLevel = 0; // ⭐️ [신규] 총 감수 (레벨 합)
+  let totalDeductionLevel = 0;
 
   studentRecords.forEach((record) => {
     const eventName = record.event;
-    const eventValue = record.value;
+    // ⭐️ [수정] eventValue가 null/undefined일 경우 빈 문자열로 처리
+    const eventValue = String(record.value || '').trim();
+
+    // ⭐️ [신규] 입력값이 없으면 (empty string) 계산을 건너뛰고 'null'로 반환
+    if (eventValue === '') {
+        log.push(`[${eventName}] 기록 없음. 계산 보류.`);
+        eventBreakdowns.push({
+            event: eventName,
+            record: '',
+            score: null, // ⭐️ null
+            deduction_level: null // ⭐️ null
+        });
+        return; // 다음 종목으로
+    }
 
     const { method } = getEventRules(eventName);
     const scoreTable = allScoreData.filter(
@@ -227,14 +238,14 @@ function calculateScore(F, S) {
     log.push(
       `[${eventName}] (규칙: ${method}) 기록: ${eventValue} → 배점: "${rawGrade}"(환산: ${score}점) → ⭐️급간(감수): ${deductionLevel}감`
     );
-    rawPracticalSum += score;
-    totalDeductionLevel += deductionLevel; // ⭐️ 총감수 누적
+    rawPracticalSum += score; // ⭐️ 점수가 있을 때만 더함
+    totalDeductionLevel += deductionLevel; 
     
     eventBreakdowns.push({
         event: eventName,
         record: eventValue,
-        score: score,
-        deduction_level: deductionLevel // ⭐️ "감수" (레벨)
+        score: score, // ⭐️ 숫자
+        deduction_level: deductionLevel // ⭐️ 숫자
     });
   });
 
@@ -244,7 +255,6 @@ function calculateScore(F, S) {
   log.push(`[조정] 종목 합계(${rawPracticalSum}) + 기본 점수(${schoolTotalBaseScore}) = ${finalRawScore}점`);
   log.push(`[결과] 실기 원점수 합계 (최종): ${finalRawScore} / ${PRACTICAL_MAX}`);
   
-  // ⭐️ [신규] 총 감수 (레벨 합)
   log.push(`[결과] ⭐️ 총 감수 (레벨 합): ${totalDeductionLevel}감`);
 
   // 5. 최종 점수 환산
@@ -263,13 +273,12 @@ function calculateScore(F, S) {
     )} * ${practicalRatio} = ${finalPracticalScore.toFixed(3)}`
   );
 
-  // ⭐️ [수정] 반환 객체에 "총감수" (레벨 합) 추가
   return {
     totalScore: finalPracticalScore.toFixed(3),
     breakdown: { 
         events: eventBreakdowns,
         practical_raw_sum: finalRawScore,
-        total_deduction_level: totalDeductionLevel // ⭐️ (예: 2 + 1 = 3)
+        total_deduction_level: totalDeductionLevel
     },
     calculationLog: log,
   };
