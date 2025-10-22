@@ -1602,6 +1602,68 @@ app.post('/jungsi/scores/officialize-bulk', authMiddleware, async (req, res) => 
   }
 });
 
+// =============================================
+// ⭐️ [신규] 상담 통계 API (상위 10% 점수)
+// =============================================
+// GET /jungsi/counseling/stats/:U_ID/:year
+app.get('/jungsi/counseling/stats/:U_ID/:year', authMiddleware, async (req, res) => {
+    const { U_ID, year } = req.params;
+    const { branch } = req.user; // 요청자 정보 확인용 (로그 등)
+
+    console.log(`[API /counseling/stats] U_ID: ${U_ID}, Year: ${year} 요청 (요청자 지점: ${branch})`);
+
+    if (!U_ID || !year) {
+        return res.status(400).json({ success: false, message: 'U_ID와 year 파라미터가 필요합니다.' });
+    }
+
+    try {
+        // DB에서 해당 학과/학년도에 상담 목록으로 추가된 모든 학생의 계산 총점 조회
+        // ❗️ 중요: branch_name으로 필터링하지 않음! (전체 지점 대상)
+        const sql = `
+            SELECT 상담_계산총점
+            FROM 정시_상담목록
+            WHERE 대학학과_ID = ? AND 학년도 = ? AND 상담_계산총점 IS NOT NULL
+        `;
+        const [rows] = await db.query(sql, [U_ID, year]);
+
+        if (rows.length === 0) {
+            console.log(` -> 데이터 없음`);
+            return res.json({ success: true, top10Score: null, totalCount: 0 });
+        }
+
+        // 점수만 추출하여 내림차순 정렬
+        const scores = rows.map(r => Number(r.상담_계산총점)).sort((a, b) => b - a);
+        const totalCount = scores.length;
+
+        // 상위 10% 인덱스 계산 (소수점 버림)
+        // 예: 10명이면 1등(index 0), 19명이면 1등(index 0), 20명이면 2등(index 1)
+        const top10Index = Math.floor(totalCount * 0.1);
+
+        // 해당 인덱스의 점수 반환
+        // 만약 지원자가 10명 미만이면 그냥 최고점(1등 점수)을 반환하도록 처리 (혹은 null 처리도 가능)
+        let top10Score = null;
+        if (totalCount > 0) {
+            // 최소 1명 이상 있을 때
+             if (totalCount < 10) {
+                 top10Score = scores[0]; // 10명 미만이면 최고점
+                 console.log(` -> ${totalCount}명 (<10), 최고점 반환: ${top10Score}`);
+             } else {
+                 top10Score = scores[top10Index]; // 10명 이상이면 계산된 인덱스 점수
+                 console.log(` -> ${totalCount}명 (>=10), 상위 10% (${top10Index + 1}등) 점수 반환: ${top10Score}`);
+             }
+        } else {
+             console.log(` -> 유효 점수 없음`);
+        }
+
+
+        res.json({ success: true, top10Score: top10Score, totalCount: totalCount });
+
+    } catch (err) {
+        console.error(`❌ /counseling/stats API 오류 (U_ID: ${U_ID}, Year: ${year}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
