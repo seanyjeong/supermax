@@ -1481,6 +1481,128 @@ app.delete('/jungsi/final-apply/:student_id/:year/:gun', authMiddleware, async (
     }
 });
 
+// =====================[ 수능 성적표 단체 입력: API ]=====================
+
+// (공통) 입력유형이 'official'이면 원점수는 무시(NULL 강제)
+const nullifyRawForOfficial = (x) => {
+  if (x.입력유형 !== 'official') return x;
+  return {
+    ...x,
+    국어_원점수: null,
+    수학_원점수: null,
+    영어_원점수: null,
+    한국사_원점수: null,
+    탐구1_원점수: null,
+    탐구2_원점수: null,
+  };
+};
+
+// [A] 학생 성적표(공식/가채점 구분) 여러 명 조회
+// body: { year: "2026", student_ids: [1,2,3] }
+app.post('/jungsi/scores/list', authMiddleware, async (req, res) => {
+  const { year, student_ids } = req.body;
+  if (!year || !Array.isArray(student_ids) || student_ids.length === 0) {
+    return res.status(400).json({ success:false, message:'year, student_ids[] 필요' });
+  }
+  try {
+    const marks = new Array(student_ids.length).fill('?').join(',');
+    const [rows] = await db.query(
+      `SELECT *
+         FROM jungsi.학생수능성적
+        WHERE 학년도 = ?
+          AND student_id IN (${marks})`,
+      [year, ...student_ids]
+    );
+    // 응답을 student_id => [rows] 맵으로
+    const map = {};
+    for (const r of rows) {
+      const sid = r.student_id;
+      if (!map[sid]) map[sid] = [];
+      map[sid].push(r);
+    }
+    res.json({ success:true, data: map });
+  } catch (e) {
+    console.error('❌ /jungsi/scores/list 오류:', e);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  }
+});
+
+// [B] 공식 성적 일괄 업서트 + raw→official 승격
+// body: {
+//   year:"2026",
+//   items:[{
+//     student_id, 입력유형:"official",
+//     국어_선택과목, 국어_표준점수, 국어_백분위, 국어_등급,
+//     수학_선택과목, 수학_표준점수, 수학_백분위, 수학_등급,
+//     영어_등급,
+//     한국사_등급,
+//     탐구1_선택과목, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급,
+//     탐구2_선택과목, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급
+//   }, ...]
+// }
+app.post('/jungsi/scores/officialize-bulk', authMiddleware, async (req, res) => {
+  const { year, items } = req.body;
+  if (!year || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success:false, message:'year, items[] 필요' });
+  }
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const sql = `
+      INSERT INTO jungsi.학생수능성적 (
+        student_id, 학년도, 입력유형,
+        국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급,
+        수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급,
+        영어_원점수, 영어_등급,
+        한국사_원점수, 한국사_등급,
+        탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급,
+        탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급
+      ) VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?, ?,?, ?,?,?,?, ?,?, ?,?,?,?, ?)
+      ON DUPLICATE KEY UPDATE
+        입력유형='official',
+        국어_선택과목=VALUES(국어_선택과목),
+        국어_원점수=NULL,  국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급),
+        수학_선택과목=VALUES(수학_선택과목),
+        수학_원점수=NULL,  수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급),
+        영어_원점수=NULL,  영어_등급=VALUES(영어_등급),
+        한국사_원점수=NULL, 한국사_등급=VALUES(한국사_등급),
+        탐구1_선택과목=VALUES(탐구1_선택과목),
+        탐구1_원점수=NULL,  탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급),
+        탐구2_선택과목=VALUES(탐구2_선택과목),
+        탐구2_원점수=NULL,  탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급)
+    `;
+
+    for (const raw of items) {
+      const x = nullifyRawForOfficial({
+        ...raw,
+        입력유형: 'official'
+      });
+
+      await conn.query(sql, [
+        x.student_id, year, x.입력유형,
+        x.국어_선택과목 ?? null, x.국어_원점수 ?? null, x.국어_표준점수 ?? null, x.국어_백분위 ?? null, x.국어_등급 ?? null,
+        x.수학_선택과목 ?? null, x.수학_원점수 ?? null, x.수학_표준점수 ?? null, x.수학_백분위 ?? null, x.수학_등급 ?? null,
+        x.영어_원점수 ?? null, x.영어_등급 ?? null,
+        x.한국사_원점수 ?? null, x.한국사_등급 ?? null,
+        x.탐구1_선택과목 ?? null, x.탐구1_원점수 ?? null, x.탐구1_표준점수 ?? null, x.탐구1_백분위 ?? null, x.탐구1_등급 ?? null,
+        x.탐구2_선택과목 ?? null, x.탐구2_원점수 ?? null, x.탐구2_표준점수 ?? null, x.탐구2_백분위 ?? null, x.탐구2_등급 ?? null,
+      ]);
+    }
+
+    await conn.commit();
+    res.json({ success:true, message:`${items.length}명 공식 성적 업로드/승격 완료` });
+  } catch (e) {
+    await conn.rollback();
+    console.error('❌ /jungsi/scores/officialize-bulk 오류:', e);
+    res.status(500).json({ success:false, message:'DB 오류', error:e.message });
+  } finally {
+    conn.release();
+  }
+});
+
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
