@@ -1637,6 +1637,94 @@ app.get('/jungsi/counseling/stats/:U_ID/:year', authMiddleware, async (req, res)
     // finally { connection?.release(); } // 커넥션 풀 사용 시 필요
 });
 
+// =============================================
+// ⭐️ [신규] 타군 인기 지원 통계 API
+// =============================================
+// GET /jungsi/counseling/cross-gun-stats/:U_ID/:year
+app.get('/jungsi/counseling/cross-gun-stats/:U_ID/:year', authMiddleware, async (req, res) => {
+    const { U_ID, year } = req.params;
+    const requested_U_ID = parseInt(U_ID, 10); // 기준이 되는 대학/학과 ID
+
+    console.log(`[API /cross-gun-stats] U_ID: ${requested_U_ID}, Year: ${year} 요청`);
+
+    if (!requested_U_ID || !year) {
+        return res.status(400).json({ success: false, message: 'U_ID와 year 파라미터가 필요합니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+
+        // 1. 기준 학과(requested_U_ID) 정보 가져오기 (군 확인용)
+        const [baseDept] = await connection.query(
+            'SELECT 군 FROM 정시기본 WHERE U_ID = ? AND 학년도 = ?',
+            [requested_U_ID, year]
+        );
+        if (baseDept.length === 0) {
+            return res.status(404).json({ success: false, message: '기준 학과 정보를 찾을 수 없습니다.' });
+        }
+        const baseGun = baseDept[0].군; // 예: '가'
+        const otherGuns = ['가', '나', '다'].filter(g => g !== baseGun); // 예: ['나', '다']
+        console.log(` -> 기준 군: ${baseGun}, 조회 대상 타군: ${otherGuns.join(', ')}`);
+
+
+        // 2. 기준 학과를 추가한 학생들의 ID 목록 조회
+        const studentIdSql = `
+            SELECT DISTINCT 학생_ID
+            FROM 정시_상담목록
+            WHERE 대학학과_ID = ? AND 학년도 = ?
+        `;
+        const [studentIdRows] = await connection.query(studentIdSql, [requested_U_ID, year]);
+        const targetStudentIds = studentIdRows.map(r => r.학생_ID);
+
+        if (targetStudentIds.length === 0) {
+            console.log(` -> 기준 학과(${requested_U_ID})를 추가한 학생 없음`);
+            // 데이터가 없어도 성공 응답 (빈 결과 반환)
+            const emptyResult = {};
+            otherGuns.forEach(gun => emptyResult[`${gun}_gun_top3`] = []);
+             return res.json({ success: true, ...emptyResult, studentCount: 0 });
+        }
+        console.log(` -> 기준 학과(${requested_U_ID}) 추가 학생 ${targetStudentIds.length}명 확인`);
+
+        // 3. 해당 학생들이 타군에 지원한 내역 집계
+        const statsSql = `
+            SELECT wl.모집군, wl.대학학과_ID, jb.대학명, jb.학과명, COUNT(*) as count
+            FROM 정시_상담목록 wl
+            JOIN 정시기본 jb ON wl.대학학과_ID = jb.U_ID AND wl.학년도 = jb.학년도
+            WHERE wl.학생_ID IN (?)
+              AND wl.학년도 = ?
+              AND wl.모집군 IN (?) -- 다른 군만 조회
+            GROUP BY wl.모집군, wl.대학학과_ID, jb.대학명, jb.학과명
+            ORDER BY wl.모집군, count DESC
+        `;
+        const [statsRows] = await connection.query(statsSql, [targetStudentIds, year, otherGuns]);
+        console.log(` -> 타군 지원 내역 ${statsRows.length}건 조회 완료`);
+
+        // 4. 군별 Top 3 추출
+        const result = {};
+        otherGuns.forEach(gun => {
+            result[`${gun}_gun_top3`] = statsRows
+                .filter(row => row.모집군 === gun)
+                .slice(0, 3) // 상위 3개만 추출
+                .map(row => ({ // 필요한 정보만 가공
+                    U_ID: row.대학학과_ID,
+                    university: row.대학명,
+                    department: row.학과명,
+                    count: row.count
+                }));
+             console.log(` -> ${gun}군 Top 3:`, result[`${gun}_gun_top3`]);
+        });
+
+        res.json({ success: true, ...result, studentCount: targetStudentIds.length });
+
+    } catch (err) {
+        console.error(`❌ /cross-gun-stats API 오류 (U_ID: ${requested_U_ID}, Year: ${year}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 또는 집계 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
