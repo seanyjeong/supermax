@@ -1196,7 +1196,7 @@ app.post('/jungsi/counseling/wishlist/bulk-save', authMiddleware, async (req, re
     await conn.beginTransaction();
 
     const sql = `
-      INSERT INTO jungsi.상담목록
+      INSERT INTO jungsi.정시_상담목록
         (학생_ID, 학년도, 모집군, 대학학과_ID,
          상담_수능점수, 상담_내신점수, 상담_실기기록, 상담_실기반영점수,
          상담_계산총점)
