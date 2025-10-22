@@ -3,7 +3,7 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const path = require('path');
-
+const fetch = require('node-fetch');
 const app = express();
 const port = 9090;
 
@@ -1186,73 +1186,55 @@ app.get('/jungsi/counseling/wishlist/:student_id/:year', authMiddleware, async (
 });
 
 // --- 상담 목록 일괄 저장 (덮어쓰기: Delete then Insert) ---
-// POST /jungsi/counseling/wishlist/bulk-save
 app.post('/jungsi/counseling/wishlist/bulk-save', authMiddleware, async (req, res) => {
-    const { 학생_ID, 학년도, wishlistItems } = req.body; // wishlistItems는 배열 [{모집군, 대학학과_ID, ...}, ...]
-    const { branch } = req.user;
+  const { 학생_ID, 학년도, wishlistItems } = req.body;
+  if (!학생_ID || !학년도 || !Array.isArray(wishlistItems))
+    return res.status(400).json({ success:false, message:'학생_ID/학년도/wishlistItems 필요' });
 
-    // 필수 값 검사
-    if (!학생_ID || !학년도 || !Array.isArray(wishlistItems)) {
-        return res.status(400).json({ success: false, message: '학생ID, 학년도, 상담 목록(wishlistItems) 배열은 필수입니다.' });
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const sql = `
+      INSERT INTO jungsi.상담목록
+        (학생_ID, 학년도, 모집군, 대학학과_ID,
+         상담_수능점수, 상담_내신점수, 상담_실기기록, 상담_실기반영점수,
+         상담_계산총점)
+      VALUES (?,?,?,?, ?,?,?,?, ?)
+      ON DUPLICATE KEY UPDATE
+         모집군=VALUES(모집군),
+         상담_수능점수=VALUES(상담_수능점수),
+         상담_내신점수=VALUES(상담_내신점수),
+         상담_실기기록=VALUES(상담_실기기록),
+         상담_실기반영점수=VALUES(상담_실기반영점수),
+         상담_계산총점=VALUES(상담_계산총점)
+    `;
+
+    for (const it of wishlistItems) {
+      const silgiJSON = it.상담_실기기록 && Object.keys(it.상담_실기기록).length
+        ? JSON.stringify(it.상담_실기기록) : null;
+
+      await conn.query(sql, [
+        학생_ID, 학년도, it.모집군, it.대학학과_ID,
+        it.상담_수능점수 ?? null,
+        it.상담_내신점수 ?? null,
+        silgiJSON,
+        it.상담_실기반영점수 ?? null,
+        it.상담_계산총점 ?? null
+      ]);
     }
 
-    const conn = await db.getConnection(); // 트랜잭션 시작
-    try {
-        await conn.beginTransaction();
-
-        // 보안: 해당 학생이 이 지점 소속인지 확인
-        const [ownerCheck] = await conn.query(
-            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ?',
-            [학생_ID, branch]
-        );
-        if (ownerCheck.length === 0) {
-            await conn.rollback();
-            return res.status(403).json({ success: false, message: '저장 권한이 없는 학생입니다.' });
-        }
-
-        // 1. 해당 학생, 해당 학년도의 기존 상담 목록 모두 삭제
-        await conn.query(
-            'DELETE FROM 정시_상담목록 WHERE 학생_ID = ? AND 학년도 = ?',
-            [학생_ID, 학년도]
-        );
-
-        let insertedCount = 0;
-        // 2. 새로운 상담 목록 데이터가 있으면 INSERT
-        if (wishlistItems.length > 0) {
-            // INSERT 할 VALUES 배열 만들기 (군별 3개 제한 로직은 프론트에서 처리했다고 가정)
-            const values = wishlistItems.map(item => [
-                학생_ID,
-                학년도,
-                item.모집군,
-                item.대학학과_ID,
-                item.상담_내신점수 === undefined || item.상담_내신점수 === null ? null : Number(item.상담_내신점수),
-                item.상담_실기기록 === undefined || item.상담_실기기록 === null || Object.keys(item.상담_실기기록).length === 0 ? null : JSON.stringify(item.상담_실기기록),
-                item.상담_계산총점 === undefined || item.상담_계산총점 === null ? null : Number(item.상담_계산총점),
-                item.메모 === undefined || item.메모 === null ? null : String(item.메모) // 메모는 현재 프론트에서 안 보냄
-            ]);
-
-            // Bulk Insert 실행
-            const sql = `
-                INSERT INTO 정시_상담목록
-                    (학생_ID, 학년도, 모집군, 대학학과_ID, 상담_내신점수, 상담_실기기록, 상담_계산총점, 메모)
-                VALUES ?  -- Bulk Insert를 위한 ? 플레이스홀더
-            `;
-            const [result] = await conn.query(sql, [values]); // values 배열을 배열로 한번 더 감싸서 전달
-            insertedCount = result.affectedRows;
-        }
-
-        await conn.commit(); // 모든 작업 성공 시 커밋
-
-        res.json({ success: true, message: `상담 내용 ${insertedCount}건이 저장되었습니다.` });
-
-    } catch (err) {
-        await conn.rollback(); // 오류 발생 시 롤백
-        console.error('❌ 상담 목록 일괄 저장 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.' });
-    } finally {
-        conn.release(); // 커넥션 반환
-    }
+    await conn.commit();
+    res.json({ success:true, saved:wishlistItems.length });
+  } catch (e) {
+    await conn.rollback();
+    console.error('wishlist bulk-save error:', e);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  } finally {
+    conn.release();
+  }
 });
+
 
 
 // --- 상담 목록 개별 삭제 ---
@@ -1602,68 +1584,58 @@ app.post('/jungsi/scores/officialize-bulk', authMiddleware, async (req, res) => 
   }
 });
 
-// =============================================
-// ⭐️ [신규] 상담 통계 API (상위 10% 점수)
-// =============================================
-// GET /jungsi/counseling/stats/:U_ID/:year
 app.get('/jungsi/counseling/stats/:U_ID/:year', authMiddleware, async (req, res) => {
     const { U_ID, year } = req.params;
-    const { branch } = req.user; // 요청자 정보 확인용 (로그 등)
+    const { branch } = req.user;
 
-    console.log(`[API /counseling/stats] U_ID: ${U_ID}, Year: ${year} 요청 (요청자 지점: ${branch})`);
+    console.log(`[API /counseling/stats v3] U_ID: ${U_ID}, Year: ${year} 요청 (요청자 지점: ${branch})`);
 
     if (!U_ID || !year) {
         return res.status(400).json({ success: false, message: 'U_ID와 year 파라미터가 필요합니다.' });
     }
 
     try {
-        // DB에서 해당 학과/학년도에 상담 목록으로 추가된 모든 학생의 계산 총점 조회
-        // ❗️ 중요: branch_name으로 필터링하지 않음! (전체 지점 대상)
+        // ⭐️ DB에서 해당 학과/학년도의 저장된 '상담_수능점수'만 바로 조회!
         const sql = `
-            SELECT 상담_계산총점
+            SELECT 상담_수능점수
             FROM 정시_상담목록
-            WHERE 대학학과_ID = ? AND 학년도 = ? AND 상담_계산총점 IS NOT NULL
+            WHERE 대학학과_ID = ? AND 학년도 = ? AND 상담_수능점수 IS NOT NULL
         `;
-        const [rows] = await db.query(sql, [U_ID, year]);
+        const [rows] = await db.query(sql, [U_ID, year]); // connection 대신 db 직접 사용 가능
 
         if (rows.length === 0) {
-            console.log(` -> 데이터 없음`);
+            console.log(` -> 저장된 수능 점수 데이터 없음`);
             return res.json({ success: true, top10Score: null, totalCount: 0 });
         }
 
         // 점수만 추출하여 내림차순 정렬
-        const scores = rows.map(r => Number(r.상담_계산총점)).sort((a, b) => b - a);
+        const scores = rows.map(r => Number(r.상담_수능점수)).sort((a, b) => b - a);
         const totalCount = scores.length;
 
-        // 상위 10% 인덱스 계산 (소수점 버림)
-        // 예: 10명이면 1등(index 0), 19명이면 1등(index 0), 20명이면 2등(index 1)
+        // 상위 10% 인덱스 계산
         const top10Index = Math.floor(totalCount * 0.1);
 
-        // 해당 인덱스의 점수 반환
-        // 만약 지원자가 10명 미만이면 그냥 최고점(1등 점수)을 반환하도록 처리 (혹은 null 처리도 가능)
         let top10Score = null;
         if (totalCount > 0) {
-            // 최소 1명 이상 있을 때
              if (totalCount < 10) {
                  top10Score = scores[0]; // 10명 미만이면 최고점
-                 console.log(` -> ${totalCount}명 (<10), 최고점 반환: ${top10Score}`);
+                 console.log(` -> ${totalCount}명 (<10), 수능 최고점 반환: ${top10Score}`);
              } else {
                  top10Score = scores[top10Index]; // 10명 이상이면 계산된 인덱스 점수
-                 console.log(` -> ${totalCount}명 (>=10), 상위 10% (${top10Index + 1}등) 점수 반환: ${top10Score}`);
+                 console.log(` -> ${totalCount}명 (>=10), 수능 상위 10% (${top10Index + 1}등) 점수 반환: ${top10Score}`);
              }
         } else {
              console.log(` -> 유효 점수 없음`);
         }
 
-
         res.json({ success: true, top10Score: top10Score, totalCount: totalCount });
 
     } catch (err) {
-        console.error(`❌ /counseling/stats API 오류 (U_ID: ${U_ID}, Year: ${year}):`, err);
+        console.error(`❌ /counseling/stats v3 API 오류 (U_ID: ${U_ID}, Year: ${year}):`, err);
         res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
     }
+    // finally { connection?.release(); } // 커넥션 풀 사용 시 필요
 });
-
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
