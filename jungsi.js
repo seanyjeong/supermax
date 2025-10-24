@@ -1890,9 +1890,9 @@ app.post('/jungsi/counseling/wishlist/remove', authMiddleware, async (req, res) 
 
 // jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
 
-// ⭐️ JWT 토큰에서 사용자 역할을 확인하는 헬퍼 함수 (payload에 role='admin'이 있어야 함)
-const isAdmin = (user) => user && user.role === 'admin';
 
+// jungsi.js 파일 상단 부근
+const isAdmin = (user) => user && user.userid === 'admin'; 
 // =============================================
 // ⭐️ [신규] 컷 점수 조회 API (v2 - 비율, 군 정보 포함)
 // =============================================
