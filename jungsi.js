@@ -2094,31 +2094,39 @@ app.post('/jungsi/cutoffs/set', authMiddleware, async (req, res) => {
 // GET /jungsi/final-apply/list-by-branch/:year
 app.get('/jungsi/final-apply/list-by-branch/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
-    const { branch } = req.user; // 토큰에서 지점 이름 가져오기
 
-    console.log(`[API /final-apply/list-by-branch] Year: ${year}, Branch: ${branch}`);
+    // *** 로그 추가 1: req.user 객체 전체 확인 ***
+    console.log('[API /list-by-branch] req.user object received:', req.user);
 
-    if (!year || !branch) {
+    // req.user가 없을 경우를 대비 (이론상 authMiddleware 통과하면 항상 있어야 함)
+    const { branch } = req.user || {};
+
+    // *** 로그 추가 2: 추출된 branch 값 확인 ***
+    console.log(`[API /final-apply/list-by-branch] Year: ${year}, Branch extracted: ${branch}`);
+
+    if (!year || !branch) { // 여기서 branch가 없는지 다시 확인
+        console.error(`[API /list-by-branch] Missing year or branch! Year: ${year}, Branch: ${branch}`);
         return res.status(400).json({ success: false, message: '학년도 파라미터와 지점 정보가 필요합니다.' });
     }
 
     try {
         const sql = `
             SELECT
-                fa.최종지원_ID, -- 각 행을 식별할 기본 키
+                fa.최종지원_ID,
                 fa.학생_ID,
-                si.student_name, -- 학생 이름
+                si.student_name,
                 jb.대학명,
                 jb.학과명,
                 fa.모집군,
-                fa.실기날짜, -- 기존에 저장된 날짜
-                fa.실기시간  -- 기존에 저장된 시간
+                fa.실기날짜,
+                fa.실기시간
             FROM 정시_최종지원 AS fa
-            JOIN 학생기본정보 AS si ON fa.학생_ID = si.student_id AND si.branch_name = ? AND si.학년도 = fa.학년도 -- 지점 필터링 + 학년도 조인
-            JOIN 정시기본 AS jb ON fa.대학학과_ID = jb.U_ID AND fa.학년도 = jb.학년도 -- 대학 정보 조인
+            JOIN 학생기본정보 AS si ON fa.학생_ID = si.student_id AND si.branch_name = ? AND si.학년도 = fa.학년도
+            JOIN 정시기본 AS jb ON fa.대학학과_ID = jb.U_ID AND fa.학년도 = jb.학년도
             WHERE fa.학년도 = ?
-            ORDER BY si.student_name, FIELD(fa.모집군, '가', '나', '다'); -- 학생 이름, 군 순서로 정렬
+            ORDER BY si.student_name, FIELD(fa.모집군, '가', '나', '다');
         `;
+        // ⭐️ SQL 파라미터 순서 확인: branch, year
         const [rows] = await db.query(sql, [branch, year]);
         console.log(` -> Found ${rows.length} final applications for branch ${branch}, year ${year}`);
         res.json({ success: true, list: rows });
