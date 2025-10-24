@@ -1888,97 +1888,20 @@ app.post('/jungsi/counseling/wishlist/remove', authMiddleware, async (req, res) 
     }
 });
 
-// jungsi.js 파일 하단 app.listen 전에 추가
+// jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
 
-const isAdmin = (user) => user && user.role === 'admin'; // 사용자 역할 확인 헬퍼 (JWT payload에 role='admin' 필요)
+// ⭐️ JWT 토큰에서 사용자 역할을 확인하는 헬퍼 함수 (payload에 role='admin'이 있어야 함)
+const isAdmin = (user) => user && user.role === 'admin';
 
 // =============================================
-// ⭐️ [신규] 컷 점수 조회 API
+// ⭐️ [신규] 컷 점수 조회 API (v2 - 비율, 군 정보 포함)
 // =============================================
 // GET /jungsi/cutoffs/:year
 app.get('/jungsi/cutoffs/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
     const { branch, role } = req.user; // 로그인한 사용자 정보
 
-    console.log(`[API /cutoffs GET] Year: ${year}, User: ${branch} (${role})`);
-
-    if (!year) {
-        return res.status(400).json({ success: false, message: '학년도 파라미터가 필요합니다.' });
-    }
-
-    let connection;
-    try {
-        connection = await db.getConnection();
-
-        // 1. 해당 학년도 모든 대학/학과 기본 정보 가져오기
-        const [baseInfoRows] = await connection.query(
-            'SELECT U_ID, 대학명, 학과명 FROM 정시기본 WHERE 학년도 = ? ORDER BY 대학명, 학과명',
-            [year]
-        );
-        console.log(` -> Found ${baseInfoRows.length} base departments for year ${year}`);
-
-        // 2. 해당 학년도의 'MAX' 컷 점수와 '로그인한 지점'의 컷 점수 가져오기
-        const cutoffSql = `
-            SELECT U_ID, branch_name, 수능컷, 총점컷, 25년총점컷
-            FROM 정시_컷점수
-            WHERE 학년도 = ? AND (branch_name = 'MAX' OR branch_name = ?)
-        `;
-        const [cutoffRows] = await connection.query(cutoffSql, [year, branch]);
-        console.log(` -> Found ${cutoffRows.length} cutoff entries for year ${year} (MAX or ${branch})`);
-
-        // 3. 데이터를 U_ID 기준으로 합치기
-        const resultsMap = new Map();
-
-        // 기본 정보로 맵 초기화
-        baseInfoRows.forEach(dept => {
-            resultsMap.set(dept.U_ID, {
-                U_ID: dept.U_ID,
-                학년도: parseInt(year),
-                대학명: dept.대학명,
-                학과명: dept.학과명,
-                지점_수능컷: null,
-                지점_총점컷: null,
-                맥스_수능컷: null,
-                맥스_총점컷: null,
-                '25년총점컷': null // 키 이름에 따옴표 사용
-            });
-        });
-
-        // 컷 점수 정보 업데이트
-        cutoffRows.forEach(cut => {
-            const entry = resultsMap.get(cut.U_ID);
-            if (entry) {
-                if (cut.branch_name === 'MAX') {
-                    entry.맥스_수능컷 = cut.수능컷;
-                    entry.맥스_총점컷 = cut.총점컷;
-                    entry['25년총점컷'] = cut['25년총점컷']; // 키 이름 주의
-                } else if (cut.branch_name === branch) {
-                    entry.지점_수능컷 = cut.수능컷;
-                    entry.지점_총점컷 = cut.총점컷;
-                }
-            }
-        });
-
-        // 맵의 값들을 배열로 변환하여 응답
-        const responseData = Array.from(resultsMap.values());
-        console.log(` -> Prepared ${responseData.length} items for response`);
-        res.json({ success: true, cutoffs: responseData });
-
-    } catch (err) {
-        console.error(`❌ /cutoffs GET API 오류 (Year: ${year}):`, err);
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
-    } finally {
-        if (connection) connection.release();
-    }
-});
-
-
-// jungsi.js 파일의 기존 GET /jungsi/cutoffs/:year API를 이걸로 **교체**
-app.get('/jungsi/cutoffs/:year', authMiddleware, async (req, res) => {
-    const { year } = req.params;
-    const { branch, role } = req.user;
-
-    console.log(`[API /cutoffs GET v2] Year: ${year}, User: ${branch} (${role})`); // 버전 표시
+    console.log(`[API /cutoffs GET v2] Year: ${year}, User: ${branch} (${role})`);
 
     if (!year) {
         return res.status(400).json({ success: false, message: '학년도 파라미터가 필요합니다.' });
@@ -2001,12 +1924,13 @@ app.get('/jungsi/cutoffs/:year', authMiddleware, async (req, res) => {
         const [baseInfoRows] = await connection.query(baseSql, [year]);
         console.log(` -> Found ${baseInfoRows.length} base departments with ratios for year ${year}`);
 
-        // 2. 컷 점수 가져오기 (이전과 동일)
+        // 2. 컷 점수 가져오기 ('MAX' 컷 + '로그인한 지점' 컷)
         const cutoffSql = `
             SELECT U_ID, branch_name, 수능컷, 총점컷, \`25년총점컷\`
             FROM 정시_컷점수
             WHERE 학년도 = ? AND (branch_name = 'MAX' OR branch_name = ?)
         `;
+        // ⭐️ 주의: '정시_컷점수' 테이블이 없다면, 이전 대화에서 알려준 SQL로 생성해야 함!
         const [cutoffRows] = await connection.query(cutoffSql, [year, branch]);
         console.log(` -> Found ${cutoffRows.length} cutoff entries for year ${year} (MAX or ${branch})`);
 
@@ -2018,10 +1942,10 @@ app.get('/jungsi/cutoffs/:year', authMiddleware, async (req, res) => {
                 학년도: parseInt(year),
                 대학명: dept.대학명,
                 학과명: dept.학과명,
-                군: dept.군, // 군 정보 추가
-                수능비율: dept.수능, // 비율 추가
-                내신비율: dept.내신, // 비율 추가
-                실기비율: dept.실기, // 비율 추가
+                군: dept.군, // ⭐️ 군 정보 추가
+                수능비율: dept.수능, // ⭐️ 비율 추가
+                내신비율: dept.내신, // ⭐️ 비율 추가
+                실기비율: dept.실기, // ⭐️ 비율 추가
                 지점_수능컷: null,
                 지점_총점컷: null,
                 맥스_수능컷: null,
@@ -2050,15 +1974,103 @@ app.get('/jungsi/cutoffs/:year', authMiddleware, async (req, res) => {
 
     } catch (err) {
         console.error(`❌ /cutoffs GET v2 API 오류 (Year: ${year}):`, err);
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+        // ⭐️ '정시_컷점수' 테이블이 없으면 'Table ... doesn't exist' 에러 발생 가능
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다. (테이블 확인 필요)' });
     } finally {
         if (connection) connection.release();
     }
 });
 
-// --- 기존 app.listen(...) ---
 
-// --- 기존 app.listen(...) ---
+// =============================================
+// ⭐️ [신규] 컷 점수 저장/수정 API
+// =============================================
+// POST /jungsi/cutoffs/set
+app.post('/jungsi/cutoffs/set', authMiddleware, async (req, res) => {
+    const { year, updates } = req.body;
+    const { branch, role } = req.user;
+
+    console.log(`[API /cutoffs SET] Year: ${year}, User: ${branch} (${role}), Updates count: ${updates?.length}`);
+
+    if (!year || !Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({ success: false, message: '학년도와 업데이트할 컷 점수 배열이 필요합니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        let updatedMaxCount = 0;
+        let updatedBranchCount = 0;
+
+        const upsertSql = `
+            INSERT INTO 정시_컷점수 (학년도, U_ID, branch_name, 수능컷, 총점컷, \`25년총점컷\`)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                수능컷 = VALUES(수능컷),
+                총점컷 = VALUES(총점컷),
+                \`25년총점컷\` = VALUES(\`25년총점컷\`),
+                updated_at = NOW()
+        `;
+
+        for (const item of updates) {
+            const U_ID = item.U_ID;
+            if (!U_ID) {
+                console.warn(" -> Skipping update item without U_ID:", item);
+                continue;
+            }
+
+            // Admin 역할 처리
+            if (isAdmin(req.user) && (item.맥스_수능컷 !== undefined || item.맥스_총점컷 !== undefined || item['25년총점컷'] !== undefined)) {
+                const maxSuneung = item.맥스_수능컷 === '' ? null : item.맥스_수능컷;
+                const maxTotal = item.맥스_총점컷 === '' ? null : item.맥스_총점컷;
+                const total25 = item['25년총점컷'] === '' ? null : item['25년총점컷'];
+
+                 if ((maxSuneung === null || !isNaN(parseFloat(maxSuneung))) &&
+                     (maxTotal === null || !isNaN(parseFloat(maxTotal))) &&
+                     (total25 === null || !isNaN(parseFloat(total25))))
+                 {
+                    console.log(` -> Admin updating MAX for U_ID ${U_ID}: 수능=${maxSuneung}, 총점=${maxTotal}, 25총점=${total25}`);
+                    await connection.query(upsertSql, [year, U_ID, 'MAX', maxSuneung, maxTotal, total25]);
+                    updatedMaxCount++;
+                 } else {
+                     console.warn(` -> Admin skipped MAX invalid data for U_ID ${U_ID}:`, item);
+                 }
+            }
+
+             // 지점 컷 처리 (Admin도 자기 지점 컷은 수정 가능하도록 함, 원치 않으면 if(isAdmin) 블록 밖으로)
+             if (item.지점_수능컷 !== undefined || item.지점_총점컷 !== undefined) {
+                 const branchSuneung = item.지점_수능컷 === '' ? null : item.지점_수능컷;
+                 const branchTotal = item.지점_총점컷 === '' ? null : item.지점_총점컷;
+
+                 if ((branchSuneung === null || !isNaN(parseFloat(branchSuneung))) &&
+                     (branchTotal === null || !isNaN(parseFloat(branchTotal))))
+                 {
+                     console.log(` -> User ${branch} updating BRANCH for U_ID ${U_ID}: 수능=${branchSuneung}, 총점=${branchTotal}`);
+                     await connection.query(upsertSql, [year, U_ID, branch, branchSuneung, branchTotal, null]); // 25년총점컷은 null
+                     updatedBranchCount++;
+                 } else {
+                      console.warn(` -> User ${branch} skipped BRANCH invalid data for U_ID ${U_ID}:`, item);
+                 }
+            }
+        } // end for loop
+
+        await connection.commit();
+        console.log(` -> Commit successful. MAX updates: ${updatedMaxCount}, Branch updates: ${updatedBranchCount}`);
+        res.json({ success: true, message: `총 ${updatedMaxCount + updatedBranchCount}건의 컷 점수가 저장/수정되었습니다.` });
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error(`❌ /cutoffs SET API 오류 (Year: ${year}):`, err);
+         // ⭐️ '정시_컷점수' 테이블이 없으면 'Table ... doesn't exist' 에러 발생 가능
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다. (테이블 확인 필요)' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// --- app.listen(...) 이 이 아래에 와야 함 ---
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
