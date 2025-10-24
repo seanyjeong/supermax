@@ -1725,6 +1725,100 @@ app.get('/jungsi/counseling/cross-gun-stats/:U_ID/:year', authMiddleware, async 
     }
 });
 
+// jungsi.js 파일 하단 app.listen 전에 추가
+
+// =============================================
+// ⭐️ [신규] 상담 목록 개별 추가 API (+ 3개 제한 체크)
+// =============================================
+// POST /jungsi/counseling/wishlist/add
+app.post('/jungsi/counseling/wishlist/add', authMiddleware, async (req, res) => {
+    // 필요한 정보: 학생_ID, 학년도, 모집군, 대학학과_ID
+    const { 학생_ID, 학년도, 모집군, 대학학과_ID } = req.body;
+    const { branch } = req.user; // 권한 확인용
+
+    console.log(`[API /wishlist/add] 요청:`, req.body); // 로그 추가
+
+    // 필수 값 검증
+    if (!학생_ID || !학년도 || !모집군 || !대학학과_ID) {
+        return res.status(400).json({ success: false, message: '학생ID, 학년도, 모집군, 대학학과ID는 필수 항목입니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 보안: 해당 학생 소유권 확인
+        const [ownerCheck] = await connection.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ?',
+            [학생_ID, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            return res.status(403).json({ success: false, message: '추가 권한이 없는 학생입니다.' });
+        }
+
+        // 2. 해당 군에 이미 몇 개 있는지 확인
+        const [countCheck] = await connection.query(
+            'SELECT COUNT(*) as count FROM 정시_상담목록 WHERE 학생_ID = ? AND 학년도 = ? AND 모집군 = ?',
+            [학생_ID, 학년도, 모집군]
+        );
+        const currentCount = countCheck[0].count;
+        console.log(` -> 현재 ${모집군}군 개수: ${currentCount}`);
+
+        if (currentCount >= 3) {
+            await connection.rollback(); // 롤백하고 종료
+            console.log(` -> ${모집군}군 3개 초과, 추가 불가`);
+            return res.status(400).json({ success: false, message: `${모집군}군에는 최대 3개까지만 추가할 수 있습니다.` });
+        }
+
+        // 3. 이미 추가된 항목인지 확인 (중복 방지)
+        const [duplicateCheck] = await connection.query(
+             'SELECT 상담목록_ID FROM 정시_상담목록 WHERE 학생_ID = ? AND 학년도 = ? AND 대학학과_ID = ?',
+             [학생_ID, 학년도, 대학학과_ID]
+        );
+        if (duplicateCheck.length > 0) {
+            await connection.rollback();
+            console.log(` -> 이미 추가된 학과 (대학학과_ID: ${대학학과_ID})`);
+            // 이미 있으면 성공으로 간주하고 메시지만 다르게 줄 수도 있음
+             return res.status(409).json({ success: false, message: '이미 상담 목록에 추가된 학과입니다.' }); // 409 Conflict
+        }
+
+
+        // 4. (필수 아님, 옵션) 추가하기 전에 수능/내신/실기 점수 미리 계산해서 저장하기
+        //    (bulk-save API와 유사한 로직 추가 가능 - 여기선 일단 null로 저장)
+        const calculatedSuneungScore = null; // 필요 시 계산 로직 추가
+        const inputNaeshinScore = null;    // 프론트에서 안 받으므로 null
+        const calculatedSilgiScore = null; // 필요 시 계산 로직 추가
+        const calculatedTotalScore = null; // 필요 시 계산 로직 추가
+
+        // 5. DB에 INSERT
+        const insertSql = `
+            INSERT INTO 정시_상담목록
+                (학생_ID, 학년도, 모집군, 대학학과_ID,
+                 상담_수능점수, 상담_내신점수, 상담_실기기록, 상담_실기반영점수, 상담_계산총점, 메모, 수정일시)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `;
+        const [insertResult] = await connection.query(insertSql, [
+            학생_ID, 학년도, 모집군, 대학학과_ID,
+            calculatedSuneungScore, inputNaeshinScore, null, calculatedSilgiScore, calculatedTotalScore, null
+        ]);
+
+        await connection.commit(); // 성공 시 커밋
+        console.log(` -> ${모집군}군에 추가 완료 (ID: ${insertResult.insertId})`);
+        res.status(201).json({ success: true, message: '상담 목록에 추가되었습니다.', insertedId: insertResult.insertId }); // 201 Created
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 오류 시 롤백
+        console.error('❌ 상담 목록 개별 추가 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
+
+// --- 기존 app.listen(...) ---
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
