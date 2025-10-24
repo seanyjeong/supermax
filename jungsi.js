@@ -12,7 +12,26 @@ const JWT_SECRET = 'super-secret-key!!';
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-const authMiddleware = (req, res, next) => { /* 이전과 동일 */ console.log(`[jungsi 서버] ${req.path} 경로에 대한 인증 검사를 시작합니다.`); const authHeader = req.headers['authorization']; const token = authHeader && authHeader.split(' ')[1]; if (!token) { return res.status(401).json({ success: false, message: '인증 토큰이 필요합니다.' }); } try { req.user = jwt.verify(token, JWT_SECRET); console.log(` -> [인증 성공] ✅ 사용자: ${req.user.userid}, 다음 단계로 진행합니다.`); next(); } catch (err) { return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' }); } };
+// jungsi.js
+const authMiddleware = (req, res, next) => {
+    console.log(`[jungsi 서버] ${req.path} 경로에 대한 인증 검사를 시작합니다.`);
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+        console.log(` -> [인증 실패] ❌ 토큰 없음.`); // 토큰 없을 때 로그
+        return res.status(401).json({ success: false, message: '인증 토큰이 필요합니다.' });
+    }
+    try {
+        req.user = jwt.verify(token, JWT_SECRET);
+        // 사용자 정보 로그에 지점(branch)도 포함하면 좋음
+        console.log(` -> [인증 성공] ✅ 사용자: ${req.user.userid}, 지점: ${req.user.branch}, 다음 단계로 진행합니다.`);
+        next();
+    } catch (err) {
+        // *** 로그 추가 ***: jwt.verify 에러 이름과 메시지 로깅
+        console.error(` -> [인증 실패] ❌ 토큰 검증 오류:`, err.name, err.message); // 어떤 에러인지 출력
+        return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
+    }
+};
 const db = mysql.createPool({ host: '211.37.174.218', user: 'maxilsan', password: 'q141171616!', database: 'jungsi', charset: 'utf8mb4', waitForConnections: true, connectionLimit: 10, queueLimit: 0 });
 
 
