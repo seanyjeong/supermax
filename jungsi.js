@@ -2069,6 +2069,127 @@ app.post('/jungsi/cutoffs/set', authMiddleware, async (req, res) => {
     }
 });
 
+// =============================================
+// ⭐️ [신규] 지점별 최종 지원 목록 + 실기 일정 조회 API
+// =============================================
+// GET /jungsi/final-apply/list-by-branch/:year
+app.get('/jungsi/final-apply/list-by-branch/:year', authMiddleware, async (req, res) => {
+    const { year } = req.params;
+    const { branch } = req.user; // 토큰에서 지점 이름 가져오기
+
+    console.log(`[API /final-apply/list-by-branch] Year: ${year}, Branch: ${branch}`);
+
+    if (!year || !branch) {
+        return res.status(400).json({ success: false, message: '학년도 파라미터와 지점 정보가 필요합니다.' });
+    }
+
+    try {
+        const sql = `
+            SELECT
+                fa.최종지원_ID, -- 각 행을 식별할 기본 키
+                fa.학생_ID,
+                si.student_name, -- 학생 이름
+                jb.대학명,
+                jb.학과명,
+                fa.모집군,
+                fa.실기날짜, -- 기존에 저장된 날짜
+                fa.실기시간  -- 기존에 저장된 시간
+            FROM 정시_최종지원 AS fa
+            JOIN 학생기본정보 AS si ON fa.학생_ID = si.student_id AND si.branch_name = ? AND si.학년도 = fa.학년도 -- 지점 필터링 + 학년도 조인
+            JOIN 정시기본 AS jb ON fa.대학학과_ID = jb.U_ID AND fa.학년도 = jb.학년도 -- 대학 정보 조인
+            WHERE fa.학년도 = ?
+            ORDER BY si.student_name, FIELD(fa.모집군, '가', '나', '다'); -- 학생 이름, 군 순서로 정렬
+        `;
+        const [rows] = await db.query(sql, [branch, year]);
+        console.log(` -> Found ${rows.length} final applications for branch ${branch}, year ${year}`);
+        res.json({ success: true, list: rows });
+
+    } catch (err) {
+        console.error(`❌ /final-apply/list-by-branch API 오류 (Year: ${year}, Branch: ${branch}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// =============================================
+// ⭐️ [신규] 실기 날짜/시간 저장/수정 API
+// =============================================
+// POST /jungsi/final-apply/update-schedule
+app.post('/jungsi/final-apply/update-schedule', authMiddleware, async (req, res) => {
+    // 필요한 정보: 최종지원_ID, 실기날짜, 실기시간
+    const { 최종지원_ID, 실기날짜, 실기시간 } = req.body;
+    const { branch } = req.user; // 권한 확인용
+
+    console.log(`[API /final-apply/update-schedule] Request Body:`, req.body);
+
+    if (!최종지원_ID) {
+        return res.status(400).json({ success: false, message: '최종지원_ID는 필수 항목입니다.' });
+    }
+    // 날짜 형식 유효성 검사 (간단하게)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (실기날짜 && !dateRegex.test(실기날짜) && 실기날짜 !== '') {
+         return res.status(400).json({ success: false, message: '실기 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).' });
+    }
+     // 시간 형식 유효성 검사 (간단하게)
+     const timeRegex = /^\d{2}:\d{2}$/;
+     if (실기시간 && !timeRegex.test(실기시간) && 실기시간 !== '') {
+         return res.status(400).json({ success: false, message: '실기 시간 형식이 올바르지 않습니다 (HH:MM).' });
+     }
+
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 보안: 해당 최종지원 항목이 이 지점 소속 학생의 것인지 확인
+        const [ownerCheck] = await connection.query(
+            `SELECT fa.최종지원_ID
+             FROM 정시_최종지원 fa
+             JOIN 학생기본정보 si ON fa.학생_ID = si.student_id
+             WHERE fa.최종지원_ID = ? AND si.branch_name = ?`,
+            [최종지원_ID, branch]
+        );
+
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.log(` -> 수정 권한 없음 (ID: ${최종지원_ID}, Branch: ${branch})`);
+            return res.status(403).json({ success: false, message: '수정 권한이 없는 항목입니다.' });
+        }
+
+        // 2. DB에 UPDATE 실행
+        const updateSql = `
+            UPDATE 정시_최종지원 SET
+                실기날짜 = ?,
+                실기시간 = ?,
+                수정일시 = NOW()
+            WHERE 최종지원_ID = ?
+        `;
+        // 빈 문자열이 오면 NULL로 저장
+        const dateToSave = 실기날짜 === '' ? null : 실기날짜;
+        const timeToSave = 실기시간 === '' ? null : 실기시간;
+
+        const [updateResult] = await connection.query(updateSql, [dateToSave, timeToSave, 최종지원_ID]);
+
+        await connection.commit(); // 성공 시 커밋
+
+        if (updateResult.affectedRows > 0) {
+            console.log(` -> 실기 일정 업데이트 완료 (ID: ${최종지원_ID})`);
+            res.json({ success: true, message: '실기 일정이 저장되었습니다.' });
+        } else {
+            // 이 경우는 ownerCheck에서 걸러지므로 거의 발생하지 않음
+            console.log(` -> 업데이트 대상 없음 (ID: ${최종지원_ID})`);
+            res.status(404).json({ success: false, message: '업데이트할 항목을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 오류 시 롤백
+        console.error('❌ 실기 일정 저장/수정 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
+
 // --- app.listen(...) 이 이 아래에 와야 함 ---
 
 app.listen(port, () => {
