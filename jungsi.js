@@ -1817,6 +1817,79 @@ app.post('/jungsi/counseling/wishlist/add', authMiddleware, async (req, res) => 
     }
 });
 
+// jungsi.js 파일 하단 app.listen 전에 추가
+
+// =============================================
+// ⭐️ [신규] 상담 목록 개별 삭제 API (POST 방식)
+// =============================================
+// POST /jungsi/counseling/wishlist/remove
+app.post('/jungsi/counseling/wishlist/remove', authMiddleware, async (req, res) => {
+    // 필요한 정보: 학생_ID, 학년도, 대학학과_ID
+    const { 학생_ID, 학년도, 대학학과_ID } = req.body;
+    const { branch } = req.user; // 권한 확인용
+
+    console.log(`[API /wishlist/remove] 요청:`, req.body);
+
+    // 필수 값 검증
+    if (!학생_ID || !학년도 || !대학학과_ID) {
+        return res.status(400).json({ success: false, message: '학생ID, 학년도, 대학학과ID는 필수 항목입니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 보안: 해당 학생 소유권 확인 (삭제 권한 확인)
+        //    정시_상담목록과 학생기본정보를 JOIN하여 branch_name 확인
+        const [ownerCheck] = await connection.query(
+            `SELECT wl.상담목록_ID
+             FROM 정시_상담목록 wl
+             JOIN 학생기본정보 si ON wl.학생_ID = si.student_id
+             WHERE wl.학생_ID = ? AND wl.학년도 = ? AND wl.대학학과_ID = ? AND si.branch_name = ?`,
+            [학생_ID, 학년도, 대학학과_ID, branch]
+        );
+
+        // 해당 항목이 없거나, 다른 지점 학생의 항목이면 삭제 불가
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            // 항목이 아예 없는 경우 404 Not Found, 권한 없는 경우 403 Forbidden 반환 가능
+            // 여기서는 일단 403으로 통일 (프론트에서 구분 필요 시 수정)
+            console.log(` -> 삭제 대상 없거나 권한 없음`);
+            return res.status(403).json({ success: false, message: '삭제할 항목이 없거나 권한이 없습니다.' });
+        }
+
+        // 2. DB에서 DELETE 실행
+        const deleteSql = `
+            DELETE FROM 정시_상담목록
+            WHERE 학생_ID = ? AND 학년도 = ? AND 대학학과_ID = ?
+        `;
+        const [deleteResult] = await connection.query(deleteSql, [학생_ID, 학년도, 대학학과_ID]);
+
+        await connection.commit(); // 성공 시 커밋
+
+        if (deleteResult.affectedRows > 0) {
+            console.log(` -> 삭제 완료`);
+            res.json({ success: true, message: '상담 목록에서 삭제되었습니다.' });
+        } else {
+            // 이 경우는 ownerCheck에서 걸러지므로 거의 발생하지 않음
+            console.log(` -> 삭제된 행 없음 (ownerCheck 통과 후 삭제 실패?)`);
+            // 이미 삭제되었거나 동시에 다른 요청으로 삭제된 경우일 수 있음
+             // 실패보다는 성공으로 간주하고 메시지만 다르게 줄 수도 있음
+             res.status(404).json({ success: false, message: '삭제할 항목을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 오류 시 롤백
+        console.error('❌ 상담 목록 개별 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
+
+
+
 // --- 기존 app.listen(...) ---
 
 app.listen(port, () => {
