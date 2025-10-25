@@ -9,7 +9,13 @@ const port = 9090;
 
 const JWT_SECRET = 'super-secret-key!!';
 
-app.use(cors());
+const corsOptions = {
+  origin: 'https://seanyjeong.github.io', // 👈 너의 github 페이지 주소
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // 👈 허용할 HTTP 메소드
+  allowedHeaders: ['Content-Type', 'Authorization'], // 👈 허용할 헤더 (제일 중요!)
+  optionsSuccessStatus: 200 // Preflight 요청에 200 OK로 응답
+};
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 
 // jungsi.js
