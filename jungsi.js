@@ -2172,6 +2172,511 @@ app.post('/jungsi/update-apply-schedule', authMiddleware, async (req, res) => {
     }
 });
 
+// --- jungsi.js 에 추가될 API 코드 ---
+
+// Helper function for admin check
+const isAdminMiddleware = (req, res, next) => {
+    // authMiddleware가 이미 req.user를 설정했다고 가정
+    if (req.user && req.user.userid === 'admin') {
+        console.log(` -> [권한 확인] ✅ Admin 사용자 (${req.user.userid}), 통과`);
+        next(); // Admin이면 통과
+    } else {
+        console.warn(` -> [권한 확인] ❌ Admin 권한 필요 (요청자: ${req.user?.userid})`);
+        res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+    }
+};
+
+// =============================================
+// ⭐️ 공지사항 API
+// =============================================
+
+// GET /jungsi/announcements : 모든 공지사항 조회
+app.get('/jungsi/announcements', authMiddleware, async (req, res) => {
+    console.log('[API GET /jungsi/announcements] 공지사항 목록 조회 요청');
+    try {
+        const [announcements] = await db.query(
+            'SELECT notice_id, title, content, created_by, created_at, updated_at FROM `공지사항` ORDER BY created_at DESC'
+        );
+        console.log(` -> 공지사항 ${announcements.length}건 조회 완료`);
+        res.json({ success: true, announcements: announcements });
+    } catch (err) {
+        console.error('❌ 공지사항 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// POST /jungsi/announcements/add : 새 공지사항 추가 (Admin 전용)
+app.post('/jungsi/announcements/add', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { title, content } = req.body;
+    const created_by = req.user.userid; // Admin ID
+    console.log(`[API POST /jungsi/announcements/add] Admin (${created_by}) 공지사항 추가 요청:`, req.body);
+
+    if (!title) {
+        return res.status(400).json({ success: false, message: '제목은 필수 항목입니다.' });
+    }
+
+    try {
+        const [result] = await db.query(
+            'INSERT INTO `공지사항` (title, content, created_by) VALUES (?, ?, ?)',
+            [title, content || null, created_by]
+        );
+        console.log(` -> 공지사항 추가 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '공지사항이 추가되었습니다.', notice_id: result.insertId });
+    } catch (err) {
+        console.error('❌ 공지사항 추가 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삽입 중 오류 발생' });
+    }
+});
+
+// PUT /jungsi/announcements/update/:notice_id : 공지사항 수정 (Admin 전용)
+app.put('/jungsi/announcements/update/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { notice_id } = req.params;
+    const { title, content } = req.body;
+    const admin_id = req.user.userid;
+    console.log(`[API PUT /jungsi/announcements/update/${notice_id}] Admin (${admin_id}) 공지사항 수정 요청:`, req.body);
+
+
+    if (!title) {
+        return res.status(400).json({ success: false, message: '제목은 필수 항목입니다.' });
+    }
+
+    try {
+        const [result] = await db.query(
+            'UPDATE `공지사항` SET title = ?, content = ? WHERE notice_id = ?',
+            [title, content || null, notice_id]
+        );
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 공지사항 수정 성공 (ID: ${notice_id})`);
+            res.json({ success: true, message: '공지사항이 수정되었습니다.' });
+        } else {
+            console.warn(` -> 수정할 공지사항 없음 (ID: ${notice_id})`);
+            res.status(404).json({ success: false, message: '수정할 공지사항을 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        console.error('❌ 공지사항 수정 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 수정 중 오류 발생' });
+    }
+});
+
+// DELETE /jungsi/announcements/delete/:notice_id : 공지사항 삭제 (Admin 전용)
+app.delete('/jungsi/announcements/delete/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { notice_id } = req.params;
+    const admin_id = req.user.userid;
+    console.log(`[API DELETE /jungsi/announcements/delete/${notice_id}] Admin (${admin_id}) 공지사항 삭제 요청`);
+
+    try {
+        const [result] = await db.query(
+            'DELETE FROM `공지사항` WHERE notice_id = ?',
+            [notice_id]
+        );
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 공지사항 삭제 성공 (ID: ${notice_id})`);
+            res.json({ success: true, message: '공지사항이 삭제되었습니다.' });
+        } else {
+            console.warn(` -> 삭제할 공지사항 없음 (ID: ${notice_id})`);
+            res.status(404).json({ success: false, message: '삭제할 공지사항을 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        console.error('❌ 공지사항 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    }
+});
+
+// =============================================
+// ⭐️ 상담일정 API
+// =============================================
+
+// GET /jungsi/counseling-schedules/:year/:month : 해당 월의 '로그인한 지점' 상담 일정 조회
+app.get('/jungsi/counseling-schedules/:year/:month', authMiddleware, async (req, res) => {
+    const { year, month } = req.params;
+    const { branch } = req.user;
+    console.log(`[API GET /jungsi/counseling-schedules] ${branch} 지점 ${year}-${month} 상담 일정 조회 요청`);
+
+    // 월 형식 확인 (1~12)
+    const monthNum = parseInt(month, 10);
+    if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+        return res.status(400).json({ success: false, message: '월(month) 파라미터는 1-12 사이의 숫자여야 합니다.' });
+    }
+    // DB에서 DATE 형식으로 비교하기 위해 시작일, 종료일 계산
+    const startDate = `${year}-${String(monthNum).padStart(2, '0')}-01`;
+    const endDate = new Date(year, monthNum, 0).toISOString().split('T')[0]; // 해당 월의 마지막 날짜
+
+    try {
+        const [schedules] = await db.query(
+            `SELECT schedule_id, student_id, counseling_date, counseling_time, counseling_type
+             FROM \`상담일정\`
+             WHERE branch_name = ? AND counseling_date BETWEEN ? AND ?
+             ORDER BY counseling_date, counseling_time`,
+            [branch, startDate, endDate]
+        );
+        console.log(` -> ${schedules.length}건 조회 완료`);
+        res.json({ success: true, schedules: schedules });
+    } catch (err) {
+        console.error('❌ 상담 일정 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// POST /jungsi/counseling-schedules/add : 새 상담 일정 추가 (로그인한 지점)
+app.post('/jungsi/counseling-schedules/add', authMiddleware, async (req, res) => {
+    const { student_id, counseling_date, counseling_time, counseling_type } = req.body;
+    const { branch } = req.user;
+    console.log(`[API POST /jungsi/counseling-schedules/add] ${branch} 지점 상담 추가 요청:`, req.body);
+
+    // 유효성 검사
+    if (!student_id || !counseling_date || !counseling_time) {
+        return res.status(400).json({ success: false, message: '학생, 날짜, 시간은 필수 항목입니다.' });
+    }
+    const timeRegex = /^\d{2}:\d{2}$/;
+    if (!timeRegex.test(counseling_time)) {
+        return res.status(400).json({ success: false, message: '시간 형식이 올바르지 않습니다 (HH:MM).' });
+    }
+    const minutes = parseInt(counseling_time.split(':')[1], 10);
+    if (minutes % 30 !== 0) {
+        return res.status(400).json({ success: false, message: '시간은 30분 단위여야 합니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 중복 시간 체크 (동일 지점, 날짜, 시간)
+        const [conflictCheck] = await connection.query(
+            'SELECT schedule_id FROM `상담일정` WHERE branch_name = ? AND counseling_date = ? AND counseling_time = ?',
+            [branch, counseling_date, counseling_time]
+        );
+        if (conflictCheck.length > 0) {
+            await connection.rollback();
+            console.warn(` -> 시간 중복 발생! (${counseling_date} ${counseling_time})`);
+            return res.status(409).json({ success: false, message: '해당 시간에 이미 다른 상담 일정이 있습니다.' }); // 409 Conflict
+        }
+
+        // DB 삽입
+        const [result] = await connection.query(
+            `INSERT INTO \`상담일정\` (branch_name, student_id, counseling_date, counseling_time, counseling_type)
+             VALUES (?, ?, ?, ?, ?)`,
+            [branch, student_id, counseling_date, counseling_time, counseling_type || null]
+        );
+        await connection.commit();
+        console.log(` -> 상담 일정 추가 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '상담 일정이 추가되었습니다.', schedule_id: result.insertId });
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 상담 일정 추가 오류:', err);
+        // FK 제약조건 위반 등 다른 DB 에러 처리
+        if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+             return res.status(400).json({ success: false, message: '선택한 학생 정보가 유효하지 않습니다.' });
+        }
+        res.status(500).json({ success: false, message: 'DB 삽입 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// PUT /jungsi/counseling-schedules/update/:schedule_id : 상담 일정 수정 (로그인한 지점)
+app.put('/jungsi/counseling-schedules/update/:schedule_id', authMiddleware, async (req, res) => {
+    const { schedule_id } = req.params;
+    const { student_id, counseling_date, counseling_time, counseling_type } = req.body;
+    const { branch } = req.user;
+    console.log(`[API PUT /jungsi/counseling-schedules/update/${schedule_id}] ${branch} 지점 상담 수정 요청:`, req.body);
+
+    // 유효성 검사
+    if (!student_id || !counseling_date || !counseling_time) { /* ... (추가 API와 동일) ... */ }
+    const timeRegex = /^\d{2}:\d{2}$/; if (!timeRegex.test(counseling_time)) { /* ... */ }
+    const minutes = parseInt(counseling_time.split(':')[1], 10); if (minutes % 30 !== 0) { /* ... */ }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 수정 권한 확인 (해당 ID가 로그인한 지점 소속인지)
+        const [ownerCheck] = await connection.query(
+            'SELECT schedule_id FROM `상담일정` WHERE schedule_id = ? AND branch_name = ?',
+            [schedule_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.warn(` -> 수정 권한 없음 (ID: ${schedule_id}, Branch: ${branch})`);
+            return res.status(403).json({ success: false, message: '수정 권한이 없는 상담 일정입니다.' });
+        }
+
+        // 2. 시간 중복 체크 (변경하려는 시간 + 자기 자신 제외)
+        const [conflictCheck] = await connection.query(
+            `SELECT schedule_id FROM \`상담일정\`
+             WHERE branch_name = ? AND counseling_date = ? AND counseling_time = ? AND schedule_id != ?`, // 자기 자신 제외 조건 추가
+            [branch, counseling_date, counseling_time, schedule_id]
+        );
+        if (conflictCheck.length > 0) {
+            await connection.rollback();
+            console.warn(` -> 시간 중복 발생! (${counseling_date} ${counseling_time})`);
+            return res.status(409).json({ success: false, message: '해당 시간에 이미 다른 상담 일정이 있습니다.' });
+        }
+
+        // 3. DB 수정
+        const [result] = await connection.query(
+            `UPDATE \`상담일정\` SET
+                student_id = ?, counseling_date = ?, counseling_time = ?, counseling_type = ?
+             WHERE schedule_id = ?`,
+            [student_id, counseling_date, counseling_time, counseling_type || null, schedule_id]
+        );
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 상담 일정 수정 성공 (ID: ${schedule_id})`);
+            res.json({ success: true, message: '상담 일정이 수정되었습니다.' });
+        } else {
+            // 이 경우는 ownerCheck에서 걸러지므로 거의 없음
+            console.warn(` -> 수정할 상담 일정 없음 (ID: ${schedule_id})`);
+            res.status(404).json({ success: false, message: '수정할 상담 일정을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 상담 일정 수정 오류:', err);
+         if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+             return res.status(400).json({ success: false, message: '선택한 학생 정보가 유효하지 않습니다.' });
+        }
+        res.status(500).json({ success: false, message: 'DB 수정 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// DELETE /jungsi/counseling-schedules/delete/:schedule_id : 상담 일정 삭제 (로그인한 지점)
+app.delete('/jungsi/counseling-schedules/delete/:schedule_id', authMiddleware, async (req, res) => {
+    const { schedule_id } = req.params;
+    const { branch } = req.user;
+    console.log(`[API DELETE /jungsi/counseling-schedules/delete/${schedule_id}] ${branch} 지점 상담 삭제 요청`);
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 삭제 권한 확인 (해당 ID가 로그인한 지점 소속인지)
+        const [ownerCheck] = await connection.query(
+            'SELECT schedule_id FROM `상담일정` WHERE schedule_id = ? AND branch_name = ?',
+            [schedule_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.warn(` -> 삭제 권한 없음 (ID: ${schedule_id}, Branch: ${branch})`);
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 상담 일정입니다.' });
+        }
+
+        // 2. DB 삭제
+        const [result] = await connection.query(
+            'DELETE FROM `상담일정` WHERE schedule_id = ?',
+            [schedule_id]
+        );
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 상담 일정 삭제 성공 (ID: ${schedule_id})`);
+            res.json({ success: true, message: '상담 일정이 삭제되었습니다.' });
+        } else {
+            console.warn(` -> 삭제할 상담 일정 없음 (ID: ${schedule_id})`);
+            res.status(404).json({ success: false, message: '삭제할 상담 일정을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 상담 일정 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// GET /jungsi/students/names-by-branch : 상담 일정 등록 시 학생 목록 불러오기
+app.get('/jungsi/students/names-by-branch', authMiddleware, async (req, res) => {
+    const { branch } = req.user;
+    const { year } = req.query; // 학년도 쿼리 파라미터 (예: ?year=2026)
+    console.log(`[API GET /jungsi/students/names-by-branch] ${branch} 지점 학생 이름 목록 조회 요청 (Year: ${year || '전체'})`);
+
+    try {
+        let sql = 'SELECT student_id, student_name FROM `학생기본정보` WHERE branch_name = ?';
+        const params = [branch];
+        if (year) {
+            sql += ' AND 학년도 = ?'; // 학년도 필터링 추가
+            params.push(year);
+        }
+        sql += ' ORDER BY student_name ASC'; // 이름순 정렬
+
+        const [students] = await db.query(sql, params);
+        console.log(` -> ${students.length}명 조회 완료`);
+        res.json({ success: true, students: students });
+    } catch (err) {
+        console.error('❌ 지점 학생 이름 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+
+// =============================================
+// ⭐️ 지점 메모 API
+// =============================================
+
+// GET /jungsi/branch-memos : '로그인한 지점'의 메모 조회
+app.get('/jungsi/branch-memos', authMiddleware, async (req, res) => {
+    const { branch } = req.user;
+    console.log(`[API GET /jungsi/branch-memos] ${branch} 지점 메모 목록 조회 요청`);
+    try {
+        const [memos] = await db.query(
+            'SELECT memo_id, memo_content, created_by, created_at, updated_at FROM `지점메모` WHERE branch_name = ? ORDER BY created_at DESC',
+            [branch]
+        );
+        console.log(` -> 메모 ${memos.length}건 조회 완료`);
+        res.json({ success: true, memos: memos });
+    } catch (err) {
+        console.error('❌ 지점 메모 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// POST /jungsi/branch-memos/add : 새 메모 추가 (로그인한 지점)
+app.post('/jungsi/branch-memos/add', authMiddleware, async (req, res) => {
+    const { memo_content } = req.body;
+    const { branch, userid } = req.user;
+    console.log(`[API POST /jungsi/branch-memos/add] ${branch} 지점 메모 추가 요청 (User: ${userid}):`, req.body);
+
+    if (!memo_content) {
+        return res.status(400).json({ success: false, message: '메모 내용은 필수 항목입니다.' });
+    }
+
+    try {
+        const [result] = await db.query(
+            'INSERT INTO `지점메모` (branch_name, memo_content, created_by) VALUES (?, ?, ?)',
+            [branch, memo_content, userid]
+        );
+        console.log(` -> 메모 추가 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '메모가 추가되었습니다.', memo_id: result.insertId });
+    } catch (err) {
+        console.error('❌ 지점 메모 추가 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삽입 중 오류 발생' });
+    }
+});
+
+// PUT /jungsi/branch-memos/update/:memo_id : 메모 수정 (로그인한 지점)
+app.put('/jungsi/branch-memos/update/:memo_id', authMiddleware, async (req, res) => {
+    const { memo_id } = req.params;
+    const { memo_content } = req.body;
+    const { branch, userid } = req.user;
+    console.log(`[API PUT /jungsi/branch-memos/update/${memo_id}] ${branch} 지점 메모 수정 요청 (User: ${userid}):`, req.body);
+
+
+    if (!memo_content) {
+        return res.status(400).json({ success: false, message: '메모 내용은 필수 항목입니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 수정 권한 확인 (메모 ID가 해당 지점 소속인지)
+        const [ownerCheck] = await connection.query(
+            'SELECT memo_id, created_by FROM `지점메모` WHERE memo_id = ? AND branch_name = ?',
+            [memo_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.warn(` -> 수정 권한 없음 (Memo ID: ${memo_id}, Branch: ${branch})`);
+            return res.status(403).json({ success: false, message: '수정 권한이 없는 메모입니다.' });
+        }
+
+        // (선택적: 본인 작성 메모만 수정 가능하게 하려면)
+        // const originalAuthor = ownerCheck[0].created_by;
+        // if (originalAuthor !== userid && userRole !== 'admin') { // Admin은 남의 메모도 수정 가능
+        //     await connection.rollback();
+        //     console.warn(` -> 메모 작성자 불일치 (Author: ${originalAuthor}, Requester: ${userid})`);
+        //     return res.status(403).json({ success: false, message: '본인이 작성한 메모만 수정할 수 있습니다.' });
+        // }
+
+        // 2. DB 수정
+        const [result] = await connection.query(
+            'UPDATE `지점메모` SET memo_content = ? WHERE memo_id = ?',
+            [memo_content, memo_id]
+        );
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 메모 수정 성공 (ID: ${memo_id})`);
+            res.json({ success: true, message: '메모가 수정되었습니다.' });
+        } else {
+            console.warn(` -> 수정할 메모 없음 (ID: ${memo_id})`);
+            res.status(404).json({ success: false, message: '수정할 메모를 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 지점 메모 수정 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 수정 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// DELETE /jungsi/branch-memos/delete/:memo_id : 메모 삭제 (로그인한 지점)
+app.delete('/jungsi/branch-memos/delete/:memo_id', authMiddleware, async (req, res) => {
+    const { memo_id } = req.params;
+    const { branch, userid } = req.user;
+    console.log(`[API DELETE /jungsi/branch-memos/delete/${memo_id}] ${branch} 지점 메모 삭제 요청 (User: ${userid})`);
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 삭제 권한 확인 (메모 ID가 해당 지점 소속인지)
+        const [ownerCheck] = await connection.query(
+            'SELECT memo_id, created_by FROM `지점메모` WHERE memo_id = ? AND branch_name = ?',
+            [memo_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.warn(` -> 삭제 권한 없음 (Memo ID: ${memo_id}, Branch: ${branch})`);
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 메모입니다.' });
+        }
+
+        // (선택적: 본인 작성 메모만 삭제 가능하게 하려면)
+        // const originalAuthor = ownerCheck[0].created_by;
+        // if (originalAuthor !== userid && userRole !== 'admin') { // Admin은 남의 메모도 삭제 가능
+        //     await connection.rollback();
+        //     console.warn(` -> 메모 작성자 불일치 (Author: ${originalAuthor}, Requester: ${userid})`);
+        //     return res.status(403).json({ success: false, message: '본인이 작성한 메모만 삭제할 수 있습니다.' });
+        // }
+
+        // 2. DB 삭제
+        const [result] = await connection.query(
+            'DELETE FROM `지점메모` WHERE memo_id = ?',
+            [memo_id]
+        );
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 메모 삭제 성공 (ID: ${memo_id})`);
+            res.json({ success: true, message: '메모가 삭제되었습니다.' });
+        } else {
+            console.warn(` -> 삭제할 메모 없음 (ID: ${memo_id})`);
+            res.status(404).json({ success: false, message: '삭제할 메모를 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 지점 메모 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+
+// --- 여기 아래에 app.listen(...) 이 와야 함 ---
+
 // --- app.listen(...) 이 이 아래에 와야 함 ---
 
 app.listen(port, () => {
