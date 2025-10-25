@@ -707,10 +707,11 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
     }
 
     try {
-        // 학생 기본 정보와 학생 수능 성적을 LEFT JOIN으로 가져옴 (학년도 기준)
+        // ⭐️ 수정: SELECT 목록에 b.phone_number, b.phone_owner 추가
         const sql = `
             SELECT
                 b.student_id, b.student_name, b.school_name, b.grade, b.gender,
+                b.phone_number, b.phone_owner, -- ⭐️ 전화번호, 연락처 구분 추가
                 s.입력유형,
                 s.국어_선택과목, s.국어_원점수, s.국어_표준점수, s.국어_백분위, s.국어_등급,
                 s.수학_선택과목, s.수학_원점수, s.수학_표준점수, s.수학_백분위, s.수학_등급,
@@ -726,11 +727,12 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
         `;
         const [students] = await db.query(sql, [branch, year]); // 파라미터로 year 전달
 
-        // 프론트엔드가 쓰기 편하게 가공 (성적 정보 없으면 null)
+        // 프론트엔드가 쓰기 편하게 가공
         const formattedStudents = students.map(s => {
             // scores 객체 생성 로직 (null 처리 포함)
             const scoresData = s.입력유형 ? {
                     입력유형: s.입력유형,
+                    // ... (기존 성적 필드들) ...
                     국어_선택과목: s.국어_선택과목, 국어_원점수: s.국어_원점수, 국어_표준점수: s.국어_표준점수, 국어_백분위: s.국어_백분위, 국어_등급: s.국어_등급,
                     수학_선택과목: s.수학_선택과목, 수학_원점수: s.수학_원점수, 수학_표준점수: s.수학_표준점수, 수학_백분위: s.수학_백분위, 수학_등급: s.수학_등급,
                     영어_원점수: s.영어_원점수, 영어_등급: s.영어_등급,
@@ -745,6 +747,8 @@ app.get('/jungsi/students/list-by-branch', authMiddleware, async (req, res) => {
                 school_name: s.school_name,
                 grade: s.grade,
                 gender: s.gender,
+                phone_number: s.phone_number, // ⭐️ 추가
+                phone_owner: s.phone_owner,   // ⭐️ 추가
                 scores: scoresData
             };
         });
@@ -911,7 +915,8 @@ app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
         return res.status(403).json({ success: false, message: '토큰에 지점 정보가 없습니다.' });
     }
 
-    const { 학년도, students } = req.body; // students는 [{ student_name, school_name, grade, gender }, ...] 배열
+    // ⭐️ 수정: students 배열 안에 phone_number, phone_owner 포함 예상
+    const { 학년도, students } = req.body; // students는 [{ student_name, school_name, phone_number, phone_owner, grade, gender }, ...] 배열
 
     // 필수 값 및 형식 검사
     if (!학년도 || !Array.isArray(students) || students.length === 0) {
@@ -925,28 +930,30 @@ app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
         let insertedCount = 0;
         const insertErrors = []; // 오류 발생 학생 저장
 
-        // INSERT 쿼리 (학생기본정보 테이블)
+        // ⭐️ 수정: INSERT 쿼리에 phone_number, phone_owner 추가
         const sql = `
-            INSERT INTO \`학생기본정보\` 
-                (학년도, branch_name, student_name, school_name, grade, gender) 
-             VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO \`학생기본정보\`
+                (학년도, branch_name, student_name, school_name, phone_number, phone_owner, grade, gender)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         // 학생 배열 반복 처리
         for (const student of students) {
             // 각 학생 정보 유효성 검사 (서버에서도 한 번 더)
-            if (!student.student_name || !student.grade || !student.gender) {
-                insertErrors.push({ name: student.student_name || '이름 없음', reason: '필수 정보 누락' });
+            if (!student.student_name || !student.grade || !student.gender) { // 이름, 학년, 성별은 필수
+                insertErrors.push({ name: student.student_name || '이름 없음', reason: '필수 정보 누락 (이름/학년/성별)' });
                 continue; // 다음 학생으로 건너뛰기
             }
 
             try {
-                // INSERT 실행 파라미터 준비
+                // ⭐️ 수정: INSERT 실행 파라미터에 phone_number, phone_owner 추가
                 const params = [
                     학년도,
                     branch, // 토큰에서 가져온 지점 이름 사용
                     student.student_name,
-                    student.school_name || null, // 학교명은 없을 수 있음
+                    student.school_name || null, // 학교명 (없으면 NULL)
+                    student.phone_number || null, // 전화번호 (없으면 NULL)
+                    student.phone_owner || '학생', // 연락처 구분 (없으면 '학생' 기본값)
                     student.grade,
                     student.gender
                 ];
@@ -958,7 +965,8 @@ app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
             } catch (err) {
                  // 중복 등의 DB 오류 발생 시 로깅하고 건너뛰기
                  console.error(`[Bulk Add Error] Student: ${student.student_name}, Error: ${err.message}`);
-                 insertErrors.push({ name: student.student_name, reason: err.code === 'ER_DUP_ENTRY' ? '중복 의심' : 'DB 오류' });
+                 // ⭐️ 수정: phone_owner 값 유효성 오류(ENUM)도 잡을 수 있게 DB 오류 메시지 포함
+                 insertErrors.push({ name: student.student_name, reason: err.code === 'ER_DUP_ENTRY' ? '중복 의심' : `DB 오류(${err.code})` });
             }
         }
 
@@ -989,18 +997,23 @@ app.post('/jungsi/students/bulk-add', authMiddleware, async (req, res) => {
         conn.release();
     }
 });
-
 // ⭐️ [신규 API] 학생 정보 수정
 app.put('/jungsi/students/update/:student_id', authMiddleware, async (req, res) => {
     const { branch } = req.user; // 토큰에서 지점 이름
     const { student_id } = req.params; // URL 경로에서 학생 ID 가져오기
-    // 프론트에서 보낸 수정된 정보
-    const { student_name, school_name, grade, gender } = req.body;
 
-    // 필수 값 검사
+    // ⭐️ 수정: 프론트에서 보낼 정보에 phone_number, phone_owner 추가
+    const { student_name, school_name, grade, gender, phone_number, phone_owner } = req.body;
+
+    // 필수 값 검사 (이름, 학년, 성별)
     if (!student_name || !grade || !gender) {
         return res.status(400).json({ success: false, message: '이름, 학년, 성별은 필수 입력 항목입니다.' });
     }
+    // ⭐️ 추가: 연락처 구분 값 유효성 검사 (ENUM 값 확인)
+    if (phone_owner && phone_owner !== '학생' && phone_owner !== '학부모') {
+        return res.status(400).json({ success: false, message: "연락처 구분은 '학생' 또는 '학부모'여야 합니다." });
+    }
+
 
     const conn = await db.getConnection();
     try {
@@ -1016,16 +1029,27 @@ app.put('/jungsi/students/update/:student_id', authMiddleware, async (req, res) 
             return res.status(403).json({ success: false, message: '수정 권한이 없는 학생입니다.' }); // 거부
         }
 
-        // 2. 학생 정보 업데이트 실행
+        // 2. ⭐️ 수정: 학생 정보 업데이트 SQL에 phone_number, phone_owner 추가
         const sql = `
-            UPDATE \`학생기본정보\` SET 
-                student_name = ?, 
-                school_name = ?, 
-                grade = ?, 
-                gender = ?
-            WHERE student_id = ? 
+            UPDATE \`학생기본정보\` SET
+                student_name = ?,
+                school_name = ?,
+                grade = ?,
+                gender = ?,
+                phone_number = ?,
+                phone_owner = ?
+            WHERE student_id = ?
         `;
-        const params = [student_name, school_name || null, grade, gender, student_id];
+        // ⭐️ 수정: 파라미터에 phone_number, phone_owner 추가 (없으면 NULL, phone_owner 기본값 '학생')
+        const params = [
+            student_name,
+            school_name || null,
+            grade,
+            gender,
+            phone_number || null,
+            phone_owner || '학생', // 값이 없거나 유효하지 않으면 '학생'으로
+            student_id
+        ];
         const [result] = await conn.query(sql, params);
 
         // 3. 커밋 (최종 반영)
@@ -1046,49 +1070,6 @@ app.put('/jungsi/students/update/:student_id', authMiddleware, async (req, res) 
         conn.release(); // 커넥션 반환
     }
 });
-
-
-// ⭐️ [신규 API] 학생 정보 삭제
-app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, res) => {
-    const { branch } = req.user; // 토큰에서 지점 이름
-    const { student_id } = req.params; // URL 경로에서 학생 ID 가져오기
-
-    const conn = await db.getConnection();
-    try {
-        await conn.beginTransaction();
-
-        // 1. (보안) 삭제하려는 학생이 진짜 이 지점 소속인지 확인
-        const [ownerCheck] = await conn.query(
-            'SELECT student_id FROM `학생기본정보` WHERE student_id = ? AND branch_name = ?',
-            [student_id, branch]
-        );
-        if (ownerCheck.length === 0) {
-            await conn.rollback();
-            return res.status(403).json({ success: false, message: '삭제 권한이 없는 학생입니다.' });
-        }
-
-        // 2. 학생 정보 삭제 실행 (ON DELETE CASCADE 설정 덕분에 관련 성적도 자동 삭제됨)
-        const sql = 'DELETE FROM `학생기본정보` WHERE student_id = ?';
-        const [result] = await conn.query(sql, [student_id]);
-
-        // 3. 커밋
-        await conn.commit();
-
-        if (result.affectedRows > 0) {
-            res.json({ success: true, message: '학생 정보가 삭제되었습니다.' });
-        } else {
-            res.status(404).json({ success: false, message: '해당 학생을 찾을 수 없습니다.' });
-        }
-
-    } catch (err) {
-        await conn.rollback();
-        console.error('❌ 학생 삭제 API 오류:', err);
-        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message });
-    } finally {
-        conn.release();
-    }
-});
-
 
 
 // jungsi.js 파일의 /jungsi/overview-configs/:year API 부분을 이걸로 교체
