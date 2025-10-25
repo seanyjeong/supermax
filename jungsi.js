@@ -2319,6 +2319,8 @@ app.get('/jungsi/counseling-schedules/:year/:month', authMiddleware, async (req,
     }
 });
 
+// jungsi.js 파일에서 POST /jungsi/counseling-schedules/add API를 찾아 교체
+
 // POST /jungsi/counseling-schedules/add : 새 상담 일정 추가 (로그인한 지점)
 app.post('/jungsi/counseling-schedules/add', authMiddleware, async (req, res) => {
     const { student_id, counseling_date, counseling_time, counseling_type } = req.body;
@@ -2333,9 +2335,10 @@ app.post('/jungsi/counseling-schedules/add', authMiddleware, async (req, res) =>
     if (!timeRegex.test(counseling_time)) {
         return res.status(400).json({ success: false, message: '시간 형식이 올바르지 않습니다 (HH:MM).' });
     }
+    // ⭐️ 30분 단위 검사 로직은 프론트엔드에서 5분 단위로 변경했으므로, 여기서는 5분 단위로 수정
     const minutes = parseInt(counseling_time.split(':')[1], 10);
-    if (minutes % 30 !== 0) {
-        return res.status(400).json({ success: false, message: '시간은 30분 단위여야 합니다.' });
+    if (minutes % 5 !== 0) { // 30 -> 5
+        return res.status(400).json({ success: false, message: '시간은 5분 단위여야 합니다.' }); // 30분 -> 5분
     }
 
     let connection;
@@ -2343,15 +2346,18 @@ app.post('/jungsi/counseling-schedules/add', authMiddleware, async (req, res) =>
         connection = await db.getConnection();
         await connection.beginTransaction();
 
-        // 중복 시간 체크 (동일 지점, 날짜, 시간)
+        // ⭐️ 중복 시간 체크 (기존: 동일 시간 -> 변경: 30분 이내 겹침)
         const [conflictCheck] = await connection.query(
-            'SELECT schedule_id FROM `상담일정` WHERE branch_name = ? AND counseling_date = ? AND counseling_time = ?',
+            `SELECT schedule_id FROM \`상담일정\`
+             WHERE branch_name = ? 
+               AND counseling_date = ? 
+               AND ABS(TIME_TO_SEC(TIMEDIFF(counseling_time, ?))) < 1800`, // 1800초 = 30분
             [branch, counseling_date, counseling_time]
         );
         if (conflictCheck.length > 0) {
             await connection.rollback();
-            console.warn(` -> 시간 중복 발생! (${counseling_date} ${counseling_time})`);
-            return res.status(409).json({ success: false, message: '해당 시간에 이미 다른 상담 일정이 있습니다.' }); // 409 Conflict
+            console.warn(` -> 시간 중복 발생! (${counseling_date} ${counseling_time}) - 30분 이내 겹침`);
+            return res.status(409).json({ success: false, message: '해당 시간 30분 이내에 이미 다른 상담 일정이 있습니다.' }); // 409 Conflict
         }
 
         // DB 삽입
@@ -2372,6 +2378,90 @@ app.post('/jungsi/counseling-schedules/add', authMiddleware, async (req, res) =>
              return res.status(400).json({ success: false, message: '선택한 학생 정보가 유효하지 않습니다.' });
         }
         res.status(500).json({ success: false, message: 'DB 삽입 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// jungsi.js 파일에서 PUT /jungsi/counseling-schedules/update/:schedule_id API를 찾아 교체
+
+// PUT /jungsi/counseling-schedules/update/:schedule_id : 상담 일정 수정 (로그인한 지점)
+app.put('/jungsi/counseling-schedules/update/:schedule_id', authMiddleware, async (req, res) => {
+    const { schedule_id } = req.params;
+    const { student_id, counseling_date, counseling_time, counseling_type } = req.body;
+    const { branch } = req.user;
+    console.log(`[API PUT /jungsi/counseling-schedules/update/${schedule_id}] ${branch} 지점 상담 수정 요청:`, req.body);
+
+    // 유효성 검사
+    if (!student_id || !counseling_date || !counseling_time) { 
+         return res.status(400).json({ success: false, message: '학생, 날짜, 시간은 필수 항목입니다.' });
+    }
+    const timeRegex = /^\d{2}:\d{2}$/; 
+    if (!timeRegex.test(counseling_time)) { 
+        return res.status(400).json({ success: false, message: '시간 형식이 올바르지 않습니다 (HH:MM).' });
+    }
+    // ⭐️ 30분 단위 검사 로직은 프론트엔드에서 5분 단위로 변경했으므로, 여기서는 5분 단위로 수정
+    const minutes = parseInt(counseling_time.split(':')[1], 10); 
+    if (minutes % 5 !== 0) { // 30 -> 5
+        return res.status(400).json({ success: false, message: '시간은 5분 단위여야 합니다.' }); // 30분 -> 5분
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 수정 권한 확인 (해당 ID가 로그인한 지점 소속인지)
+        const [ownerCheck] = await connection.query(
+            'SELECT schedule_id FROM `상담일정` WHERE schedule_id = ? AND branch_name = ?',
+            [schedule_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.warn(` -> 수정 권한 없음 (ID: ${schedule_id}, Branch: ${branch})`);
+            return res.status(403).json({ success: false, message: '수정 권한이 없는 상담 일정입니다.' });
+        }
+
+        // 2. ⭐️ 시간 중복 체크 (변경하려는 시간 + 30분 이내 겹침 + 자기 자신 제외)
+        const [conflictCheck] = await connection.query(
+            `SELECT schedule_id FROM \`상담일정\`
+             WHERE branch_name = ? 
+               AND counseling_date = ? 
+               AND ABS(TIME_TO_SEC(TIMEDIFF(counseling_time, ?))) < 1800 
+               AND schedule_id != ?`, // 1800초 = 30분, 자기 자신 제외
+            [branch, counseling_date, counseling_time, schedule_id]
+        );
+        if (conflictCheck.length > 0) {
+            await connection.rollback();
+            console.warn(` -> 시간 중복 발생! (${counseling_date} ${counseling_time})`);
+            return res.status(409).json({ success: false, message: '해당 시간 30분 이내에 이미 다른 상담 일정이 있습니다.' });
+        }
+
+        // 3. DB 수정
+        const [result] = await connection.query(
+            `UPDATE \`상담일정\` SET
+                student_id = ?, counseling_date = ?, counseling_time = ?, counseling_type = ?
+             WHERE schedule_id = ?`,
+            [student_id, counseling_date, counseling_time, counseling_type || null, schedule_id]
+        );
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 상담 일정 수정 성공 (ID: ${schedule_id})`);
+            res.json({ success: true, message: '상담 일정이 수정되었습니다.' });
+        } else {
+            // 이 경우는 ownerCheck에서 걸러지므로 거의 없음
+            console.warn(` -> 수정할 상담 일정 없음 (ID: ${schedule_id})`);
+            res.status(404).json({ success: false, message: '수정할 상담 일정을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 상담 일정 수정 오류:', err);
+         if (err.code === 'ER_NO_REFERENCED_ROW_2') {
+             return res.status(400).json({ success: false, message: '선택한 학생 정보가 유효하지 않습니다.' });
+        }
+        res.status(500).json({ success: false, message: 'DB 수정 중 오류 발생' });
     } finally {
         if (connection) connection.release();
     }
