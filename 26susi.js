@@ -75,6 +75,13 @@ const dbJungsi = mysql.createPool({
     database: 'jungsi', // 💡 여기 포인트
     charset: 'utf8mb4'
 });
+const dbStudent = mysql.createPool({
+    host: '211.37.174.218',
+    user: 'maxilsan',
+    password: 'q141171616!',
+    database: 'jungsimaxstudent',
+    charset: 'utf8mb4'
+});
 
 // 관리자 권한 체크 함수
 function isAdmin(user) {
