@@ -944,5 +944,15 @@ const formulaData = rows[0];
     res.json({ success: true, maxes });
   });
 
+  module.exports.helpers = {
+  calculateScoreWithConv, // 핵심 계산 함수
+  calculateScore,         // calculateScoreWithConv가 내부적으로 사용할 수 있음
+  safeParse,            // 유틸리티 함수
+  loadYearHighestMap,     // 유틸리티 함수
+  guessInquiryGroup,      // 유틸리티 함수
+  buildSpecialContext,    // 특수 공식 계산 시 필요할 수 있음
+  // 여기에 calculateScoreWithConv가 의존하는 다른 함수가 있다면 추가
+};
+
   return router;
 };
