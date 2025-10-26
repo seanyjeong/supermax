@@ -145,7 +145,7 @@ app.get('/jungsi/schools/:year', authMiddleware, async (req, res) => {
 
 // jungsi.js 파일에서 이 부분을 찾아서 교체
 
-app.post('/jungsi/school-details', authMiddleware, async (req, res) => { 
+app.post('/jungsi/school-details',  async (req, res) => { 
     const { U_ID, year } = req.body; 
     if (!U_ID || !year) { 
         return res.status(400).json({ success: false, message: "U_ID와 학년도(year)가 필요합니다." }); 
