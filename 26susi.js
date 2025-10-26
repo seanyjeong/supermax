@@ -71,8 +71,10 @@ const db = mysql.createPool({
 
 // 관리자 권한 체크 함수
 function isAdmin(user) {
-  return user && user.userid === 'admin';
+    // admin(본부)는 전체 승인 가능, 원장(owner)은 자기 지점 승인 가능
+    return user && (user.userid === 'admin' || user.role === 'owner');
 }
+
 function safe(v) {
   return v === undefined ? null : v;
 }
@@ -279,68 +281,176 @@ app.post('/26susi_student/login', async (req, res) => {
             "SELECT * FROM 학생회원 WHERE 아이디 = ?",
             [userid]
         );
+
         if (!rows.length) {
             return res.json({ success: false, message: "아이디 없음" });
         }
 
         const user = rows[0];
 
+        // 승인상태 확인
         if (user.승인여부 !== '승인') {
             return res.json({ success: false, message: "아직 승인되지 않은 계정입니다." });
         }
 
+        // 비밀번호 검증
         const isMatch = await bcrypt.compare(password, user.비밀번호);
         if (!isMatch) {
             return res.json({ success: false, message: "비밀번호가 올바르지 않습니다." });
         }
 
-        // 학생 전용 토큰 발급
+        // 여기서 학생 전용 토큰 발급
         const token = jwt.sign({
             id: user.학생ID,
             userid: user.아이디,
             name: user.이름,
-            branch: user.지점명,
+            branch: user.지점명,   // 원장 branch 비교에 쓰일 값과 동일한 필드명
             phone: user.전화번호,
-            role: 'student',      // 💡 중요
-            source: 'ilsan'       // 💡 중요 (정시엔진에서 차단할 기준)
+            role: 'student'        // 핵심: 정시엔진에서 이걸로 차단한다
         }, JWT_SECRET, { expiresIn: '3d' });
 
-        res.json({ success: true, token });
+        return res.json({ success: true, token });
 
     } catch (err) {
         console.error("학생 로그인 오류:", err);
-        res.json({ success: false, message: "서버 오류" });
+        return res.json({ success: false, message: "서버 오류" });
     }
 });
+
 app.get('/26susi_student/pending-list', authJWT, async (req, res) => {
-    if (!isAdmin(req.user)) {
+    const user = req.user; // 토큰에서 복원된 로그인 사용자 (owner, admin 등)
+
+    // 1) admin 또는 owner(원장)만 접근 가능
+    if (!(user.userid === 'admin' || user.role === 'owner')) {
         return res.status(403).json({ success: false, message: "권한없음" });
     }
 
     try {
-        const [rows] = await db.promise().query(
-            "SELECT 학생ID, 아이디, 이름, 지점명, 전화번호, 승인여부, 생성일시 FROM 학생회원 ORDER BY 생성일시 DESC"
-        );
-        res.json({ success: true, students: rows });
+        // 2) admin은 전체 조회, 원장은 자기 지점만
+        let sql = `
+            SELECT 학생ID, 아이디, 이름, 지점명, 전화번호, 승인여부, 생성일시
+            FROM 학생회원
+        `;
+        const params = [];
+
+        if (user.role === 'owner' && user.userid !== 'admin') {
+            sql += " WHERE 지점명 = ? ";
+            params.push(user.branch);
+        }
+
+        sql += " ORDER BY 생성일시 DESC";
+
+        const [rows] = await db.promise().query(sql, params);
+
+        return res.json({ success: true, students: rows });
     } catch (err) {
         console.error("학생 대기목록 조회 오류:", err);
-        res.status(500).json({ success: false, message: "서버 오류" });
+        return res.status(500).json({ success: false, message: "서버 오류" });
     }
 });
 
+
 app.post('/26susi_student/delete', authJWT, async (req, res) => {
-    if (!isAdmin(req.user)) {
+    const user = req.user;
+    const { student_id } = req.body;
+
+    if (!student_id) {
+        return res.json({ success: false, message: "student_id 필요" });
+    }
+
+    // admin 또는 owner만 가능
+    if (!(user.userid === 'admin' || user.role === 'owner')) {
         return res.status(403).json({ success: false, message: "권한없음" });
     }
+
+    try {
+        // 대상 학생 가져오기
+        const [rows] = await db.promise().query(
+            "SELECT 지점명, 이름 FROM 학생회원 WHERE 학생ID = ?",
+            [student_id]
+        );
+        if (!rows.length) {
+            return res.json({ success: false, message: "해당 학생을 찾을 수 없습니다." });
+        }
+        const student = rows[0];
+
+        // 원장은 자기 지점 학생만 삭제 가능
+        if (user.role === 'owner' && user.userid !== 'admin') {
+            if (user.branch !== student.지점명) {
+                return res.status(403).json({
+                    success: false,
+                    message: "다른 지점 학생은 삭제할 수 없습니다."
+                });
+            }
+        }
+
+        await db.promise().query(
+            "DELETE FROM 학생회원 WHERE 학생ID=?",
+            [student_id]
+        );
+
+        console.log(`학생 삭제: ${student.이름} (${student.지점명}) by ${user.userid}(${user.branch})`);
+
+        return res.json({ success: true, message: "삭제 완료" });
+
+    } catch (err) {
+        console.error("학생 삭제 오류:", err);
+        return res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+
+app.post('/26susi_student/approve', authJWT, async (req, res) => {
+    const user = req.user;
     const { student_id } = req.body;
-    if (!student_id) return res.json({ success: false, message: "student_id 필요" });
 
-    await db.promise().query(
-        "DELETE FROM 학생회원 WHERE 학생ID=?",
-        [student_id]
-    );
+    if (!student_id) {
+        return res.json({ success: false, message: "student_id 필요" });
+    }
 
-    res.json({ success: true });
+    // 1) 승인 권한 체크 (admin 또는 owner만)
+    if (!(user.userid === 'admin' || user.role === 'owner')) {
+        return res.status(403).json({ success: false, message: "승인 권한이 없습니다." });
+    }
+
+    try {
+        // 2) 승인 대상 학생 정보 조회
+        const [rows] = await db.promise().query(
+            "SELECT 지점명, 이름 FROM 학생회원 WHERE 학생ID = ?",
+            [student_id]
+        );
+        if (!rows.length) {
+            return res.json({ success: false, message: "해당 학생을 찾을 수 없습니다." });
+        }
+        const student = rows[0];
+
+        // 3) 원장은 자기 지점 학생만 승인 가능
+        if (user.role === 'owner' && user.userid !== 'admin') {
+            if (user.branch !== student.지점명) {
+                console.warn(
+                  `승인 거부: ${user.userid}(${user.branch}) -> ${student.이름}(${student.지점명})`
+                );
+                return res.status(403).json({
+                    success: false,
+                    message: "다른 지점 학생은 승인할 수 없습니다."
+                });
+            }
+        }
+
+        // 4) 승인 처리
+        await db.promise().query(
+            "UPDATE 학생회원 SET 승인여부='승인' WHERE 학생ID=?",
+            [student_id]
+        );
+
+        console.log(`학생 승인 완료: ${student.이름} (${student.지점명}) by ${user.userid}(${user.branch})`);
+
+        return res.json({ success: true, message: "승인 완료" });
+
+    } catch (err) {
+        console.error("학생 승인 처리 오류:", err);
+        return res.status(500).json({ success: false, message: "서버 오류" });
+    }
 });
 
 //실기배점
