@@ -51,25 +51,50 @@ app.use('/silgi', silgicalRouter);
 app.get('/jungsi/schools/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
     try {
-        // --- ⭐️ 수정: SELECT 목록에 r.실기 추가 ---
         const sql = `
           SELECT
-              b.U_ID, b.대학명, b.학과명, b.군,
-              r.실기, -- ⭐️ 실기 반영 비율 컬럼 추가
-              r.selection_rules, r.bonus_rules, r.score_config, r.계산유형
+              b.U_ID,
+              b.대학명,
+              b.학과명,
+              b.군,
+              b.광역,
+              b.시구,
+              r.실기,
+              r.selection_rules,
+              r.bonus_rules,
+              r.score_config,
+              r.계산유형
           FROM \`정시기본\` AS b
-          LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
+          LEFT JOIN \`정시반영비율\` AS r
+            ON b.U_ID = r.U_ID
+           AND b.학년도 = r.학년도
           WHERE b.학년도 = ?
           ORDER BY b.U_ID ASC
         `;
-        // --- ⭐️ 수정 끝 ---
+
         const [schools] = await db.query(sql, [year]);
-        res.json({ success: true, schools });
+
+        const list = schools.map(row => ({
+            U_ID: row.U_ID,
+            university: row.대학명,
+            department: row.학과명,
+            gun: row.군,
+            광역: row.광역,
+            시구: row.시구,
+            실기: row.실기,
+            selection_rules: row.selection_rules,
+            bonus_rules: row.bonus_rules,
+            score_config: row.score_config,
+            계산유형: row.계산유형
+        }));
+
+        res.json({ success: true, list });
     } catch (err) {
         console.error("❌ 학교 목록 조회 오류:", err);
         res.status(500).json({ success: false, message: "DB 오류" });
     }
 });
+
 // jungsi.js 파일에서 이 부분을 찾아서 교체
 
 app.post('/jungsi/school-details', authMiddleware, async (req, res) => { 
