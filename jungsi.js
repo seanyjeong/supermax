@@ -94,6 +94,55 @@ const silgicalRouter = require('./silgical.js')(db, authMiddleware); //
 app.use('/jungsi', jungsicalRouter);
 app.use('/silgi', silgicalRouter);
 
+const safeParse = (v, fb = null) => {
+  if (v == null) return fb;
+  if (typeof v === 'object') return v;
+  try { return JSON.parse(v); } catch { return fb; }
+};
+
+async function loadYearHighestMap(db, year, exam) {
+  try { // DB 에러 방지용 try-catch 추가
+    const [rows] = await db.query(
+      'SELECT 과목명, 최고점 FROM `정시최고표점` WHERE 학년도=? AND 모형=?',
+      [year, exam]
+    );
+    const map = {};
+    rows.forEach(r => { map[r.과목명] = Number(r.최고점); });
+    return map;
+  } catch (err) {
+    console.error(`Error loading highest map for ${year} ${exam}:`, err);
+    return {}; // 에러 시 빈 객체 반환
+  }
+}
+
+function guessInquiryGroup(subjectName='') {
+  const s = String(subjectName);
+  const sci = ['물리','화학','생명','지구'];
+  if (sci.some(w => s.includes(w))) return '과탐';
+  // 그 외에는 사탐으로 간주 (직탐 등 예외처리 필요 시 추가)
+  return '사탐';
+}
+
+// jungsical.js에서 계산 함수 가져오기 (이미 되어있다면 이 부분은 생략 가능)
+// 만약 jungsical.js export 방식이 다르다면 맞춰서 수정 필요
+let calculateScoreWithConv; // 전역 변수로 선언
+try {
+    // calculateScoreWithConv 함수가 jungsical 모듈의 export 객체에 포함되어 있다고 가정
+    const jungsicalModule = require('./jungsical.js')(db, authMiddleware);
+    if (typeof jungsicalModule.calculateScoreWithConv === 'function') {
+        calculateScoreWithConv = jungsicalModule.calculateScoreWithConv;
+    } else {
+        // jungsical.js 가 router만 export 하는 경우, calculateScoreWithConv 정의를 여기로 복사해야 할 수도 있음
+        console.error("!!! calculateScoreWithConv 함수를 jungsical.js에서 찾을 수 없습니다. !!!");
+        // 임시 방편으로 calculateScoreWithConv 함수 정의를 여기에 직접 넣거나,
+        // jungsical.js의 export 방식을 수정해야 함.
+        // calculateScoreWithConv = function(...) { /* jungsical.js의 함수 내용 복사 */ };
+    }
+} catch (e) {
+    console.error("jungsical.js 로드 또는 calculateScoreWithConv 가져오기 실패:", e);
+    // calculateScoreWithConv 함수 정의를 복사하는 방식으로 대체 필요
+}
+
 // --- API 목록 ---
 // [API #1] 특정 '학년도'의 전체 학교 목록 조회 (모든 규칙 포함 버전)
 app.get('/jungsi/schools/:year', authMiddleware, async (req, res) => {
