@@ -2879,7 +2879,7 @@ app.get('/jungsi/student/my-profile', authStudentOnlyMiddleware, async (req, res
     }
 });
 
-const { interpolateScore, getEnglishGrade, getHistoryGrade } = require('./utils/scoreEstimator.js');
+
 
 /**
  * ⭐️ [학생 API 2] 내 수능 성적 저장/수정
