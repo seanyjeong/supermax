@@ -3523,59 +3523,115 @@ app.get('/jungsi/public/regions/:year', async (req, res) => {
 // ⭐️ [신규] 학생 성적 기록 저장 API (saved_list.html 용)
 // =============================================
 // POST /jungsi/student/save-history
+// jungsi.js 파일의 app.listen(...) 바로 위에 있는
+// 기존 /jungsi/student/save-history API를 이걸로 교체!
+
+// =============================================
+// ⭐️ [신규] 학생 성적 기록 저장 API (하루 한 번 UPSERT 로직)
+// =============================================
+// POST /jungsi/student/save-history
 app.post('/jungsi/student/save-history', authStudentOnlyMiddleware, async (req, res) => {
     // 1. 학생 ID (account_id) 가져오기
     const { account_id: studentAccountId } = req.user;
 
     // 2. 프론트엔드(모달)에서 보낸 점수 정보 받기
-    const { 
-        U_ID, 
-        year, // ⭐️ 학년도 (예: '2026')
-        suneungScore, 
-        naeshinScore, 
-        silgiRecordsJson, // ⭐️ 실기 세부 기록 (JSON 배열)
-        silgiScore, 
-        totalScore 
+    const {
+        U_ID,
+        year, // 학년도
+        suneungScore,
+        naeshinScore,
+        silgiRecordsJson, // 실기 세부 기록 (JSON 배열)
+        silgiScore,
+        totalScore
     } = req.body;
 
-    console.log(`[API /save-history] 학생(${studentAccountId}) 대학(${U_ID}) 점수 기록 저장 요청:`, req.body);
+    console.log(`[API /save-history] 학생(${studentAccountId}) 대학(${U_ID}) ${year}학년도 점수 기록 저장/업데이트 요청:`, req.body);
 
     // 3. 필수 값 확인
     if (!studentAccountId || !U_ID || !year) {
         return res.status(400).json({ success: false, message: '학생ID, 대학ID, 학년도 정보가 필요합니다.' });
     }
-    
-    // 4. DB에 저장 (dbStudent 사용)
+
+    // 4. DB 작업 (트랜잭션 사용)
+    let connection;
     try {
-        const insertSql = `
-            INSERT INTO student_score_history 
-                (account_id, U_ID, 학년도, suneung_score, naeshin_score, 
-                 silgi_records_json, silgi_score, total_score, record_date) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        connection = await dbStudent.getConnection(); // dbStudent 풀 사용
+        await connection.beginTransaction(); // ⭐️ 트랜잭션 시작
+
+        // 5. ⭐️ 오늘 날짜(CURDATE())로 이미 저장된 기록이 있는지 확인 (FOR UPDATE로 잠금)
+        const checkSql = `
+            SELECT history_id FROM student_score_history
+            WHERE account_id = ? AND U_ID = ? AND 학년도 = ? AND DATE(record_date) = CURDATE()
+            LIMIT 1
+            FOR UPDATE
         `;
-        
+        const [existingRows] = await connection.query(checkSql, [studentAccountId, U_ID, year]);
+
+        // 6. 저장할 파라미터 준비
         const params = [
-            studentAccountId,
-            U_ID,
-            year,
             suneungScore || null,
             naeshinScore || null,
-            silgiRecordsJson ? JSON.stringify(silgiRecordsJson) : null, // ⭐️ JSON 문자열로 변환
+            silgiRecordsJson ? JSON.stringify(silgiRecordsJson) : null,
             silgiScore || null,
             totalScore || null
         ];
 
-        const [result] = await dbStudent.query(insertSql, params);
-        
-        console.log(` -> 저장 성공 (ID: ${result.insertId})`);
-        res.status(201).json({ success: true, message: '성적 기록이 저장되었습니다.', historyId: result.insertId });
+        if (existingRows.length > 0) {
+            // 7a. ⭐️ 오늘 기록이 있으면: UPDATE (점수 덮어쓰고, 시간도 최신으로 갱신)
+            const existingHistoryId = existingRows[0].history_id;
+            console.log(` -> 기존 기록(${existingHistoryId}) 발견. 오늘 날짜로 업데이트합니다.`);
+            
+            const updateSql = `
+                UPDATE student_score_history SET
+                    suneung_score = ?, 
+                    naeshin_score = ?, 
+                    silgi_records_json = ?,
+                    silgi_score = ?, 
+                    total_score = ?, 
+                    record_date = NOW()
+                WHERE history_id = ?
+            `;
+            await connection.query(updateSql, [...params, existingHistoryId]);
+            await connection.commit(); // ⭐️ 커밋
+            
+            res.json({ 
+                success: true, 
+                message: '오늘의 성적 기록을 업데이트했습니다.', 
+                historyId: existingHistoryId, 
+                updated: true // ⭐️ 프론트에 업데이트 되었다고 알려줌
+            });
+
+        } else {
+            // 7b. ⭐️ 오늘 기록이 없으면: INSERT (새 기록 추가)
+            console.log(" -> 오늘 기록 없음. 새 기록을 추가합니다.");
+            
+            const insertSql = `
+                INSERT INTO student_score_history
+                    (account_id, U_ID, 학년도, suneung_score, naeshin_score,
+                     silgi_records_json, silgi_score, total_score, record_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            `;
+            const [result] = await connection.query(insertSql, [studentAccountId, U_ID, year, ...params]);
+            await connection.commit(); // ⭐️ 커밋
+            
+            res.status(201).json({ 
+                success: true, 
+                message: '성적 기록이 새로 저장되었습니다.', 
+                historyId: result.insertId, 
+                updated: false // ⭐️ 프론트에 새로 추가되었다고 알려줌
+            });
+        }
 
     } catch (err) {
-        console.error('❌ 학생 성적 기록 저장 API 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생', error: err.message });
+        if (connection) await connection.rollback(); // ⭐️ 에러 시 롤백
+        console.error('❌ 학생 성적 기록 저장/업데이트 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+    } finally {
+        if (connection) connection.release(); // ⭐️ 커넥션 반환
     }
 });
 
+// GET /jungsi/student/get-history/:uid/:year API는 수정할 필요 없어! (그대로 두면 됨)
 // =============================================
 // ⭐️ [신규] 학생 성적 기록 조회 API (history_view.html 용)
 // =============================================
