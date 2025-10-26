@@ -2823,7 +2823,6 @@ app.delete('/jungsi/branch-memos/delete/:memo_id', authMiddleware, async (req, r
 //----------------------------------학생들 관리 API
 
 app.get('/jungsi/student/my-profile', authStudentOnlyMiddleware, async (req, res) => {
-    // ⭐️ 미들웨어에서 주입된 ID 사용 (req.student_id)
     const { student_id } = req; 
 
     try {
@@ -2847,18 +2846,33 @@ app.get('/jungsi/student/my-profile', authStudentOnlyMiddleware, async (req, res
             return res.status(404).json({ success: false, message: '학생 정보를 찾을 수 없습니다.' });
         }
 
-        const s = rows[0];
+        const s = rows[0]; // ⭐️ DB에서 가져온 원본 데이터
+
+        // ⭐️ DB 원본 데이터 로깅 (확인용)
+        console.log(`[my-profile API] DB Raw Data for student ${student_id}:`, s); 
         
-        // ⭐️ 기존 'list-by-branch' API의 로직 재활용
+        // scoresData 객체 생성
         const scoresData = s.입력유형 ? {
             입력유형: s.입력유형,
             국어_선택과목: s.국어_선택과목, 국어_원점수: s.국어_원점수, 국어_표준점수: s.국어_표준점수, 국어_백분위: s.국어_백분위, 국어_등급: s.국어_등급,
             수학_선택과목: s.수학_선택과목, 수학_원점수: s.수학_원점수, 수학_표준점수: s.수학_표준점수, 수학_백분위: s.수학_백분위, 수학_등급: s.수학_등급,
             영어_원점수: s.영어_원점수, 영어_등급: s.영어_등급,
             한국사_원점수: s.한국사_원점수, 한국사_등급: s.한국사_등급,
-            탐구1_선택과목: s.탐구1_선택과목, 탐구1_원점수: s.탐구1_원점수, 탐구1_표준점수: s.탐구1_표준점수, 탐구1_백분위: s.탐구1_등급,
-            탐구2_선택과목: s.탐구2_선택과목, 탐구2_원점수: s.탐구2_원점수, 탐구2_표준점수: s.탐구2_표준점수, 탐구2_백분위: s.탐구2_등급
-        } : null; // 성적 입력 이력이 없으면 null
+            
+            // ▼▼▼▼▼ 여기를 다시 한번 확인! ▼▼▼▼▼
+            탐구1_선택과목: s.탐구1_선택과목, 
+            탐구1_원점수: s.탐구1_원점수, 
+            탐구1_표준점수: s.탐구1_표준점수, 
+            탐구1_백분위: s.탐구1_백분위, // ✅ 백분위 컬럼 값
+            탐구1_등급: s.탐구1_등급,      // ✅ 등급 컬럼 값
+            탐구2_선택과목: s.탐구2_선택과목, 
+            탐구2_원점수: s.탐구2_원점수, 
+            탐구2_표준점수: s.탐구2_표준점수, 
+            탐구2_백분위: s.탐구2_백분위, // ✅ 백분위 컬럼 값
+            탐구2_등급: s.탐구2_등급       // ✅ 등급 컬럼 값
+            // ▲▲▲▲▲ 확인 끝 ▲▲▲▲▲
+
+        } : null; 
 
         const profile = {
             student_id: s.student_id,
@@ -2868,8 +2882,11 @@ app.get('/jungsi/student/my-profile', authStudentOnlyMiddleware, async (req, res
             gender: s.gender,
             branch_name: s.branch_name,
             학년도: s.학년도,
-            scores: scoresData // ⭐️ 성적 정보 포함
+            scores: scoresData
         };
+        
+        // ⭐️ 프론트로 보내기 직전 데이터 로깅 (확인용)
+        console.log(`[my-profile API] Data sent to client for student ${student_id}:`, profile);
 
         res.json({ success: true, profile: profile });
 
@@ -2878,7 +2895,6 @@ app.get('/jungsi/student/my-profile', authStudentOnlyMiddleware, async (req, res
         res.status(500).json({ success: false, message: '서버 오류' });
     }
 });
-
 
 
 /**
