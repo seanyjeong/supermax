@@ -2820,6 +2820,188 @@ app.delete('/jungsi/branch-memos/delete/:memo_id', authMiddleware, async (req, r
 });
 
 
+//----------------------------------학생들 관리 API
+
+app.get('/jungsi/student/my-profile', authStudentOnlyMiddleware, async (req, res) => {
+    // ⭐️ 미들웨어에서 주입된 ID 사용 (req.student_id)
+    const { student_id } = req; 
+
+    try {
+        const sql = `
+            SELECT
+                b.student_id, b.student_name, b.school_name, b.grade, b.gender, b.branch_name, b.학년도,
+                s.입력유형,
+                s.국어_선택과목, s.국어_원점수, s.국어_표준점수, s.국어_백분위, s.국어_등급,
+                s.수학_선택과목, s.수학_원점수, s.수학_표준점수, s.수학_백분위, s.수학_등급,
+                s.영어_원점수, s.영어_등급,
+                s.한국사_원점수, s.한국사_등급,
+                s.탐구1_선택과목, s.탐구1_원점수, s.탐구1_표준점수, s.탐구1_백분위, s.탐구1_등급,
+                s.탐구2_선택과목, s.탐구2_원점수, s.탐구2_표준점수, s.탐구2_백분위, s.탐구2_등급
+            FROM 학생기본정보 b
+            LEFT JOIN 학생수능성적 s ON b.student_id = s.student_id AND b.학년도 = s.학년도
+            WHERE b.student_id = ?;
+        `;
+        const [rows] = await db.query(sql, [student_id]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: '학생 정보를 찾을 수 없습니다.' });
+        }
+
+        const s = rows[0];
+        
+        // ⭐️ 기존 'list-by-branch' API의 로직 재활용
+        const scoresData = s.입력유형 ? {
+            입력유형: s.입력유형,
+            국어_선택과목: s.국어_선택과목, 국어_원점수: s.국어_원점수, 국어_표준점수: s.국어_표준점수, 국어_백분위: s.국어_백분위, 국어_등급: s.국어_등급,
+            수학_선택과목: s.수학_선택과목, 수학_원점수: s.수학_원점수, 수학_표준점수: s.수학_표준점수, 수학_백분위: s.수학_백분위, 수학_등급: s.수학_등급,
+            영어_원점수: s.영어_원점수, 영어_등급: s.영어_등급,
+            한국사_원점수: s.한국사_원점수, 한국사_등급: s.한국사_등급,
+            탐구1_선택과목: s.탐구1_선택과목, 탐구1_원점수: s.탐구1_원점수, 탐구1_표준점수: s.탐구1_표준점수, 탐구1_백분위: s.탐구1_등급,
+            탐구2_선택과목: s.탐구2_선택과목, 탐구2_원점수: s.탐구2_원점수, 탐구2_표준점수: s.탐구2_표준점수, 탐구2_백분위: s.탐구2_등급
+        } : null; // 성적 입력 이력이 없으면 null
+
+        const profile = {
+            student_id: s.student_id,
+            student_name: s.student_name,
+            school_name: s.school_name,
+            grade: s.grade,
+            gender: s.gender,
+            branch_name: s.branch_name,
+            학년도: s.학년도,
+            scores: scoresData // ⭐️ 성적 정보 포함
+        };
+
+        res.json({ success: true, profile: profile });
+
+    } catch (err) {
+        console.error('❌ [학생 API] 내 프로필 조회 오류:', err);
+        res.status(500).json({ success: false, message: '서버 오류' });
+    }
+});
+
+const { interpolateScore, getEnglishGrade, getHistoryGrade } = require('./utils/scoreEstimator.js');
+
+/**
+ * ⭐️ [학생 API 2] 내 수능 성적 저장/수정
+ * (mypage.html에서 '저장' 시 호출)
+ */
+app.post('/jungsi/student/my-score', authStudentOnlyMiddleware, async (req, res) => {
+    // ⭐️ 미들웨어에서 주입된 ID 사용 (req.student_id)
+    const { student_id } = req; 
+    
+    // ⭐️ 프론트에서는 '학년도', '입력유형', 'scores 객체'만 받음
+    const { 학년도, 입력유형, scores } = req.body;
+    
+    if (!학년도 || !입력유형 || !scores) {
+        return res.status(400).json({ success: false, message: '학년도, 입력유형, 성적 정보(scores)는 필수입니다.' });
+    }
+
+    const conn = await db.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        // 1. (가채점 변환용) 등급컷 데이터 로드
+        const [allCuts] = await conn.query(
+            'SELECT 선택과목명, 원점수, 표준점수, 백분위, 등급 FROM `정시예상등급컷` WHERE 학년도 = ? AND 모형 = ?',
+            [학년도, '수능'] // 모형은 '수능'으로 가정
+        );
+        const cutsMap = new Map();
+        allCuts.forEach(cut => {
+            const key = cut.선택과목명;
+            if (!cutsMap.has(key)) cutsMap.set(key, []);
+            cutsMap.get(key).push(cut);
+        });
+
+        // 2. 저장할 데이터 객체(savedData) 생성
+        // ⭐️ 기존 'set-wide' API 로직 재활용
+        const savedData = { 
+            student_id: student_id, // ⭐️ ID 강제 주입
+            학년도: 학년도, 입력유형: 입력유형,
+            국어_선택과목: scores.국어_선택과목, 국어_원점수: scores.국어_원점수,
+            수학_선택과목: scores.수학_선택과목, 수학_원점수: scores.수학_원점수,
+            영어_원점수: scores.영어_원점수, 한국사_원점수: scores.한국사_원점수,
+            탐구1_선택과목: scores.탐구1_선택과목, 탐구1_원점수: scores.탐구1_원점수,
+            탐구2_선택과목: scores.탐구2_선택과목, 탐구2_원점수: scores.탐구2_원점수,
+            국어_표준점수: null, 국어_백분위: null, 국어_등급: null,
+            수학_표준점수: null, 수학_백분위: null, 수학_등급: null,
+            영어_등급: null, 한국사_등급: null,
+            탐구1_표준점수: null, 탐구1_백분위: null, 탐구1_등급: null,
+            탐구2_표준점수: null, 탐구2_백분위: null, 탐구2_등급: null,
+        };
+
+        // 3. 점수 변환 또는 복사
+        if (입력유형 === 'raw') { // (가채점)
+            if (scores.영어_원점수 != null) savedData.영어_등급 = getEnglishGrade(scores.영어_원점수);
+            if (scores.한국사_원점수 != null) savedData.한국사_등급 = getHistoryGrade(scores.한국사_원점수);
+            const relativeSubjects = [
+                { prefix: '국어', score: scores.국어_원점수, subject: scores.국어_선택과목 },
+                { prefix: '수학', score: scores.수학_원점수, subject: scores.수학_선택과목 },
+                { prefix: '탐구1', score: scores.탐구1_원점수, subject: scores.탐구1_선택과목 },
+                { prefix: '탐구2', score: scores.탐구2_원점수, subject: scores.탐구2_선택과목 },
+            ];
+            for (const s of relativeSubjects) {
+                if (s.score != null && s.subject && cutsMap.has(s.subject)) {
+                    const cuts = cutsMap.get(s.subject);
+                    const estimated = interpolateScore(s.score, cuts);
+                    savedData[`${s.prefix}_표준점수`] = estimated.std;
+                    savedData[`${s.prefix}_백분위`] = estimated.pct;
+                    savedData[`${s.prefix}_등급`] = estimated.grade;
+                }
+            }
+        } else { // (실채점 - official)
+            savedData.국어_표준점수=scores.국어_표준점수||null; savedData.국어_백분위=scores.국어_백분위||null; savedData.국어_등급=scores.국어_등급||null;
+            savedData.수학_표준점수=scores.수학_표준점수||null; savedData.수학_백분위=scores.수학_백분위||null; savedData.수학_등급=scores.수학_등급||null;
+            savedData.영어_등급=scores.영어_등급||getEnglishGrade(scores.영어_원점수); savedData.한국사_등급=scores.한국사_등급||getHistoryGrade(scores.한국사_원점수);
+            savedData.탐구1_표준점수=scores.탐구1_표준점수||null; savedData.탐구1_백분위=scores.탐구1_백분위||null; savedData.탐구1_등급=scores.탐구1_등급||null;
+            savedData.탐구2_표준점수=scores.탐구2_표준점수||null; savedData.탐구2_백분위=scores.탐구2_백분위||null; savedData.탐구2_등급=scores.탐구2_등급||null;
+        }
+
+        // 4. DB에 UPSERT (저장/수정)
+        // ⭐️ 기존 'set-wide' API의 SQL 재활용
+        const sql = `
+            INSERT INTO \`학생수능성적\` (
+                student_id, 학년도, 입력유형,
+                국어_선택과목, 국어_원점수, 국어_표준점수, 국어_백분위, 국어_등급,
+                수학_선택과목, 수학_원점수, 수학_표준점수, 수학_백분위, 수학_등급,
+                영어_원점수, 영어_등급,
+                한국사_원점수, 한국사_등급,
+                탐구1_선택과목, 탐구1_원점수, 탐구1_표준점수, 탐구1_백분위, 탐구1_등급,
+                탐구2_선택과목, 탐구2_원점수, 탐구2_표준점수, 탐구2_백분위, 탐구2_등급
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                입력유형=VALUES(입력유형),
+                국어_선택과목=VALUES(국어_선택과목), 국어_원점수=VALUES(국어_원점수), 국어_표준점수=VALUES(국어_표준점수), 국어_백분위=VALUES(국어_백분위), 국어_등급=VALUES(국어_등급),
+                수학_선택과목=VALUES(수학_선택과목), 수학_원점수=VALUES(수학_원점수), 수학_표준점수=VALUES(수학_표준점수), 수학_백분위=VALUES(수학_백분위), 수학_등급=VALUES(수학_등급),
+                영어_원점수=VALUES(영어_원점수), 영어_등급=VALUES(영어_등급),
+                한국사_원점수=VALUES(한국사_원점수), 한국사_등급=VALUES(한국사_등급),
+                탐구1_선택과목=VALUES(탐구1_선택과목), 탐구1_원점수=VALUES(탐구1_원점수), 탐구1_표준점수=VALUES(탐구1_표준점수), 탐구1_백분위=VALUES(탐구1_백분위), 탐구1_등급=VALUES(탐구1_등급),
+                탐구2_선택과목=VALUES(탐구2_선택과목), 탐구2_원점수=VALUES(탐구2_원점수), 탐구2_표준점수=VALUES(탐구2_표준점수), 탐구2_백분위=VALUES(탐구2_백분위), 탐구2_등급=VALUES(탐구2_등급);
+        `;
+        const params = [
+            savedData.student_id, savedData.학년도, savedData.입력유형,
+            savedData.국어_선택과목, savedData.국어_원점수, savedData.국어_표준점수, savedData.국어_백분위, savedData.국어_등급,
+            savedData.수학_선택과목, savedData.수학_원점수, savedData.수학_표준점수, savedData.수학_백분위, savedData.수학_등급,
+            savedData.영어_원점수, savedData.영어_등급,
+            savedData.한국사_원점수, savedData.한국사_등급,
+            savedData.탐구1_선택과목, savedData.탐구1_원점수, savedData.탐구1_표준점수, savedData.탐구1_백분위, savedData.탐구1_등급,
+            savedData.탐구2_선택과목, savedData.탐구2_원점수, savedData.탐구2_표준점수, savedData.탐구2_백분위, savedData.탐구2_등급
+        ];
+
+        await conn.query(sql, params);
+        await conn.commit();
+        
+        res.json({ success: true, message: '성적이 저장되었습니다.', savedData: savedData });
+
+    } catch (err) {
+        await conn.rollback();
+        console.error('❌ [학생 API] 내 성적 저장 오류:', err); 
+        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message }); 
+    } finally {
+        conn.release();
+    }
+});
+
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- app.listen(...) 이 이 아래에 와야 함 ---
