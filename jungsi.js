@@ -3259,7 +3259,7 @@ app.post('/jungsi/student/remove-university', authStudentOnlyMiddleware, async (
     }
 });
 
-app.get('/jungsi/public/schools/:year', authMiddleware, async (req, res) => {
+app.get('/jungsi/public/schools/:year', async (req, res) => {
   const { year } = req.params;
   try {
     const [rows] = await db.promise().query(`
