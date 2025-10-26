@@ -68,6 +68,13 @@ const db = mysql.createPool({
   connectionLimit: 10,      // 최대 10개의 커넥션을 만듦
   queueLimit: 0             // 대기열 제한 없음
 });
+const dbJungsi = mysql.createPool({
+    host: '211.37.174.218',
+    user: 'maxilsan',
+    password: 'q141171616!',
+    database: 'jungsi', // 💡 여기 포인트
+    charset: 'utf8mb4'
+});
 
 // 관리자 권한 체크 함수
 function isAdmin(user) {
@@ -456,28 +463,26 @@ app.post('/26susi_student/approve', authJWT, async (req, res) => {
         return res.json({ success: false, message: "student_id 필요" });
     }
 
-    // 1) 승인 권한 체크 (admin 또는 owner만)
     if (!(user.userid === 'admin' || user.role === 'owner')) {
         return res.status(403).json({ success: false, message: "승인 권한이 없습니다." });
     }
 
     try {
-        // 2) 승인 대상 학생 정보 조회
+        // 1️⃣ 학생회원 정보 가져오기
         const [rows] = await db.promise().query(
-            "SELECT 지점명, 이름 FROM 학생회원 WHERE 학생ID = ?",
+            "SELECT 이름, 지점명, 성별 FROM 학생회원 WHERE 학생ID = ?",
             [student_id]
         );
-        if (!rows.length) {
-            return res.json({ success: false, message: "해당 학생을 찾을 수 없습니다." });
-        }
-        const student = rows[0];
 
-        // 3) 원장은 자기 지점 학생만 승인 가능
+        if (!rows.length) {
+            return res.json({ success: false, message: "학생회원 정보 없음" });
+        }
+
+        const st = rows[0];
+
+        // 2️⃣ 원장은 자기 지점 학생만 승인 가능
         if (user.role === 'owner' && user.userid !== 'admin') {
-            if (user.branch !== student.지점명) {
-                console.warn(
-                  `승인 거부: ${user.userid}(${user.branch}) -> ${student.이름}(${student.지점명})`
-                );
+            if (user.branch !== st.지점명) {
                 return res.status(403).json({
                     success: false,
                     message: "다른 지점 학생은 승인할 수 없습니다."
@@ -485,21 +490,44 @@ app.post('/26susi_student/approve', authJWT, async (req, res) => {
             }
         }
 
-        // 4) 승인 처리
-        await db.promise().query(
-            "UPDATE 학생회원 SET 승인여부='승인' WHERE 학생ID=?",
-            [student_id]
+        // 3️⃣ jungsi.students 테이블에서 자동 매칭 시도
+        let 내부학생_ID = null;
+        const [match] = await dbJungsi.promise().query(
+            `SELECT student_id 
+             FROM students 
+             WHERE 이름 = ? AND 지점 = ? AND 성별 = ? 
+             LIMIT 1`,
+            [st.이름, st.지점명, st.성별]
         );
 
-        console.log(`학생 승인 완료: ${student.이름} (${student.지점명}) by ${user.userid}(${user.branch})`);
+        if (match.length === 1) {
+            내부학생_ID = match[0].student_id;
+            console.log(`✅ 자동 매칭 성공: ${st.이름} (${st.지점명}) → jungsi.student_id=${내부학생_ID}`);
+        } else if (match.length > 1) {
+            console.warn(`⚠️ 중복 학생 (${st.이름}/${st.지점명}/${st.성별}) ${match.length}명 발견. 내부학생_ID 미지정`);
+        } else {
+            console.warn(`❌ jungsi DB에서 해당 학생 없음: ${st.이름} (${st.지점명}, ${st.성별})`);
+        }
 
-        return res.json({ success: true, message: "승인 완료" });
+        // 4️⃣ 승인 + 내부학생_ID 업데이트
+        await db.promise().query(
+            "UPDATE 학생회원 SET 승인여부='승인', 내부학생_ID=? WHERE 학생ID=?",
+            [내부학생_ID, student_id]
+        );
+
+        res.json({
+            success: true,
+            message: 내부학생_ID
+                ? `승인 완료 (jungsi.student_id=${내부학생_ID})`
+                : '승인 완료 (자동 매칭 실패 — 내부 ID 없음)'
+        });
 
     } catch (err) {
         console.error("학생 승인 처리 오류:", err);
-        return res.status(500).json({ success: false, message: "서버 오류" });
+        res.status(500).json({ success: false, message: "서버 오류" });
     }
 });
+
 
 //실기배점
 
