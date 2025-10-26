@@ -3247,6 +3247,128 @@ app.post('/jungsi/student/remove-university', authStudentOnlyMiddleware, async (
     }
 });
 
+app.get('/jungsi/public/schools/:year', authMiddleware, async (req, res) => {
+  const { year } = req.params;
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT 
+        b.U_ID,
+        b.대학명    AS university,
+        b.학과명    AS department,
+        b.군        AS gun,
+        b.광역      AS regionWide,
+        b.시구      AS regionLocal,
+        b.교직      AS teacher,
+        b.모집정원  AS quota
+      FROM 정시기본 b
+      WHERE b.학년도 = ?
+      ORDER BY b.U_ID ASC
+    `, [year]);
+
+    res.json({ success:true, list: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  }
+});
+
+/* ===========================
+   특정 학교 실기종목 조회
+   =========================== */
+app.post('/jungsi/public/school-details', authMiddleware, async (req, res) => {
+  const { U_ID, year } = req.body;
+  if (!U_ID || !year) {
+    return res.status(400).json({ success:false, message:'U_ID 또는 year 누락' });
+  }
+
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT DISTINCT 종목명
+      FROM 정시실기배점
+      WHERE U_ID = ? AND 학년도 = ?
+    `, [U_ID, year]);
+
+    const events = rows.map(r => r.종목명?.trim()).filter(Boolean);
+    res.json({ success:true, data:{ U_ID, events } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  }
+});
+
+/* ===========================
+   학생 개인 선호 저장
+   =========================== */
+app.post('/jungsi/public/save-preference', authMiddleware, async (req, res) => {
+  let { year, picks, student_id } = req.body;
+  if (req.user.role === 'student') student_id = req.user.user_id;
+  if (!student_id || !year || !picks)
+    return res.status(400).json({ success:false, message:'필수값 누락' });
+
+  const guns = ['가','나','다'];
+  for (const g of guns) {
+    const arr = Array.isArray(picks[g]) ? picks[g] : [];
+    if (arr.length > 3)
+      return res.status(400).json({ success:false, message:`${g}군 최대 3개 제한` });
+  }
+
+  try {
+    const gun_ga = JSON.stringify(picks['가'] || []);
+    const gun_na = JSON.stringify(picks['나'] || []);
+    const gun_da = JSON.stringify(picks['다'] || []);
+    await db.promise().query(`
+      INSERT INTO jungsimaxstudent (student_id, year, gun_ga, gun_na, gun_da, updated_at)
+      VALUES (?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        gun_ga = VALUES(gun_ga),
+        gun_na = VALUES(gun_na),
+        gun_da = VALUES(gun_da),
+        updated_at = NOW()
+    `, [student_id, year, gun_ga, gun_na, gun_da]);
+
+    res.json({ success:true, message:'저장 완료' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  }
+});
+
+/* ===========================
+   학생 개인 선호 불러오기
+   =========================== */
+app.get('/jungsi/public/get-preference/:year', authMiddleware, async (req, res) => {
+  const { year } = req.params;
+  let student_id = req.query.student_id;
+  if (req.user.role === 'student') student_id = req.user.user_id;
+  if (!student_id)
+    return res.status(400).json({ success:false, message:'student_id 누락' });
+
+  try {
+    const [rows] = await db.promise().query(`
+      SELECT gun_ga, gun_na, gun_da
+      FROM jungsimaxstudent
+      WHERE student_id = ? AND year = ?
+      LIMIT 1
+    `, [student_id, year]);
+
+    if (!rows.length)
+      return res.json({ success:true, picks:{ '가':[], '나':[], '다':[] } });
+
+    const { gun_ga, gun_na, gun_da } = rows[0];
+    res.json({
+      success:true,
+      picks:{
+        '가': JSON.parse(gun_ga || '[]'),
+        '나': JSON.parse(gun_na || '[]'),
+        '다': JSON.parse(gun_da || '[]')
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success:false, message:'DB 오류' });
+  }
+});
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- app.listen(...) 이 이 아래에 와야 함 ---
