@@ -515,7 +515,7 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
     }
 
     try {
-        // 1) 학생 계정 정보 가져오기
+        // 1) 학생 계정 정보 가져오기 (dbStudent - 이건 문제 없음)
         const [rows] = await dbStudent.promise().query(
             "SELECT * FROM student_account WHERE account_id=?",
             [student_id]
@@ -525,7 +525,7 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
         }
         const st = rows[0];
 
-        // 2) owner 권한이면 자기 지점 학생만 승인 가능
+        // 2) owner 권한이면 자기 지점 학생만 승인 가능 (문제 없음)
         if (user.role === 'owner' && user.userid !== 'admin') {
             if (user.branch !== st.branch) {
                 return res.status(403).json({
@@ -535,14 +535,15 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
             }
         }
 
-        // 3) jungsi.students에서 자동 매칭 시도
+        // 3) ⭐️⭐️⭐️ [수정] ⭐️⭐️⭐️
+        //    jungsi.students에서 자동 매칭 시도 -> jungsi.학생기본정보 로 변경
         let matchedId = null;
-        const [matchRows] = await dbJungsi.promise().query(
+        const [matchRows] = await dbJungsi.promise().query( // dbJungsi (jungsi DB)
             `SELECT student_id
-             FROM students
-             WHERE 이름 = ? AND 지점 = ? AND 성별 = ?
+             FROM 학생기본정보  -- ❌ students -> ✅ 학생기본정보
+             WHERE student_name = ? AND branch_name = ? AND gender = ? -- ❌ 이름, 지점 -> ✅ student_name, branch_name, gender
              LIMIT 1`,
-            [st.name, st.branch, st.gender || '']
+            [st.name, st.branch, st.gender || ''] // (st.name, st.branch, st.gender 값 자체는 OK)
         );
 
         if (matchRows.length === 1) {
@@ -554,7 +555,7 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
             console.warn(`❌ 매칭 실패: ${st.name}/${st.branch}/${st.gender}`);
         }
 
-        // 4) 승인 처리 + 매핑 저장
+        // 4) 승인 처리 + 매핑 저장 (dbStudent - 이건 문제 없음)
         await dbStudent.promise().query(
             "UPDATE student_account SET status='승인', jungsi_student_id=? WHERE account_id=?",
             [matchedId, student_id]
@@ -572,7 +573,6 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
         return res.status(500).json({ success:false, message:"서버 오류" });
     }
 });
-
 
 //실기배점
 
