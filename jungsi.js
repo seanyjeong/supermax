@@ -2930,7 +2930,8 @@ app.post('/jungsi/student/my-score', authStudentOnlyMiddleware, async (req, res)
         };
 
         // 3. 점수 변환 또는 복사
-        if (입력유형 === 'raw') { // (가채점)
+if (입력유형 === 'raw') { // (가채점)
+            // ... (가채점 로직은 그대로 둠) ...
             if (scores.영어_원점수 != null) savedData.영어_등급 = getEnglishGrade(scores.영어_원점수);
             if (scores.한국사_원점수 != null) savedData.한국사_등급 = getHistoryGrade(scores.한국사_원점수);
             const relativeSubjects = [
@@ -2949,11 +2950,34 @@ app.post('/jungsi/student/my-score', authStudentOnlyMiddleware, async (req, res)
                 }
             }
         } else { // (실채점 - official)
-            savedData.국어_표준점수=scores.국어_표준점수||null; savedData.국어_백분위=scores.국어_백분위||null; savedData.국어_등급=scores.국어_등급||null;
-            savedData.수학_표준점수=scores.수학_표준점수||null; savedData.수학_백분위=scores.수학_백분위||null; savedData.수학_등급=scores.수학_등급||null;
-            savedData.영어_등급=scores.영어_등급||getEnglishGrade(scores.영어_원점수); savedData.한국사_등급=scores.한국사_등급||getHistoryGrade(scores.한국사_원점수);
-            savedData.탐구1_표준점수=scores.탐구1_표준점수||null; savedData.탐구1_백분위=scores.탐구1_백분위||null; savedData.탐구1_등급=scores.탐구1_등급||null;
-            savedData.탐구2_표준점수=scores.탐구2_표준점수||null; savedData.탐구2_백분위=scores.탐구2_백분위||null; savedData.탐구2_등급=scores.탐구2_등급||null;
+            // ▼▼▼▼▼ 여기가 수정된 부분 ▼▼▼▼▼
+            
+            // 1. 실채점 값 복사 (기존과 동일)
+            savedData.국어_표준점수 = scores.국어_표준점수 || null;
+            savedData.국어_백분위 = scores.국어_백분위 || null;
+            savedData.국어_등급 = scores.국어_등급 || null;
+            savedData.수학_표준점수 = scores.수학_표준점수 || null;
+            savedData.수학_백분위 = scores.수학_백분위 || null;
+            savedData.수학_등급 = scores.수학_등급 || null;
+            // 영어/한국사는 등급만 사용 (원점수는 있어도 되고 없어도 됨)
+            savedData.영어_등급 = scores.영어_등급 || getEnglishGrade(scores.영어_원점수); 
+            savedData.한국사_등급 = scores.한국사_등급 || getHistoryGrade(scores.한국사_원점수);
+            savedData.탐구1_표준점수 = scores.탐구1_표준점수 || null;
+            savedData.탐구1_백분위 = scores.탐구1_백분위 || null;
+            savedData.탐구1_등급 = scores.탐구1_등급 || null;
+            savedData.탐구2_표준점수 = scores.탐구2_표준점수 || null;
+            savedData.탐구2_백분위 = scores.탐구2_백분위 || null;
+            savedData.탐구2_등급 = scores.탐구2_등급 || null;
+            
+            // ⭐️ 2. [핵심 수정] 실채점일 경우 원점수 필드를 강제로 null 처리!
+            savedData.국어_원점수 = null;
+            savedData.수학_원점수 = null;
+            savedData.영어_원점수 = null; // 영어 원점수도 비워줌 (등급만 있으면 됨)
+            savedData.한국사_원점수 = null; // 한국사 원점수도 비워줌 (등급만 있으면 됨)
+            savedData.탐구1_원점수 = null;
+            savedData.탐구2_원점수 = null;
+            
+            // ▲▲▲▲▲ 수정 끝 ▲▲▲▲▲
         }
 
         // 4. DB에 UPSERT (저장/수정)
