@@ -3185,6 +3185,67 @@ app.post('/jungsi/student/save-university', authStudentOnlyMiddleware, async (re
     } 
     // finally 불필요 (풀 자동 반환)
 });
+app.get('/jungsi/student/saved-universities', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id: studentAccountId } = req.user; // 학생 계정 DB ID
+    console.log(`[API /student/saved-universities] 학생계정ID: ${studentAccountId} 저장 목록 조회 요청`);
+
+    if (!studentAccountId) return res.status(403).json({ success: false, message: '학생 계정 ID 없음' });
+
+    try {
+        const sql = `
+            SELECT 
+                su.saved_id, su.U_ID, su.학년도, su.calculated_suneung_score, su.saved_at,
+                jb.대학명, jb.학과명, jb.군 -- jungsi DB에서 대학 정보 JOIN
+            FROM jungsimaxstudent.student_saved_universities su -- 학생 DB 테이블
+            JOIN jungsi.정시기본 jb ON su.U_ID = jb.U_ID AND su.학년도 = jb.학년도 -- jungsi DB 테이블 JOIN
+            WHERE su.account_id = ?
+            ORDER BY FIELD(jb.군, '가', '나', '다'), su.saved_at DESC; -- 군별 정렬, 최신순 정렬
+        `;
+        // ⭐️ dbStudent 풀 사용! account_id 사용!
+        const [savedList] = await dbStudent.query(sql, [studentAccountId]); 
+        
+        console.log(` -> 저장된 대학 ${savedList.length}건 조회 완료`);
+        res.json({ success: true, list: savedList });
+
+    } catch (err) {
+        console.error('❌ 학생 저장 대학 목록 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// =============================================
+// ⭐️ 학생용 저장대학 삭제 API (신규)
+// =============================================
+// POST /jungsi/student/remove-university (DELETE 대신 POST 사용)
+app.post('/jungsi/student/remove-university', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id: studentAccountId } = req.user;
+    const { savedId } = req.body; // 프론트에서 saved_id를 받음
+
+    console.log(`[API /student/remove-university] 학생계정ID: ${studentAccountId}, 저장ID: ${savedId} 삭제 요청`);
+
+    if (!savedId) return res.status(400).json({ success: false, message: '삭제할 항목 ID(savedId) 필요' });
+    if (!studentAccountId) return res.status(403).json({ success: false, message: '학생 계정 ID 없음' });
+
+    try {
+        const deleteSql = `
+            DELETE FROM jungsimaxstudent.student_saved_universities 
+            WHERE saved_id = ? AND account_id = ? -- 본인 것만 삭제 가능하도록 account_id 조건 추가
+        `;
+        // ⭐️ dbStudent 풀 사용! account_id 사용!
+        const [result] = await dbStudent.query(deleteSql, [savedId, studentAccountId]);
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 저장된 대학 삭제 완료 (saved_id: ${savedId})`);
+            res.json({ success: true, message: '저장 목록에서 삭제되었습니다.' });
+        } else {
+            console.log(` -> 삭제할 항목 없거나 권한 없음 (saved_id: ${savedId}, account_id: ${studentAccountId})`);
+            res.status(404).json({ success: false, message: '삭제할 항목이 없거나 권한이 없습니다.' });
+        }
+    } catch (err) {
+         console.error('❌ 학생 저장 대학 삭제 오류:', err);
+         res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    }
+});
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
