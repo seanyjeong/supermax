@@ -312,29 +312,31 @@ app.post('/26susi_student/check-userid', async (req, res) => {
     }
 
     try {
-        // 학생회원 중복 체크
-        const [dup1] = await db.promise().query(
-            "SELECT 학생ID FROM 학생회원 WHERE 아이디 = ?",
+        // ⭐️ 수정: dbStudent (jungsimaxstudent DB)의 새 테이블을 보도록 변경
+        const [dup1] = await dbStudent.promise().query(
+            "SELECT account_id FROM student_account WHERE userid = ?",
             [userid]
         );
 
-        // 원장회원 아이디랑 겹쳐도 안 되게 막아줌
+        // 원장회원 아이디랑 겹쳐도 안 되게 막아줌 (이건 db (26susi)가 맞음)
         const [dup2] = await db.promise().query(
             "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?",
             [userid]
         );
 
         if (dup1.length > 0 || dup2.length > 0) {
+            // 둘 중 하나라도 있으면 중복
             return res.json({ success: true, available: false, message: "이미 사용중인 아이디입니다." });
         }
 
+        // 둘 다 없어야 사용 가능
         return res.json({ success: true, available: true, message: "사용 가능한 아이디입니다." });
+        
     } catch (err) {
         console.error("학생 아이디 중복 체크 오류:", err);
         res.status(500).json({ success: false, message: "서버 오류" });
     }
 });
-
 
 app.post('/26susi_student/register', async (req, res) => {
     try {
