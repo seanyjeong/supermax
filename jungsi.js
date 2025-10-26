@@ -45,7 +45,13 @@ const authMiddleware = (req, res, next) => {
 
 const db = mysql.createPool({ host: '211.37.174.218', user: 'maxilsan', password: 'q141171616!', database: 'jungsi', charset: 'utf8mb4', waitForConnections: true, connectionLimit: 10, queueLimit: 0 });
 
-
+const dbStudent = mysql.createPool({
+    host: '211.37.174.218',
+    user: 'maxilsan',
+    password: 'q141171616!',
+    database: 'jungsimaxstudent',
+    charset: 'utf8mb4'
+});
 // ⭐️ [핵심 1] jungsical.js 파일(계산기 부품)을 불러온다.
 const jungsicalRouter = require('./jungsical.js')(db, authMiddleware);
 // ⭐️ [신규] silgical.js 파일(실기 계산기 부품)을 불러온다.
