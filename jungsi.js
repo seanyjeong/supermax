@@ -3481,6 +3481,44 @@ app.get('/jungsi/public/get-preference/:year', authMiddleware, async (req, res) 
   }
 });
 
+// jungsi.js 파일의 app.listen(...) 바로 위에 추가
+
+// ⭐️ [신규 API] 학생용 - 필터링에 사용할 '광역' 지역 목록 조회
+app.get('/jungsi/public/regions/:year', async (req, res) => {
+    const { year } = req.params;
+    if (!year) {
+        return res.status(400).json({ success: false, message: '학년도(year)가 필요합니다.' });
+    }
+
+    console.log(`[API /public/regions] Year: ${year} 지역 목록 요청`);
+
+    try {
+        const sql = `
+            SELECT DISTINCT 광역 
+            FROM 정시기본 
+            WHERE 학년도 = ? AND 광역 IS NOT NULL AND 광역 != ''
+            ORDER BY 
+                CASE 
+                    WHEN 광역 = '서울' THEN 1
+                    WHEN 광역 = '경기' THEN 2
+                    WHEN 광역 = '인천' THEN 3
+                    ELSE 4 
+                END, 광역 ASC
+        `;
+        const [rows] = await db.query(sql, [year]);
+        
+        // ['서울', '경기', '인천', '강원', ...] 형태의 배열로 변환
+        const regions = rows.map(r => r.광역); 
+        
+        console.log(` -> Found ${regions.length} regions.`);
+        res.json({ success: true, regions: regions });
+
+    } catch (err) {
+        console.error("❌ 지역 목록 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "DB 오류", error: err.message });
+    }
+});
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- app.listen(...) 이 이 아래에 와야 함 ---
