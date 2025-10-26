@@ -3041,6 +3041,132 @@ if (입력유형 === 'raw') { // (가채점)
     }
 });
 
+app.post('/jungsi/student/save-university', authStudentOnlyMiddleware, async (req, res) => {
+    // authStudentOnlyMiddleware가 req.user (토큰 payload) 와 req.student_id (jungsi DB ID) 설정
+    const { student_id: jungsiStudentId, account_id: studentAccountId } = req.user; // 토큰 payload에서 두 ID 모두 가져옴
+    const { universityId, 학년도 } = req.body; // 프론트에서 U_ID와 학년도 받음
+
+    console.log(`[API /student/save-university] 학생계정ID: ${studentAccountId}, 정시학생ID: ${jungsiStudentId}, 학년도: ${학년도}, 대학ID: ${universityId} 저장 요청`);
+
+    if (!universityId || !학년도) {
+        return res.status(400).json({ success: false, message: '대학ID와 학년도는 필수입니다.' });
+    }
+    if (!studentAccountId) {
+         return res.status(403).json({ success: false, message: '학생 계정 ID를 토큰에서 찾을 수 없습니다.' });
+    }
+    if (!jungsiStudentId) {
+         return res.status(403).json({ success: false, message: '정시 DB 학생 ID를 토큰에서 찾을 수 없습니다.' });
+    }
+
+
+    let connection; // jungsi DB용 커넥션
+    try {
+        // --- 1. 학생 성적(S_data) 조회 (jungsi DB) ---
+        const [scoreRows] = await db.query( // jungsi DB 사용
+            'SELECT * FROM 학생수능성적 WHERE student_id = ? AND 학년도 = ?',
+            [jungsiStudentId, 학년도]
+        );
+        if (scoreRows.length === 0) {
+            console.log(` -> 학생 성적 없음 (정시ID: ${jungsiStudentId}, Year: ${학년도})`);
+            return res.status(404).json({ success: false, message: '수능 성적 정보가 없습니다. 마이페이지에서 먼저 입력해주세요.' });
+        }
+        const studentScoreData = scoreRows[0];
+        const S_data = { /* ... S_data 객체 만들기 ... */ 
+             subjects: [
+                { name: '국어', subject: studentScoreData.국어_선택과목, std: studentScoreData.국어_표준점수, percentile: studentScoreData.국어_백분위, grade: studentScoreData.국어_등급 },
+                { name: '수학', subject: studentScoreData.수학_선택과목, std: studentScoreData.수학_표준점수, percentile: studentScoreData.수학_백분위, grade: studentScoreData.수학_등급 },
+                { name: '영어', grade: studentScoreData.영어_등급 },
+                { name: '한국사', grade: studentScoreData.한국사_등급 },
+                ...(studentScoreData.탐구1_선택과목 ? [{ name: '탐구', subject: studentScoreData.탐구1_선택과목, std: studentScoreData.탐구1_표준점수, percentile: studentScoreData.탐구1_백분위, grade: studentScoreData.탐구1_등급 }] : []),
+                ...(studentScoreData.탐구2_선택과목 ? [{ name: '탐구', subject: studentScoreData.탐구2_선택과목, std: studentScoreData.탐구2_표준점수, percentile: studentScoreData.탐구2_백분위, grade: studentScoreData.탐구2_등급 }] : [])
+            ]
+        };
+        console.log(` -> 학생 성적(S_data) 조회 완료`);
+
+        // --- 2. 대학 정보 및 규칙(F_data) 조회 (jungsi DB) ---
+        const formulaSql = `SELECT b.*, r.* FROM \`정시기본\` AS b JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 WHERE b.U_ID = ? AND b.학년도 = ?`;
+        const [formulaRows] = await db.query(formulaSql, [universityId, 학년도]); // jungsi DB 사용
+        if (formulaRows.length === 0) {
+             console.log(` -> 대학 정보 없음 (ID: ${universityId}, Year: ${학년도})`);
+            return res.status(404).json({ success: false, message: '대학 정보를 찾을 수 없습니다.' });
+        }
+        const F_data = formulaRows[0];
+        console.log(` -> 대학 정보(F_data) 조회 완료`);
+
+        // --- 3. (점수 계산용) 추가 정보 조회 (jungsi DB) ---
+         const [convRows] = await db.query(/* ... 변표 SQL ... */);
+         const convMap = { /* ... 변표 Map 만들기 ... */ };
+         F_data.탐구변표 = convMap;
+         const cfg = safeParse(F_data.score_config, {}) || {};
+         const mustLoadYearMax = /* ... 조건 ... */;
+         let highestMap = null;
+         if (mustLoadYearMax) {
+             const exam = cfg?.highest_exam || '수능';
+             highestMap = await loadYearHighestMap(db, 학년도, exam); 
+         }
+         console.log(` -> 계산용 추가 정보 조회 완료`);
+
+        // --- 4. ⭐️ 점수 계산 실행 (jungsical 함수 사용) ---
+        let calculatedScore = null;
+        try {
+            const result = calculateScoreWithConv(F_data, S_data, convMap, null, highestMap); // 로그 콜백은 null
+            calculatedScore = result.totalScore ? parseFloat(result.totalScore) : null;
+             console.log(` -> 점수 계산 완료: ${calculatedScore}`);
+        } catch (calcError) {
+             console.error(` -> 점수 계산 중 오류 발생:`, calcError);
+             // 계산 실패해도 저장은 진행 (점수는 null)
+        }
+
+        // --- 5. ⭐️ 학생 DB에 저장 (jungsimaxstudent DB 사용!) ---
+        try {
+            const insertSql = `
+                INSERT INTO jungsimaxstudent.student_saved_universities 
+                    (account_id, U_ID, 학년도, calculated_suneung_score)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    calculated_suneung_score = VALUES(calculated_suneung_score), 
+                    saved_at = NOW() 
+            `;
+            // ⭐️ dbStudent 풀 사용!
+            const [insertResult] = await dbStudent.query(insertSql, [ 
+                studentAccountId, universityId, 학년도, calculatedScore
+            ]);
+            
+            console.log(` -> 학생 DB 저장 완료 (account_id: ${studentAccountId}, U_ID: ${universityId})`);
+            
+            res.json({ 
+                success: true, 
+                message: '저장대학 목록에 추가되었습니다!', 
+                calculatedScore: calculatedScore, // 계산된 점수 반환
+                savedId: insertResult.insertId // 새로 생긴 ID 또는 업데이트된 경우 0
+            });
+
+        } catch (dbError) {
+            // UNIQUE 제약조건 위반(ER_DUP_ENTRY)은 사실 성공으로 처리해도 됨 (이미 저장됨)
+            if (dbError.code === 'ER_DUP_ENTRY') {
+                 console.log(` -> 이미 저장된 대학 (account_id: ${studentAccountId}, U_ID: ${universityId}) - 점수만 업데이트`);
+                 // 업데이트된 점수를 알려주기 위해 성공 응답
+                 res.json({ 
+                     success: true, // 중복도 성공으로 간주
+                     message: '이미 저장된 대학입니다 (점수 업데이트됨).', 
+                     calculatedScore: calculatedScore,
+                     updated: true // 업데이트 되었다는 플래그
+                 });
+            } else {
+                // 다른 DB 오류는 실패 처리
+                 console.error('❌ 학생 DB 저장 오류:', dbError);
+                 throw dbError; // 아래 catch 블록으로 넘김
+            }
+        }
+
+    } catch (err) {
+        // 트랜잭션은 사용하지 않았으므로 롤백 필요 없음
+        console.error('❌ /student/save-university API 최종 오류:', err);
+        res.status(500).json({ success: false, message: err.message || '서버 처리 중 오류 발생' });
+    } 
+    // finally 커넥션 반환 불필요 (풀 사용 시 자동)
+});
+
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
