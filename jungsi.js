@@ -76,6 +76,13 @@ const authStudentOnlyMiddleware = (req, res, next) => {
 };
 
 const db = mysql.createPool({ host: '211.37.174.218', user: 'maxilsan', password: 'q141171616!', database: 'jungsi', charset: 'utf8mb4', waitForConnections: true, connectionLimit: 10, queueLimit: 0 });
+const {
+    calculateScoreWithConv, // 계산 함수
+    safeParse,            // 유틸리티 함수
+    loadYearHighestMap,     // 유틸리티 함수
+    guessInquiryGroup       // 유틸리티 함수
+    // 필요하다면 buildSpecialContext 등 다른 함수도 여기서 가져오기
+} = require('./jungsical.js').helpers;
 
 const dbStudent = mysql.createPool({
     host: '211.37.174.218',
@@ -94,11 +101,7 @@ const silgicalRouter = require('./silgical.js')(db, authMiddleware); //
 app.use('/jungsi', jungsicalRouter);
 app.use('/silgi', silgicalRouter);
 
-const safeParse = (v, fb = null) => {
-  if (v == null) return fb;
-  if (typeof v === 'object') return v;
-  try { return JSON.parse(v); } catch { return fb; }
-};
+
 
 async function loadYearHighestMap(db, year, exam) {
   try { // DB 에러 방지용 try-catch 추가
