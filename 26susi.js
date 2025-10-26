@@ -93,6 +93,9 @@ function safe(v) {
   return v === undefined ? null : v;
 }
 
+
+
+
 const authStudentJWT = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -101,7 +104,6 @@ const authStudentJWT = (req, res, next) => {
     }
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        // decoded 예: { account_id, role:'student', ... }
         if (decoded.role !== 'student') {
             return res.status(403).json({ success:false, message:'학생 전용' });
         }
@@ -113,7 +115,7 @@ const authStudentJWT = (req, res, next) => {
     }
 };
 
-const authStudentJWT = (req, res, next) => {
+const authOwnerJWT = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) {
@@ -121,17 +123,18 @@ const authStudentJWT = (req, res, next) => {
     }
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        // decoded 예: { account_id, role:'student', ... }
-        if (decoded.role !== 'student') {
-            return res.status(403).json({ success:false, message:'학생 전용' });
+        // owner 또는 admin만 허용
+        if (!(decoded.role === 'owner' || decoded.role === 'admin')) {
+            return res.status(403).json({ success:false, message:'원장/관리자 전용' });
         }
         req.user = decoded;
         next();
     } catch (err) {
-        console.error('authStudentJWT 에러:', err);
+        console.error('authOwnerJWT 에러:', err);
         return res.status(403).json({ success:false, message:'토큰 유효하지 않음' });
     }
 };
+
 
 app.post('/26susi_owner/login', async (req, res) => {
     try {
