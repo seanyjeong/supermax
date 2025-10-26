@@ -944,14 +944,27 @@ const formulaData = rows[0];
     res.json({ success: true, maxes });
   });
 
-  module.exports.helpers = {
+module.exports.helpers = {
   calculateScoreWithConv, // 핵심 계산 함수
-  calculateScore,         // calculateScoreWithConv가 내부적으로 사용할 수 있음
-  safeParse,            // 유틸리티 함수
-  loadYearHighestMap,     // 유틸리티 함수
-  guessInquiryGroup,      // 유틸리티 함수
-  buildSpecialContext,    // 특수 공식 계산 시 필요할 수 있음
-  // 여기에 calculateScoreWithConv가 의존하는 다른 함수가 있다면 추가
+  calculateScore,         // calculateScoreWithConv가 내부적으로 사용
+  safeParse,              // 유틸리티 함수
+  // loadYearHighestMap,     // jungsi.js 에서만 필요하므로 여기서 빼도 됨 (선택)
+  // guessInquiryGroup,      // jungsi.js 에서만 필요하므로 여기서 빼도 됨 (선택)
+  buildSpecialContext,      // 특수 공식 계산 시 필요
+  // calculateScoreWithConv가 의존하는 jungsical.js 내부 함수들 추가
+  pickByType,
+  kmSubjectNameForKorean,
+  kmSubjectNameForMath,
+  inquirySubjectName,
+  resolveTotal,
+  detectEnglishAsBonus,
+  isSubjectUsedInRules,
+  calcInquiryRepresentative,
+  resolveMaxScores,
+  evaluateSpecialFormula,
+  readConvertedStd,
+  mapPercentileToConverted,
+  guessInquiryGroup, // calculateScore 내부에서도 쓰일 수 있으니 포함
 };
 
   return router;
