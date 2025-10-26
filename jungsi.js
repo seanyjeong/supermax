@@ -1197,65 +1197,77 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     }
 });
 
-app.get('/jungsi/public/schools/:year', /* authMiddleware 없음! */ async (req, res) => {
+app.get('/jungsi/public/schools/:year', authMiddleware, async (req, res) => { // ⭐️ authMiddleware 추가 (학생 로그인 필요)
     const { year } = req.params;
+    const { region, teaching, exclude_events } = req.query; // 필터 파라미터 받기
+
+    console.log(`[API /public/schools] Year: ${year}, Filters:`, req.query); // 로그 추가
+
     try {
-        // 내용은 위 API와 동일
-        const sql = `
-          SELECT b.U_ID, b.대학명, b.학과명, b.군, r.실기,
-                 r.selection_rules, r.bonus_rules, r.score_config, r.계산유형
-          FROM \`정시기본\` AS b
-          LEFT JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
-          WHERE b.학년도 = ?
-          ORDER BY b.U_ID ASC
+        let sql = `
+            SELECT
+                b.U_ID, b.대학명 AS university, b.학과명 AS department, b.군 AS gun,
+                b.광역 AS regionWide, b.시구 AS regionLocal, b.교직 AS teacher,
+                b.모집정원 AS quota, -- ⭐️ 모집정원 추가
+                GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events -- ⭐️ 실기 종목 목록 추가
+            FROM 정시기본 b
+            LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도 -- ⭐️ 실기 배점 테이블 JOIN
         `;
-        const [schools] = await db.query(sql, [year]);
-        // 간단 로깅 (선택 사항)
-        console.log(`[Public API] /public/schools/${year} 호출됨.`);
-        res.json({ success: true, schools });
-    } catch (err) {
-        console.error("❌ 공개 학교 목록 조회 오류:", err);
-        res.status(500).json({ success: false, message: "DB 오류" });
-    }
-});
+        const whereClauses = ['b.학년도 = ?'];
+        const params = [year];
 
-// =============================================
-// ⭐️ 정시_상담목록 API (counsel.html 용) - 생략 없음!
-// =============================================
-
-// --- 상담 목록 조회 (특정 학생, 특정 학년도) ---
-// GET /jungsi/counseling/wishlist/:student_id/:year
-app.get('/jungsi/counseling/wishlist/:student_id/:year', authMiddleware, async (req, res) => {
-    const { student_id, year } = req.params;
-    const { branch } = req.user;
-
-    try {
-        // 보안: 해당 학생이 이 지점 소속인지 확인
-        const [ownerCheck] = await db.query(
-            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ? AND 학년도 = ?',
-            [student_id, branch, year]
-        );
-        if (ownerCheck.length === 0) {
-            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        // 지역 필터 (콤마로 구분된 여러 지역 가능)
+        if (region) {
+            const regions = region.split(',').map(r => r.trim()).filter(Boolean);
+            if (regions.length > 0) {
+                whereClauses.push('b.광역 IN (?)');
+                params.push(regions);
+            }
+        }
+        // 교직 필터
+        if (teaching === 'O' || teaching === 'X') {
+            whereClauses.push('b.교직 = ?');
+            params.push(teaching);
         }
 
-        // 상담 목록 조회 (대학 정보 포함 JOIN)
-        const sql = `
-            SELECT
-                wl.*,
-                jb.대학명, jb.학과명
-            FROM 정시_상담목록 wl
-            JOIN 정시기본 jb ON wl.대학학과_ID = jb.U_ID AND wl.학년도 = jb.학년도
-            WHERE wl.학생_ID = ? AND wl.학년도 = ?
-            ORDER BY FIELD(wl.모집군, '가', '나', '다'), wl.수정일시 DESC
-        `;
-        const [wishlistItems] = await db.query(sql, [student_id, year]);
+        // ⭐️ 실기 종목 제외 필터
+        if (exclude_events) {
+            const eventsToExclude = exclude_events.split(',').map(e => e.trim()).filter(Boolean);
+            if (eventsToExclude.length > 0) {
+                // 서브쿼리를 사용하여 해당 실기 종목을 가진 U_ID를 찾고, 그 ID들을 제외
+                whereClauses.push(`
+                    b.U_ID NOT IN (
+                        SELECT DISTINCT U_ID
+                        FROM 정시실기배점
+                        WHERE 학년도 = ? AND 종목명 IN (?)
+                    )
+                `);
+                params.push(year, eventsToExclude); // 서브쿼리에도 year 조건 필요
+            }
+        }
 
-        res.json({ success: true, wishlist: wishlistItems });
+        sql += ` WHERE ${whereClauses.join(' AND ')}`;
+        sql += ` GROUP BY b.U_ID `; // ⭐️ U_ID별로 그룹화 (실기 종목 때문에 중복될 수 있음)
+        sql += ` ORDER BY b.대학명, b.학과명 ASC`;
+
+        console.log("Executing SQL:", sql); // 실행될 SQL 확인용 로그
+        console.log("With Params:", params); // 파라미터 확인용 로그
+
+        const [rows] = await db.query(sql, params); // ⭐️ db 직접 사용 (connection pool)
+
+        console.log(` -> Found ${rows.length} universities matching criteria.`); // 결과 건수 로그
+
+        // events 필드를 배열로 변환 (쉼표로 구분된 문자열 -> 배열)
+        const formattedRows = rows.map(row => ({
+            ...row,
+            events: row.events ? row.events.split(',') : [] // ⭐️ events 문자열을 배열로
+        }));
+
+        res.json({ success: true, universities: formattedRows }); // ⭐️ 키 이름을 'universities'로 변경 (프론트와 일치)
 
     } catch (err) {
-        console.error('❌ 상담 목록 조회 오류:', err); // 에러 로그
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' }); // 500 에러 응답
+        console.error("❌ 공개 학교 목록 조회 오류 (v2):", err);
+        res.status(500).json({ success: false, message: "DB 오류", error: err.message });
     }
 });
 
