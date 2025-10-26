@@ -340,13 +340,15 @@ app.post('/26susi_student/check-userid', async (req, res) => {
 
 app.post('/26susi_student/register', async (req, res) => {
     try {
-        const { userid, password, name, branch, phone, gender } = req.body;
+        // ⭐️ 1. school, grade 값 받기
+        const { userid, password, name, school, grade, branch, phone, gender } = req.body;
 
-        if (![userid, password, name, branch, phone].every(Boolean)) {
-            return res.json({ success: false, message: "빈칸 없이 입력해주세요." });
+        // ⭐️ 2. grade는 필수, school은 선택으로 유효성 검사
+        if (![userid, password, name, branch, phone, grade, gender].every(Boolean)) {
+            return res.json({ success: false, message: "빈칸 없이 입력해주세요. (학년/성별 필수)" });
         }
 
-        // 아이디 중복 검사 (학생 계정 테이블만 보면 됨)
+        // 아이디 중복 검사 (dbStudent - student_account)
         const [dup] = await dbStudent.promise().query(
             "SELECT account_id FROM student_account WHERE userid = ?",
             [userid]
@@ -357,9 +359,12 @@ app.post('/26susi_student/register', async (req, res) => {
 
         const hash = await bcrypt.hash(password, 10);
 
+        // ⭐️ 3. INSERT 쿼리에 school, grade 추가
         await dbStudent.promise().query(
-            "INSERT INTO student_account (userid, pw_hash, name, branch, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, '대기')",
-            [userid, hash, name, branch, phone, gender || null]
+            `INSERT INTO student_account 
+                (userid, pw_hash, name, school, grade, branch, phone, gender, status) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, '대기')`,
+            [userid, hash, name, school || null, grade, branch, phone, gender || null] // school은 없으면 null
         );
 
         return res.json({ success: true, message: "가입 신청 완료! 승인 후 로그인 가능합니다." });
@@ -420,17 +425,15 @@ app.post('/26susi_student/login', async (req, res) => {
 
 app.get('/26susi_student/pending-list', authOwnerJWT, async (req, res) => {
     const user = req.user; 
-    // user.role: 'owner' or 'admin'
-    // user.branch: 원장 지점
-
+    
     try {
+        // ⭐️ 1. SELECT에 school, grade 추가
         let sql = `
-            SELECT account_id, userid, name, branch, phone, gender, status, jungsi_student_id, created_at
+            SELECT account_id, userid, name, school, grade, branch, phone, gender, status, jungsi_student_id, created_at
             FROM student_account
         `;
         const params = [];
 
-        // owner는 자기 지점만, admin은 전체
         if (user.role === 'owner' && user.userid !== 'admin') {
             sql += " WHERE branch = ? ";
             params.push(user.branch);
@@ -440,11 +443,13 @@ app.get('/26susi_student/pending-list', authOwnerJWT, async (req, res) => {
 
         const [rows] = await dbStudent.promise().query(sql, params);
 
-        // 프론트에 맞추기 위해 키 이름만 기존 스타일로 바꿔주자
+        // ⭐️ 2. 프론트에 전달할 mapped 객체에 고교명, 학년 추가
         const mapped = rows.map(r => ({
             학생ID: r.account_id,
             아이디: r.userid,
             이름: r.name,
+            고교명: r.school, // ⭐️ 추가
+            학년: r.grade,   // ⭐️ 추가
             지점명: r.branch,
             전화번호: r.phone,
             성별: r.gender,
