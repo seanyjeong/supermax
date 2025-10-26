@@ -93,6 +93,45 @@ function safe(v) {
   return v === undefined ? null : v;
 }
 
+const authStudentJWT = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ success: false, message: '토큰 필요' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        // decoded 예: { account_id, role:'student', ... }
+        if (decoded.role !== 'student') {
+            return res.status(403).json({ success:false, message:'학생 전용' });
+        }
+        req.user = decoded;
+        next();
+    } catch (err) {
+        console.error('authStudentJWT 에러:', err);
+        return res.status(403).json({ success:false, message:'토큰 유효하지 않음' });
+    }
+};
+
+const authStudentJWT = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ success: false, message: '토큰 필요' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        // decoded 예: { account_id, role:'student', ... }
+        if (decoded.role !== 'student') {
+            return res.status(403).json({ success:false, message:'학생 전용' });
+        }
+        req.user = decoded;
+        next();
+    } catch (err) {
+        console.error('authStudentJWT 에러:', err);
+        return res.status(403).json({ success:false, message:'토큰 유효하지 않음' });
+    }
+};
 
 app.post('/26susi_owner/login', async (req, res) => {
     try {
@@ -141,6 +180,7 @@ app.post('/26susi_owner/login', async (req, res) => {
         return res.json({ success: false, message: "서버 오류" });
     }
 });
+
 
 // (GET) 원장회원 리스트 조회
 app.get('/26susi_admin_members', authJWT, async (req, res) => {
@@ -295,33 +335,26 @@ app.post('/26susi_student/check-userid', async (req, res) => {
 
 app.post('/26susi_student/register', async (req, res) => {
     try {
-        const { userid, password, name, branch, phone } = req.body;
+        const { userid, password, name, branch, phone, gender } = req.body;
 
-        // 최소값 체크
         if (![userid, password, name, branch, phone].every(Boolean)) {
             return res.json({ success: false, message: "빈칸 없이 입력해주세요." });
         }
 
-        // 아이디 중복 검사
-        const [dupStudent] = await db.promise().query(
-            "SELECT 학생ID FROM 학생회원 WHERE 아이디 = ?",
+        // 아이디 중복 검사 (학생 계정 테이블만 보면 됨)
+        const [dup] = await dbStudent.promise().query(
+            "SELECT account_id FROM student_account WHERE userid = ?",
             [userid]
         );
-        const [dupOwner] = await db.promise().query(
-            "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?",
-            [userid]
-        );
-        if (dupStudent.length > 0 || dupOwner.length > 0) {
+        if (dup.length > 0) {
             return res.json({ success: false, message: "이미 사용중인 아이디입니다." });
         }
 
-        // 비번 해시
         const hash = await bcrypt.hash(password, 10);
 
-        // DB 저장 (승인여부 = '대기')
-        await db.promise().query(
-            "INSERT INTO 학생회원 (아이디, 비밀번호, 이름, 지점명, 전화번호, 승인여부) VALUES (?, ?, ?, ?, ?, '대기')",
-            [userid, hash, name, branch, phone]
+        await dbStudent.promise().query(
+            "INSERT INTO student_account (userid, pw_hash, name, branch, phone, gender, status) VALUES (?, ?, ?, ?, ?, ?, '대기')",
+            [userid, hash, name, branch, phone, gender || null]
         );
 
         return res.json({ success: true, message: "가입 신청 완료! 승인 후 로그인 가능합니다." });
@@ -332,6 +365,7 @@ app.post('/26susi_student/register', async (req, res) => {
     }
 });
 
+
 app.post('/26susi_student/login', async (req, res) => {
     try {
         const { userid, password } = req.body;
@@ -339,36 +373,35 @@ app.post('/26susi_student/login', async (req, res) => {
             return res.json({ success: false, message: "아이디/비번 입력" });
         }
 
-        const [rows] = await db.promise().query(
-            "SELECT * FROM 학생회원 WHERE 아이디 = ?",
+        const [rows] = await dbStudent.promise().query(
+            "SELECT * FROM student_account WHERE userid = ?",
             [userid]
         );
-
         if (!rows.length) {
             return res.json({ success: false, message: "아이디 없음" });
         }
 
         const user = rows[0];
 
-        // 승인상태 확인
-        if (user.승인여부 !== '승인') {
+        if (user.status !== '승인') {
             return res.json({ success: false, message: "아직 승인되지 않은 계정입니다." });
         }
 
-        // 비밀번호 검증
-        const isMatch = await bcrypt.compare(password, user.비밀번호);
-        if (!isMatch) {
+        const ok = await bcrypt.compare(password, user.pw_hash);
+        if (!ok) {
             return res.json({ success: false, message: "비밀번호가 올바르지 않습니다." });
         }
 
-        // 여기서 학생 전용 토큰 발급
+        // 학생용 토큰
         const token = jwt.sign({
-            id: user.학생ID,
-            userid: user.아이디,
-            name: user.이름,
-            branch: user.지점명,   // 원장 branch 비교에 쓰일 값과 동일한 필드명
-            phone: user.전화번호,
-            role: 'student'        // 핵심: 정시엔진에서 이걸로 차단한다
+            account_id: user.account_id,
+            userid: user.userid,
+            name: user.name,
+            branch: user.branch,
+            phone: user.phone,
+            gender: user.gender,
+            role: 'student',
+            jungsi_student_id: user.jungsi_student_id || null
         }, JWT_SECRET, { expiresIn: '3d' });
 
         return res.json({ success: true, token });
@@ -379,32 +412,44 @@ app.post('/26susi_student/login', async (req, res) => {
     }
 });
 
-app.get('/26susi_student/pending-list', authJWT, async (req, res) => {
-    const user = req.user; // 토큰에서 복원된 로그인 사용자 (owner, admin 등)
 
-    // 1) admin 또는 owner(원장)만 접근 가능
-    if (!(user.userid === 'admin' || user.role === 'owner')) {
-        return res.status(403).json({ success: false, message: "권한없음" });
-    }
+app.get('/26susi_student/pending-list', authOwnerJWT, async (req, res) => {
+    const user = req.user; 
+    // user.role: 'owner' or 'admin'
+    // user.branch: 원장 지점
 
     try {
-        // 2) admin은 전체 조회, 원장은 자기 지점만
         let sql = `
-            SELECT 학생ID, 아이디, 이름, 지점명, 전화번호, 승인여부, 생성일시
-            FROM 학생회원
+            SELECT account_id, userid, name, branch, phone, gender, status, jungsi_student_id, created_at
+            FROM student_account
         `;
         const params = [];
 
+        // owner는 자기 지점만, admin은 전체
         if (user.role === 'owner' && user.userid !== 'admin') {
-            sql += " WHERE 지점명 = ? ";
+            sql += " WHERE branch = ? ";
             params.push(user.branch);
         }
 
-        sql += " ORDER BY 생성일시 DESC";
+        sql += " ORDER BY created_at DESC";
 
-        const [rows] = await db.promise().query(sql, params);
+        const [rows] = await dbStudent.promise().query(sql, params);
 
-        return res.json({ success: true, students: rows });
+        // 프론트에 맞추기 위해 키 이름만 기존 스타일로 바꿔주자
+        const mapped = rows.map(r => ({
+            학생ID: r.account_id,
+            아이디: r.userid,
+            이름: r.name,
+            지점명: r.branch,
+            전화번호: r.phone,
+            성별: r.gender,
+            승인여부: r.status,
+            내부학생_ID: r.jungsi_student_id,
+            생성일시: r.created_at
+        }));
+
+        return res.json({ success: true, students: mapped });
+
     } catch (err) {
         console.error("학생 대기목록 조회 오류:", err);
         return res.status(500).json({ success: false, message: "서버 오류" });
@@ -412,126 +457,114 @@ app.get('/26susi_student/pending-list', authJWT, async (req, res) => {
 });
 
 
-app.post('/26susi_student/delete', authJWT, async (req, res) => {
+app.post('/26susi_student/delete', authOwnerJWT, async (req, res) => {
     const user = req.user;
-    const { student_id } = req.body;
+    const { student_id } = req.body; // account_id
 
     if (!student_id) {
-        return res.json({ success: false, message: "student_id 필요" });
-    }
-
-    // admin 또는 owner만 가능
-    if (!(user.userid === 'admin' || user.role === 'owner')) {
-        return res.status(403).json({ success: false, message: "권한없음" });
+        return res.json({ success:false, message:"student_id 필요" });
     }
 
     try {
-        // 대상 학생 가져오기
-        const [rows] = await db.promise().query(
-            "SELECT 지점명, 이름 FROM 학생회원 WHERE 학생ID = ?",
+        // 권한 체크하려면 우선 대상 학생 불러오기
+        const [rows] = await dbStudent.promise().query(
+            "SELECT branch FROM student_account WHERE account_id=?",
             [student_id]
         );
         if (!rows.length) {
-            return res.json({ success: false, message: "해당 학생을 찾을 수 없습니다." });
+            return res.json({ success:false, message:"이미 없음" });
         }
-        const student = rows[0];
 
-        // 원장은 자기 지점 학생만 삭제 가능
+        const targetBranch = rows[0].branch;
+
         if (user.role === 'owner' && user.userid !== 'admin') {
-            if (user.branch !== student.지점명) {
+            if (user.branch !== targetBranch) {
                 return res.status(403).json({
-                    success: false,
-                    message: "다른 지점 학생은 삭제할 수 없습니다."
+                    success:false,
+                    message:"다른 지점 학생은 삭제할 수 없습니다."
                 });
             }
         }
 
-        await db.promise().query(
-            "DELETE FROM 학생회원 WHERE 학생ID=?",
+        // 실제 삭제
+        await dbStudent.promise().query(
+            "DELETE FROM student_account WHERE account_id=?",
             [student_id]
         );
 
-        console.log(`학생 삭제: ${student.이름} (${student.지점명}) by ${user.userid}(${user.branch})`);
-
-        return res.json({ success: true, message: "삭제 완료" });
-
+        return res.json({ success:true });
     } catch (err) {
         console.error("학생 삭제 오류:", err);
-        return res.status(500).json({ success: false, message: "서버 오류" });
+        return res.status(500).json({ success:false, message:"서버 오류" });
     }
 });
 
 
-app.post('/26susi_student/approve', authJWT, async (req, res) => {
+
+app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
     const user = req.user;
-    const { student_id } = req.body;
+    const { student_id } = req.body; // 프론트에서 보내는 학생ID = account_id
 
     if (!student_id) {
-        return res.json({ success: false, message: "student_id 필요" });
-    }
-
-    if (!(user.userid === 'admin' || user.role === 'owner')) {
-        return res.status(403).json({ success: false, message: "승인 권한이 없습니다." });
+        return res.json({ success:false, message:"student_id 필요" });
     }
 
     try {
-        // 1️⃣ 학생회원 정보 가져오기
-        const [rows] = await db.promise().query(
-            "SELECT 이름, 지점명, 성별 FROM 학생회원 WHERE 학생ID = ?",
+        // 1) 학생 계정 정보 가져오기
+        const [rows] = await dbStudent.promise().query(
+            "SELECT * FROM student_account WHERE account_id=?",
             [student_id]
         );
-
         if (!rows.length) {
-            return res.json({ success: false, message: "학생회원 정보 없음" });
+            return res.json({ success:false, message:"학생 없음" });
         }
-
         const st = rows[0];
 
-        // 2️⃣ 원장은 자기 지점 학생만 승인 가능
+        // 2) owner 권한이면 자기 지점 학생만 승인 가능
         if (user.role === 'owner' && user.userid !== 'admin') {
-            if (user.branch !== st.지점명) {
+            if (user.branch !== st.branch) {
                 return res.status(403).json({
-                    success: false,
-                    message: "다른 지점 학생은 승인할 수 없습니다."
+                    success:false,
+                    message:"다른 지점 학생은 승인할 수 없습니다."
                 });
             }
         }
 
-        // 3️⃣ jungsi.students 테이블에서 자동 매칭 시도
-        let 내부학생_ID = null;
-        const [match] = await dbJungsi.promise().query(
-            `SELECT student_id 
-             FROM students 
-             WHERE 이름 = ? AND 지점 = ? AND 성별 = ? 
+        // 3) jungsi.students에서 자동 매칭 시도
+        let matchedId = null;
+        const [matchRows] = await dbJungsi.promise().query(
+            `SELECT student_id
+             FROM students
+             WHERE 이름 = ? AND 지점 = ? AND 성별 = ?
              LIMIT 1`,
-            [st.이름, st.지점명, st.성별]
+            [st.name, st.branch, st.gender || '']
         );
 
-        if (match.length === 1) {
-            내부학생_ID = match[0].student_id;
-            console.log(`✅ 자동 매칭 성공: ${st.이름} (${st.지점명}) → jungsi.student_id=${내부학생_ID}`);
-        } else if (match.length > 1) {
-            console.warn(`⚠️ 중복 학생 (${st.이름}/${st.지점명}/${st.성별}) ${match.length}명 발견. 내부학생_ID 미지정`);
+        if (matchRows.length === 1) {
+            matchedId = matchRows[0].student_id;
+            console.log(`✅ 자동 매칭 성공: ${st.name}/${st.branch}/${st.gender} -> jungsi.student_id=${matchedId}`);
+        } else if (matchRows.length > 1) {
+            console.warn(`⚠️ 중복 매칭: ${st.name}/${st.branch}/${st.gender} 후보 ${matchRows.length}명`);
         } else {
-            console.warn(`❌ jungsi DB에서 해당 학생 없음: ${st.이름} (${st.지점명}, ${st.성별})`);
+            console.warn(`❌ 매칭 실패: ${st.name}/${st.branch}/${st.gender}`);
         }
 
-        // 4️⃣ 승인 + 내부학생_ID 업데이트
-        await db.promise().query(
-            "UPDATE 학생회원 SET 승인여부='승인', 내부학생_ID=? WHERE 학생ID=?",
-            [내부학생_ID, student_id]
+        // 4) 승인 처리 + 매핑 저장
+        await dbStudent.promise().query(
+            "UPDATE student_account SET status='승인', jungsi_student_id=? WHERE account_id=?",
+            [matchedId, student_id]
         );
 
-        res.json({
-            success: true,
-            message: 내부학생_ID
-                ? `승인 완료 (jungsi.student_id=${내부학생_ID})`
-                : '승인 완료 (자동 매칭 실패 — 내부 ID 없음)'
+        return res.json({
+            success:true,
+            message: matchedId
+                ? `승인 완료 (정시엔진 ID ${matchedId} 연결됨)`
+                : `승인 완료 (정시엔진 학생 자동 매칭 실패)`
         });
 
     } catch (err) {
         console.error("학생 승인 처리 오류:", err);
-        res.status(500).json({ success: false, message: "서버 오류" });
+        return res.status(500).json({ success:false, message:"서버 오류" });
     }
 });
 
