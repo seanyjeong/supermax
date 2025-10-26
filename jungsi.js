@@ -1197,7 +1197,7 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     }
 });
 
-app.get('/jungsi/public/schools/:year', authMiddleware, async (req, res) => { // ⭐️ authMiddleware 추가 (학생 로그인 필요)
+app.get('/jungsi/public/schools/:year',  async (req, res) => { // ⭐️ authMiddleware 추가 (학생 로그인 필요)
     const { year } = req.params;
     const { region, teaching, exclude_events } = req.query; // 필터 파라미터 받기
 
