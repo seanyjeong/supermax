@@ -28,10 +28,10 @@ const authMiddleware = (req, res, next) => {
         const user = req.user;
 
         // ✅ 학생 계정 차단 (정시엔진 접근 불가)
-        if (user.role === 'student') {
-            console.log(` -> [접근 차단] 🚫 학생 계정 (${user.userid}) 은 정시엔진 접근 불가`);
-            return res.status(403).json({ success: false, message: '학생 계정은 정시엔진에 접근할 수 없습니다.' });
-        }
+        // if (user.role === 'student') {
+        //     console.log(` -> [접근 차단] 🚫 학생 계정 (${user.userid}) 은 정시엔진 접근 불가`);
+        //     return res.status(403).json({ success: false, message: '학생 계정은 정시엔진에 접근할 수 없습니다.' });
+        // }
 
         // 🟢 인증 성공 로그
         console.log(` -> [인증 성공] ✅ 사용자: ${user.userid}, 지점: ${user.branch}, 역할: ${user.role} → 다음 단계로 진행`);
