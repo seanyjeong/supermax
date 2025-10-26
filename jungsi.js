@@ -103,48 +103,48 @@ app.use('/silgi', silgicalRouter);
 
 
 
-async function loadYearHighestMap(db, year, exam) {
-  try { // DB 에러 방지용 try-catch 추가
-    const [rows] = await db.query(
-      'SELECT 과목명, 최고점 FROM `정시최고표점` WHERE 학년도=? AND 모형=?',
-      [year, exam]
-    );
-    const map = {};
-    rows.forEach(r => { map[r.과목명] = Number(r.최고점); });
-    return map;
-  } catch (err) {
-    console.error(`Error loading highest map for ${year} ${exam}:`, err);
-    return {}; // 에러 시 빈 객체 반환
-  }
-}
+// async function loadYearHighestMap(db, year, exam) {
+//   try { // DB 에러 방지용 try-catch 추가
+//     const [rows] = await db.query(
+//       'SELECT 과목명, 최고점 FROM `정시최고표점` WHERE 학년도=? AND 모형=?',
+//       [year, exam]
+//     );
+//     const map = {};
+//     rows.forEach(r => { map[r.과목명] = Number(r.최고점); });
+//     return map;
+//   } catch (err) {
+//     console.error(`Error loading highest map for ${year} ${exam}:`, err);
+//     return {}; // 에러 시 빈 객체 반환
+//   }
+// }
 
-function guessInquiryGroup(subjectName='') {
-  const s = String(subjectName);
-  const sci = ['물리','화학','생명','지구'];
-  if (sci.some(w => s.includes(w))) return '과탐';
-  // 그 외에는 사탐으로 간주 (직탐 등 예외처리 필요 시 추가)
-  return '사탐';
-}
+// function guessInquiryGroup(subjectName='') {
+//   const s = String(subjectName);
+//   const sci = ['물리','화학','생명','지구'];
+//   if (sci.some(w => s.includes(w))) return '과탐';
+//   // 그 외에는 사탐으로 간주 (직탐 등 예외처리 필요 시 추가)
+//   return '사탐';
+// }
 
 // jungsical.js에서 계산 함수 가져오기 (이미 되어있다면 이 부분은 생략 가능)
 // 만약 jungsical.js export 방식이 다르다면 맞춰서 수정 필요
-let calculateScoreWithConv; // 전역 변수로 선언
-try {
-    // calculateScoreWithConv 함수가 jungsical 모듈의 export 객체에 포함되어 있다고 가정
-    const jungsicalModule = require('./jungsical.js')(db, authMiddleware);
-    if (typeof jungsicalModule.calculateScoreWithConv === 'function') {
-        calculateScoreWithConv = jungsicalModule.calculateScoreWithConv;
-    } else {
-        // jungsical.js 가 router만 export 하는 경우, calculateScoreWithConv 정의를 여기로 복사해야 할 수도 있음
-        console.error("!!! calculateScoreWithConv 함수를 jungsical.js에서 찾을 수 없습니다. !!!");
-        // 임시 방편으로 calculateScoreWithConv 함수 정의를 여기에 직접 넣거나,
-        // jungsical.js의 export 방식을 수정해야 함.
-        // calculateScoreWithConv = function(...) { /* jungsical.js의 함수 내용 복사 */ };
-    }
-} catch (e) {
-    console.error("jungsical.js 로드 또는 calculateScoreWithConv 가져오기 실패:", e);
-    // calculateScoreWithConv 함수 정의를 복사하는 방식으로 대체 필요
-}
+// let calculateScoreWithConv; // 전역 변수로 선언
+// try {
+//     // calculateScoreWithConv 함수가 jungsical 모듈의 export 객체에 포함되어 있다고 가정
+//     const jungsicalModule = require('./jungsical.js')(db, authMiddleware);
+//     if (typeof jungsicalModule.calculateScoreWithConv === 'function') {
+//         calculateScoreWithConv = jungsicalModule.calculateScoreWithConv;
+//     } else {
+//         // jungsical.js 가 router만 export 하는 경우, calculateScoreWithConv 정의를 여기로 복사해야 할 수도 있음
+//         console.error("!!! calculateScoreWithConv 함수를 jungsical.js에서 찾을 수 없습니다. !!!");
+//         // 임시 방편으로 calculateScoreWithConv 함수 정의를 여기에 직접 넣거나,
+//         // jungsical.js의 export 방식을 수정해야 함.
+//         // calculateScoreWithConv = function(...) { /* jungsical.js의 함수 내용 복사 */ };
+//     }
+// } catch (e) {
+//     console.error("jungsical.js 로드 또는 calculateScoreWithConv 가져오기 실패:", e);
+//     // calculateScoreWithConv 함수 정의를 복사하는 방식으로 대체 필요
+// }
 
 // --- API 목록 ---
 // [API #1] 특정 '학년도'의 전체 학교 목록 조회 (모든 규칙 포함 버전)
@@ -3105,150 +3105,193 @@ if (입력유형 === 'raw') { // (가채점)
     }
 });
 
+// app.post('/jungsi/student/save-university', authStudentOnlyMiddleware, async (req, res) => {
+//     // ⭐️ account_id 와 jungsi_student_id 모두 사용
+//     const { student_id: jungsiStudentId } = req; 
+//     const { account_id: studentAccountId } = req.user; // 토큰에서 가져옴
+//     const { universityId, 학년도 } = req.body; 
+
+//     console.log(`[API /student/save-university v3] 계정ID: ${studentAccountId}, 정시ID: ${jungsiStudentId}, 학년도: ${학년도}, 대학ID: ${universityId} 저장 요청`);
+
+//     if (!universityId || !학년도 || !studentAccountId || !jungsiStudentId) {
+//         return res.status(400).json({ success: false, message: '필수 정보 누락 (학생ID, 대학ID, 학년도)' });
+//     }
+
+//     try {
+//         // --- 1. 학생 성적(S_data) 조회 (jungsi DB) ---
+//         const studentScoreSql = `
+//             SELECT * FROM 학생수능성적 
+//             WHERE student_id = ? AND 학년도 = ?`;
+//         const [scoreRows] = await db.query(studentScoreSql, [jungsiStudentId, 학년도]); // jungsi DB 사용
+        
+//         if (scoreRows.length === 0) {
+//             console.log(` -> 학생 성적 없음 (정시ID: ${jungsiStudentId}, Year: ${학년도})`);
+//             return res.status(404).json({ success: false, message: '수능 성적 정보가 없습니다. 마이페이지에서 먼저 입력해주세요.' });
+//         }
+//         const studentScoreData = scoreRows[0];
+        
+//         // S_data 객체 만들기 (jungsical.js 요구 형식)
+//         const S_data = {
+//              subjects: [
+//                 { name: '국어', subject: studentScoreData.국어_선택과목, std: studentScoreData.국어_표준점수, percentile: studentScoreData.국어_백분위, grade: studentScoreData.국어_등급 },
+//                 { name: '수학', subject: studentScoreData.수학_선택과목, std: studentScoreData.수학_표준점수, percentile: studentScoreData.수학_백분위, grade: studentScoreData.수학_등급 },
+//                 { name: '영어', grade: studentScoreData.영어_등급 },
+//                 { name: '한국사', grade: studentScoreData.한국사_등급 },
+//                 // 탐구 과목이 있을 경우에만 배열에 추가
+//                 ...(studentScoreData.탐구1_선택과목 ? [{ 
+//                     name: '탐구', 
+//                     subject: studentScoreData.탐구1_선택과목, 
+//                     std: studentScoreData.탐구1_표준점수, 
+//                     percentile: studentScoreData.탐구1_백분위, 
+//                     grade: studentScoreData.탐구1_등급 
+//                 }] : []),
+//                 ...(studentScoreData.탐구2_선택과목 ? [{ 
+//                     name: '탐구', 
+//                     subject: studentScoreData.탐구2_선택과목, 
+//                     std: studentScoreData.탐구2_표준점수, 
+//                     percentile: studentScoreData.탐구2_백분위, 
+//                     grade: studentScoreData.탐구2_등급 
+//                 }] : [])
+//             ]
+//         };
+//         console.log(` -> 학생 성적(S_data) 조회 완료`);
+
+//         // --- 2. 대학 정보(F_data) 조회 (jungsi DB) ---
+//         const formulaSql = `
+//             SELECT b.*, r.* FROM \`정시기본\` AS b 
+//             JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 
+//             WHERE b.U_ID = ? AND b.학년도 = ?`;
+//         const [formulaRows] = await db.query(formulaSql, [universityId, 학년도]); // jungsi DB 사용
+        
+//         if (formulaRows.length === 0) {
+//              console.log(` -> 대학 정보 없음 (ID: ${universityId}, Year: ${학년도})`);
+//             return res.status(404).json({ success: false, message: '대학 정보를 찾을 수 없습니다.' });
+//         }
+//         const F_data = formulaRows[0];
+//         const 모집군 = F_data.군; // 군 정보 저장 (저장에는 안 쓰지만 로깅용)
+//         console.log(` -> 대학 정보(F_data) 조회 완료 (군: ${모집군})`);
+
+//         // --- 3. 계산용 추가 정보 조회 (jungsi DB) ---
+//         const convSql = `
+//             SELECT 계열, 백분위, 변환표준점수 
+//             FROM \`정시탐구변환표준\` 
+//             WHERE U_ID=? AND 학년도=?`;
+//         const [convRows] = await db.query(convSql, [universityId, 학년도]);
+//         const convMap = { '사탐': {}, '과탐': {} };
+//         convRows.forEach(r => { 
+//             if (convMap[r.계열]) { // 사탐, 과탐 외 다른 값이 들어오는 것 방지
+//                 convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); 
+//             }
+//         });
+//         F_data.탐구변표 = convMap; // F_data 객체에 변표 정보 추가
+        
+//         const cfg = safeParse(F_data.score_config, {}) || {}; // safeParse 함수 필요
+//         // 최고표점 로딩 조건 (jungsical.js와 동일하게)
+//         const mustLoadYearMax = 
+//             cfg?.korean_math?.max_score_method === 'highest_of_year' ||
+//             cfg?.inquiry?.max_score_method     === 'highest_of_year' ||
+//             (F_data.계산유형 === '특수공식'); 
+            
+//         let highestMap = null;
+//         if (mustLoadYearMax) {
+//             const exam = cfg?.highest_exam || '수능';
+//             // loadYearHighestMap 함수는 jungsical.js 에서 require 해야 함
+//             highestMap = await loadYearHighestMap(db, 학년도, exam); 
+//         }
+//         console.log(` -> 계산용 추가 정보 조회 완료 (highestMap 로드 여부: ${!!highestMap})`);
+
+//         // --- 4. 점수 계산 (jungsical 함수 사용) ---
+//         let calculatedScore = null;
+//         try {
+//             // calculateScoreWithConv 함수는 jungsical.js 에서 require 해야 함
+//             const result = calculateScoreWithConv(F_data, S_data, convMap, null, highestMap); // 로그 콜백 null
+//             calculatedScore = result.totalScore ? parseFloat(result.totalScore) : null;
+//              console.log(` -> 점수 계산 완료: ${calculatedScore}`);
+//         } catch (calcError) { 
+//              console.error(` -> 점수 계산 중 오류 발생:`, calcError); 
+//              // 계산 실패 시 calculatedScore는 null 유지
+//         }
+
+//         // --- 5. 학생 DB에 저장 (jungsimaxstudent DB 사용!) ---
+//         try {
+//             const insertSql = `
+//                 INSERT INTO jungsimaxstudent.student_saved_universities 
+//                     (account_id, U_ID, 학년도, calculated_suneung_score) VALUES (?, ?, ?, ?)
+//                 ON DUPLICATE KEY UPDATE 
+//                     calculated_suneung_score = VALUES(calculated_suneung_score), 
+//                     saved_at = NOW()`;
+//             // ⭐️ dbStudent 사용! account_id 사용!
+//             const [insertResult] = await dbStudent.query(insertSql, [studentAccountId, universityId, 학년도, calculatedScore]); 
+            
+//             console.log(` -> 학생 DB 저장/업데이트 완료 (Rows affected: ${insertResult.affectedRows})`);
+            
+//             // affectedRows: 1이면 INSERT 성공, 2이면 UPDATE 성공 (ON DUPLICATE KEY UPDATE의 특징)
+//             const isUpdate = insertResult.affectedRows === 2;
+//             const message = isUpdate ? '이미 저장된 대학 (점수 업데이트됨).' : '저장대학 목록에 추가됨!';
+            
+//             res.json({ 
+//                 success: true, 
+//                 message: message, 
+//                 calculatedScore: calculatedScore, 
+//                 savedId: insertResult.insertId, // INSERT 시 ID 반환, UPDATE 시 0 또는 기존 ID 반환 (MySQL 버전에 따라 다름)
+//                 updated: isUpdate 
+//             });
+
+//         } catch (dbError) {
+//              console.error('❌ 학생 DB 저장 오류:', dbError);
+//              throw dbError; 
+//         }
+
+//     } catch (err) {
+//         console.error('❌ /student/save-university API 최종 오류:', err);
+//         // 여기서 rollback은 필요 없음 (트랜잭션 미사용)
+//         res.status(500).json({ success: false, message: err.message || '서버 처리 중 오류 발생' });
+//     } 
+//     // finally 불필요 (풀 자동 반환)
+// });
+
 app.post('/jungsi/student/save-university', authStudentOnlyMiddleware, async (req, res) => {
     // ⭐️ account_id 와 jungsi_student_id 모두 사용
-    const { student_id: jungsiStudentId } = req; 
+    const { student_id: jungsiStudentId } = req;
     const { account_id: studentAccountId } = req.user; // 토큰에서 가져옴
-    const { universityId, 학년도 } = req.body; 
+    // ▼▼▼▼▼ 1. req.body에서 calculatedScore 받는지 확인! ▼▼▼▼▼
+    const { universityId, 학년도, calculatedScore } = req.body; // ⭐️⭐️⭐️ calculatedScore 추가! ⭐️⭐️⭐️
+    // ▲▲▲▲▲ 1. req.body에서 calculatedScore 받는지 확인! ▲▲▲▲▲
 
-    console.log(`[API /student/save-university v3] 계정ID: ${studentAccountId}, 정시ID: ${jungsiStudentId}, 학년도: ${학년도}, 대학ID: ${universityId} 저장 요청`);
+    console.log(`[API /student/save-university] 계정ID: ${studentAccountId}, 정시ID: ${jungsiStudentId}, 학년도: ${학년도}, 대학ID: ${universityId}, 점수: ${calculatedScore} 저장 요청`); // ⭐️ 로그에 점수 추가
 
     if (!universityId || !학년도 || !studentAccountId || !jungsiStudentId) {
         return res.status(400).json({ success: false, message: '필수 정보 누락 (학생ID, 대학ID, 학년도)' });
     }
 
+    // --- 점수 계산 로직은 삭제 또는 주석 처리 ---
+
+    // --- 학생 DB에 저장 (jungsimaxstudent DB 사용!) ---
     try {
-        // --- 1. 학생 성적(S_data) 조회 (jungsi DB) ---
-        const studentScoreSql = `
-            SELECT * FROM 학생수능성적 
-            WHERE student_id = ? AND 학년도 = ?`;
-        const [scoreRows] = await db.query(studentScoreSql, [jungsiStudentId, 학년도]); // jungsi DB 사용
-        
-        if (scoreRows.length === 0) {
-            console.log(` -> 학생 성적 없음 (정시ID: ${jungsiStudentId}, Year: ${학년도})`);
-            return res.status(404).json({ success: false, message: '수능 성적 정보가 없습니다. 마이페이지에서 먼저 입력해주세요.' });
-        }
-        const studentScoreData = scoreRows[0];
-        
-        // S_data 객체 만들기 (jungsical.js 요구 형식)
-        const S_data = {
-             subjects: [
-                { name: '국어', subject: studentScoreData.국어_선택과목, std: studentScoreData.국어_표준점수, percentile: studentScoreData.국어_백분위, grade: studentScoreData.국어_등급 },
-                { name: '수학', subject: studentScoreData.수학_선택과목, std: studentScoreData.수학_표준점수, percentile: studentScoreData.수학_백분위, grade: studentScoreData.수학_등급 },
-                { name: '영어', grade: studentScoreData.영어_등급 },
-                { name: '한국사', grade: studentScoreData.한국사_등급 },
-                // 탐구 과목이 있을 경우에만 배열에 추가
-                ...(studentScoreData.탐구1_선택과목 ? [{ 
-                    name: '탐구', 
-                    subject: studentScoreData.탐구1_선택과목, 
-                    std: studentScoreData.탐구1_표준점수, 
-                    percentile: studentScoreData.탐구1_백분위, 
-                    grade: studentScoreData.탐구1_등급 
-                }] : []),
-                ...(studentScoreData.탐구2_선택과목 ? [{ 
-                    name: '탐구', 
-                    subject: studentScoreData.탐구2_선택과목, 
-                    std: studentScoreData.탐구2_표준점수, 
-                    percentile: studentScoreData.탐구2_백분위, 
-                    grade: studentScoreData.탐구2_등급 
-                }] : [])
-            ]
-        };
-        console.log(` -> 학생 성적(S_data) 조회 완료`);
+        const insertSql = `
+            INSERT INTO jungsimaxstudent.student_saved_universities
+                (account_id, U_ID, 학년도, calculated_suneung_score) VALUES (?, ?, ?, ?) -- 컬럼 4개
+            ON DUPLICATE KEY UPDATE
+                calculated_suneung_score = VALUES(calculated_suneung_score), -- 업데이트 시에도 점수 반영
+                saved_at = NOW()`;
 
-        // --- 2. 대학 정보(F_data) 조회 (jungsi DB) ---
-        const formulaSql = `
-            SELECT b.*, r.* FROM \`정시기본\` AS b 
-            JOIN \`정시반영비율\` AS r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 
-            WHERE b.U_ID = ? AND b.학년도 = ?`;
-        const [formulaRows] = await db.query(formulaSql, [universityId, 학년도]); // jungsi DB 사용
-        
-        if (formulaRows.length === 0) {
-             console.log(` -> 대학 정보 없음 (ID: ${universityId}, Year: ${학년도})`);
-            return res.status(404).json({ success: false, message: '대학 정보를 찾을 수 없습니다.' });
-        }
-        const F_data = formulaRows[0];
-        const 모집군 = F_data.군; // 군 정보 저장 (저장에는 안 쓰지만 로깅용)
-        console.log(` -> 대학 정보(F_data) 조회 완료 (군: ${모집군})`);
+        // ▼▼▼▼▼ 2. 쿼리 파라미터에 calculatedScore 넘겨주는지 확인! ▼▼▼▼▼
+        const scoreToSave = (calculatedScore !== null && !isNaN(parseFloat(calculatedScore))) ? parseFloat(calculatedScore) : null;
+        const [insertResult] = await dbStudent.query(insertSql, [studentAccountId, universityId, 학년도, scoreToSave]); // ⭐️⭐️⭐️ 파라미터 4개 확인! ⭐️⭐️⭐️
+        // ▲▲▲▲▲ 2. 쿼리 파라미터에 calculatedScore 넘겨주는지 확인! ▲▲▲▲▲
 
-        // --- 3. 계산용 추가 정보 조회 (jungsi DB) ---
-        const convSql = `
-            SELECT 계열, 백분위, 변환표준점수 
-            FROM \`정시탐구변환표준\` 
-            WHERE U_ID=? AND 학년도=?`;
-        const [convRows] = await db.query(convSql, [universityId, 학년도]);
-        const convMap = { '사탐': {}, '과탐': {} };
-        convRows.forEach(r => { 
-            if (convMap[r.계열]) { // 사탐, 과탐 외 다른 값이 들어오는 것 방지
-                convMap[r.계열][String(r.백분위)] = Number(r.변환표준점수); 
-            }
-        });
-        F_data.탐구변표 = convMap; // F_data 객체에 변표 정보 추가
-        
-        const cfg = safeParse(F_data.score_config, {}) || {}; // safeParse 함수 필요
-        // 최고표점 로딩 조건 (jungsical.js와 동일하게)
-        const mustLoadYearMax = 
-            cfg?.korean_math?.max_score_method === 'highest_of_year' ||
-            cfg?.inquiry?.max_score_method     === 'highest_of_year' ||
-            (F_data.계산유형 === '특수공식'); 
-            
-        let highestMap = null;
-        if (mustLoadYearMax) {
-            const exam = cfg?.highest_exam || '수능';
-            // loadYearHighestMap 함수는 jungsical.js 에서 require 해야 함
-            highestMap = await loadYearHighestMap(db, 학년도, exam); 
-        }
-        console.log(` -> 계산용 추가 정보 조회 완료 (highestMap 로드 여부: ${!!highestMap})`);
+        console.log(` -> 학생 DB 저장/업데이트 완료 (Rows affected: ${insertResult.affectedRows})`);
+        const isUpdate = insertResult.affectedRows === 2;
+        const message = isUpdate ? '이미 저장된 대학 (점수 업데이트됨).' : '저장대학 목록에 추가됨!';
 
-        // --- 4. 점수 계산 (jungsical 함수 사용) ---
-        let calculatedScore = null;
-        try {
-            // calculateScoreWithConv 함수는 jungsical.js 에서 require 해야 함
-            const result = calculateScoreWithConv(F_data, S_data, convMap, null, highestMap); // 로그 콜백 null
-            calculatedScore = result.totalScore ? parseFloat(result.totalScore) : null;
-             console.log(` -> 점수 계산 완료: ${calculatedScore}`);
-        } catch (calcError) { 
-             console.error(` -> 점수 계산 중 오류 발생:`, calcError); 
-             // 계산 실패 시 calculatedScore는 null 유지
-        }
+        res.json({ success: true, message: message, calculatedScore: scoreToSave, savedId: insertResult.insertId, updated: isUpdate });
 
-        // --- 5. 학생 DB에 저장 (jungsimaxstudent DB 사용!) ---
-        try {
-            const insertSql = `
-                INSERT INTO jungsimaxstudent.student_saved_universities 
-                    (account_id, U_ID, 학년도, calculated_suneung_score) VALUES (?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
-                    calculated_suneung_score = VALUES(calculated_suneung_score), 
-                    saved_at = NOW()`;
-            // ⭐️ dbStudent 사용! account_id 사용!
-            const [insertResult] = await dbStudent.query(insertSql, [studentAccountId, universityId, 학년도, calculatedScore]); 
-            
-            console.log(` -> 학생 DB 저장/업데이트 완료 (Rows affected: ${insertResult.affectedRows})`);
-            
-            // affectedRows: 1이면 INSERT 성공, 2이면 UPDATE 성공 (ON DUPLICATE KEY UPDATE의 특징)
-            const isUpdate = insertResult.affectedRows === 2;
-            const message = isUpdate ? '이미 저장된 대학 (점수 업데이트됨).' : '저장대학 목록에 추가됨!';
-            
-            res.json({ 
-                success: true, 
-                message: message, 
-                calculatedScore: calculatedScore, 
-                savedId: insertResult.insertId, // INSERT 시 ID 반환, UPDATE 시 0 또는 기존 ID 반환 (MySQL 버전에 따라 다름)
-                updated: isUpdate 
-            });
-
-        } catch (dbError) {
-             console.error('❌ 학생 DB 저장 오류:', dbError);
-             throw dbError; 
-        }
-
-    } catch (err) {
-        console.error('❌ /student/save-university API 최종 오류:', err);
-        // 여기서 rollback은 필요 없음 (트랜잭션 미사용)
-        res.status(500).json({ success: false, message: err.message || '서버 처리 중 오류 발생' });
-    } 
-    // finally 불필요 (풀 자동 반환)
+    } catch (dbError) {
+         console.error('❌ 학생 DB 저장 오류:', dbError);
+         res.status(500).json({ success: false, message: dbError.message || 'DB 저장 중 오류 발생' });
+    }
 });
+
 app.get('/jungsi/student/saved-universities', authStudentOnlyMiddleware, async (req, res) => {
     const { account_id: studentAccountId } = req.user; // 학생 계정 DB ID
     console.log(`[API /student/saved-universities] 학생계정ID: ${studentAccountId} 저장 목록 조회 요청`);
