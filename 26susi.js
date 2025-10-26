@@ -80,6 +80,54 @@ function safe(v) {
 }
 
 
+app.post('/26susi_owner/login', async (req, res) => {
+    try {
+        const { userid, password } = req.body;
+        if (!userid || !password) {
+            return res.json({ success: false, message: "아이디/비번 입력" });
+        }
+
+        // 원장회원 테이블에서 계정 찾기
+        const [rows] = await db.promise().query(
+            "SELECT * FROM 원장회원 WHERE 아이디 = ?",
+            [userid]
+        );
+
+        if (!rows.length) {
+            return res.json({ success: false, message: "해당 아이디가 없습니다." });
+        }
+
+        const user = rows[0];
+
+        // 비번 검사
+        const isMatch = await bcrypt.compare(password, user.비밀번호);
+        if (!isMatch) {
+            return res.json({ success: false, message: "비밀번호가 올바르지 않습니다." });
+        }
+
+        // role 결정
+        // - admin 계정이면 role:'admin'
+        // - 아니면 role:'owner' (원장)
+        const role = (user.아이디 === 'admin') ? 'admin' : 'owner';
+
+        // 원장/관리자 토큰 발급
+        const token = jwt.sign({
+            id: user.원장ID,
+            userid: user.아이디,
+            name: user.이름,
+            branch: user.지점명,   // 이게 중요. 이걸로 "일산 원장은 일산 학생만 승인"
+            phone: user.전화번호,
+            role: role             // 'owner' 또는 'admin'
+        }, JWT_SECRET, { expiresIn: '7d' });
+
+        return res.json({ success: true, token });
+
+    } catch (err) {
+        console.error("원장 로그인 오류:", err);
+        return res.json({ success: false, message: "서버 오류" });
+    }
+});
+
 // (GET) 원장회원 리스트 조회
 app.get('/26susi_admin_members', authJWT, async (req, res) => {
   if (!isAdmin(req.user)) return res.status(403).json({ success: false, message: "권한없음" });
