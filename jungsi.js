@@ -10,7 +10,7 @@ const port = 9090;
 const JWT_SECRET = 'super-secret-key!!';
 
 app.use(cors());
-app.use(cors(corsOptions));
+
 app.use(express.json({ limit: '10mb' }));
 
 // jungsi.js
