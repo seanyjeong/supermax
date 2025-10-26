@@ -1249,14 +1249,14 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     }
 });
 
-app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 제거된 상태 유지
+app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 없음
     const { year } = req.params;
-    const { region, teaching, exclude_events } = req.query;
+    const { region, exclude_events } = req.query; // teaching 필터는 프론트에서 처리
 
-    console.log(`[API /public/schools v3] Year: ${year}, Filters:`, req.query);
+    console.log(`[API /public/schools v4] Year: ${year}, Filters:`, req.query);
 
     try {
-        // ⭐️ SQL 쿼리 수정: CTE(WITH 절)를 사용하여 상위 10% 컷 계산 후 JOIN
+        // ⭐️ SQL 쿼리 수정: GROUP BY 단순화 및 MAX() 집계 함수 사용
         let sql = `
             WITH RankedScores AS (
                 SELECT
@@ -1268,7 +1268,7 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 
             ), Top10Cutoffs AS (
                 SELECT
                     대학학과_ID,
-                    MIN(상담_수능점수) as top10_cutoff -- 상위 10% 구간의 최저 점수 (컷라인)
+                    MIN(상담_수능점수) as top10_cutoff
                 FROM RankedScores
                 WHERE decile = 1
                 GROUP BY 대학학과_ID
@@ -1278,13 +1278,13 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 
                 b.광역 AS regionWide, b.시구 AS regionLocal, b.교직 AS teacher,
                 b.모집정원 AS quota,
                 GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events,
-                t10.top10_cutoff -- ⭐️ 계산된 상위 10% 컷 점수 JOIN
+                MAX(t10.top10_cutoff) as top10_cutoff -- ⭐️ MAX() 집계 함수 사용
             FROM 정시기본 b
             LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도
-            LEFT JOIN Top10Cutoffs t10 ON b.U_ID = t10.대학학과_ID -- ⭐️ 상위 10% 컷 JOIN
+            LEFT JOIN Top10Cutoffs t10 ON b.U_ID = t10.대학학과_ID
         `;
-        // WHERE 절과 파라미터 처리 (CTE 때문에 파라미터 순서 변경됨)
-        const whereClauses = ['b.학년도 = ?']; // 기본 조건 (메인 쿼리용)
+        // WHERE 절과 파라미터 처리
+        const whereClauses = ['b.학년도 = ?'];
         const params = [year, year]; // CTE용 year, 메인 쿼리용 year
 
         if (region) {
@@ -1294,11 +1294,6 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 
                 params.push(regions);
             }
         }
-        // 교직 필터는 프론트에서 처리하므로 여기선 제거
-        // if (teaching === 'O' || teaching === 'X' || teaching === '△') {
-        //     whereClauses.push('b.교직 = ?');
-        //     params.push(teaching);
-        // }
 
         if (exclude_events) {
             const eventsToExclude = exclude_events.split(',').map(e => e.trim()).filter(Boolean);
@@ -1308,32 +1303,36 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 
                         SELECT DISTINCT U_ID FROM 정시실기배점 WHERE 학년도 = ? AND 종목명 IN (?)
                     )
                 `);
-                params.push(year, eventsToExclude); // 서브쿼리용 파라미터 추가
+                params.push(year, eventsToExclude);
             }
         }
 
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
-        sql += ` GROUP BY b.U_ID, t10.top10_cutoff `; // ⭐️ GROUP BY에 t10.top10_cutoff 추가
+        sql += ` GROUP BY b.U_ID `; // ⭐️⭐️⭐️ GROUP BY b.U_ID 로 단순화 ⭐️⭐️⭐️
         sql += ` ORDER BY b.대학명, b.학과명 ASC`;
 
-        console.log("Executing SQL v3:", sql); // 실행될 SQL 확인용 로그
-        console.log("With Params v3:", params); // 파라미터 확인용 로그
+        console.log("Executing SQL v4:", sql);
+        console.log("With Params v4:", params);
 
         const [rows] = await db.query(sql, params);
 
-        console.log(` -> Found ${rows.length} universities matching criteria (with top10 cut).`); // 결과 건수 로그
+        console.log(` -> Found ${rows.length} universities matching criteria (with top10 cut).`);
 
         const formattedRows = rows.map(row => ({
             ...row,
             events: row.events ? row.events.split(',') : [],
-            top10_cutoff: row.top10_cutoff ? parseFloat(row.top10_cutoff.toFixed(2)) : null // ⭐️ 소수점 처리 및 null 변환
+            top10_cutoff: row.top10_cutoff ? parseFloat(row.top10_cutoff.toFixed(2)) : null
         }));
 
         res.json({ success: true, universities: formattedRows });
 
     } catch (err) {
-        console.error("❌ 공개 학교 목록 조회 오류 (v3 - top10 cut 포함):", err);
-        res.status(500).json({ success: false, message: "DB 오류", error: err.message });
+        console.error("❌ 공개 학교 목록 조회 오류 (v4 - top10 cut 포함):", err);
+        // ⭐️ 에러 발생 시 더 자세한 정보 로깅
+        console.error("Error Code:", err.code);
+        console.error("Error SQL State:", err.sqlState);
+        console.error("Error Message:", err.message);
+        res.status(500).json({ success: false, message: "DB 오류가 발생했습니다.", error: err.message }); // 에러 메시지 포함
     }
 });
 
