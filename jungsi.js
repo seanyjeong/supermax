@@ -1249,44 +1249,30 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     }
 });
 
-app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 없음
+app.get('/jungsi/public/schools/:year',  async (req, res) => { // ⭐️ authMiddleware 추가 (학생 로그인 필요)
     const { year } = req.params;
-    const { region, exclude_events } = req.query; // teaching 필터는 프론트에서 처리
+    const { region, teaching, exclude_events } = req.query; // 필터 파라미터 받기
 
-    console.log(`[API /public/schools v4] Year: ${year}, Filters:`, req.query);
+    console.log(`[API /public/schools] Year: ${year}, Filters:`, req.query); // 로그 추가
 
     try {
-        // ⭐️ SQL 쿼리 수정: GROUP BY 단순화 및 MAX() 집계 함수 사용
+
         let sql = `
-            WITH RankedScores AS (
-                SELECT
-                    대학학과_ID,
-                    상담_수능점수,
-                    NTILE(10) OVER (PARTITION BY 대학학과_ID ORDER BY 상담_수능점수 DESC) as decile
-                FROM 정시_상담목록
-                WHERE 학년도 = ? AND 상담_수능점수 IS NOT NULL
-            ), Top10Cutoffs AS (
-                SELECT
-                    대학학과_ID,
-                    MIN(상담_수능점수) as top10_cutoff
-                FROM RankedScores
-                WHERE decile = 1
-                GROUP BY 대학학과_ID
-            )
-            SELECT
+SELECT
                 b.U_ID, b.대학명 AS university, b.학과명 AS department, b.군 AS gun,
                 b.광역 AS regionWide, b.시구 AS regionLocal, b.교직 AS teacher,
-                b.모집정원 AS quota,
-                GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events,
-                MAX(t10.top10_cutoff) as top10_cutoff -- ⭐️ MAX() 집계 함수 사용
-            FROM 정시기본 b
-            LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도
-            LEFT JOIN Top10Cutoffs t10 ON b.U_ID = t10.대학학과_ID
-        `;
-        // WHERE 절과 파라미터 처리
-        const whereClauses = ['b.학년도 = ?'];
-        const params = [year, year]; // CTE용 year, 메인 쿼리용 year
+                b.모집정원 AS quota, -- ⭐️ 모집정원 추가
+                GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events -- ⭐️ 실기 종목 목록 추가
 
+            FROM 정시기본 b
+            LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도 -- ⭐️ 실기 배점 테이블 JOIN
+
+        `;
+        const whereClauses = ['b.학년도 = ?'];
+        const params = [year];
+
+
+        // 지역 필터 (콤마로 구분된 여러 지역 가능)
         if (region) {
             const regions = region.split(',').map(r => r.trim()).filter(Boolean);
             if (regions.length > 0) {
@@ -1294,45 +1280,51 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // authMiddleware 
                 params.push(regions);
             }
         }
+        // 교직 필터
+        if (teaching === 'O' || teaching === 'X') {
+            whereClauses.push('b.교직 = ?');
+            params.push(teaching);
+        }
 
+        // ⭐️ 실기 종목 제외 필터
         if (exclude_events) {
             const eventsToExclude = exclude_events.split(',').map(e => e.trim()).filter(Boolean);
             if (eventsToExclude.length > 0) {
+                // 서브쿼리를 사용하여 해당 실기 종목을 가진 U_ID를 찾고, 그 ID들을 제외
                 whereClauses.push(`
                     b.U_ID NOT IN (
-                        SELECT DISTINCT U_ID FROM 정시실기배점 WHERE 학년도 = ? AND 종목명 IN (?)
+                        SELECT DISTINCT U_ID
+                        FROM 정시실기배점
+                        WHERE 학년도 = ? AND 종목명 IN (?)
                     )
                 `);
-                params.push(year, eventsToExclude);
+                params.push(year, eventsToExclude); // 서브쿼리에도 year 조건 필요
             }
         }
 
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
-        sql += ` GROUP BY b.U_ID `; // ⭐️⭐️⭐️ GROUP BY b.U_ID 로 단순화 ⭐️⭐️⭐️
+        sql += ` GROUP BY b.U_ID `; // ⭐️ U_ID별로 그룹화 (실기 종목 때문에 중복될 수 있음)
         sql += ` ORDER BY b.대학명, b.학과명 ASC`;
 
-        console.log("Executing SQL v4:", sql);
-        console.log("With Params v4:", params);
+        console.log("Executing SQL:", sql); // 실행될 SQL 확인용 로그
+        console.log("With Params:", params); // 파라미터 확인용 로그
 
-        const [rows] = await db.query(sql, params);
+        const [rows] = await db.query(sql, params); // ⭐️ db 직접 사용 (connection pool)
 
-        console.log(` -> Found ${rows.length} universities matching criteria (with top10 cut).`);
+        console.log(` -> Found ${rows.length} universities matching criteria.`); // 결과 건수 로그
 
+        // events 필드를 배열로 변환 (쉼표로 구분된 문자열 -> 배열)
         const formattedRows = rows.map(row => ({
             ...row,
-            events: row.events ? row.events.split(',') : [],
-            top10_cutoff: row.top10_cutoff ? parseFloat(row.top10_cutoff.toFixed(2)) : null
+            events: row.events ? row.events.split(',') : [] // ⭐️ events 문자열을 배열로
+
         }));
 
-        res.json({ success: true, universities: formattedRows });
+        res.json({ success: true, universities: formattedRows }); // ⭐️ 키 이름을 'universities'로 변경 (프론트와 일치)
 
     } catch (err) {
-        console.error("❌ 공개 학교 목록 조회 오류 (v4 - top10 cut 포함):", err);
-        // ⭐️ 에러 발생 시 더 자세한 정보 로깅
-        console.error("Error Code:", err.code);
-        console.error("Error SQL State:", err.sqlState);
-        console.error("Error Message:", err.message);
-        res.status(500).json({ success: false, message: "DB 오류가 발생했습니다.", error: err.message }); // 에러 메시지 포함
+        console.error("❌ 공개 학교 목록 조회 오류 (v2):", err);
+        res.status(500).json({ success: false, message: "DB 오류", error: err.message });
     }
 });
 
