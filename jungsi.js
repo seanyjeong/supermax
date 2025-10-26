@@ -19,20 +19,30 @@ const authMiddleware = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     if (!token) {
-        console.log(` -> [인증 실패] ❌ 토큰 없음.`); // 토큰 없을 때 로그
+        console.log(` -> [인증 실패] ❌ 토큰 없음.`);
         return res.status(401).json({ success: false, message: '인증 토큰이 필요합니다.' });
     }
+
     try {
         req.user = jwt.verify(token, JWT_SECRET);
-        // 사용자 정보 로그에 지점(branch)도 포함하면 좋음
-        console.log(` -> [인증 성공] ✅ 사용자: ${req.user.userid}, 지점: ${req.user.branch}, 다음 단계로 진행합니다.`);
+        const user = req.user;
+
+        // ✅ 학생 계정 차단 (정시엔진 접근 불가)
+        if (user.role === 'student') {
+            console.log(` -> [접근 차단] 🚫 학생 계정 (${user.userid}) 은 정시엔진 접근 불가`);
+            return res.status(403).json({ success: false, message: '학생 계정은 정시엔진에 접근할 수 없습니다.' });
+        }
+
+        // 🟢 인증 성공 로그
+        console.log(` -> [인증 성공] ✅ 사용자: ${user.userid}, 지점: ${user.branch}, 역할: ${user.role} → 다음 단계로 진행`);
         next();
+
     } catch (err) {
-        // *** 로그 추가 ***: jwt.verify 에러 이름과 메시지 로깅
-        console.error(` -> [인증 실패] ❌ 토큰 검증 오류:`, err.name, err.message); // 어떤 에러인지 출력
+        console.error(` -> [인증 실패] ❌ 토큰 검증 오류:`, err.name, err.message);
         return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
     }
 };
+
 const db = mysql.createPool({ host: '211.37.174.218', user: 'maxilsan', password: 'q141171616!', database: 'jungsi', charset: 'utf8mb4', waitForConnections: true, connectionLimit: 10, queueLimit: 0 });
 
 
