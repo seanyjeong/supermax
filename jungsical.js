@@ -944,6 +944,11 @@ const formulaData = rows[0];
     res.json({ success: true, maxes });
   });
 
+
+
+  return router;
+};
+
 module.exports.helpers = {
   calculateScoreWithConv, // 핵심 계산 함수
   calculateScore,         // calculateScoreWithConv가 내부적으로 사용
@@ -965,7 +970,4 @@ module.exports.helpers = {
   readConvertedStd,
   mapPercentileToConverted,
   guessInquiryGroup, // calculateScore 내부에서도 쓰일 수 있으니 포함
-};
-
-  return router;
 };
