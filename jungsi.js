@@ -3519,6 +3519,116 @@ app.get('/jungsi/public/regions/:year', async (req, res) => {
     }
 });
 
+// =============================================
+// ⭐️ [신규] 학생 성적 기록 저장 API (saved_list.html 용)
+// =============================================
+// POST /jungsi/student/save-history
+app.post('/jungsi/student/save-history', authStudentOnlyMiddleware, async (req, res) => {
+    // 1. 학생 ID (account_id) 가져오기
+    const { account_id: studentAccountId } = req.user;
+
+    // 2. 프론트엔드(모달)에서 보낸 점수 정보 받기
+    const { 
+        U_ID, 
+        year, // ⭐️ 학년도 (예: '2026')
+        suneungScore, 
+        naeshinScore, 
+        silgiRecordsJson, // ⭐️ 실기 세부 기록 (JSON 배열)
+        silgiScore, 
+        totalScore 
+    } = req.body;
+
+    console.log(`[API /save-history] 학생(${studentAccountId}) 대학(${U_ID}) 점수 기록 저장 요청:`, req.body);
+
+    // 3. 필수 값 확인
+    if (!studentAccountId || !U_ID || !year) {
+        return res.status(400).json({ success: false, message: '학생ID, 대학ID, 학년도 정보가 필요합니다.' });
+    }
+    
+    // 4. DB에 저장 (dbStudent 사용)
+    try {
+        const insertSql = `
+            INSERT INTO student_score_history 
+                (account_id, U_ID, 학년도, suneung_score, naeshin_score, 
+                 silgi_records_json, silgi_score, total_score, record_date) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        `;
+        
+        const params = [
+            studentAccountId,
+            U_ID,
+            year,
+            suneungScore || null,
+            naeshinScore || null,
+            silgiRecordsJson ? JSON.stringify(silgiRecordsJson) : null, // ⭐️ JSON 문자열로 변환
+            silgiScore || null,
+            totalScore || null
+        ];
+
+        const [result] = await dbStudent.query(insertSql, params);
+        
+        console.log(` -> 저장 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '성적 기록이 저장되었습니다.', historyId: result.insertId });
+
+    } catch (err) {
+        console.error('❌ 학생 성적 기록 저장 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생', error: err.message });
+    }
+});
+
+// =============================================
+// ⭐️ [신규] 학생 성적 기록 조회 API (history_view.html 용)
+// =============================================
+// GET /jungsi/student/get-history/:uid/:year
+app.get('/jungsi/student/get-history/:uid/:year', authStudentOnlyMiddleware, async (req, res) => {
+    // 1. 학생 ID (account_id) 가져오기
+    const { account_id: studentAccountId } = req.user;
+    
+    // 2. URL 파라미터에서 대학ID, 학년도 가져오기
+    const { uid, year } = req.params;
+    const U_ID = uid; // 변수명 맞추기
+
+    console.log(`[API /get-history] 학생(${studentAccountId}) 대학(${U_ID}) ${year}학년도 기록 조회 요청`);
+
+    // 3. DB에서 조회 (dbStudent 사용)
+    try {
+        const selectSql = `
+            SELECT 
+                history_id, 
+                record_date, 
+                suneung_score, 
+                naeshin_score, 
+                silgi_records_json, 
+                silgi_score, 
+                total_score
+            FROM student_score_history
+            WHERE account_id = ? AND U_ID = ? AND 학년도 = ?
+            ORDER BY record_date DESC -- 최신순으로 정렬
+        `;
+        
+        const [historyList] = await dbStudent.query(selectSql, [studentAccountId, U_ID, year]);
+        
+        console.log(` -> ${historyList.length}건 조회 완료`);
+        
+        // 4. (중요) silgi_records_json 필드를 다시 JSON 객체로 파싱해서 전달
+        const formattedList = historyList.map(item => {
+            try {
+                item.silgi_records_json = item.silgi_records_json ? JSON.parse(item.silgi_records_json) : null;
+            } catch (e) {
+                console.warn(` -> JSON 파싱 실패 (history_id: ${item.history_id}):`, item.silgi_records_json);
+                item.silgi_records_json = null; // 파싱 실패 시 null 처리
+            }
+            return item;
+        });
+        
+        res.json({ success: true, history: formattedList });
+
+    } catch (err) {
+        console.error('❌ 학생 성적 기록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생', error: err.message });
+    }
+});
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- app.listen(...) 이 이 아래에 와야 함 ---
