@@ -196,6 +196,153 @@ app.get('/26susi/profile', authJWT, async (req, res) => {
 app.listen(port, () => {
   console.log('원장회원 가입/로그인 서버 실행!');
 });
+
+
+app.post('/26susi_student/check-userid', async (req, res) => {
+    const { userid } = req.body;
+    if (!userid) {
+        return res.status(400).json({ success: false, message: "아이디를 입력하세요." });
+    }
+
+    try {
+        // 학생회원 중복 체크
+        const [dup1] = await db.promise().query(
+            "SELECT 학생ID FROM 학생회원 WHERE 아이디 = ?",
+            [userid]
+        );
+
+        // 원장회원 아이디랑 겹쳐도 안 되게 막아줌
+        const [dup2] = await db.promise().query(
+            "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?",
+            [userid]
+        );
+
+        if (dup1.length > 0 || dup2.length > 0) {
+            return res.json({ success: true, available: false, message: "이미 사용중인 아이디입니다." });
+        }
+
+        return res.json({ success: true, available: true, message: "사용 가능한 아이디입니다." });
+    } catch (err) {
+        console.error("학생 아이디 중복 체크 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+
+app.post('/26susi_student/register', async (req, res) => {
+    try {
+        const { userid, password, name, branch, phone } = req.body;
+
+        // 최소값 체크
+        if (![userid, password, name, branch, phone].every(Boolean)) {
+            return res.json({ success: false, message: "빈칸 없이 입력해주세요." });
+        }
+
+        // 아이디 중복 검사
+        const [dupStudent] = await db.promise().query(
+            "SELECT 학생ID FROM 학생회원 WHERE 아이디 = ?",
+            [userid]
+        );
+        const [dupOwner] = await db.promise().query(
+            "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?",
+            [userid]
+        );
+        if (dupStudent.length > 0 || dupOwner.length > 0) {
+            return res.json({ success: false, message: "이미 사용중인 아이디입니다." });
+        }
+
+        // 비번 해시
+        const hash = await bcrypt.hash(password, 10);
+
+        // DB 저장 (승인여부 = '대기')
+        await db.promise().query(
+            "INSERT INTO 학생회원 (아이디, 비밀번호, 이름, 지점명, 전화번호, 승인여부) VALUES (?, ?, ?, ?, ?, '대기')",
+            [userid, hash, name, branch, phone]
+        );
+
+        return res.json({ success: true, message: "가입 신청 완료! 승인 후 로그인 가능합니다." });
+
+    } catch (err) {
+        console.error('학생 회원가입 오류:', err);
+        return res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+app.post('/26susi_student/login', async (req, res) => {
+    try {
+        const { userid, password } = req.body;
+        if (!userid || !password) {
+            return res.json({ success: false, message: "아이디/비번 입력" });
+        }
+
+        const [rows] = await db.promise().query(
+            "SELECT * FROM 학생회원 WHERE 아이디 = ?",
+            [userid]
+        );
+        if (!rows.length) {
+            return res.json({ success: false, message: "아이디 없음" });
+        }
+
+        const user = rows[0];
+
+        if (user.승인여부 !== '승인') {
+            return res.json({ success: false, message: "아직 승인되지 않은 계정입니다." });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.비밀번호);
+        if (!isMatch) {
+            return res.json({ success: false, message: "비밀번호가 올바르지 않습니다." });
+        }
+
+        // 학생 전용 토큰 발급
+        const token = jwt.sign({
+            id: user.학생ID,
+            userid: user.아이디,
+            name: user.이름,
+            branch: user.지점명,
+            phone: user.전화번호,
+            role: 'student',      // 💡 중요
+            source: 'ilsan'       // 💡 중요 (정시엔진에서 차단할 기준)
+        }, JWT_SECRET, { expiresIn: '3d' });
+
+        res.json({ success: true, token });
+
+    } catch (err) {
+        console.error("학생 로그인 오류:", err);
+        res.json({ success: false, message: "서버 오류" });
+    }
+});
+app.get('/26susi_student/pending-list', authJWT, async (req, res) => {
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "권한없음" });
+    }
+
+    try {
+        const [rows] = await db.promise().query(
+            "SELECT 학생ID, 아이디, 이름, 지점명, 전화번호, 승인여부, 생성일시 FROM 학생회원 ORDER BY 생성일시 DESC"
+        );
+        res.json({ success: true, students: rows });
+    } catch (err) {
+        console.error("학생 대기목록 조회 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류" });
+    }
+});
+
+app.post('/26susi_student/delete', authJWT, async (req, res) => {
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "권한없음" });
+    }
+    const { student_id } = req.body;
+    if (!student_id) return res.json({ success: false, message: "student_id 필요" });
+
+    await db.promise().query(
+        "DELETE FROM 학생회원 WHERE 학생ID=?",
+        [student_id]
+    );
+
+    res.json({ success: true });
+});
+
 //실기배점
 
 
