@@ -4657,6 +4657,105 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
         if (connection) connection.release(); // 커넥션 반환
     }
 });
+
+// jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
+
+// =============================================
+// ⭐️ [신규] 선생님용: 학생 특이사항 메모 API (2개)
+// =============================================
+
+// --- API 1: (선생님용) 특정 학생의 메모 이력 조회 ---
+// GET /jungsi/teacher/notes/:student_account_id
+app.get('/jungsi/teacher/notes/:student_account_id', authMiddleware, async (req, res) => {
+    // 1. URL에서 학생 account_id 가져오기
+    const { student_account_id } = req.params;
+    // 2. 로그인한 선생님 정보 가져오기
+    const { branch, userid: teacher_userid } = req.user;
+
+    console.log(`[API /teacher/notes GET] 선생님(${teacher_userid})이 학생(${student_account_id}) 메모 조회 (지점: ${branch})`);
+
+    if (!student_account_id) {
+        return res.status(400).json({ success: false, message: '학생 ID(student_account_id)가 필요합니다.' });
+    }
+
+    try {
+        // 3. (보안) 해당 학생이 요청한 선생님과 같은 지점 소속인지 확인
+        // ⭐️ dbStudent (jungsimaxstudent DB)의 student_account 테이블 사용
+        const [studentCheck] = await dbStudent.query(
+            'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
+            [student_account_id, branch]
+        );
+        if (studentCheck.length === 0) {
+            console.warn(` -> 권한 없음: 학생(${student_account_id})이 ${branch} 지점 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        }
+
+        // 4. 메모 조회 (student_teacher_notes 테이블)
+        const sql = `
+            SELECT note_id, student_account_id, teacher_userid, note_date, note_content, category
+            FROM jungsimaxstudent.student_teacher_notes
+            WHERE student_account_id = ?
+            ORDER BY note_date DESC -- 최신 메모가 위로
+        `;
+        // ⭐️ dbStudent 사용!
+        const [notes] = await dbStudent.query(sql, [student_account_id]);
+
+        console.log(` -> 학생(${student_account_id}) 메모 ${notes.length}건 조회 완료`);
+        res.json({ success: true, notes: notes });
+
+    } catch (err) {
+        console.error('❌ 학생 메모 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+
+// --- API 2: (선생님용) 새 메모 저장 ---
+// POST /jungsi/teacher/notes/add
+app.post('/jungsi/teacher/notes/add', authMiddleware, async (req, res) => {
+    // 1. 요청 본문에서 학생 ID와 메모 내용 가져오기
+    const { student_account_id, note_content, category } = req.body;
+    // 2. 로그인한 선생님 정보 가져오기
+    const { userid: teacher_userid, branch } = req.user;
+
+    console.log(`[API /teacher/notes POST] 선생님(${teacher_userid})이 학생(${student_account_id})에게 메모 작성`);
+
+    // 3. 유효성 검사
+    if (!student_account_id || !note_content) {
+        return res.status(400).json({ success: false, message: '학생 ID(student_account_id)와 메모 내용(note_content)은 필수입니다.' });
+    }
+
+    try {
+        // 4. (보안) 해당 학생이 요청한 선생님과 같은 지점 소속인지 확인
+        // ⭐️ dbStudent (jungsimaxstudent DB)의 student_account 테이블 사용
+        const [studentCheck] = await dbStudent.query(
+            'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
+            [student_account_id, branch]
+        );
+        if (studentCheck.length === 0) {
+            console.warn(` -> 권한 없음: 학생(${student_account_id})이 ${branch} 지점 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '메모 작성 권한이 없는 학생입니다.' });
+        }
+
+        // 5. 메모 저장 (student_teacher_notes 테이블)
+        const sql = `
+            INSERT INTO jungsimaxstudent.student_teacher_notes
+                (student_account_id, teacher_userid, note_content, category, note_date)
+            VALUES (?, ?, ?, ?, NOW())
+        `;
+        // ⭐️ dbStudent 사용!
+        const [result] = await dbStudent.query(sql, [student_account_id, teacher_userid, note_content, category || null]);
+
+        console.log(` -> 메모 저장 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '메모가 저장되었습니다.', noteId: result.insertId });
+
+    } catch (err) {
+        console.error('❌ 학생 메모 저장 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+    }
+});
+
+// --- 여기 아래에 app.listen(...) 이 와야 함 ---
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
