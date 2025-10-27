@@ -3860,6 +3860,11 @@ app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async 
         );
         let trackedEvents = [];
         if (settingsRows.length > 0 && settingsRows[0].tracked_events) {
+            // ▼▼▼▼▼ 로그 추가 시작 ▼▼▼▼▼
+            const rawDbValue = settingsRows[0].tracked_events;
+            console.log(`>>> DEBUG: Raw DB value for tracked_events:`, rawDbValue);
+            console.log(`>>> DEBUG: Typeof raw DB value:`, typeof rawDbValue);
+            // ▲▲▲▲▲ 로그 추가 끝 ▲▲▲▲▲
             try {
                 // DB의 JSON 문자열을 실제 배열로 파싱 (에러 처리 추가됨)
                 trackedEvents = JSON.parse(settingsRows[0].tracked_events);
