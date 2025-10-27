@@ -4145,41 +4145,37 @@ app.get('/jungsi/public/practical-events', async (req, res) => {
     }
 });
 
+
+
+
+
 // jungsi.js 파일
 
-// --- Helper function for admin check (이전에 추가됨) ---
-// const isAdmin = (user) => user && user.userid === 'admin';
-// const isAdminMiddleware = ... (이전에 추가됨) ...
+// ======================================================================
+// ⭐️ 2. 학생용 공지사항 API (jungsimaxstudent DB 사용, 조회만 가능)
+// ======================================================================
 
-// =============================================
-// ⭐️ 공지사항 API (DB 위치: jungsimaxstudent, DB 연결: dbStudent 사용)
-// =============================================
-
-// GET /jungsi/announcements : 학생은 자기 지점 공지만, 관리자는 전체 공지 조회
-app.get('/jungsi/announcements', authMiddleware, async (req, res) => {
-    const { branch, role } = req.user;
-    console.log(`[API GET /jungsi/announcements] 공지사항 목록 조회 요청 (User: ${req.user.userid}, Branch: ${branch}, Role: ${role})`);
+// GET /jungsi/student/announcements : 학생은 자기 지점 공지만 조회
+app.get('/jungsi/student/announcements', authStudentOnlyMiddleware, async (req, res) => {
+    const { branch, account_id } = req.user;
+    console.log(`[API GET /student/announcements] 학생(${account_id}) 공지사항(jungsimaxstudent DB) 목록 조회 요청 (Branch: ${branch})`);
     try {
-        // ⭐️ DB 연결을 dbStudent 로 변경! 테이블명 앞에 DB 이름 명시 (선택)
+        // ⭐️ dbStudent 사용!
         let sql = 'SELECT notice_id, title, content, created_by, created_at, updated_at, branch_name FROM `jungsimaxstudent`.`공지사항`';
         const params = [];
-        if (role === 'student') {
-            if (!branch) {
-                 console.warn(' -> 학생 토큰에 지점 정보 없음. 전체 공지만 조회합니다.');
-                 sql += ' WHERE branch_name IS NULL';
-            } else {
-                 sql += ' WHERE branch_name = ? OR branch_name IS NULL';
-                 params.push(branch);
-            }
+        if (!branch) {
+             console.warn(' -> 학생 토큰에 지점 정보 없음. 전체 공지만 조회합니다.');
+             sql += ' WHERE branch_name IS NULL';
+        } else {
+             sql += ' WHERE branch_name = ? OR branch_name IS NULL';
+             params.push(branch);
         }
         sql += ' ORDER BY created_at DESC';
-        // ⭐️ dbStudent 사용!
         const [announcements] = await dbStudent.query(sql, params);
-        console.log(` -> 공지사항 ${announcements.length}건 조회 완료`);
+        console.log(` -> 공지사항 ${announcements.length}건 조회 완료 (jungsimaxstudent DB)`);
         res.json({ success: true, announcements: announcements });
     } catch (err) {
-        console.error('❌ 공지사항 조회 오류:', err);
-        // ⭐️ 테이블 없을 시 에러 처리 추가
+        console.error('❌ 학생 공지사항 조회 오류:', err);
         if (err.code === 'ER_NO_SUCH_TABLE') {
              res.status(404).json({ success: false, message: '공지사항 테이블(jungsimaxstudent.공지사항)을 찾을 수 없습니다.' });
         } else {
@@ -4188,12 +4184,17 @@ app.get('/jungsi/announcements', authMiddleware, async (req, res) => {
     }
 });
 
-// POST /jungsi/announcements/add : 새 공지사항 추가 (관리자 전용)
-app.post('/jungsi/announcements/add', authMiddleware, isAdminMiddleware, async (req, res) => {
+
+// ======================================================================
+// ⭐️ 3. 관리자용 학생 공지 관리 API (jungsimaxstudent DB 사용)
+// ======================================================================
+
+// POST /jungsi/admin/student-announcements/add : 새 학생 공지 추가 (관리자 전용)
+app.post('/jungsi/admin/student-announcements/add', authMiddleware, isAdminMiddleware, async (req, res) => {
     const { title, content, target_branch } = req.body;
     const created_by = req.user.userid;
     const branchNameToSave = target_branch ? target_branch : null;
-    console.log(`[API POST /announcements/add] Admin (${created_by}) 공지사항 추가 요청: Target='${branchNameToSave || '전체'}', Title='${title}'`);
+    console.log(`[API POST /admin/student-announcements/add] Admin (${created_by}) 학생 공지(jungsimaxstudent DB) 추가 요청: Target='${branchNameToSave || '전체'}', Title='${title}'`);
     if (!title) return res.status(400).json({ success: false, message: '제목 필수' });
     try {
         // ⭐️ dbStudent 사용!
@@ -4201,21 +4202,21 @@ app.post('/jungsi/announcements/add', authMiddleware, isAdminMiddleware, async (
             'INSERT INTO `jungsimaxstudent`.`공지사항` (title, content, created_by, branch_name) VALUES (?, ?, ?, ?)',
             [title, content || null, created_by, branchNameToSave]
         );
-        console.log(` -> 공지사항 추가 성공 (ID: ${result.insertId})`);
-        res.status(201).json({ success: true, message: '공지사항 추가됨', notice_id: result.insertId });
-    } catch (err) { /* ... 에러 처리 (dbStudent 관련 에러 고려) ... */
-        console.error('❌ 공지사항 추가 오류:', err);
+        console.log(` -> 학생 공지사항 추가 성공 (ID: ${result.insertId}) (jungsimaxstudent DB)`);
+        res.status(201).json({ success: true, message: '학생 공지사항 추가됨', notice_id: result.insertId });
+    } catch (err) {
+        console.error('❌ 관리자 학생 공지사항 추가 오류:', err);
         res.status(500).json({ success: false, message: 'DB 삽입 중 오류 발생' });
     }
 });
 
-// PUT /jungsi/announcements/update/:notice_id : 공지사항 수정 (관리자 전용)
-app.put('/jungsi/announcements/update/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
+// PUT /jungsi/admin/student-announcements/update/:notice_id : 학생 공지 수정 (관리자 전용)
+app.put('/jungsi/admin/student-announcements/update/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
     const { notice_id } = req.params;
     const { title, content, target_branch } = req.body;
     const admin_id = req.user.userid;
     const branchNameToSave = target_branch ? target_branch : null;
-    console.log(`[API PUT /update/${notice_id}] Admin (${admin_id}) 공지 수정: Target='${branchNameToSave || '전체'}', Title='${title}'`);
+    console.log(`[API PUT /admin/student-announcements/update/${notice_id}] Admin (${admin_id}) 학생 공지 수정(jungsimaxstudent DB): Target='${branchNameToSave || '전체'}', Title='${title}'`);
     if (!title) return res.status(400).json({ success: false, message: '제목 필수' });
     try {
         // ⭐️ dbStudent 사용!
@@ -4223,43 +4224,40 @@ app.put('/jungsi/announcements/update/:notice_id', authMiddleware, isAdminMiddle
             'UPDATE `jungsimaxstudent`.`공지사항` SET title = ?, content = ?, branch_name = ? WHERE notice_id = ?',
             [title, content || null, branchNameToSave, notice_id]
         );
-        if (result.affectedRows > 0) { /* ... 성공 처리 ... */
-            console.log(` -> 공지사항 수정 성공 (ID: ${notice_id})`);
-            res.json({ success: true, message: '공지사항이 수정되었습니다.' });
-        } else { /* ... 실패 처리 ... */
-            console.warn(` -> 수정할 공지사항 없음 (ID: ${notice_id})`);
-            res.status(404).json({ success: false, message: '수정할 공지사항을 찾을 수 없습니다.' });
+        if (result.affectedRows > 0) {
+            console.log(` -> 학생 공지사항 수정 성공 (ID: ${notice_id}) (jungsimaxstudent DB)`);
+            res.json({ success: true, message: '학생 공지사항 수정됨' });
+        } else {
+             res.status(404).json({ success: false, message: '수정할 학생 공지사항 없음' });
         }
-    } catch (err) { /* ... 에러 처리 (dbStudent 관련 에러 고려) ... */
-        console.error('❌ 공지사항 수정 오류:', err);
+    } catch (err) {
+        console.error('❌ 관리자 학생 공지사항 수정 오류:', err);
         res.status(500).json({ success: false, message: 'DB 수정 중 오류 발생' });
     }
 });
 
-// DELETE /jungsi/announcements/delete/:notice_id : 공지사항 삭제 (관리자 전용)
-app.delete('/jungsi/announcements/delete/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
+// DELETE /jungsi/admin/student-announcements/delete/:notice_id : 학생 공지 삭제 (관리자 전용)
+app.delete('/jungsi/admin/student-announcements/delete/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
     const { notice_id } = req.params;
     const admin_id = req.user.userid;
-    console.log(`[API DELETE /delete/${notice_id}] Admin (${admin_id}) 공지 삭제`);
+    console.log(`[API DELETE /admin/student-announcements/delete/${notice_id}] Admin (${admin_id}) 학생 공지 삭제(jungsimaxstudent DB)`);
     try {
         // ⭐️ dbStudent 사용!
         const [result] = await dbStudent.query(
             'DELETE FROM `jungsimaxstudent`.`공지사항` WHERE notice_id = ?',
             [notice_id]
         );
-        if (result.affectedRows > 0) { /* ... 성공 처리 ... */
-             console.log(` -> 공지사항 삭제 성공 (ID: ${notice_id})`);
-             res.json({ success: true, message: '공지사항이 삭제되었습니다.' });
-        } else { /* ... 실패 처리 ... */
-            console.warn(` -> 삭제할 공지사항 없음 (ID: ${notice_id})`);
-            res.status(404).json({ success: false, message: '삭제할 공지사항을 찾을 수 없습니다.' });
+        if (result.affectedRows > 0) {
+            console.log(` -> 학생 공지사항 삭제 성공 (ID: ${notice_id}) (jungsimaxstudent DB)`);
+            res.json({ success: true, message: '학생 공지사항 삭제됨' });
+        } else {
+            res.status(404).json({ success: false, message: '삭제할 학생 공지사항 없음' });
         }
-    } catch (err) { /* ... 에러 처리 (dbStudent 관련 에러 고려) ... */
-         console.error('❌ 공지사항 삭제 오류:', err);
-         res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    } catch (err) {
+        console.error('❌ 관리자 학생 공지사항 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
     }
 });
-
 
 // =============================================
 // ⭐️ 학생용: 오늘 할당된 운동 조회 API (teacher_userid 로 수정됨)
