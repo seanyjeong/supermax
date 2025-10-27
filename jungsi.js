@@ -4427,33 +4427,22 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
 // =============================================
 // GET /jungsi/admin/teachers-in-branch
 app.get('/jungsi/admin/teachers-in-branch', authMiddleware, async (req, res) => {
-    // 1. 관리자(sean8320) 확인
-    if (req.user.userid !== 'sean8320') {
-        console.warn(`[API /admin/teachers-in-branch] 접근 거부: ${req.user.userid} (sean8320 아님)`);
-        return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
+    // ⭐️ 권한 확인 추가/수정
+    if (!hasAdminPermission(req.user)) {
+        console.warn(`[API /admin/teachers-in-branch] 접근 거부: ${req.user?.userid} (Position: ${req.user?.position})`);
+        return res.status(403).json({ success: false, message: '관리자 권한(원장/부원장/팀장)이 필요합니다.' });
     }
-
-    const { branch } = req.user; // 토큰에서 지점 정보 (예: '일산')
-    console.log(`[API /admin/teachers-in-branch] ${branch} 지점의 승인된 원장 목록 조회 요청`);
-
+    // ... (기존 API 로직) ...
+    const { branch } = req.user; // 이제 관리자도 자기 지점만 조회? -> 아니면 전체 조회? 로직 수정 필요할 수 있음
+    console.log(`[API /admin/teachers-in-branch] ${branch} 지점 선생님 목록 조회 요청 (by ${req.user.userid})`);
     try {
-        // 2. ⭐️ dbSusi (26susi DB) 사용!
         const sql = `
-            SELECT
-                아이디 AS userid,
-                이름 AS name
+            SELECT 아이디 AS userid, 이름 AS name
             FROM \`26susi\`.\`원장회원\`
-            WHERE 지점명 = ? AND 승인여부 = 'O'
-            ORDER BY 이름 ASC
+            WHERE 지점명 = ? AND 승인여부 = 'O' ORDER BY 이름 ASC
         `;
-        // ⭐️ dbSusi 사용!
-        const [teachers] = await dbSusi.query(sql, [branch]);
-
-        console.log(` -> ${teachers.length}명의 선생님(원장) 목록 조회 완료`);
-
-        // 3. 결과 응답
+        const [teachers] = await dbSusi.query(sql, [branch]); // 현재는 로그인한 관리자의 지점만 조회함
         res.json({ success: true, teachers: teachers });
-
     } catch (err) {
         console.error('❌ 지점 선생님 목록 조회 API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
@@ -4467,127 +4456,87 @@ app.get('/jungsi/admin/teachers-in-branch', authMiddleware, async (req, res) => 
 // --- API 1: 특정 학년도/지점의 학생 목록 + 배정 정보 조회 ---
 // GET /jungsi/admin/students-for-assignment?year=YYYY
 app.get('/jungsi/admin/students-for-assignment', authMiddleware, async (req, res) => {
-    // 1. 관리자(sean8320) 확인
-    if (req.user.userid !== 'sean8320') {
-        console.warn(`[API /admin/students-for-assignment] 접근 거부: ${req.user.userid} (sean8320 아님)`);
-        return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
+    // ⭐️ 권한 확인 추가/수정
+    if (!hasAdminPermission(req.user)) {
+        console.warn(`[API /admin/students-for-assignment] 접근 거부: ${req.user?.userid} (Position: ${req.user?.position})`);
+        return res.status(403).json({ success: false, message: '관리자 권한(원장/부원장/팀장)이 필요합니다.' });
     }
-
-    const { year } = req.query;
-    const { branch } = req.user;
-
-    console.log(`[API /admin/students-for-assignment] ${branch} 지점 ${year}학년도 학생 목록 조회 요청 (by ${req.user.userid})`);
-
-    if (!year) {
-        return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
-    }
-    if (!branch) {
-        return res.status(403).json({ success: false, message: '토큰에 지점 정보가 없습니다.' });
-    }
-
-    try {
-        // 2. ⭐️⭐️⭐️ SQL 수정: "AND sa.role = 'student'" 부분 삭제! ⭐️⭐️⭐️
-        const sql = `
-            SELECT
-                sa.account_id, sa.userid, sa.name AS student_name, -- 학생 정보
-                sassign.class_name, sassign.teacher_userid, sassign.year -- 기존 배정 정보
-            FROM jungsimaxstudent.student_account sa
-            LEFT JOIN jungsimaxstudent.student_assignments sassign
-              ON sa.account_id = sassign.student_account_id AND sassign.year = ?
-            WHERE sa.branch = ? -- 해당 지점 학생만
-            -- ⭐️ "AND sa.role = 'student'" 라인 삭제됨!
-            ORDER BY sa.name ASC -- 학생 이름순 정렬
-        `;
-        // ⭐️ dbStudent 사용! 파라미터 순서 주의: year, branch
-        const [students] = await dbStudent.query(sql, [year, branch]);
-
-        console.log(` -> ${students.length}명의 학생 정보 조회 완료 (배정 정보 포함)`);
-
-        // 3. 결과 응답
-        res.json({ success: true, students: students });
-
-    } catch (err) {
-        console.error('❌ 학생 목록 조회(배정용) API 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
-    }
+    // ... (기존 API 로직) ...
+     const { year } = req.query;
+     const { branch } = req.user;
+     console.log(`[API /admin/students-for-assignment] ${branch} 지점 ${year}학년도 학생 목록 조회 요청 (by ${req.user.userid})`);
+     // ... (이하 로직 동일) ...
+     try {
+         const sql = `
+             SELECT sa.account_id, sa.userid, sa.name AS student_name,
+                    sassign.class_name, sassign.teacher_userid, sassign.year
+             FROM jungsimaxstudent.student_account sa
+             LEFT JOIN jungsimaxstudent.student_assignments sassign
+               ON sa.account_id = sassign.student_account_id AND sassign.year = ?
+             WHERE sa.branch = ?
+             ORDER BY sa.name ASC
+         `;
+         const [students] = await dbStudent.query(sql, [year, branch]);
+         res.json({ success: true, students: students });
+     } catch (err) {
+          console.error('❌ 학생 목록 조회(배정용) API 오류:', err);
+          res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+      }
 });
 
 
 // --- API 2: 학생 배정 정보 일괄 저장/수정 (UPSERT) ---
 // POST /jungsi/admin/save-assignments
 app.post('/jungsi/admin/save-assignments', authMiddleware, async (req, res) => {
-    // 1. 관리자(sean8320) 확인
-    if (req.user.userid !== 'sean8320') {
-        console.warn(`[API /admin/save-assignments] 접근 거부: ${req.user.userid} (sean8320 아님)`);
-        return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
+    // ⭐️ 권한 확인 추가/수정
+    if (!hasAdminPermission(req.user)) {
+        console.warn(`[API /admin/save-assignments] 접근 거부: ${req.user?.userid} (Position: ${req.user?.position})`);
+        return res.status(403).json({ success: false, message: '관리자 권한(원장/부원장/팀장)이 필요합니다.' });
     }
-
-    // 2. 요청 본문에서 데이터 추출
-    const { year, assignments } = req.body; // assignments: [{ student_account_id, class_name, teacher_userid }, ...] 배열
-
-    console.log(`[API /admin/save-assignments] ${year}학년도 학생 ${assignments?.length || 0}명 배정 정보 저장 요청 (by ${req.user.userid})`);
-
-    // 3. 유효성 검사
-    if (!year || !Array.isArray(assignments) || assignments.length === 0) {
-        return res.status(400).json({ success: false, message: '학년도(year)와 배정 정보 배열(assignments)은 필수입니다.' });
-    }
-    // 각 항목 유효성 검사 (간단히)
-    const isValid = assignments.every(item =>
-        item.student_account_id && item.class_name && item.teacher_userid && typeof item.class_name === 'string' && typeof item.teacher_userid === 'string'
-    );
-    if (!isValid) {
-        return res.status(400).json({ success: false, message: '배열 내 항목 형식이 올바르지 않습니다. (student_account_id, class_name, teacher_userid 확인)' });
-    }
-
-    // 4. DB 작업 (트랜잭션 사용)
-    let connection;
-    try {
-        connection = await dbStudent.getConnection(); // dbStudent 사용!
-        await connection.beginTransaction(); // 트랜잭션 시작
-
-        // 5. UPSERT 쿼리 준비 (INSERT ... ON DUPLICATE KEY UPDATE)
-        const sql = `
-            INSERT INTO jungsimaxstudent.student_assignments
-                (student_account_id, class_name, teacher_userid, year, created_at)
-            VALUES (?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE
-                class_name = VALUES(class_name),
-                teacher_userid = VALUES(teacher_userid),
-                created_at = NOW() -- 수정 시간도 갱신 (컬럼 이름 created_at 유지)
-        `;
-
-        let updatedCount = 0;
-        let insertedCount = 0;
-
-        // 6. 배열 반복하며 쿼리 실행
-        for (const item of assignments) {
-            const params = [
-                item.student_account_id,
-                item.class_name,
-                item.teacher_userid,
-                year
-            ];
-            const [result] = await connection.query(sql, params);
-
-            // affectedRows: 1이면 INSERT, 2이면 UPDATE (UPSERT 특징)
-            if (result.affectedRows === 1) insertedCount++;
-            else if (result.affectedRows === 2) updatedCount++;
-        }
-
-        // 7. 커밋 (최종 반영)
-        await connection.commit();
-        console.log(` -> 저장 완료 (신규: ${insertedCount}명, 수정: ${updatedCount}명)`);
-
-        // 8. 성공 응답
-        res.json({ success: true, message: `총 ${insertedCount + updatedCount}명의 학생 배정 정보가 저장/수정되었습니다.` });
-
-    } catch (err) {
-        if (connection) await connection.rollback(); // 에러 시 롤백
-        console.error('❌ 학생 배정 정보 저장 API 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
-    } finally {
-        if (connection) connection.release(); // 커넥션 반환
-    }
+    // ... (기존 API 로직) ...
+     const { year, assignments } = req.body;
+     console.log(`[API /admin/save-assignments] ${year}학년도 학생 ${assignments?.length || 0}명 배정 정보 저장 요청 (by ${req.user.userid})`);
+     // ... (이하 로직 동일) ...
+     let connection;
+     try {
+         connection = await dbStudent.getConnection();
+         await connection.beginTransaction();
+         const sql = `
+             INSERT INTO jungsimaxstudent.student_assignments
+                 (student_account_id, class_name, teacher_userid, year, created_at)
+             VALUES (?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE
+                 class_name = VALUES(class_name),
+                 teacher_userid = VALUES(teacher_userid),
+                 created_at = NOW()
+         `;
+         let updatedCount = 0;
+         let insertedCount = 0;
+         for (const item of assignments) {
+             // 유효성 검사 추가 (class_name 또는 teacher_userid 둘 중 하나라도 있어야 함)
+             if (!item.student_account_id || (!item.class_name && !item.teacher_userid)) {
+                 console.warn('Skipping invalid assignment item:', item);
+                 continue;
+             }
+             const params = [
+                 item.student_account_id,
+                 item.class_name || null, // 비어있으면 null
+                 item.teacher_userid || null, // 비어있으면 null
+                 year
+             ];
+             const [result] = await connection.query(sql, params);
+             if (result.affectedRows === 1) insertedCount++;
+             else if (result.affectedRows === 2) updatedCount++;
+         }
+         await connection.commit();
+         res.json({ success: true, message: `총 ${insertedCount + updatedCount}명의 학생 배정 정보가 저장/수정되었습니다.` });
+     } catch (err) {
+         if (connection) await connection.rollback();
+         console.error('❌ 학생 배정 정보 저장 API 오류:', err);
+         res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+     } finally {
+         if (connection) connection.release();
+     }
 });
 
 // =============================================
