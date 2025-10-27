@@ -1329,6 +1329,60 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
         res.status(500).json({ success: false, message: "DB 오류", error: err.message });
     }
 });
+// =============================================
+// ⭐️ [신규] 특정 학생/학년도의 상담 목록 조회 API
+// =============================================
+// GET /jungsi/counseling/wishlist/:student_id/:year
+app.get('/jungsi/counseling/wishlist/:student_id/:year', authMiddleware, async (req, res) => {
+    // URL 경로에서 학생 ID와 학년도 추출
+    const { student_id, year } = req.params;
+    // 인증된 사용자(강사/관리자)의 지점 정보 가져오기 (권한 확인용)
+    const { branch } = req.user;
+
+    console.log(`[API GET /wishlist] 학생(${student_id}), 학년도(${year}) 상담 목록 조회 요청 (요청자 지점: ${branch})`);
+
+    // 필수 파라미터 확인
+    if (!student_id || !year) {
+        return res.status(400).json({ success: false, message: '학생 ID와 학년도 파라미터가 필요합니다.' });
+    }
+
+    try {
+        // --- 보안 검사: 요청한 학생이 해당 지점 소속인지 확인 ---
+        const [ownerCheck] = await db.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ? AND 학년도 = ?',
+            [student_id, branch, year]
+        );
+        // 학생 정보가 없거나, 다른 지점 학생이면 권한 없음(403 Forbidden) 응답
+        if (ownerCheck.length === 0) {
+            console.warn(` -> 조회 권한 없음: 학생(${student_id})이 ${branch} 지점 소속(${year}학년도)이 아님.`);
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        }
+        console.log(` -> 권한 확인 완료`);
+
+        // --- 학생의 상담 목록 조회 ---
+        const sql = `
+            SELECT
+                wl.상담목록_ID, wl.학생_ID, wl.학년도, wl.모집군, wl.대학학과_ID,
+                wl.상담_수능점수, wl.상담_내신점수, wl.상담_실기기록, wl.상담_실기반영점수,
+                wl.상담_계산총점, wl.메모, wl.수정일시,
+                jb.대학명, jb.학과명 -- 정시기본 테이블에서 대학/학과명 JOIN
+            FROM jungsi.정시_상담목록 wl
+            JOIN jungsi.정시기본 jb ON wl.대학학과_ID = jb.U_ID AND wl.학년도 = jb.학년도
+            WHERE wl.학생_ID = ? AND wl.학년도 = ?
+            ORDER BY FIELD(wl.모집군, '가', '나', '다'), wl.수정일시 DESC -- 군별 정렬, 최신순 정렬
+        `;
+        const [wishlistItems] = await db.query(sql, [student_id, year]);
+
+        console.log(` -> 상담 목록 ${wishlistItems.length}건 조회 완료`);
+
+        // --- 결과 응답 ---
+        res.json({ success: true, wishlist: wishlistItems });
+
+    } catch (err) {
+        console.error(`❌ 학생 상담 목록 조회 API 오류 (학생ID: ${student_id}, 학년도: ${year}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+    }
+});
 // --- 상담 목록 일괄 저장 (덮어쓰기: Delete then Insert) ---
 app.post('/jungsi/counseling/wishlist/bulk-save', authMiddleware, async (req, res) => {
   const { 학생_ID, 학년도, wishlistItems } = req.body;
