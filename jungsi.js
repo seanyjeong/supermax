@@ -74,6 +74,16 @@ const authStudentOnlyMiddleware = (req, res, next) => {
         return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
     }
 };
+const dbSusi = mysql.createPool({
+    host: '211.37.174.218',
+    user: 'maxilsan',
+    password: 'q141171616!',
+    database: '26susi', // ⭐️ 26susi DB 연결
+    charset: 'utf8mb4',
+    waitForConnections: true,
+    connectionLimit: 5, // (조회용이므로 5개 정도만)
+    queueLimit: 0
+});
 
 const db = mysql.createPool({ host: '211.37.174.218', user: 'maxilsan', password: 'q141171616!', database: 'jungsi', charset: 'utf8mb4', waitForConnections: true, connectionLimit: 10, queueLimit: 0 });
 const {
