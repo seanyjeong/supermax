@@ -4181,13 +4181,6 @@ const hasAdminPermission = (user) => {
     );
 };
 
-// --- API 1: 공지사항 목록 조회 (선생님/원장/학생/관리자) ---
-// GET /jungsi/student/announcements
-알았어! Collation 에러 해결을 위해 COLLATE utf8mb4_unicode_ci를 추가한 /jungsi/student/announcements API 핸들러 코드로 다시 줄게.
-
-jungsi.js 파일에서 /jungsi/student/announcements API 부분을 이걸로 교체하고 서버를 재시작해줘.
-
-JavaScript
 
 // jungsi.js 파일 수정
 
@@ -4213,12 +4206,12 @@ app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => {
         let sql = `
             SELECT
                 a.notice_id, a.title, a.content, a.created_by, a.created_at, a.updated_at, a.branch_name,
-                b.이름 AS author_name -- 작성자 이름
+                b.이름 AS author_name 
             FROM jungsimaxstudent.공지사항 a
             LEFT JOIN \`26susi\`.원장회원 b
-              -- ▼▼▼ COLLATE 추가 ▼▼▼
+            
               ON a.created_by COLLATE utf8mb4_unicode_ci = b.아이디 COLLATE utf8mb4_unicode_ci
-              -- ▲▲▲ COLLATE 추가 ▲▲▲
+            
         `; // WHERE 절 추가를 위해 세미콜론 제거
         const params = [];
 
