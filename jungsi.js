@@ -4288,6 +4288,35 @@ app.delete('/jungsi/admin/student-announcements/delete/:notice_id', authMiddlewa
     }
 });
 
+app.get('/jungsi/admin/student-branches', authMiddleware, isAdminMiddleware, async (req, res) => {
+    // isAdminMiddleware가 이미 관리자(admin 역할 또는 sean8320)인지 확인했음
+    const admin_id = req.user.userid;
+    console.log(`[API /admin/student-branches] Admin (${admin_id}) 학생 지점 목록 조회 요청`);
+
+    try {
+        // ⭐️ dbStudent (jungsimaxstudent DB) 사용!
+        // student_account 테이블에서 NULL이나 빈 문자열이 아닌 고유한 branch 값을 가져옴
+        const sql = `
+            SELECT DISTINCT branch AS branchName
+            FROM \`jungsimaxstudent\`.\`student_account\`
+            WHERE branch IS NOT NULL AND branch != ''
+            ORDER BY branch ASC
+        `;
+        const [branches] = await dbStudent.query(sql); // dbStudent 사용!
+
+        // 결과 형식: ['강남', '강동', '일산', ...]
+        const branchNames = branches.map(b => b.branchName);
+        console.log(` -> ${branchNames.length}개의 학생 지점 목록 조회 완료`);
+
+        // 결과 응답
+        res.json({ success: true, branches: branchNames });
+
+    } catch (err) {
+        console.error('❌ 학생 지점 목록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
 // =============================================
 // ⭐️ 학생용: 오늘 할당된 운동 조회 API (teacher_userid 로 수정됨)
 // =============================================
