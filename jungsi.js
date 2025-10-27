@@ -4288,10 +4288,8 @@ app.delete('/jungsi/admin/student-announcements/delete/:notice_id', authMiddlewa
     }
 });
 
-app.get('/jungsi/admin/student-branches', authMiddleware, isAdminMiddleware, async (req, res) => {
-    // isAdminMiddleware가 이미 관리자(admin 역할 또는 sean8320)인지 확인했음
-    const admin_id = req.user.userid;
-    console.log(`[API /admin/student-branches] Admin (${admin_id}) 학생 지점 목록 조회 요청`);
+app.get('/jungsi/admin/student-branches', async (req, res) => { // ⭐️ authMiddleware, isAdminMiddleware 제거!
+    console.log(`[API /admin/student-branches] 학생 지점 목록 조회 요청 (Public)`); // ⭐️ 로그 수정
 
     try {
         // ⭐️ dbStudent (jungsimaxstudent DB) 사용!
