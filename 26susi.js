@@ -167,14 +167,15 @@ app.post('/26susi_owner/login', async (req, res) => {
         const role = (user.아이디 === 'admin') ? 'admin' : 'owner';
 
         // 원장/관리자 토큰 발급
-        const token = jwt.sign({
-            id: user.원장ID,
-            userid: user.아이디,
-            name: user.이름,
-            branch: user.지점명,   // 이게 중요. 이걸로 "일산 원장은 일산 학생만 승인"
-            phone: user.전화번호,
-            role: role             // 'owner' 또는 'admin'
-        }, JWT_SECRET, { expiresIn: '7d' });
+const token = jwt.sign({
+    id: user.원장ID,
+    userid: user.아이디,
+    name: user.이름,
+    branch: user.지점명,
+    phone: user.전화번호,
+    role: role, // 'owner' 또는 'admin'
+    position: user.직급 // ⭐️ 이 부분이 추가되었는지 확인!
+}, JWT_SECRET, { expiresIn: '7d' });
 
         return res.json({ success: true, token });
 
