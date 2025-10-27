@@ -1249,7 +1249,7 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
     }
 });
 
-app.get('/jungsi/public/schools/:year',  async (req, res) => { // ⭐️ authMiddleware 추가 (학생 로그인 필요)
+app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMiddleware 제거 (학생도 접근 가능해야 함)
     const { year } = req.params;
     const { region, teaching, exclude_events } = req.query; // 필터 파라미터 받기
 
@@ -1257,20 +1257,22 @@ app.get('/jungsi/public/schools/:year',  async (req, res) => { // ⭐️ authMid
 
     try {
 
+        // --- ⭐️ SQL 수정: JOIN 및 SELECT 추가 ---
         let sql = `
-SELECT
+            SELECT
                 b.U_ID, b.대학명 AS university, b.학과명 AS department, b.군 AS gun,
                 b.광역 AS regionWide, b.시구 AS regionLocal, b.교직 AS teacher,
-                b.모집정원 AS quota, -- ⭐️ 모집정원 추가
-                GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events -- ⭐️ 실기 종목 목록 추가
-
+                b.모집정원 AS quota,
+                r.실기 AS practicalRatio, -- ⭐️⭐️⭐️ 실기 비율 추가 (정시반영비율 테이블) ⭐️⭐️⭐️
+                GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events
             FROM 정시기본 b
-            LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도 -- ⭐️ 실기 배점 테이블 JOIN
-
+            LEFT JOIN 정시반영비율 r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 -- ⭐️⭐️⭐️ 반영비율 테이블 JOIN 추가 ⭐️⭐️⭐️
+            LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도
         `;
+        // --- ⭐️ SQL 수정 끝 ---
+
         const whereClauses = ['b.학년도 = ?'];
         const params = [year];
-
 
         // 지역 필터 (콤마로 구분된 여러 지역 가능)
         if (region) {
@@ -1285,12 +1287,10 @@ SELECT
             whereClauses.push('b.교직 = ?');
             params.push(teaching);
         }
-
-        // ⭐️ 실기 종목 제외 필터
+         // ⭐️ 실기 종목 제외 필터
         if (exclude_events) {
             const eventsToExclude = exclude_events.split(',').map(e => e.trim()).filter(Boolean);
             if (eventsToExclude.length > 0) {
-                // 서브쿼리를 사용하여 해당 실기 종목을 가진 U_ID를 찾고, 그 ID들을 제외
                 whereClauses.push(`
                     b.U_ID NOT IN (
                         SELECT DISTINCT U_ID
@@ -1298,36 +1298,37 @@ SELECT
                         WHERE 학년도 = ? AND 종목명 IN (?)
                     )
                 `);
-                params.push(year, eventsToExclude); // 서브쿼리에도 year 조건 필요
+                params.push(year, eventsToExclude);
             }
         }
 
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
-        sql += ` GROUP BY b.U_ID `; // ⭐️ U_ID별로 그룹화 (실기 종목 때문에 중복될 수 있음)
+        // --- ⭐️ GROUP BY 수정: 조인된 테이블의 컬럼 추가 ---
+        sql += ` GROUP BY b.U_ID, b.대학명, b.학과명, b.군, b.광역, b.시구, b.교직, b.모집정원, r.실기 `; // ⭐️ 그룹핑 기준에 r.실기 추가
+        // --- ⭐️ GROUP BY 수정 끝 ---
         sql += ` ORDER BY b.대학명, b.학과명 ASC`;
 
-        console.log("Executing SQL:", sql); // 실행될 SQL 확인용 로그
-        console.log("With Params:", params); // 파라미터 확인용 로그
+        console.log("Executing SQL:", sql);
+        console.log("With Params:", params);
 
-        const [rows] = await db.query(sql, params); // ⭐️ db 직접 사용 (connection pool)
+        const [rows] = await db.query(sql, params);
 
-        console.log(` -> Found ${rows.length} universities matching criteria.`); // 결과 건수 로그
+        console.log(` -> Found ${rows.length} universities matching criteria.`);
 
-        // events 필드를 배열로 변환 (쉼표로 구분된 문자열 -> 배열)
         const formattedRows = rows.map(row => ({
             ...row,
-            events: row.events ? row.events.split(',') : [] // ⭐️ events 문자열을 배열로
-
+            // ⭐️ practicalRatio 값 형 변환 (문자열일 수 있으므로)
+            practicalRatio: row.practicalRatio ? Number(row.practicalRatio) : 0, // ⭐️ 숫자로 변환, 없으면 0
+            events: row.events ? row.events.split(',') : []
         }));
 
-        res.json({ success: true, universities: formattedRows }); // ⭐️ 키 이름을 'universities'로 변경 (프론트와 일치)
+        res.json({ success: true, universities: formattedRows });
 
     } catch (err) {
         console.error("❌ 공개 학교 목록 조회 오류 (v2):", err);
         res.status(500).json({ success: false, message: "DB 오류", error: err.message });
     }
 });
-
 // --- 상담 목록 일괄 저장 (덮어쓰기: Delete then Insert) ---
 app.post('/jungsi/counseling/wishlist/bulk-save', authMiddleware, async (req, res) => {
   const { 학생_ID, 학년도, wishlistItems } = req.body;
