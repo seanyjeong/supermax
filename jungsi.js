@@ -4182,16 +4182,6 @@ const hasAdminPermission = (user) => {
 };
 
 
-// jungsi.js 파일 수정
-
-// --- 권한 확인 헬퍼 함수 (직급 또는 admin 역할 기반) ---
-// (이 함수가 API 핸들러보다 위에 정의되어 있는지 확인!)
-const hasAdminPermission = (user) => {
-    return user && (
-        (user.position && ['원장', '부원장', '팀장'].includes(user.position)) ||
-        user.role === 'admin'
-    );
-};
 
 // ======================================================================
 // ⭐️ 학생 공지사항 관련 API (jungsimaxstudent DB 사용, Collation 수정됨)
