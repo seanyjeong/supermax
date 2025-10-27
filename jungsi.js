@@ -3957,6 +3957,31 @@ app.get('/jungsi/student/practical/today-best', authStudentOnlyMiddleware, async
     }
 });
 
+app.get('/jungsi/public/practical-events', async (req, res) => {
+    console.log(`[API /public/practical-events] 전체 실기 종목 목록 조회 요청`);
+
+    try {
+        // DB에서 중복 없이 모든 종목명 조회 (ORDER BY 추가)
+        const sql = `
+            SELECT DISTINCT 종목명 
+            FROM jungsi.정시실기배점 
+            WHERE 종목명 IS NOT NULL AND 종목명 != ''
+            ORDER BY 종목명 ASC 
+        `; // 가나다 순 정렬 추가
+        const [rows] = await db.query(sql); // jungsi DB 사용
+
+        // 결과 배열에서 '종목명' 값만 추출
+        const eventNames = rows.map(row => row.종목명);
+
+        console.log(` -> 총 ${eventNames.length}개의 실기 종목명 조회 완료`);
+        res.json({ success: true, events: eventNames });
+
+    } catch (err) {
+        console.error('❌ 전체 실기 종목 목록 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
