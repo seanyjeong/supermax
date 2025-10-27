@@ -3892,6 +3892,14 @@ app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async 
         console.log(` -> 기록 (${recordRows.length}개 로드 완료)`);
 
         // 4. 결과 조합하여 응답
+// --- ⭐️ 캐싱 방지 헤더 추가 시작 ⭐️ ---
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+        // --- ⭐️ 캐싱 방지 헤더 추가 끝 ⭐️ ---
+
+        // 4. 결과 조합하여 응답 (이 부분은 기존과 동일)
         res.json({
             success: true,
             dashboard: {
@@ -3900,6 +3908,7 @@ app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async 
                 records: recordsMap
             }
         });
+        
 
     } catch (err) {
         console.error('❌ 대시보드 데이터 로드 오류:', err);
