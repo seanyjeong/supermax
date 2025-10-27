@@ -4066,6 +4066,211 @@ app.get('/jungsi/public/practical-events', async (req, res) => {
     }
 });
 
+// jungsi.js 파일
+
+// --- Helper function for admin check (이전에 추가됨) ---
+// const isAdmin = (user) => user && user.userid === 'admin';
+// const isAdminMiddleware = ... (이전에 추가됨) ...
+
+// =============================================
+// ⭐️ 공지사항 API (지점별 로직 추가됨)
+// =============================================
+
+// GET /jungsi/announcements : 학생은 자기 지점 공지만, 관리자는 전체 공지 조회
+app.get('/jungsi/announcements', authMiddleware, async (req, res) => {
+    // authMiddleware 에서 req.user 에 { userid, branch, role } 등이 담겨있음
+    const { branch, role } = req.user;
+    console.log(`[API GET /jungsi/announcements] 공지사항 목록 조회 요청 (User: ${req.user.userid}, Branch: ${branch}, Role: ${role})`);
+
+    try {
+        let sql = 'SELECT notice_id, title, content, created_by, created_at, updated_at, branch_name FROM `공지사항`';
+        const params = [];
+
+        // ⭐️ 학생(student)일 경우, 자기 지점 공지 또는 전체 공지(branch_name is NULL)만 조회
+        if (role === 'student') {
+            // 학생 토큰에 branch 정보가 없다면 에러 처리 (또는 전체 공지만 보여줄 수도 있음)
+            if (!branch) {
+                 console.warn(' -> 학생 토큰에 지점 정보 없음. 전체 공지만 조회합니다.');
+                 sql += ' WHERE branch_name IS NULL';
+            } else {
+                 sql += ' WHERE branch_name = ? OR branch_name IS NULL';
+                 params.push(branch);
+            }
+        }
+        // ⭐️ 관리자/원장은 모든 공지 조회 가능 (WHERE 조건 없음)
+
+        sql += ' ORDER BY created_at DESC'; // 최신순 정렬
+
+        const [announcements] = await db.query(sql, params);
+        console.log(` -> 공지사항 ${announcements.length}건 조회 완료`);
+        res.json({ success: true, announcements: announcements });
+
+    } catch (err) {
+        console.error('❌ 공지사항 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// POST /jungsi/announcements/add : 새 공지사항 추가 (관리자 전용, 자기 지점 또는 전체 공지)
+app.post('/jungsi/announcements/add', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { title, content, target_branch } = req.body; // target_branch 추가 (프론트에서 받아옴, 없으면 전체)
+    const created_by = req.user.userid; // 관리자 ID
+    const admin_branch = req.user.branch; // 관리자 소속 지점
+
+    // target_branch 값이 없으면 NULL (전체 공지), 있으면 해당 지점명 사용
+    const branchNameToSave = target_branch ? target_branch : null;
+
+    console.log(`[API POST /announcements/add] Admin (${created_by}) 공지사항 추가 요청: Target='${branchNameToSave || '전체'}', Title='${title}'`);
+
+    if (!title) {
+        return res.status(400).json({ success: false, message: '제목은 필수 항목입니다.' });
+    }
+
+    try {
+        // branch_name 컬럼 추가된 INSERT 쿼리
+        const [result] = await db.query(
+            'INSERT INTO `공지사항` (title, content, created_by, branch_name) VALUES (?, ?, ?, ?)',
+            [title, content || null, created_by, branchNameToSave]
+        );
+        console.log(` -> 공지사항 추가 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '공지사항이 추가되었습니다.', notice_id: result.insertId });
+    } catch (err) {
+        console.error('❌ 공지사항 추가 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삽입 중 오류 발생' });
+    }
+});
+
+// PUT /jungsi/announcements/update/:notice_id : 공지사항 수정 (관리자 전용)
+app.put('/jungsi/announcements/update/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { notice_id } = req.params;
+    const { title, content, target_branch } = req.body; // target_branch 추가
+    const admin_id = req.user.userid;
+
+    const branchNameToSave = target_branch ? target_branch : null;
+    console.log(`[API PUT /announcements/update/${notice_id}] Admin (${admin_id}) 공지사항 수정 요청: Target='${branchNameToSave || '전체'}', Title='${title}'`);
+
+    if (!title) {
+        return res.status(400).json({ success: false, message: '제목은 필수 항목입니다.' });
+    }
+
+    try {
+        // branch_name 업데이트 추가된 UPDATE 쿼리
+        const [result] = await db.query(
+            'UPDATE `공지사항` SET title = ?, content = ?, branch_name = ? WHERE notice_id = ?',
+            [title, content || null, branchNameToSave, notice_id]
+        );
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 공지사항 수정 성공 (ID: ${notice_id})`);
+            res.json({ success: true, message: '공지사항이 수정되었습니다.' });
+        } else {
+            console.warn(` -> 수정할 공지사항 없음 (ID: ${notice_id})`);
+            res.status(404).json({ success: false, message: '수정할 공지사항을 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        console.error('❌ 공지사항 수정 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 수정 중 오류 발생' });
+    }
+});
+
+// DELETE /jungsi/announcements/delete/:notice_id : 공지사항 삭제 (관리자 전용)
+app.delete('/jungsi/announcements/delete/:notice_id', authMiddleware, isAdminMiddleware, async (req, res) => {
+    // 이 API는 수정할 필요 없음 (ID만으로 삭제)
+    const { notice_id } = req.params;
+    const admin_id = req.user.userid;
+    console.log(`[API DELETE /announcements/delete/${notice_id}] Admin (${admin_id}) 공지사항 삭제 요청`);
+
+    try {
+        const [result] = await db.query(
+            'DELETE FROM `공지사항` WHERE notice_id = ?',
+            [notice_id]
+        );
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 공지사항 삭제 성공 (ID: ${notice_id})`);
+            res.json({ success: true, message: '공지사항이 삭제되었습니다.' });
+        } else {
+            console.warn(` -> 삭제할 공지사항 없음 (ID: ${notice_id})`);
+            res.status(404).json({ success: false, message: '삭제할 공지사항을 찾을 수 없습니다.' });
+        }
+    } catch (err) {
+        console.error('❌ 공지사항 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    }
+});
+
+// =============================================
+// ⭐️ (신규) 학생용: 오늘 할당된 운동 조회 API
+// =============================================
+// GET /jungsi/student/today-assignment
+app.get('/jungsi/student/today-assignment', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user; // 학생 계정 ID
+    console.log(`[API GET /student/today-assignment] 학생(${account_id}) 오늘 운동 조회 요청`);
+
+    try {
+        const sql = `
+            SELECT
+                assignment_id, teacher_name, assignment_date, exercise_name, category, sub_category,
+                target_weight, target_sets, target_reps, target_notes, is_completed
+            FROM jungsimaxstudent.teacher_daily_assignments -- 학생 DB 사용!
+            WHERE student_account_id = ? AND assignment_date = CURDATE()
+            ORDER BY created_at ASC -- 할당된 순서대로
+        `;
+        // ⭐️ dbStudent 풀 사용!
+        const [assignments] = await dbStudent.query(sql, [account_id]);
+
+        console.log(` -> 오늘 할당된 운동 ${assignments.length}건 조회 완료`);
+        res.json({ success: true, assignments: assignments });
+
+    } catch (err) {
+        console.error(`❌ 오늘 운동 조회 API 오류 (학생ID: ${account_id}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// =============================================
+// ⭐️ (신규) 학생용: 운동 완료 상태 변경 API
+// =============================================
+// POST /jungsi/student/assignment/complete
+app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user; // 학생 계정 ID
+    const { assignment_id, is_completed } = req.body; // 프론트에서 과제 ID와 체크 상태(true/false) 받음
+
+    console.log(`[API POST /assignment/complete] 학생(${account_id}) 운동(${assignment_id}) 완료 상태 변경 요청: ${is_completed}`);
+
+    if (assignment_id === undefined || is_completed === undefined) {
+        return res.status(400).json({ success: false, message: '과제 ID(assignment_id)와 완료 상태(is_completed)는 필수입니다.' });
+    }
+    const completedValue = Boolean(is_completed); // 확실하게 boolean으로 변환
+
+    try {
+        const sql = `
+            UPDATE jungsimaxstudent.teacher_daily_assignments
+            SET
+                is_completed = ?,
+                completion_timestamp = ? -- 완료 시 현재 시간, 미완료 시 NULL
+            WHERE assignment_id = ? AND student_account_id = ? -- 본인 것만 수정 가능
+        `;
+        const completionTime = completedValue ? new Date() : null; // 완료 시 현재 시간, 아니면 NULL
+        // ⭐️ dbStudent 풀 사용!
+        const [result] = await dbStudent.query(sql, [completedValue, completionTime, assignment_id, account_id]);
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 운동(${assignment_id}) 완료 상태 업데이트 성공`);
+            res.json({ success: true, message: '완료 상태가 업데이트되었습니다.' });
+        } else {
+            console.warn(` -> 업데이트할 운동 과제 없거나 권한 없음 (ID: ${assignment_id}, 학생: ${account_id})`);
+            res.status(404).json({ success: false, message: '해당 운동 과제를 찾을 수 없거나 업데이트 권한이 없습니다.' });
+        }
+
+    } catch (err) {
+        console.error(`❌ 운동 완료 상태 업데이트 API 오류 (과제ID: ${assignment_id}):`, err);
+        res.status(500).json({ success: false, message: 'DB 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
+// --- 여기 아래에 app.listen(...) 이 와야 함 ---
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
