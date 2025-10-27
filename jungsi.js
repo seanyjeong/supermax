@@ -4866,6 +4866,146 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
+
+// GET /jungsi/teacher/record-view/students?year=YYYY&view=my|all
+app.get('/jungsi/teacher/record-view/students', authMiddleware, async (req, res) => {
+    const { year, view } = req.query;
+    const { userid, branch, position, role } = req.user;
+    const isMgmt = hasAdminPermission(req.user); // 관리 권한 확인
+
+    console.log(`[API /record-view/students] 사용자(${userid}, ${position}) ${year}년도 학생 목록 조회 (View: ${view}, Mgmt: ${isMgmt})`);
+
+    if (!year) {
+        return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
+    }
+    if (!branch) {
+         return res.status(403).json({ success: false, message: '사용자 토큰에 지점 정보가 없습니다.' });
+    }
+
+    let sql;
+    let params;
+
+    // 보기 옵션('all' 또는 'my')과 관리 권한(isMgmt)에 따라 쿼리 분기
+    if (view === 'all' && isMgmt) {
+        // 관리자가 '전체 학생' 보기 선택 시: 해당 지점의 모든 학생 조회
+        console.log(` -> 관리자 전체 보기: ${branch} 지점 ${year}년도 모든 학생 조회`);
+        sql = `
+            SELECT sa.account_id, sa.name as student_name, sa.grade, sa.gender, sassign.class_name
+            FROM jungsimaxstudent.student_account sa
+            LEFT JOIN jungsimaxstudent.student_assignments sassign
+              ON sa.account_id = sassign.student_account_id AND sassign.year = ?
+            WHERE sa.branch = ?
+            ORDER BY sa.name ASC
+        `;
+        params = [year, branch];
+    } else {
+        // 일반 사용자 또는 관리자가 '우리 반' 보기 선택 시: 담당 학생만 조회
+        console.log(` -> 담당 학생 보기: ${branch} 지점 ${year}년도 ${userid} 담당 학생 조회`);
+        sql = `
+            SELECT sa.account_id, sa.name as student_name, sa.grade, sa.gender, sassign.class_name
+            FROM jungsimaxstudent.student_assignments sassign
+            JOIN jungsimaxstudent.student_account sa ON sassign.student_account_id = sa.account_id
+            WHERE sassign.teacher_userid = ? AND sassign.year = ? AND sa.branch = ?
+            ORDER BY sa.name ASC
+        `;
+        params = [userid, year, branch]; // teacher_userid 사용
+    }
+
+    try {
+        const [students] = await dbStudent.query(sql, params); // dbStudent 사용!
+        console.log(` -> ${students.length}명의 학생 조회 완료`);
+        res.json({ success: true, students: students });
+    } catch (err) {
+        console.error('❌ 학생 목록 조회(기록 열람용) API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// --- API 2: 특정 학생의 기록 및 목표 조회 ---
+// GET /jungsi/teacher/record-view/records/:account_id
+app.get('/jungsi/teacher/record-view/records/:account_id', authMiddleware, async (req, res) => {
+    const { account_id } = req.params;
+    const { userid, branch, position, role } = req.user;
+    const isMgmt = hasAdminPermission(req.user); // 관리 권한 확인
+
+    console.log(`[API /record-view/records] 사용자(${userid}, ${position}) 학생(${account_id}) 기록/목표 조회`);
+
+    if (!account_id) {
+         return res.status(400).json({ success: false, message: '학생 account_id가 필요합니다.' });
+    }
+
+    try {
+        // --- 보안 검사 ---
+        // 1. 요청된 학생이 사용자의 지점 소속인지 확인
+        const [studentCheck] = await dbStudent.query(
+            'SELECT account_id, name FROM jungsimaxstudent.student_account WHERE account_id = ? AND branch = ?',
+            [account_id, branch]
+        );
+        if (studentCheck.length === 0) {
+            console.warn(` -> 권한 없음: 학생(${account_id})이 사용자 지점(${branch}) 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다 (다른 지점 학생).' });
+        }
+        const studentName = studentCheck[0].name; // 로그용
+
+        // 2. 관리자가 아니면, 해당 학생이 자신에게 배정된 학생인지 추가 확인 (가장 최근 년도 기준)
+        if (!isMgmt) {
+            const [assignmentCheck] = await dbStudent.query(
+                `SELECT assignment_id FROM jungsimaxstudent.student_assignments
+                 WHERE student_account_id = ? AND teacher_userid = ?
+                 ORDER BY year DESC LIMIT 1`, // 가장 최근 배정 정보 확인
+                [account_id, userid]
+            );
+            if (assignmentCheck.length === 0) {
+                 console.warn(` -> 권한 없음: 사용자(${userid})에게 학생(${account_id})이 배정되지 않음.`);
+                 return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다 (담당 학생 아님).' });
+            }
+        }
+        console.log(` -> 권한 확인 완료 (학생: ${studentName})`);
+
+        // --- 데이터 조회 ---
+        // 1. 학생 실기 기록 조회 (종목별, 최신순)
+        const [recordRows] = await dbStudent.query(
+            `SELECT record_id, event_name, record_date, record_value
+             FROM jungsimaxstudent.student_practical_records
+             WHERE account_id = ?
+             ORDER BY event_name ASC, record_date DESC`, // 종목별 정렬 후 날짜 내림차순
+            [account_id]
+        );
+
+        // 2. 학생 실기 목표 조회
+        const [goalRows] = await dbStudent.query(
+            'SELECT goal_id, event_name, goal_value FROM jungsimaxstudent.student_practical_goals WHERE account_id = ?',
+            [account_id]
+        );
+
+        // --- 데이터 가공 ---
+        // 기록을 종목별로 그룹화
+        const recordsGrouped = {};
+        recordRows.forEach(r => {
+            if (!recordsGrouped[r.event_name]) {
+                recordsGrouped[r.event_name] = [];
+            }
+            recordsGrouped[r.event_name].push({
+                 record_id: r.record_id,
+                 date: r.record_date, //.toISOString().split('T')[0], // YYYY-MM-DD 형식 원하면 주석 해제
+                 value: r.record_value
+             });
+        });
+
+        // 목표를 종목명-값 맵으로 변환
+        const goalsMap = {};
+        goalRows.forEach(g => {
+            goalsMap[g.event_name] = g.goal_value;
+        });
+
+        console.log(` -> 기록 ${recordRows.length}건, 목표 ${goalRows.length}건 조회 및 가공 완료`);
+        res.json({ success: true, records: recordsGrouped, goals: goalsMap });
+
+    } catch (err) {
+        console.error(`❌ 학생 기록/목표 조회 API 오류 (학생ID: ${account_id}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
