@@ -4171,18 +4171,29 @@ app.get('/jungsi/public/practical-events', async (req, res) => {
 // ======================================================================
 
 // GET /jungsi/student/announcements : 학생은 자기 지점 공지만 조회
-app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => { // ⭐️ 미들웨어 변경! authStudentOnlyMiddleware -> authMiddleware
-    // authMiddleware는 req.user에 userid, branch, role 등을 넣어줌
-    const { branch, userid, role } = req.user;
-    console.log(`[API GET /student/announcements] 사용자(${userid}, ${role}) 공지사항(jungsimaxstudent DB) 목록 조회 요청 (Branch: ${branch})`);
+// --- 권한 확인 헬퍼 함수 (직급 또는 admin 역할 기반) ---
+const hasAdminPermission = (user) => {
+    // 토큰에 position 정보가 있는지 확인하고, 해당 직급인지 또는 role이 admin인지 체크
+    // 26susi 로그인 시 토큰에 position 정보가 포함되어야 함
+    return user && (
+        (user.position && ['원장', '부원장', '팀장'].includes(user.position)) ||
+        user.role === 'admin'
+    );
+};
+
+// --- API 1: 공지사항 목록 조회 (선생님/원장/학생/관리자) ---
+// GET /jungsi/student/announcements
+app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => {
+    // authMiddleware는 req.user에 userid, branch, role, position 등을 넣어줌 (26susi 로그인 API 수정 필요)
+    const { branch, userid, role, position } = req.user;
+    console.log(`[API GET /student/announcements] 사용자(${userid}, ${role}, ${position}) 공지사항 목록 조회 요청 (Branch: ${branch})`);
     try {
-        // ⭐️ dbStudent 사용! (jungsimaxstudent DB 풀)
+        // dbStudent 사용! (jungsimaxstudent DB 풀)
         let sql = 'SELECT notice_id, title, content, created_by, created_at, updated_at, branch_name FROM `jungsimaxstudent`.`공지사항`';
         const params = [];
 
-        // 관리자가 아니면 지점 필터링 적용 (학생/선생님/원장 공통)
-        // 관리자(admin 역할 또는 sean8320)는 모든 공지 조회 가능
-        if (role !== 'admin' && userid !== 'sean8320') {
+        // 관리 권한이 없으면 지점 필터링 적용 (학생/선생님/일반 원장)
+        if (!hasAdminPermission(req.user)) { // ⭐️ 헬퍼 함수 사용
              if (!branch) {
                  console.warn(` -> 사용자(${userid}) 토큰에 지점 정보 없음. 전체 공지만 조회합니다.`);
                  sql += ' WHERE branch_name IS NULL'; // 지점 정보 없으면 전체 공지만
@@ -4192,10 +4203,9 @@ app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => { /
                  params.push(branch);
              }
         } else {
-            console.log(` -> 관리자(${userid}) 요청. 모든 공지사항을 조회합니다.`);
-            // 관리자는 WHERE 조건 없이 모든 공지 조회
+            console.log(` -> 관리 권한 사용자(${userid}) 요청. 모든 공지사항을 조회합니다.`);
+            // 관리 권한 사용자는 WHERE 조건 없이 모든 공지 조회
         }
-
 
         sql += ' ORDER BY created_at DESC'; // 최신순 정렬
         const [announcements] = await dbStudent.query(sql, params); // dbStudent 사용!
@@ -4205,39 +4215,34 @@ app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => { /
 
     } catch (err) {
         console.error('❌ 공지사항 조회 오류:', err);
-        // 테이블이 없을 경우 에러 처리
         if (err.code === 'ER_NO_SUCH_TABLE') {
              res.status(404).json({ success: false, message: '공지사항 테이블(jungsimaxstudent.공지사항)을 찾을 수 없습니다.' });
         } else {
-             // 그 외 DB 오류
              res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
         }
     }
 });
-// ======================================================================
-// ⭐️ 3. 관리자용 학생 공지 관리 API (jungsimaxstudent DB 사용)
-// ======================================================================
 
-// jungsi.js 파일 수정
-
-// POST /jungsi/admin/student-announcements/add : 새 학생 공지 추가
-app.post('/jungsi/admin/student-announcements/add', authMiddleware, async (req, res) => { // ⭐️ isAdminMiddleware는 없는 상태 유지
-    // ⭐️ 내부 권한 체크 수정: isAdmin() 대신 직접 확인
-    if (!(req.user && (req.user.userid === 'sean8320' || req.user.role === 'admin'))) {
-        console.warn(`[API POST /admin/student-announcements/add] 접근 거부: ${req.user?.userid} (Admin 아님)`);
-        return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+// --- API 2: 새 학생 공지 추가 (관리 권한 필요) ---
+// POST /jungsi/admin/student-announcements/add
+app.post('/jungsi/admin/student-announcements/add', authMiddleware, async (req, res) => {
+    // ⭐️ 내부 권한 체크: hasAdminPermission() 사용
+    if (!hasAdminPermission(req.user)) {
+        console.warn(`[API POST /admin/student-announcements/add] 접근 거부: ${req.user?.userid} (Position: ${req.user?.position})`);
+        return res.status(403).json({ success: false, message: '공지사항 작성 권한(원장/부원장/팀장)이 필요합니다.' });
     }
 
     const { title, content, target_branch } = req.body;
-    const created_by = req.user.userid;
+    const created_by = req.user.userid; // 작성자는 로그인한 사용자 ID
     const branchNameToSave = target_branch ? target_branch : null;
-    console.log(`[API POST /admin/student-announcements/add] Admin (${created_by}) 학생 공지 추가 요청: ...`);
+    console.log(`[API POST /admin/student-announcements/add] 사용자 (${created_by}, ${req.user.position}) 학생 공지 추가 요청: Target='${branchNameToSave || '전체'}', Title='${title}'`);
     if (!title) return res.status(400).json({ success: false, message: '제목 필수' });
     try {
         const [result] = await dbStudent.query(
             'INSERT INTO `jungsimaxstudent`.`공지사항` (title, content, created_by, branch_name) VALUES (?, ?, ?, ?)',
             [title, content || null, created_by, branchNameToSave]
         );
+        console.log(` -> 학생 공지사항 추가 성공 (ID: ${result.insertId})`);
         res.status(201).json({ success: true, message: '학생 공지사항 추가됨', notice_id: result.insertId });
     } catch (err) {
         console.error('❌ 학생 공지사항 추가 오류:', err);
@@ -4245,26 +4250,29 @@ app.post('/jungsi/admin/student-announcements/add', authMiddleware, async (req, 
     }
 });
 
-// PUT /jungsi/admin/student-announcements/update/:notice_id : 학생 공지 수정
-app.put('/jungsi/admin/student-announcements/update/:notice_id', authMiddleware, async (req, res) => { // ⭐️ isAdminMiddleware는 없는 상태 유지
-    // ⭐️ 내부 권한 체크 수정: isAdmin() 대신 직접 확인
-    if (!(req.user && (req.user.userid === 'sean8320' || req.user.role === 'admin'))) {
-        console.warn(`[API PUT /admin/student-announcements/update] 접근 거부: ${req.user?.userid} (Admin 아님)`);
-        return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+// --- API 3: 학생 공지 수정 (관리 권한 필요) ---
+// PUT /jungsi/admin/student-announcements/update/:notice_id
+app.put('/jungsi/admin/student-announcements/update/:notice_id', authMiddleware, async (req, res) => {
+    // ⭐️ 내부 권한 체크: hasAdminPermission() 사용
+    if (!hasAdminPermission(req.user)) {
+        console.warn(`[API PUT /admin/student-announcements/update] 접근 거부: ${req.user?.userid} (Position: ${req.user?.position})`);
+        return res.status(403).json({ success: false, message: '공지사항 수정 권한(원장/부원장/팀장)이 필요합니다.' });
     }
 
     const { notice_id } = req.params;
     const { title, content, target_branch } = req.body;
     const user_id = req.user.userid;
     const branchNameToSave = target_branch ? target_branch : null;
-    console.log(`[API PUT /admin/student-announcements/update/${notice_id}] Admin (${user_id}) 학생 공지 수정 요청: ...`);
+    console.log(`[API PUT /admin/student-announcements/update/${notice_id}] 사용자 (${user_id}, ${req.user.position}) 학생 공지 수정 요청: ...`);
     if (!title) return res.status(400).json({ success: false, message: '제목 필수' });
     try {
+        // (선택적 강화: 본인 글만 수정 가능하게 하려면 created_by = ? 조건 추가)
         const [result] = await dbStudent.query(
             'UPDATE `jungsimaxstudent`.`공지사항` SET title = ?, content = ?, branch_name = ? WHERE notice_id = ?',
             [title, content || null, branchNameToSave, notice_id]
         );
         if (result.affectedRows > 0) {
+            console.log(` -> 학생 공지사항 수정 성공 (ID: ${notice_id})`);
             res.json({ success: true, message: '학생 공지사항 수정됨' });
         } else {
              res.status(404).json({ success: false, message: '수정할 학생 공지사항 없음' });
@@ -4275,23 +4283,26 @@ app.put('/jungsi/admin/student-announcements/update/:notice_id', authMiddleware,
     }
 });
 
-// DELETE /jungsi/admin/student-announcements/delete/:notice_id : 학생 공지 삭제
-app.delete('/jungsi/admin/student-announcements/delete/:notice_id', authMiddleware, async (req, res) => { // ⭐️ isAdminMiddleware는 없는 상태 유지
-    // ⭐️ 내부 권한 체크 수정: isAdmin() 대신 직접 확인
-    if (!(req.user && (req.user.userid === 'sean8320' || req.user.role === 'admin'))) {
-        console.warn(`[API DELETE /admin/student-announcements/delete] 접근 거부: ${req.user?.userid} (Admin 아님)`);
-        return res.status(403).json({ success: false, message: '관리자 권한이 필요합니다.' });
+// --- API 4: 학생 공지 삭제 (관리 권한 필요) ---
+// DELETE /jungsi/admin/student-announcements/delete/:notice_id
+app.delete('/jungsi/admin/student-announcements/delete/:notice_id', authMiddleware, async (req, res) => {
+    // ⭐️ 내부 권한 체크: hasAdminPermission() 사용
+    if (!hasAdminPermission(req.user)) {
+        console.warn(`[API DELETE /admin/student-announcements/delete] 접근 거부: ${req.user?.userid} (Position: ${req.user?.position})`);
+        return res.status(403).json({ success: false, message: '공지사항 삭제 권한(원장/부원장/팀장)이 필요합니다.' });
     }
 
     const { notice_id } = req.params;
     const user_id = req.user.userid;
-    console.log(`[API DELETE /admin/student-announcements/delete/${notice_id}] Admin (${user_id}) 학생 공지 삭제 요청`);
+    console.log(`[API DELETE /admin/student-announcements/delete/${notice_id}] 사용자 (${user_id}, ${req.user.position}) 학생 공지 삭제 요청`);
     try {
+        // (선택적 강화: 본인 글만 삭제 가능하게 하려면 created_by = ? 조건 추가)
         const [result] = await dbStudent.query(
             'DELETE FROM `jungsimaxstudent`.`공지사항` WHERE notice_id = ?',
             [notice_id]
         );
         if (result.affectedRows > 0) {
+            console.log(` -> 학생 공지사항 삭제 성공 (ID: ${notice_id})`);
             res.json({ success: true, message: '학생 공지사항 삭제됨' });
         } else {
             res.status(404).json({ success: false, message: '삭제할 학생 공지사항 없음' });
@@ -4301,7 +4312,6 @@ app.delete('/jungsi/admin/student-announcements/delete/:notice_id', authMiddlewa
         res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
     }
 });
-
 // GET /jungsi/admin/student-branches API는 공개 API로 뒀으니 그대로 두면 됨.
 
 app.get('/jungsi/admin/student-branches', async (req, res) => { // ⭐️ authMiddleware, isAdminMiddleware 제거!
