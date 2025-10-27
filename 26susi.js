@@ -212,13 +212,25 @@ app.post('/26susi_admin_delete', authJWT, async (req, res) => {
 
 // ✅ 원장회원 회원가입
 // ✅ [수정] 회원가입 API (에러 로깅 강화)
+// 26susi.js 파일의 /26susi/register API를 이걸로 교체
+
 app.post('/26susi/register', async (req, res) => {
   try {
-    const { userid, password, name, branch, phone } = req.body;
-    if (![userid, password, name, branch, phone].every(Boolean)) {
-      return res.json({ success: false, message: "모든 값을 입력해주세요." });
+    // ⭐️ 1. req.body에서 position(직급) 값 받기
+    const { userid, password, name, position, branch, phone } = req.body;
+
+    // ⭐️ 2. 유효성 검사에 position 추가
+    if (![userid, password, name, position, branch, phone].every(Boolean)) {
+      // ⭐️ 직급 필드가 비어있으면 에러 메시지 수정
+      return res.json({ success: false, message: "모든 값을 입력해주세요 (직급 포함)." });
+    }
+    // (선택) position 값이 '원장','부원장','강사','팀장' 등 유효한 값인지 추가 검사 가능
+    if (!['원장', '팀장','부원장','강사'].includes(position)) { // '강사' 등 다른 직급 허용 시 배열 수정
+         return res.json({ success: false, message: "유효하지 않은 직급입니다." });
     }
 
+
+    // 아이디 중복 검사 (기존과 동일)
     const [dup] = await db.promise().query(
       "SELECT 원장ID FROM 원장회원 WHERE 아이디 = ?", [userid]
     );
@@ -227,22 +239,21 @@ app.post('/26susi/register', async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
+
+    // ⭐️ 3. INSERT 쿼리에 '직급' 컬럼과 값 추가
     await db.promise().query(
-      "INSERT INTO 원장회원 (아이디, 비밀번호, 이름, 지점명, 전화번호) VALUES (?, ?, ?, ?, ?)",
-      [userid, hash, name, branch, phone]
+      "INSERT INTO 원장회원 (아이디, 비밀번호, 이름, 직급, 지점명, 전화번호) VALUES (?, ?, ?, ?, ?, ?)",
+      [userid, hash, name, position, branch, phone] // ⭐️ 순서 맞추기
     );
 
-    res.json({ success: true });
+    res.json({ success: true, message: "가입 신청 완료! 승인 후 로그인 가능합니다." }); // ⭐️ 성공 메시지 추가
 
   } catch (err) {
-    // 에러를 더 명확하게 터미널에 출력
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.error("!!! /26susi/register 경로에서 오류 발생 !!!");
     console.error("- 발생 시간:", new Date().toLocaleString('ko-KR'));
-    console.error("- 에러 내용:", err); // 에러 객체 전체를 출력
+    console.error("- 에러 내용:", err);
     console.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
-    // 500 상태 코드와 함께 명확한 에러 메시지를 응답
     res.status(500).json({ success: false, message: "서버 내부 오류가 발생했습니다." });
   }
 });
