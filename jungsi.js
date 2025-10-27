@@ -4727,7 +4727,6 @@ app.post('/jungsi/teacher/notes/add', authMiddleware, async (req, res) => {
 
     try {
         // 4. (보안) 해당 학생이 요청한 선생님과 같은 지점 소속인지 확인
-        // ⭐️ dbStudent (jungsimaxstudent DB)의 student_account 테이블 사용
         const [studentCheck] = await dbStudent.query(
             'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
             [student_account_id, branch]
@@ -4743,18 +4742,30 @@ app.post('/jungsi/teacher/notes/add', authMiddleware, async (req, res) => {
                 (student_account_id, teacher_userid, note_content, category, note_date)
             VALUES (?, ?, ?, ?, NOW())
         `;
-        // ⭐️ dbStudent 사용!
         const [result] = await dbStudent.query(sql, [student_account_id, teacher_userid, note_content, category || null]);
 
         console.log(` -> 메모 저장 성공 (ID: ${result.insertId})`);
-        res.status(201).json({ success: true, message: '메모가 저장되었습니다.', noteId: result.insertId });
+
+        // ⭐️⭐️⭐️ 6. [수정] 프론트가 기대하는 insertedNote 객체 반환 ⭐️⭐️⭐️
+        res.status(201).json({
+            success: true,
+            message: '메모가 저장되었습니다.',
+            // (프론트엔드에서 즉시 렌더링할 수 있도록 저장된 객체 정보를 반환)
+            insertedNote: {
+                note_id: result.insertId,
+                student_account_id: parseInt(student_account_id),
+                teacher_userid: teacher_userid,
+                note_content: note_content,
+                category: category || null,
+                note_date: new Date() // ⭐️ 방금 저장한 시간
+            }
+        });
 
     } catch (err) {
         console.error('❌ 학생 메모 저장 API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
     }
 });
-
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
