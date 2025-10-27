@@ -4325,6 +4325,141 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
     }
 });
 
+// jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
+
+// =============================================
+// ⭐️ [신규] 관리자용: 학생 반 배정 관리 API (sean8320 전용)
+// =============================================
+
+// --- API 1: 특정 학년도/지점의 학생 목록 + 배정 정보 조회 ---
+// GET /jungsi/admin/students-for-assignment?year=YYYY
+app.get('/jungsi/admin/students-for-assignment', authMiddleware, async (req, res) => {
+    // 1. 관리자(sean8320) 확인
+    if (req.user.userid !== 'sean8320') {
+        console.warn(`[API /admin/students-for-assignment] 접근 거부: ${req.user.userid} (sean8320 아님)`);
+        return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
+    }
+
+    const { year } = req.query; // 쿼리 파라미터에서 학년도 가져오기
+    const { branch } = req.user; // 토큰에서 지점 정보 가져오기
+
+    console.log(`[API /admin/students-for-assignment] ${branch} 지점 ${year}학년도 학생 목록 조회 요청 (by ${req.user.userid})`);
+
+    if (!year) {
+        return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
+    }
+    if (!branch) {
+         // 이 경우는 authMiddleware에서 걸러지지만, 방어적으로 추가
+        return res.status(403).json({ success: false, message: '토큰에 지점 정보가 없습니다.' });
+    }
+
+    try {
+        // 2. 학생 계정 정보(student_account)와 배정 정보(student_assignments)를 LEFT JOIN하여 조회
+        const sql = `
+            SELECT
+                sa.account_id, sa.userid, sa.name AS student_name, -- 학생 정보
+                sassign.class_name, sassign.teacher_userid, sassign.year -- 기존 배정 정보
+            FROM jungsimaxstudent.student_account sa
+            LEFT JOIN jungsimaxstudent.student_assignments sassign
+              ON sa.account_id = sassign.student_account_id AND sassign.year = ?
+            WHERE sa.branch = ? -- 해당 지점 학생만
+              AND sa.role = 'student' -- 학생 역할만 (선생님 계정 제외)
+            ORDER BY sa.name ASC -- 학생 이름순 정렬
+        `;
+        // ⭐️ dbStudent 사용! 파라미터 순서 주의: year, branch
+        const [students] = await dbStudent.query(sql, [year, branch]);
+
+        console.log(` -> ${students.length}명의 학생 정보 조회 완료 (배정 정보 포함)`);
+
+        // 3. 결과 응답
+        res.json({ success: true, students: students });
+
+    } catch (err) {
+        console.error('❌ 학생 목록 조회(배정용) API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+
+// --- API 2: 학생 배정 정보 일괄 저장/수정 (UPSERT) ---
+// POST /jungsi/admin/save-assignments
+app.post('/jungsi/admin/save-assignments', authMiddleware, async (req, res) => {
+    // 1. 관리자(sean8320) 확인
+    if (req.user.userid !== 'sean8320') {
+        console.warn(`[API /admin/save-assignments] 접근 거부: ${req.user.userid} (sean8320 아님)`);
+        return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
+    }
+
+    // 2. 요청 본문에서 데이터 추출
+    const { year, assignments } = req.body; // assignments: [{ student_account_id, class_name, teacher_userid }, ...] 배열
+
+    console.log(`[API /admin/save-assignments] ${year}학년도 학생 ${assignments?.length || 0}명 배정 정보 저장 요청 (by ${req.user.userid})`);
+
+    // 3. 유효성 검사
+    if (!year || !Array.isArray(assignments) || assignments.length === 0) {
+        return res.status(400).json({ success: false, message: '학년도(year)와 배정 정보 배열(assignments)은 필수입니다.' });
+    }
+    // 각 항목 유효성 검사 (간단히)
+    const isValid = assignments.every(item =>
+        item.student_account_id && item.class_name && item.teacher_userid && typeof item.class_name === 'string' && typeof item.teacher_userid === 'string'
+    );
+    if (!isValid) {
+        return res.status(400).json({ success: false, message: '배열 내 항목 형식이 올바르지 않습니다. (student_account_id, class_name, teacher_userid 확인)' });
+    }
+
+    // 4. DB 작업 (트랜잭션 사용)
+    let connection;
+    try {
+        connection = await dbStudent.getConnection(); // dbStudent 사용!
+        await connection.beginTransaction(); // 트랜잭션 시작
+
+        // 5. UPSERT 쿼리 준비 (INSERT ... ON DUPLICATE KEY UPDATE)
+        const sql = `
+            INSERT INTO jungsimaxstudent.student_assignments
+                (student_account_id, class_name, teacher_userid, year, created_at)
+            VALUES (?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE
+                class_name = VALUES(class_name),
+                teacher_userid = VALUES(teacher_userid),
+                created_at = NOW() -- 수정 시간도 갱신 (컬럼 이름 created_at 유지)
+        `;
+
+        let updatedCount = 0;
+        let insertedCount = 0;
+
+        // 6. 배열 반복하며 쿼리 실행
+        for (const item of assignments) {
+            const params = [
+                item.student_account_id,
+                item.class_name,
+                item.teacher_userid,
+                year
+            ];
+            const [result] = await connection.query(sql, params);
+
+            // affectedRows: 1이면 INSERT, 2이면 UPDATE (UPSERT 특징)
+            if (result.affectedRows === 1) insertedCount++;
+            else if (result.affectedRows === 2) updatedCount++;
+        }
+
+        // 7. 커밋 (최종 반영)
+        await connection.commit();
+        console.log(` -> 저장 완료 (신규: ${insertedCount}명, 수정: ${updatedCount}명)`);
+
+        // 8. 성공 응답
+        res.json({ success: true, message: `총 ${insertedCount + updatedCount}명의 학생 배정 정보가 저장/수정되었습니다.` });
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 에러 시 롤백
+        console.error('❌ 학생 배정 정보 저장 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
+
+// --- 여기 아래에 app.listen(...) 이 와야 함 ---
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
