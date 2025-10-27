@@ -4183,35 +4183,61 @@ const hasAdminPermission = (user) => {
 
 // --- API 1: 공지사항 목록 조회 (선생님/원장/학생/관리자) ---
 // GET /jungsi/student/announcements
+알았어! Collation 에러 해결을 위해 COLLATE utf8mb4_unicode_ci를 추가한 /jungsi/student/announcements API 핸들러 코드로 다시 줄게.
+
+jungsi.js 파일에서 /jungsi/student/announcements API 부분을 이걸로 교체하고 서버를 재시작해줘.
+
+JavaScript
+
+// jungsi.js 파일 수정
+
+// --- 권한 확인 헬퍼 함수 (직급 또는 admin 역할 기반) ---
+// (이 함수가 API 핸들러보다 위에 정의되어 있는지 확인!)
+const hasAdminPermission = (user) => {
+    return user && (
+        (user.position && ['원장', '부원장', '팀장'].includes(user.position)) ||
+        user.role === 'admin'
+    );
+};
+
+// ======================================================================
+// ⭐️ 학생 공지사항 관련 API (jungsimaxstudent DB 사용, Collation 수정됨)
+// ======================================================================
+
+// GET /jungsi/student/announcements : 공지사항 목록 조회 (선생님/원장/학생/관리자)
 app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => {
     const { branch, userid, role, position } = req.user;
     console.log(`[API GET /student/announcements] 사용자(${userid}, ${role}, ${position}) 공지사항 목록 조회 요청 (Branch: ${branch})`);
     try {
-        // ⭐️ SQL 쿼리 수정: 26susi.원장회원 테이블을 LEFT JOIN 해서 '이름' 가져오기
+        // ⭐️ SQL 쿼리 수정: JOIN 시 COLLATE utf8mb4_unicode_ci 추가
         let sql = `
             SELECT
                 a.notice_id, a.title, a.content, a.created_by, a.created_at, a.updated_at, a.branch_name,
-                b.이름 AS author_name -- ⭐️ 작성자 이름 추가 (원장회원 테이블에서)
+                b.이름 AS author_name -- 작성자 이름
             FROM jungsimaxstudent.공지사항 a
-            LEFT JOIN \`26susi\`.원장회원 b ON a.created_by = b.아이디 -- ⭐️ JOIN 추가
-        `;
+            LEFT JOIN \`26susi\`.원장회원 b
+              -- ▼▼▼ COLLATE 추가 ▼▼▼
+              ON a.created_by COLLATE utf8mb4_unicode_ci = b.아이디 COLLATE utf8mb4_unicode_ci
+              -- ▲▲▲ COLLATE 추가 ▲▲▲
+        `; // WHERE 절 추가를 위해 세미콜론 제거
         const params = [];
 
-        // 관리 권한 없으면 지점 필터링 (기존과 동일)
+        // 관리 권한 없으면 지점 필터링
         if (!hasAdminPermission(req.user)) {
              if (!branch) {
                  console.warn(` -> 사용자(${userid}) 토큰에 지점 정보 없음. 전체 공지만 조회합니다.`);
-                 sql += ' WHERE a.branch_name IS NULL'; // 지점 정보 없으면 전체 공지만
+                 sql += ' WHERE a.branch_name IS NULL'; // 테이블 별칭 사용
              } else {
-                 sql += ' WHERE a.branch_name = ? OR a.branch_name IS NULL';
+                 // 지점 정보 있으면 해당 지점 공지 + 전체 공지 조회
+                 sql += ' WHERE (a.branch_name = ? OR a.branch_name IS NULL)'; // 테이블 별칭 사용 및 괄호 추가
                  params.push(branch);
              }
         } else {
             console.log(` -> 관리 권한 사용자(${userid}) 요청. 모든 공지사항을 조회합니다.`);
-            // 관리자는 WHERE 조건 없이 조회 (JOIN만 추가됨)
+            // 관리자는 WHERE 조건 없이 조회
         }
 
-        sql += ' ORDER BY a.created_at DESC'; // 최신순 정렬 (alias 사용)
+        sql += ' ORDER BY a.created_at DESC'; // 최신순 정렬 (테이블 별칭 사용)
         const [announcements] = await dbStudent.query(sql, params); // dbStudent 사용!
 
         console.log(` -> 공지사항 ${announcements.length}건 조회 완료 (작성자 이름 포함)`);
@@ -4221,6 +4247,9 @@ app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => {
         console.error('❌ 공지사항 조회 오류 (JOIN 포함):', err);
         if (err.code === 'ER_NO_SUCH_TABLE') {
              res.status(404).json({ success: false, message: '공지사항 또는 원장회원 테이블을 찾을 수 없습니다.' });
+        } else if (err.code === 'ER_MIX_OF_COLLATION' || err.message.includes('Illegal mix of collations')) { // Collation 에러 더 확실하게 확인
+             console.error(' -> Collation mix error confirmed.');
+             res.status(500).json({ success: false, message: '데이터 정렬 방식 충돌 오류 발생. DB 컬럼 설정을 확인하세요.' });
         } else {
              res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
         }
