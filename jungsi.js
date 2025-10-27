@@ -4512,44 +4512,48 @@ app.post('/jungsi/admin/save-assignments', authMiddleware, async (req, res) => {
 app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     // 1. 로그인한 선생님(원장) ID 및 지점 확인
     const { userid: teacher_userid, branch } = req.user;
-    const { year } = req.query; // 학년도
+    const { year } = req.query;
 
-    console.log(`[API /teacher/my-students] 선생님(${teacher_userid}, ${branch}지점) ${year}학년도 담당 학생 목록 조회`);
+    console.log(`[API /teacher/my-students] 선생님(${teacher_userid}, ${branch}지점) ${year}학년도 담당 학생 목록 조회 (상세)`);
 
     if (!year) {
         return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
     }
 
     try {
-        // 2. student_assignments와 student_account 테이블을 JOIN
-        //    (담당 선생님 ID와 학년도로 필터링)
+        // 2. ⭐️ SQL 수정: sa.gender, sa.grade, 부상 메모(injury_status) 서브쿼리 추가
         const sql = `
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
-                sassign.class_name
+                sa.gender, sa.grade, -- ⭐️ 학생 성별, 학년 추가
+                sassign.class_name,
+                ( -- ⭐️ 학생의 최신 "부상" 카테고리 메모 조회 (있으면 '부상', 없으면 NULL)
+                    SELECT stn.category
+                    FROM jungsimaxstudent.student_teacher_notes stn
+                    WHERE stn.student_account_id = sa.account_id
+                      AND stn.category = '부상'
+                    ORDER BY stn.note_date DESC
+                    LIMIT 1
+                ) AS injury_status
             FROM jungsimaxstudent.student_assignments sassign
             JOIN jungsimaxstudent.student_account sa
               ON sassign.student_account_id = sa.account_id
             WHERE sassign.teacher_userid = ?
               AND sassign.year = ?
-              AND sa.branch = ? -- ⭐️ 학생의 지점도 로그인한 선생님 지점과 같은지 한번 더 확인 (보안)
+              AND sa.branch = ?
             ORDER BY sa.name ASC -- 학생 이름순 정렬
         `;
         // ⭐️ dbStudent 사용!
         const [students] = await dbStudent.query(sql, [teacher_userid, year, branch]);
 
-        console.log(` -> ${students.length}명의 담당 학생 정보 조회 완료`);
-
-        // 3. 결과 응답
+        console.log(` -> ${students.length}명의 담당 학생 상세 정보 조회 완료`);
         res.json({ success: true, students: students });
 
     } catch (err) {
-        console.error('❌ 내 담당 학생 목록 조회 API 오류:', err);
+        console.error('❌ 내 담당 학생 목록(상세) 조회 API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
-
-
 // --- API 2: (선생님용) 운동 마스터 목록 조회 ---
 // GET /jungsi/master-exercises
 app.get('/jungsi/master-exercises', authMiddleware, async (req, res) => {
@@ -4764,6 +4768,66 @@ app.post('/jungsi/teacher/notes/add', authMiddleware, async (req, res) => {
     } catch (err) {
         console.error('❌ 학생 메모 저장 API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+    }
+});
+
+// =============================================
+// GET /jungsi/teacher/student-saved-list/:student_account_id/:year
+app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMiddleware, async (req, res) => {
+    // 1. URL 파라미터 및 로그인한 선생님 정보
+    const { student_account_id, year } = req.params;
+    const { branch, userid: teacher_userid } = req.user;
+
+    console.log(`[API /teacher/student-saved-list] 선생님(${teacher_userid})이 학생(${student_account_id}, ${year}년도) 저장 대학 목록 조회`);
+
+    if (!student_account_id || !year) {
+        return res.status(400).json({ success: false, message: '학생 ID와 학년도가 필요합니다.' });
+    }
+
+    try {
+        // 2. (보안) 해당 학생이 요청한 선생님 지점 소속인지 확인
+        const [studentCheck] = await dbStudent.query(
+            'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
+            [student_account_id, branch]
+        );
+        if (studentCheck.length === 0) {
+            console.warn(` -> 권한 없음: 학생(${student_account_id})이 ${branch} 지점 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        }
+
+        // 3. 학생이 저장한 대학 목록 + 대학 정보 + 실기 종목(GROUP_CONCAT) 조회
+        //    (학생DB의 student_saved_universities와 정시DB의 정시기본, 정시실기배점 JOIN)
+        const sql = `
+            SELECT
+                su.saved_id, su.U_ID, su.calculated_suneung_score,
+                jb.대학명, jb.학과명, jb.군,
+                -- ⭐️ 이 대학의 모든 실기 종목을 콤마(,)로 연결해서 가져옴
+                GROUP_CONCAT(DISTINCT je.종목명 ORDER BY je.종목명 SEPARATOR ', ') AS events
+            FROM jungsimaxstudent.student_saved_universities su
+            JOIN jungsi.정시기본 jb
+              ON su.U_ID = jb.U_ID AND su.학년도 = jb.학년도
+            LEFT JOIN jungsi.정시실기배점 je -- 실기 종목이 없는 대학도 있으므로 LEFT JOIN
+              ON su.U_ID = je.U_ID AND su.학년도 = je.학년도
+            WHERE su.account_id = ? AND su.학년도 = ?
+            GROUP BY su.saved_id -- ⭐️ 저장된 항목(saved_id) 기준으로 그룹화
+            ORDER BY FIELD(jb.군, '가', '나', '다'), jb.대학명;
+        `;
+        // ⭐️ dbStudent 사용!
+        const [savedList] = await dbStudent.query(sql, [student_account_id, year]);
+
+        console.log(` -> 학생(${student_account_id})의 저장 대학 ${savedList.length}건 (실기 종목 포함) 조회 완료`);
+
+        // 4. (선택) events 문자열을 배열로 변환
+        const formattedList = savedList.map(item => ({
+            ...item,
+            events: item.events ? item.events.split(', ') : [] // "종목1, 종목2" -> ["종목1", "종목2"]
+        }));
+
+        res.json({ success: true, savedUniversities: formattedList });
+
+    } catch (err) {
+        console.error('❌ 학생 저장 대학 목록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
