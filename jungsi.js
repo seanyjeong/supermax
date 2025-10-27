@@ -4386,8 +4386,8 @@ app.get('/jungsi/admin/students-for-assignment', authMiddleware, async (req, res
         return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
     }
 
-    const { year } = req.query; // 쿼리 파라미터에서 학년도 가져오기
-    const { branch } = req.user; // 토큰에서 지점 정보 가져오기
+    const { year } = req.query;
+    const { branch } = req.user;
 
     console.log(`[API /admin/students-for-assignment] ${branch} 지점 ${year}학년도 학생 목록 조회 요청 (by ${req.user.userid})`);
 
@@ -4395,12 +4395,11 @@ app.get('/jungsi/admin/students-for-assignment', authMiddleware, async (req, res
         return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
     }
     if (!branch) {
-         // 이 경우는 authMiddleware에서 걸러지지만, 방어적으로 추가
         return res.status(403).json({ success: false, message: '토큰에 지점 정보가 없습니다.' });
     }
 
     try {
-        // 2. 학생 계정 정보(student_account)와 배정 정보(student_assignments)를 LEFT JOIN하여 조회
+        // 2. ⭐️⭐️⭐️ SQL 수정: "AND sa.role = 'student'" 부분 삭제! ⭐️⭐️⭐️
         const sql = `
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name, -- 학생 정보
@@ -4409,7 +4408,7 @@ app.get('/jungsi/admin/students-for-assignment', authMiddleware, async (req, res
             LEFT JOIN jungsimaxstudent.student_assignments sassign
               ON sa.account_id = sassign.student_account_id AND sassign.year = ?
             WHERE sa.branch = ? -- 해당 지점 학생만
-              AND sa.role = 'student' -- 학생 역할만 (선생님 계정 제외)
+            -- ⭐️ "AND sa.role = 'student'" 라인 삭제됨!
             ORDER BY sa.name ASC -- 학생 이름순 정렬
         `;
         // ⭐️ dbStudent 사용! 파라미터 순서 주의: year, branch
