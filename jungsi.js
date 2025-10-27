@@ -4184,45 +4184,48 @@ const hasAdminPermission = (user) => {
 // --- API 1: 공지사항 목록 조회 (선생님/원장/학생/관리자) ---
 // GET /jungsi/student/announcements
 app.get('/jungsi/student/announcements', authMiddleware, async (req, res) => {
-    // authMiddleware는 req.user에 userid, branch, role, position 등을 넣어줌 (26susi 로그인 API 수정 필요)
     const { branch, userid, role, position } = req.user;
     console.log(`[API GET /student/announcements] 사용자(${userid}, ${role}, ${position}) 공지사항 목록 조회 요청 (Branch: ${branch})`);
     try {
-        // dbStudent 사용! (jungsimaxstudent DB 풀)
-        let sql = 'SELECT notice_id, title, content, created_by, created_at, updated_at, branch_name FROM `jungsimaxstudent`.`공지사항`';
+        // ⭐️ SQL 쿼리 수정: 26susi.원장회원 테이블을 LEFT JOIN 해서 '이름' 가져오기
+        let sql = `
+            SELECT
+                a.notice_id, a.title, a.content, a.created_by, a.created_at, a.updated_at, a.branch_name,
+                b.이름 AS author_name -- ⭐️ 작성자 이름 추가 (원장회원 테이블에서)
+            FROM jungsimaxstudent.공지사항 a
+            LEFT JOIN \`26susi\`.원장회원 b ON a.created_by = b.아이디 -- ⭐️ JOIN 추가
+        `;
         const params = [];
 
-        // 관리 권한이 없으면 지점 필터링 적용 (학생/선생님/일반 원장)
-        if (!hasAdminPermission(req.user)) { // ⭐️ 헬퍼 함수 사용
+        // 관리 권한 없으면 지점 필터링 (기존과 동일)
+        if (!hasAdminPermission(req.user)) {
              if (!branch) {
                  console.warn(` -> 사용자(${userid}) 토큰에 지점 정보 없음. 전체 공지만 조회합니다.`);
-                 sql += ' WHERE branch_name IS NULL'; // 지점 정보 없으면 전체 공지만
+                 sql += ' WHERE a.branch_name IS NULL'; // 지점 정보 없으면 전체 공지만
              } else {
-                 // 지점 정보 있으면 해당 지점 공지 + 전체 공지 조회
-                 sql += ' WHERE branch_name = ? OR branch_name IS NULL';
+                 sql += ' WHERE a.branch_name = ? OR a.branch_name IS NULL';
                  params.push(branch);
              }
         } else {
             console.log(` -> 관리 권한 사용자(${userid}) 요청. 모든 공지사항을 조회합니다.`);
-            // 관리 권한 사용자는 WHERE 조건 없이 모든 공지 조회
+            // 관리자는 WHERE 조건 없이 조회 (JOIN만 추가됨)
         }
 
-        sql += ' ORDER BY created_at DESC'; // 최신순 정렬
+        sql += ' ORDER BY a.created_at DESC'; // 최신순 정렬 (alias 사용)
         const [announcements] = await dbStudent.query(sql, params); // dbStudent 사용!
 
-        console.log(` -> 공지사항 ${announcements.length}건 조회 완료 (jungsimaxstudent DB)`);
-        res.json({ success: true, announcements: announcements });
+        console.log(` -> 공지사항 ${announcements.length}건 조회 완료 (작성자 이름 포함)`);
+        res.json({ success: true, announcements: announcements }); // author_name 포함된 데이터 전송
 
     } catch (err) {
-        console.error('❌ 공지사항 조회 오류:', err);
+        console.error('❌ 공지사항 조회 오류 (JOIN 포함):', err);
         if (err.code === 'ER_NO_SUCH_TABLE') {
-             res.status(404).json({ success: false, message: '공지사항 테이블(jungsimaxstudent.공지사항)을 찾을 수 없습니다.' });
+             res.status(404).json({ success: false, message: '공지사항 또는 원장회원 테이블을 찾을 수 없습니다.' });
         } else {
              res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
         }
     }
 });
-
 // --- API 2: 새 학생 공지 추가 (관리 권한 필요) ---
 // POST /jungsi/admin/student-announcements/add
 app.post('/jungsi/admin/student-announcements/add', authMiddleware, async (req, res) => {
