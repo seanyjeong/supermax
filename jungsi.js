@@ -4688,6 +4688,7 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
         if (connection) connection.release();
     }
 });
+
 // --- API 2: (선생님용) 운동 마스터 목록 조회 ---
 // GET /jungsi/master-exercises
 app.get('/jungsi/master-exercises', authMiddleware, async (req, res) => {
@@ -4716,7 +4717,7 @@ app.get('/jungsi/master-exercises', authMiddleware, async (req, res) => {
 });
 
 
-/
+
 
 // jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
 
