@@ -3847,37 +3847,49 @@ app.post('/jungsi/student/practical/record', authStudentOnlyMiddleware, async (r
 
 // --- API 4: 대시보드 데이터 (설정+목표+기록) 한 번에 불러오기 ---
 // GET /jungsi/student/practical/dashboard
+// --- API 4: 대시보드 데이터 ... ---
 app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async (req, res) => {
-    // authStudentOnlyMiddleware 에서 req.user.account_id 주입됨
     const { account_id } = req.user;
     console.log(`[API /practical/dashboard] 학생(${account_id}) 대시보드 데이터 요청`);
 
     try {
-        // 1. 학생 설정 조회 (추적 종목 목록)
         const [settingsRows] = await dbStudent.query(
             'SELECT tracked_events FROM jungsimaxstudent.student_practical_settings WHERE account_id = ?',
             [account_id]
         );
         let trackedEvents = [];
         if (settingsRows.length > 0 && settingsRows[0].tracked_events) {
-            // ▼▼▼▼▼ 로그 추가 시작 ▼▼▼▼▼
             const rawDbValue = settingsRows[0].tracked_events;
             console.log(`>>> DEBUG: Raw DB value for tracked_events:`, rawDbValue);
             console.log(`>>> DEBUG: Typeof raw DB value:`, typeof rawDbValue);
-            // ▲▲▲▲▲ 로그 추가 끝 ▲▲▲▲▲
+
             try {
-                // DB의 JSON 문자열을 실제 배열로 파싱 (에러 처리 추가됨)
-                trackedEvents = JSON.parse(settingsRows[0].tracked_events);
-                if (!Array.isArray(trackedEvents)) {
-                    console.warn(` -> 파싱 결과가 배열이 아님 (account_id: ${account_id}):`, trackedEvents);
-                    trackedEvents = []; // 파싱 실패 시 빈 배열
+                // ⭐️ 수정된 로직: 타입 체크 후 처리
+                if (Array.isArray(rawDbValue)) {
+                    // Case 1: 이미 배열 (mysql2가 파싱해준 경우)
+                    trackedEvents = rawDbValue;
+                    console.log(` -> DB value is already an array.`);
+                } else if (typeof rawDbValue === 'string') {
+                    // Case 2: 문자열 (파싱 시도)
+                    trackedEvents = JSON.parse(rawDbValue);
+                    if (!Array.isArray(trackedEvents)) { // 파싱 결과가 배열이 아니면 실패 처리
+                         console.warn(` -> Parsed result is not an array:`, trackedEvents);
+                         trackedEvents = [];
+                    } else {
+                         console.log(` -> DB value parsed from string.`);
+                    }
+                } else {
+                    // Case 3: 예상 못한 타입 (NULL, object 등) -> 빈 배열 처리
+                     console.warn(` -> Unexpected data type from DB: ${typeof rawDbValue}, treating as empty.`);
+                     trackedEvents = [];
                 }
             } catch (parseError) {
-                console.error(` -> JSON 파싱 에러 (account_id: ${account_id}):`, settingsRows[0].tracked_events, parseError);
-                trackedEvents = []; // 에러 시 빈 배열로 초기화
+                 // JSON.parse 실패 시
+                 console.error(` -> JSON parsing error (account_id: ${account_id}):`, rawDbValue, parseError);
+                 trackedEvents = [];
             }
         }
-        console.log(` -> 추적 종목 (${trackedEvents.length}개):`, trackedEvents);
+        console.log(` -> Final trackedEvents (${trackedEvents.length} items):`, trackedEvents);
 
         // 2. 학생 목표 조회 (모든 종목)
         const [goalRows] = await dbStudent.query(
