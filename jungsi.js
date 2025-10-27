@@ -3686,6 +3686,279 @@ app.get('/jungsi/student/get-history/:uid/:year', authStudentOnlyMiddleware, asy
     }
 });
 
+// jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
+
+// =============================================
+// ⭐️ [신규] 학생 실기 훈련 관련 API (5개)
+// =============================================
+
+// --- 헬퍼 함수 (silgical.js 에서 가져옴 - getEventRules) ---
+function getEventRules(eventName) {
+    eventName = eventName || '';
+    const LOW_IS_BETTER_KEYWORDS = [ 'm', 'run', '런', '왕복', '초', '벽','지그','z' ];
+    let method = 'higher_is_better';
+    if (LOW_IS_BETTER_KEYWORDS.some((k) => eventName.includes(k))) {
+        method = 'lower_is_better';
+    }
+    if (eventName.includes('던지기') || eventName.includes('멀리뛰기')) {
+        method = 'higher_is_better';
+    }
+    return { method };
+}
+
+
+// --- API 1: 내 운동 종목 설정 저장/수정 ---
+// POST /jungsi/student/practical/settings
+app.post('/jungsi/student/practical/settings', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user; // 미들웨어에서 account_id 주입 가정
+    const { tracked_events } = req.body; // 프론트에서 ["종목1", "종목2"] 형태의 배열 전송 예상
+
+    console.log(`[API /practical/settings] 학생(${account_id}) 추적 종목 설정 요청:`, tracked_events);
+
+    if (!Array.isArray(tracked_events)) {
+        return res.status(400).json({ success: false, message: 'tracked_events는 배열 형태여야 합니다.' });
+    }
+
+    try {
+        const sql = `
+            INSERT INTO jungsimaxstudent.student_practical_settings (account_id, tracked_events)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE tracked_events = VALUES(tracked_events), updated_at = NOW()
+        `;
+        // 배열을 JSON 문자열로 변환하여 저장
+        await dbStudent.query(sql, [account_id, JSON.stringify(tracked_events)]);
+
+        console.log(` -> 설정 저장 완료`);
+        res.json({ success: true, message: '추적할 운동 종목 설정을 저장했습니다.' });
+
+    } catch (err) {
+        console.error('❌ 학생 운동 설정 저장 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+    }
+});
+
+
+// --- API 2: 종목별 목표 저장/수정 ---
+// POST /jungsi/student/practical/goal
+app.post('/jungsi/student/practical/goal', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+    const { event_name, goal_value } = req.body; // 프론트에서 종목명과 목표값 전송
+
+    console.log(`[API /practical/goal] 학생(${account_id}) 종목(${event_name}) 목표(${goal_value}) 설정 요청`);
+
+    if (!event_name || goal_value === undefined || goal_value === null || goal_value === '') {
+        return res.status(400).json({ success: false, message: '종목명(event_name)과 목표값(goal_value)은 필수입니다.' });
+    }
+
+    const goalValueNum = parseFloat(goal_value);
+    if (isNaN(goalValueNum) || goalValueNum < 0) {
+         // 목표 삭제 요청으로 간주 (음수나 빈 문자열 등) -> 실제로는 null 또는 0 저장
+         console.log(` -> 목표 삭제 요청으로 처리 (값: ${goal_value})`);
+         // 여기서 해당 레코드를 DELETE 하거나, goal_value를 null로 업데이트 할 수 있음
+         // 여기서는 UPSERT를 이용해 0 또는 null로 업데이트하는 방식 선택
+         // (만약 삭제를 원하면 DELETE 쿼리 추가)
+         // goalValueNum = null; // null 허용 시
+    }
+
+
+    try {
+        const sql = `
+            INSERT INTO jungsimaxstudent.student_practical_goals (account_id, event_name, goal_value)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE goal_value = VALUES(goal_value), updated_at = NOW()
+        `;
+        // 목표값이 유효하지 않으면 0 저장 (또는 null 허용 시 null)
+        const valueToSave = (isNaN(goalValueNum) || goalValueNum < 0) ? 0 : goalValueNum;
+        await dbStudent.query(sql, [account_id, event_name, valueToSave]);
+
+        console.log(` -> 목표 저장/수정 완료`);
+        res.json({ success: true, message: `[${event_name}] 목표 기록을 저장했습니다.` });
+
+    } catch (err) {
+        console.error('❌ 학생 운동 목표 저장 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+    }
+});
+
+
+// --- API 3: 오늘 훈련 기록 추가 (+ 하루 3개 제한) ---
+// POST /jungsi/student/practical/record
+app.post('/jungsi/student/practical/record', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+    const { event_name, record_date, record_value } = req.body; // 프론트에서 종목명, 날짜, 기록값 전송
+
+    console.log(`[API /practical/record] 학생(${account_id}) 종목(${event_name}) 날짜(${record_date}) 기록(${record_value}) 추가 요청`);
+
+    if (!event_name || !record_date || record_value === undefined || record_value === null || record_value === '') {
+        return res.status(400).json({ success: false, message: '종목명, 날짜, 기록값은 필수입니다.' });
+    }
+    const recordValueNum = parseFloat(record_value);
+    if (isNaN(recordValueNum) || recordValueNum < 0) {
+        return res.status(400).json({ success: false, message: '기록값은 0 이상의 숫자여야 합니다.' });
+    }
+    // 날짜 형식 검사 (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(record_date)) {
+        return res.status(400).json({ success: false, message: '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).' });
+    }
+
+    let connection;
+    try {
+        connection = await dbStudent.getConnection();
+        await connection.beginTransaction(); // 트랜잭션 시작
+
+        // ⭐️ 1. 해당 날짜, 해당 종목의 기존 기록 개수 확인
+        const countSql = `
+            SELECT COUNT(*) as count FROM jungsimaxstudent.student_practical_records
+            WHERE account_id = ? AND event_name = ? AND record_date = ?
+        `;
+        const [countRows] = await connection.query(countSql, [account_id, event_name, record_date]);
+        const currentCount = countRows[0].count;
+
+        console.log(` -> ${record_date} ${event_name} 현재 기록 개수: ${currentCount}`);
+
+        // ⭐️ 2. 3개 이상이면 에러 반환
+        if (currentCount >= 3) {
+            await connection.rollback(); // 롤백하고 종료
+            console.log(` -> 저장 개수 제한 초과 (최대 3개)`);
+            return res.status(429).json({ success: false, message: `[${event_name}] 종목은 하루에 최대 3개의 기록만 저장할 수 있습니다.` }); // 429 Too Many Requests
+        }
+
+        // ⭐️ 3. 3개 미만이면 INSERT 실행
+        const insertSql = `
+            INSERT INTO jungsimaxstudent.student_practical_records (account_id, event_name, record_date, record_value)
+            VALUES (?, ?, ?, ?)
+        `;
+        const [result] = await connection.query(insertSql, [account_id, event_name, record_date, recordValueNum]);
+
+        await connection.commit(); // 커밋 (최종 저장)
+        console.log(` -> 기록 추가 성공 (ID: ${result.insertId})`);
+        res.status(201).json({ success: true, message: '훈련 기록이 추가되었습니다.', recordId: result.insertId });
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 에러 시 롤백
+        console.error('❌ 학생 훈련 기록 추가 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
+
+
+// --- API 4: 대시보드 데이터 (설정+목표+기록) 한 번에 불러오기 ---
+// GET /jungsi/student/practical/dashboard
+app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+    console.log(`[API /practical/dashboard] 학생(${account_id}) 대시보드 데이터 요청`);
+
+    try {
+        // 1. 학생 설정 조회 (추적 종목 목록)
+        const [settingsRows] = await dbStudent.query(
+            'SELECT tracked_events FROM jungsimaxstudent.student_practical_settings WHERE account_id = ?',
+            [account_id]
+        );
+        let trackedEvents = [];
+        if (settingsRows.length > 0 && settingsRows[0].tracked_events) {
+            try {
+                // DB의 JSON 문자열을 실제 배열로 파싱
+                trackedEvents = JSON.parse(settingsRows[0].tracked_events);
+                if (!Array.isArray(trackedEvents)) trackedEvents = []; // 파싱 실패 시 빈 배열
+            } catch { trackedEvents = []; } // JSON 파싱 에러 시 빈 배열
+        }
+        console.log(` -> 추적 종목 (${trackedEvents.length}개):`, trackedEvents);
+
+        // 2. 학생 목표 조회 (모든 종목)
+        const [goalRows] = await dbStudent.query(
+            'SELECT event_name, goal_value FROM jungsimaxstudent.student_practical_goals WHERE account_id = ?',
+            [account_id]
+        );
+        const goalsMap = {}; // { '종목명': 목표값, ... } 형태로 변환
+        goalRows.forEach(row => { goalsMap[row.event_name] = Number(row.goal_value); });
+        console.log(` -> 목표 (${goalRows.length}개):`, goalsMap);
+
+        // 3. 학생 기록 조회 (모든 종목, 모든 날짜)
+        const [recordRows] = await dbStudent.query(
+            'SELECT event_name, record_date, record_value FROM jungsimaxstudent.student_practical_records WHERE account_id = ? ORDER BY record_date ASC', // 날짜 오름차순
+            [account_id]
+        );
+        const recordsMap = {}; // { '종목명': [ {date, value}, ... ], ... } 형태로 변환
+        recordRows.forEach(row => {
+            const event = row.event_name;
+            if (!recordsMap[event]) recordsMap[event] = [];
+            // 날짜만 YYYY-MM-DD 형식으로 추출 (시간 정보 제거)
+            const dateOnly = row.record_date.toISOString().split('T')[0];
+            recordsMap[event].push({ date: dateOnly, value: Number(row.record_value) });
+        });
+        console.log(` -> 기록 (${recordRows.length}개 로드 완료)`);
+
+        // 4. 결과 조합하여 응답
+        res.json({
+            success: true,
+            dashboard: {
+                settings: { trackedEvents: trackedEvents },
+                goals: goalsMap,
+                records: recordsMap
+            }
+        });
+
+    } catch (err) {
+        console.error('❌ 대시보드 데이터 로드 오류:', err);
+        res.status(500).json({ success: false, message: '데이터 로드 중 오류 발생' });
+    }
+});
+
+
+// --- API 5: 오늘 최고 기록만 불러오기 (saved_list.html 연동용) ---
+// GET /jungsi/student/practical/today-best
+app.get('/jungsi/student/practical/today-best', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+    console.log(`[API /practical/today-best] 학생(${account_id}) 오늘 최고 기록 요청`);
+
+    try {
+        // 1. 오늘 날짜(CURDATE())의 모든 기록 조회
+        const sql = `
+            SELECT event_name, record_value
+            FROM jungsimaxstudent.student_practical_records
+            WHERE account_id = ? AND record_date = CURDATE()
+        `;
+        const [todayRecords] = await dbStudent.query(sql, [account_id]);
+
+        if (todayRecords.length === 0) {
+            console.log(` -> 오늘 기록 없음`);
+            return res.json({ success: true, bestRecords: {} }); // 기록 없으면 빈 객체 반환
+        }
+
+        // 2. 종목별 최고 기록 집계
+        const bestRecordsMap = {};
+        todayRecords.forEach(record => {
+            const event = record.event_name;
+            const value = Number(record.record_value);
+            const { method } = getEventRules(event); // 기록 방식 확인 (lower/higher)
+
+            if (bestRecordsMap[event] === undefined) {
+                // 해당 종목의 첫 기록이면 그냥 저장
+                bestRecordsMap[event] = value;
+            } else {
+                // 기존 최고 기록과 비교하여 업데이트
+                if (method === 'lower_is_better' && value < bestRecordsMap[event]) {
+                    bestRecordsMap[event] = value; // 더 낮은 값(더 좋은 기록)으로 업데이트
+                } else if (method === 'higher_is_better' && value > bestRecordsMap[event]) {
+                    bestRecordsMap[event] = value; // 더 높은 값(더 좋은 기록)으로 업데이트
+                }
+            }
+        });
+
+        console.log(` -> 오늘 최고 기록 (${Object.keys(bestRecordsMap).length} 종목):`, bestRecordsMap);
+        res.json({ success: true, bestRecords: bestRecordsMap });
+
+    } catch (err) {
+        console.error('❌ 오늘 최고 기록 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// --- 여기 아래에 app.listen(...) 이 와야 함 ---
+
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- app.listen(...) 이 이 아래에 와야 함 ---
