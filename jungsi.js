@@ -4166,34 +4166,47 @@ app.get('/jungsi/public/practical-events', async (req, res) => {
 // ======================================================================
 
 // GET /jungsi/student/announcements : 학생은 자기 지점 공지만 조회
+// ======================================================================
+// ⭐️ 2. 학생용 공지사항 API (jungsimaxstudent DB 사용, 조회만 가능)
+// ======================================================================
+
+// GET /jungsi/student/announcements : 학생은 자기 지점 공지만 조회
 app.get('/jungsi/student/announcements', authStudentOnlyMiddleware, async (req, res) => {
+    // authStudentOnlyMiddleware 에서 req.user 에 account_id 와 branch 를 넣어줌
     const { branch, account_id } = req.user;
     console.log(`[API GET /student/announcements] 학생(${account_id}) 공지사항(jungsimaxstudent DB) 목록 조회 요청 (Branch: ${branch})`);
     try {
-        // ⭐️ dbStudent 사용!
+        // ⭐️ dbStudent 사용! (jungsimaxstudent DB 풀)
         let sql = 'SELECT notice_id, title, content, created_by, created_at, updated_at, branch_name FROM `jungsimaxstudent`.`공지사항`';
         const params = [];
+
+        // 학생 토큰에는 branch 정보가 없을 수도 있음 (관리자가 직접 추가한 경우 등)
         if (!branch) {
              console.warn(' -> 학생 토큰에 지점 정보 없음. 전체 공지만 조회합니다.');
-             sql += ' WHERE branch_name IS NULL';
+             sql += ' WHERE branch_name IS NULL'; // 지점 정보 없으면 전체 공지만
         } else {
+             // 지점 정보 있으면 해당 지점 공지 + 전체 공지 조회
              sql += ' WHERE branch_name = ? OR branch_name IS NULL';
              params.push(branch);
         }
-        sql += ' ORDER BY created_at DESC';
-        const [announcements] = await dbStudent.query(sql, params);
+
+        sql += ' ORDER BY created_at DESC'; // 최신순 정렬
+        const [announcements] = await dbStudent.query(sql, params); // dbStudent 사용!
+
         console.log(` -> 공지사항 ${announcements.length}건 조회 완료 (jungsimaxstudent DB)`);
         res.json({ success: true, announcements: announcements });
+
     } catch (err) {
         console.error('❌ 학생 공지사항 조회 오류:', err);
+        // 테이블이 없을 경우 에러 처리
         if (err.code === 'ER_NO_SUCH_TABLE') {
              res.status(404).json({ success: false, message: '공지사항 테이블(jungsimaxstudent.공지사항)을 찾을 수 없습니다.' });
         } else {
+             // 그 외 DB 오류
              res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
         }
     }
 });
-
 
 // ======================================================================
 // ⭐️ 3. 관리자용 학생 공지 관리 API (jungsimaxstudent DB 사용)
