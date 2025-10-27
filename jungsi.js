@@ -4335,7 +4335,43 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
     }
 });
 
-// jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
+// =============================================
+// ⭐️ [신규] 관리자용: 지점 소속 원장/강사 목록 조회 API (sean8320 전용)
+// =============================================
+// GET /jungsi/admin/teachers-in-branch
+app.get('/jungsi/admin/teachers-in-branch', authMiddleware, async (req, res) => {
+    // 1. 관리자(sean8320) 확인
+    if (req.user.userid !== 'sean8320') {
+        console.warn(`[API /admin/teachers-in-branch] 접근 거부: ${req.user.userid} (sean8320 아님)`);
+        return res.status(403).json({ success: false, message: '관리자 전용 기능입니다.' });
+    }
+
+    const { branch } = req.user; // 토큰에서 지점 정보 (예: '일산')
+    console.log(`[API /admin/teachers-in-branch] ${branch} 지점의 승인된 원장 목록 조회 요청`);
+
+    try {
+        // 2. ⭐️ dbSusi (26susi DB) 사용!
+        const sql = `
+            SELECT
+                아이디 AS userid,
+                이름 AS name
+            FROM \`26susi\`.\`원장회원\`
+            WHERE 지점명 = ? AND 승인여부 = 'O'
+            ORDER BY 이름 ASC
+        `;
+        // ⭐️ dbSusi 사용!
+        const [teachers] = await dbSusi.query(sql, [branch]);
+
+        console.log(` -> ${teachers.length}명의 선생님(원장) 목록 조회 완료`);
+
+        // 3. 결과 응답
+        res.json({ success: true, teachers: teachers });
+
+    } catch (err) {
+        console.error('❌ 지점 선생님 목록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
 
 // =============================================
 // ⭐️ [신규] 관리자용: 학생 반 배정 관리 API (sean8320 전용)
