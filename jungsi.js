@@ -4716,6 +4716,68 @@ app.get('/jungsi/master-exercises', authMiddleware, async (req, res) => {
     }
 });
 
+app.get('/jungsi/teacher/assignments/:student_account_id/:date', authMiddleware, async (req, res) => {
+    // 1. URL 파라미터 및 로그인 사용자 정보
+    const { student_account_id, date: assignment_date } = req.params;
+    const { userid: requester_userid, branch: requester_branch, position, role } = req.user;
+    const isMgmt = hasAdminPermission(req.user); // 관리 권한 확인 (파일 상단에 함수 정의 필요)
+
+    console.log(`[API GET /teacher/assignments] 사용자(${requester_userid}, ${position})가 학생(${student_account_id})의 ${assignment_date} 운동 목록 조회 요청`);
+
+    // 날짜 형식 검사 (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!student_account_id || !assignment_date || !dateRegex.test(assignment_date)) {
+        return res.status(400).json({ success: false, message: '학생 ID 또는 날짜 형식이 올바르지 않습니다.' });
+    }
+
+    try {
+        // --- 보안 검사 ---
+        // 1. 요청된 학생이 사용자의 지점 소속인지 확인
+        const [studentCheck] = await dbStudent.query(
+            'SELECT account_id, name, branch FROM jungsimaxstudent.student_account WHERE account_id = ?',
+            [student_account_id]
+        );
+        if (studentCheck.length === 0 || studentCheck[0].branch !== requester_branch) {
+            console.warn(` -> 권한 없음: 학생(${student_account_id})이 사용자 지점(${requester_branch}) 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다 (다른 지점 학생).' });
+        }
+        console.log(` -> 학생 지점(${studentCheck[0].branch}) 확인 완료`);
+
+        // (선택적) 관리자가 아니면, 해당 학생이 자신에게 배정된 학생인지 추가 확인 가능
+        // if (!isMgmt) { ... }
+
+        // --- 데이터 조회 ---
+        // 할당된 운동 목록 + 담당 선생님 이름(26susi.원장회원 JOIN) 조회
+        const sql = `
+            SELECT
+                tda.assignment_id, tda.teacher_userid, tda.assignment_date, tda.exercise_name,
+                tda.category, tda.sub_category, tda.target_weight, tda.target_sets,
+                tda.target_reps, tda.target_notes, tda.is_completed, tda.created_at,
+                ow.이름 AS teacher_name -- ⭐️ 26susi DB에서 선생님 이름 가져오기
+            FROM jungsimaxstudent.teacher_daily_assignments AS tda
+            LEFT JOIN \`26susi\`.원장회원 AS ow -- ⭐️ LEFT JOIN 사용
+              -- ▼▼▼ COLLATE 추가 (Collation 충돌 방지) ▼▼▼
+              ON tda.teacher_userid COLLATE utf8mb4_unicode_ci = ow.아이디 COLLATE utf8mb4_unicode_ci
+              -- ▲▲▲ COLLATE 추가 ▲▲▲
+            WHERE tda.student_account_id = ? AND tda.assignment_date = ?
+            ORDER BY tda.created_at ASC -- 할당된 순서대로
+        `;
+        // ⭐️ dbStudent 사용!
+        const [assignments] = await dbStudent.query(sql, [student_account_id, assignment_date]);
+
+        console.log(` -> ${assignment_date} 날짜의 운동 ${assignments.length}건 조회 완료 (선생님 이름 포함)`);
+        res.json({ success: true, assignments: assignments });
+
+    } catch (err) {
+        console.error(`❌ 특정 날짜 운동 목록 조회 API 오류 (학생ID: ${student_account_id}):`, err);
+        if (err.code === 'ER_MIX_OF_COLLATION') {
+             res.status(500).json({ success: false, message: '데이터 정렬 방식 충돌 오류 발생' });
+        } else {
+             res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+        }
+    }
+});
+
 
 
 
