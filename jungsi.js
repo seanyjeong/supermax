@@ -1197,6 +1197,85 @@ app.put('/jungsi/students/update/:student_id', authMiddleware, async (req, res) 
     }
 });
 
+// =============================================
+// ⭐️ 학생 삭제 API
+// =============================================
+// DELETE /jungsi/students/delete/:student_id
+app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, res) => {
+    const { branch } = req.user; // 토큰에서 지점 이름
+    const { student_id } = req.params; // URL 경로에서 삭제할 학생 ID 가져오기
+
+    console.log(`[API DELETE /students/delete] 학생 ID(${student_id}) 삭제 요청 (요청자 지점: ${branch})`);
+
+    if (!student_id) {
+        return res.status(400).json({ success: false, message: '삭제할 학생 ID가 필요합니다.' });
+    }
+
+    let connection;
+    try {
+        // ⭐️⭐️⭐️ 중요: 학생 기본 정보는 jungsi DB에 있음! db 사용! ⭐️⭐️⭐️
+        connection = await db.getConnection(); 
+        await connection.beginTransaction(); // 트랜잭션 시작
+
+        // 1. (보안) 삭제하려는 학생이 진짜 이 지점 소속인지 확인
+        const [ownerCheck] = await connection.query(
+            'SELECT student_id FROM 학생기본정보 WHERE student_id = ? AND branch_name = ?',
+            [student_id, branch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback(); // 롤백하고
+            console.warn(` -> 삭제 권한 없음: 학생(${student_id})이 ${branch} 지점 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 학생입니다.' }); // 거부
+        }
+
+        // --- ⭐️⭐️⭐️ 중요: 관련 데이터 삭제 (jungsimaxstudent DB) ⭐️⭐️⭐️ ---
+        // 학생 기본 정보를 지우기 전에 학생 DB의 관련 데이터를 먼저 지워야 함!
+        
+        // 예시: 학생수능성적 삭제 (jungsi DB) - 만약 ON DELETE CASCADE 없다면
+        // await connection.query('DELETE FROM 학생수능성적 WHERE student_id = ?', [student_id]); 
+
+        // 예시: 상담목록 삭제 (jungsi DB) - 만약 ON DELETE CASCADE 없다면
+        // await connection.query('DELETE FROM 정시_상담목록 WHERE 학생_ID = ?', [student_id]);
+
+        // 예시: 최종지원 삭제 (jungsi DB) - 만약 ON DELETE CASCADE 없다면
+        // await connection.query('DELETE FROM 정시_최종지원 WHERE 학생_ID = ?', [student_id]);
+        
+        // 예시: 학생 실기 기록 삭제 (jungsimaxstudent DB) - 다른 DB 풀 사용!
+        await dbStudent.query('DELETE FROM student_practical_records WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // 예시: 학생 실기 목표 삭제 (jungsimaxstudent DB)
+        await dbStudent.query('DELETE FROM student_practical_goals WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // 예시: 학생 실기 설정 삭제 (jungsimaxstudent DB)
+        await dbStudent.query('DELETE FROM student_practical_settings WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // 예시: 학생 저장 대학 삭제 (jungsimaxstudent DB)
+        await dbStudent.query('DELETE FROM student_saved_universities WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // 예시: 학생 점수 기록 삭제 (jungsimaxstudent DB)
+        await dbStudent.query('DELETE FROM student_score_history WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // --- ⭐️⭐️⭐️ 관련 데이터 삭제 끝 ⭐️⭐️⭐️ ---
+
+        // 3. 학생 기본 정보 삭제 (jungsi DB)
+        const deleteSql = 'DELETE FROM 학생기본정보 WHERE student_id = ?';
+        const [result] = await connection.query(deleteSql, [student_id]);
+
+        // 4. 커밋 (최종 반영)
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 학생 ID(${student_id}) 삭제 성공`);
+            res.status(204).send(); // 성공 시 No Content
+        } else {
+            console.warn(` -> 삭제할 학생 없음 (ID: ${student_id})`);
+            res.status(404).json({ success: false, message: '삭제할 학생을 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 에러 시 롤백
+        console.error('❌ 학생 삭제 API 오류:', err);
+        res.status(500).json({ success: false, message: '서버 오류 발생', error: err.message });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
+
 
 // jungsi.js 파일의 /jungsi/overview-configs/:year API 부분을 이걸로 교체
 
