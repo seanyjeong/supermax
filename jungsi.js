@@ -4503,6 +4503,160 @@ app.post('/jungsi/admin/save-assignments', authMiddleware, async (req, res) => {
     }
 });
 
+// =============================================
+// ⭐️ [신규] 선생님용: 운동 할당 페이지 API (3개)
+// =============================================
+
+// --- API 1: (선생님용) 내 담당 학생 목록 조회 ---
+// GET /jungsi/teacher/my-students?year=YYYY
+app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
+    // 1. 로그인한 선생님(원장) ID 및 지점 확인
+    const { userid: teacher_userid, branch } = req.user;
+    const { year } = req.query; // 학년도
+
+    console.log(`[API /teacher/my-students] 선생님(${teacher_userid}, ${branch}지점) ${year}학년도 담당 학생 목록 조회`);
+
+    if (!year) {
+        return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
+    }
+
+    try {
+        // 2. student_assignments와 student_account 테이블을 JOIN
+        //    (담당 선생님 ID와 학년도로 필터링)
+        const sql = `
+            SELECT
+                sa.account_id, sa.userid, sa.name AS student_name,
+                sassign.class_name
+            FROM jungsimaxstudent.student_assignments sassign
+            JOIN jungsimaxstudent.student_account sa
+              ON sassign.student_account_id = sa.account_id
+            WHERE sassign.teacher_userid = ?
+              AND sassign.year = ?
+              AND sa.branch = ? -- ⭐️ 학생의 지점도 로그인한 선생님 지점과 같은지 한번 더 확인 (보안)
+            ORDER BY sa.name ASC -- 학생 이름순 정렬
+        `;
+        // ⭐️ dbStudent 사용!
+        const [students] = await dbStudent.query(sql, [teacher_userid, year, branch]);
+
+        console.log(` -> ${students.length}명의 담당 학생 정보 조회 완료`);
+
+        // 3. 결과 응답
+        res.json({ success: true, students: students });
+
+    } catch (err) {
+        console.error('❌ 내 담당 학생 목록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+
+// --- API 2: (선생님용) 운동 마스터 목록 조회 ---
+// GET /jungsi/master-exercises
+app.get('/jungsi/master-exercises', authMiddleware, async (req, res) => {
+    console.log(`[API /master-exercises] 전체 운동 마스터 목록 조회 요청 (by ${req.user.userid})`);
+
+    try {
+        const sql = `
+            SELECT exercise_id, exercise_name, category, sub_category, default_unit
+            FROM jungsimaxstudent.master_exercises
+            WHERE is_active = TRUE -- ⭐️ 활성화된 운동만
+            ORDER BY
+                FIELD(category, 'Skill', 'Weight', 'Other'), -- 실기 -> 웨이트 -> 기타 순
+                FIELD(sub_category, '상체', '하체', '코어', '달리기', '점프'), -- 세부 카테고리 순
+                exercise_name ASC -- 이름순
+        `;
+        // ⭐️ dbStudent 사용!
+        const [exercises] = await dbStudent.query(sql);
+
+        console.log(` -> ${exercises.length}개의 활성화된 운동 목록 조회 완료`);
+        res.json({ success: true, exercises: exercises });
+
+    } catch (err) {
+        console.error('❌ 운동 마스터 목록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+
+// --- API 3: (선생님용) 데일리 운동 할당 (일괄 저장) ---
+// POST /jungsi/teacher/assign-workout
+app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
+    // 1. 로그인한 선생님(원장) ID 확인
+    const { userid: teacher_userid } = req.user;
+
+    // 2. 요청 본문에서 데이터 추출
+    const { student_account_id, assignment_date, assignments } = req.body;
+    // assignments: [{ exercise_name, category, sub_category, target_weight, target_sets, target_reps, target_notes }, ...] 배열
+
+    console.log(`[API /teacher/assign-workout] 선생님(${teacher_userid})이 학생(${student_account_id})에게 ${assignment_date} 날짜 운동 ${assignments?.length || 0}개 할당 요청`);
+
+    // 3. 유효성 검사
+    if (!student_account_id || !assignment_date || !Array.isArray(assignments)) {
+        return res.status(400).json({ success: false, message: '학생ID, 할당날짜, 운동 목록(assignments)은 필수입니다.' });
+    }
+    if (assignments.length === 0) {
+        // 운동 목록이 비어있으면 -> 해당 날짜의 운동을 모두 삭제하는 것으로 간주
+        console.log(` -> 운동 목록이 비어있어, 해당 날짜(${assignment_date})의 학생(${student_account_id}) 운동을 모두 삭제합니다.`);
+    }
+
+    // 4. DB 작업 (트랜잭션 사용)
+    let connection;
+    try {
+        connection = await dbStudent.getConnection(); // dbStudent 사용!
+        await connection.beginTransaction(); // 트랜잭션 시작
+
+        // 5. ⭐️ (중요) 해당 학생, 해당 날짜의 기존 운동 할당 내역을 *모두 삭제*
+        // (이렇게 해야 수정/삭제/순서 변경이 한 번에 처리됨)
+        const deleteSql = `
+            DELETE FROM jungsimaxstudent.teacher_daily_assignments
+            WHERE student_account_id = ? AND assignment_date = ? AND teacher_userid = ? -- ⭐️ 본인이 할당한 것만 지우도록
+        `;
+        await connection.query(deleteSql, [student_account_id, assignment_date, teacher_userid]);
+        console.log(` -> 학생(${student_account_id})의 ${assignment_date} 기존 운동 내역 삭제 완료 (담당자: ${teacher_userid})`);
+
+        // 6. (운동 목록이 있는 경우) 새 운동 목록을 INSERT
+        if (assignments.length > 0) {
+            const insertSql = `
+                INSERT INTO jungsimaxstudent.teacher_daily_assignments
+                    (teacher_userid, student_account_id, assignment_date,
+                     exercise_name, category, sub_category,
+                     target_weight, target_sets, target_reps, target_notes,
+                     is_completed, created_at)
+                VALUES ? -- ⭐️ Bulk Insert 사용
+            `;
+
+            // Bulk Insert를 위한 2차원 배열 생성
+            const values = assignments.map(item => [
+                teacher_userid, // 할당한 선생님 ID
+                student_account_id,
+                assignment_date,
+                item.exercise_name,
+                item.category,
+                item.sub_category || null,
+                item.target_weight || null,
+                item.target_sets || null,
+                item.target_reps || null,
+                item.target_notes || null,
+                false, // is_completed 기본값
+                new Date() // created_at
+            ]);
+
+            await connection.query(insertSql, [values]);
+            console.log(` -> ${values.length}개의 새 운동 내역 INSERT 완료`);
+        }
+
+        // 7. 커밋 (최종 반영)
+        await connection.commit();
+        res.status(201).json({ success: true, message: '데일리 운동 할당이 완료되었습니다.' });
+
+    } catch (err) {
+        if (connection) await connection.rollback(); // 에러 시 롤백
+        console.error('❌ 데일리 운동 할당 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+    } finally {
+        if (connection) connection.release(); // 커넥션 반환
+    }
+});
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
