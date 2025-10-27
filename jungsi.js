@@ -3848,6 +3848,7 @@ app.post('/jungsi/student/practical/record', authStudentOnlyMiddleware, async (r
 // --- API 4: 대시보드 데이터 (설정+목표+기록) 한 번에 불러오기 ---
 // GET /jungsi/student/practical/dashboard
 app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async (req, res) => {
+    // authStudentOnlyMiddleware 에서 req.user.account_id 주입됨
     const { account_id } = req.user;
     console.log(`[API /practical/dashboard] 학생(${account_id}) 대시보드 데이터 요청`);
 
@@ -3860,10 +3861,16 @@ app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async 
         let trackedEvents = [];
         if (settingsRows.length > 0 && settingsRows[0].tracked_events) {
             try {
-                // DB의 JSON 문자열을 실제 배열로 파싱
+                // DB의 JSON 문자열을 실제 배열로 파싱 (에러 처리 추가됨)
                 trackedEvents = JSON.parse(settingsRows[0].tracked_events);
-                if (!Array.isArray(trackedEvents)) trackedEvents = []; // 파싱 실패 시 빈 배열
-            } catch { trackedEvents = []; } // JSON 파싱 에러 시 빈 배열
+                if (!Array.isArray(trackedEvents)) {
+                    console.warn(` -> 파싱 결과가 배열이 아님 (account_id: ${account_id}):`, trackedEvents);
+                    trackedEvents = []; // 파싱 실패 시 빈 배열
+                }
+            } catch (parseError) {
+                console.error(` -> JSON 파싱 에러 (account_id: ${account_id}):`, settingsRows[0].tracked_events, parseError);
+                trackedEvents = []; // 에러 시 빈 배열로 초기화
+            }
         }
         console.log(` -> 추적 종목 (${trackedEvents.length}개):`, trackedEvents);
 
@@ -3885,21 +3892,20 @@ app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async 
         recordRows.forEach(row => {
             const event = row.event_name;
             if (!recordsMap[event]) recordsMap[event] = [];
-            // 날짜만 YYYY-MM-DD 형식으로 추출 (시간 정보 제거)
+            // DB DATE 타입을 YYYY-MM-DD 문자열로 변환
             const dateOnly = row.record_date.toISOString().split('T')[0];
             recordsMap[event].push({ date: dateOnly, value: Number(row.record_value) });
         });
         console.log(` -> 기록 (${recordRows.length}개 로드 완료)`);
 
-        // 4. 결과 조합하여 응답
-// --- ⭐️ 캐싱 방지 헤더 추가 시작 ⭐️ ---
+        // --- 캐싱 방지 헤더 추가 ---
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
         res.setHeader('Surrogate-Control', 'no-store');
-        // --- ⭐️ 캐싱 방지 헤더 추가 끝 ⭐️ ---
+        // --- 캐싱 방지 헤더 추가 끝 ---
 
-        // 4. 결과 조합하여 응답 (이 부분은 기존과 동일)
+        // 4. 결과 조합하여 응답
         res.json({
             success: true,
             dashboard: {
@@ -3908,14 +3914,12 @@ app.get('/jungsi/student/practical/dashboard', authStudentOnlyMiddleware, async 
                 records: recordsMap
             }
         });
-        
 
     } catch (err) {
         console.error('❌ 대시보드 데이터 로드 오류:', err);
         res.status(500).json({ success: false, message: '데이터 로드 중 오류 발생' });
     }
 });
-
 
 // --- API 5: 오늘 최고 기록만 불러오기 (saved_list.html 연동용) ---
 // GET /jungsi/student/practical/today-best
