@@ -598,7 +598,9 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
                     st.branch,
                     st.name,
                     st.grade,
-                    st.gender || null
+                    st.gender || null,
+                    st.school || null, // ⭐️ st 객체에서 school 값 가져오기
+                    st.phone || null   // ⭐️ st 객체에서 phone 값 가져오기
                 ]);
                 jungsiStudentId = insertResult.insertId; // 새로 생성된 ID 사용
                 jungsiMessage = `정시엔진 학생 ID ${jungsiStudentId}(으)로 신규 등록 및 연결됨`;
