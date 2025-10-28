@@ -3337,10 +3337,6 @@ app.get('/26susi/all-ranks', async (req, res) => {
 // 🚀 API 실기테스트 로직 여기서까지 끝
 // =================================================================
 
-// --- 서버 시작 ---
-app.listen(port, () => {
-    console.log(`🔥 26수시 실기테스트 서버 실행 중 (포트: ${port})`);
-});
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
