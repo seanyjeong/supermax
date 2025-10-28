@@ -3139,7 +3139,7 @@ app.get('/26susi/records/students', async (req, res) => {
             SELECT s.id, s.student_name, s.exam_number, s.attendance, s.gender, r.record_value, r.score
             FROM students s LEFT JOIN records r ON s.id = r.student_id AND r.event = ? WHERE s.exam_group = ?
             ORDER BY SUBSTRING_INDEX(s.exam_number, '-', 1), CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED)`;
-        const [students] = db.promise().query(sql, [event, group]);
+        const [students] = await db.promise().query(sql, [event, group]);
         res.status(200).json({ success: true, data: students });
     } catch (err) {
         console.error("조별 학생 목록 조회 오류:", err);
