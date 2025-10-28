@@ -590,7 +590,7 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
 
                 const insertSql = `
                     INSERT INTO 학생기본정보
-                        (학년도, branch_name, student_name, grade, gender)
+                        (학년도, branch_name, student_name, grade, gender, school_name, phone_number)
                     VALUES (?, ?, ?, ?, ?)
                 `;
                 const [insertResult] = await dbJungsi.promise().query(insertSql, [
