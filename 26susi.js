@@ -3122,7 +3122,7 @@ app.post('/26susi/students/add-new', async (req, res) => {
 app.get('/26susi/records/groups', async (req, res) => {
     try {
         const sql = `SELECT DISTINCT exam_group FROM students WHERE exam_group IS NOT NULL ORDER BY exam_group ASC`;
-        const [rows] = await db.query(sql);
+        const [rows] = await db.promise().query(sql); // .promise() 추가!
         res.status(200).json({ success: true, data: rows.map(r => r.exam_group) });
     } catch (err) {
         console.error("조 목록 조회 오류:", err);
