@@ -2842,7 +2842,7 @@ app.get('/26susi/students', async (req, res) => {
         } else {
             return res.status(200).json({ success: true, data: [] });
         }
-        const [students] = await db.query(sql, params);
+    const [students] = await db.promise().query(sql, params); // .promise() 추가!
         res.status(200).json({ success: true, data: students });
     } catch (err) {
         console.error("학생 조회 오류:", err);
