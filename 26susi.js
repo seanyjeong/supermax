@@ -2270,20 +2270,37 @@ app.post('/26susi/announcements/delete', authJWT, async (req, res) => {
 
 // --- 점수 계산 헬퍼 함수 (콜백 방식) ---
 // --- 점수 계산 헬퍼 함수 (만점/최하점 처리 기능 추가) ---
-function calculateScoreFromDB(event, gender, recordValue, callback) {
-    const isLowerBetter = event === '10m';
+async function calculateScoreFromDBAsync(event, gender, recordValue) {
+    const isReverse = (event === '10m'); // 10m만 기록 낮을수록 좋음
+    const order = isReverse ? 'ASC' : 'DESC';
+    const comparison = isReverse ? '>=' : '<=';
 
-    // 1. 해당 종목/성별의 최고점과 최하점 기준 기록을 가져옴
-    const boundarySql = `
-        SELECT 
-            MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
-            MAX(CASE WHEN score = 52 THEN record_threshold END) as min_score_record
+    // ⚠️ 테이블 이름을 scoring_criteria 로 수정
+    const sql = `
+        SELECT score
         FROM scoring_criteria
-        WHERE event = ? AND gender = ?
+        WHERE event = ? AND gender = ? AND record_threshold ${comparison} ?
+        ORDER BY record_threshold ${order}
+        LIMIT 1;
     `;
 
-    db.query(boundarySql, [event, gender], (err, boundaries) => {
-        if (err || boundaries.length === 0) {
+    try {
+        // ✅ 1번 수정
+        const [rows] = await db.promise().query(sql, [event, gender, recordValue]);
+        if (rows.length > 0) {
+            return rows[0].score;
+        } else {
+            // ✅ 2번 수정
+             const [boundaries] = await db.promise().query(
+                // ⚠️ 테이블 이름을 scoring_criteria 로 수정
+                `SELECT
+                    MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
+                    MAX(CASE WHEN score = 52 THEN record_threshold END) as min_score_record
+                 FROM scoring_criteria WHERE event = ? AND gender = ?`,
+                [event, gender]
+            );
+
+            if (boundaries.length > 0) {
             console.error("기준점 조회 오류:", err);
             return callback(err, 0);
         }
@@ -2306,7 +2323,7 @@ function calculateScoreFromDB(event, gender, recordValue, callback) {
             ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
             LIMIT 1;
         `;
-        await db.query(findScoreSql, [event, gender, recordValue], (err, rows) => {
+         db.query(findScoreSql, [event, gender, recordValue], (err, rows) => {
             if (err) {
                 console.error("점수 검색 오류:", err);
                 return callback(err, 0);
