@@ -4364,21 +4364,32 @@ app.get('/jungsi/student/today-assignment', authStudentOnlyMiddleware, async (re
     const { account_id } = req.user;
     console.log(`[API GET /student/today-assignment] 학생(${account_id}) 오늘 운동 조회 요청`);
     try {
-        // ⭐️ SQL 쿼리에서 teacher_name -> teacher_userid 로 수정!
+        // ⭐️ SQL 쿼리 수정: 26susi.원장회원 테이블과 JOIN하여 선생님 이름(teacher_name) 가져오기
         const sql = `
             SELECT
-                assignment_id, teacher_userid, assignment_date, exercise_name, category, sub_category,
-                target_weight, target_sets, target_reps, target_notes, is_completed
-            FROM jungsimaxstudent.teacher_daily_assignments
-            WHERE student_account_id = ? AND assignment_date = CURDATE()
-            ORDER BY created_at ASC
+                tda.assignment_id, tda.teacher_userid, tda.assignment_date, tda.exercise_name, tda.category, tda.sub_category,
+                tda.target_weight, tda.target_sets, tda.target_reps, tda.target_notes, tda.is_completed,
+                ow.이름 AS teacher_name -- ⭐️ 선생님 이름 추가
+            FROM jungsimaxstudent.teacher_daily_assignments AS tda
+            LEFT JOIN \`26susi\`.원장회원 AS ow -- ⭐️ 원장회원 테이블 JOIN (LEFT JOIN 사용: 혹시 탈퇴한 선생님이라도 기록은 보이도록)
+              -- ▼▼▼ COLLATE 추가 (Collation 충돌 방지) ▼▼▼
+              ON tda.teacher_userid COLLATE utf8mb4_unicode_ci = ow.아이디 COLLATE utf8mb4_unicode_ci
+              -- ▲▲▲ COLLATE 추가 ▲▲▲
+            WHERE tda.student_account_id = ? AND tda.assignment_date = CURDATE()
+            ORDER BY tda.created_at ASC
         `;
         const [assignments] = await dbStudent.query(sql, [account_id]); // dbStudent 사용 확인
-        console.log(` -> 오늘 할당된 운동 ${assignments.length}건 조회 완료`);
+        console.log(` -> 오늘 할당된 운동 ${assignments.length}건 조회 완료 (선생님 이름 포함)`);
+        // ⭐️ 응답 데이터에 teacher_name 포함됨
         res.json({ success: true, assignments: assignments });
     } catch (err) {
         console.error(`❌ 오늘 운동 조회 API 오류 (학생ID: ${account_id}):`, err);
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+        // Collation 에러 처리 추가
+        if (err.code === 'ER_MIX_OF_COLLATION') {
+             res.status(500).json({ success: false, message: '데이터 정렬 방식 충돌 오류 발생' });
+        } else {
+             res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
+        }
     }
 });
 // =============================================
