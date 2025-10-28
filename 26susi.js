@@ -2940,129 +2940,76 @@ app.post('/26susi/records', async (req, res) => {
 // =============================================
 // API: [마스터] 학생 일괄 등록 (v12 - Pool 직접 사용, 트랜잭션 없음)
 // =============================================
+// =================================================================
+// 🚀 [API] 마스터 - 학생 일괄 등록 (POST /26susi/students/master-bulk)
+// =================================================================
+// 위 HTML 파일의 'addStudentsInBulk' 함수가 호출하는 API
 app.post('/26susi/students/master-bulk', async (req, res) => {
-    const startTime = Date.now();
-    console.log(`\n\n[master-bulk v12 @ ${new Date(startTime).toISOString()}] --- API 핸들러 진입 ---`);
+    
+    // 1. 클라이언트가 보낸 데이터 받기
+    // req.body에 { students: [ { branch: '...', name: '...' }, ... ] } 형태로 옴
+    const { students } = req.body;
+
+    // 2. 서버에서 데이터 유효성 검사 (클라이언트에서 했더라도 서버는 필수!)
+    if (!students || !Array.isArray(students) || students.length === 0) {
+        console.log('[일괄 등록 실패] ❌ 학생 데이터가 비어있습니다.');
+        // 400 Bad Request: 클라이언트가 잘못된 요청을 보냄
+        return res.status(400).json({ 
+            success: false, 
+            message: '등록할 학생 데이터가 없습니다.' 
+        });
+    }
+
+    console.log(`[일괄 등록 시작] 총 ${students.length}건의 데이터 처리 시도...`);
 
     try {
-        const { students } = req.body;
-        console.log(`[master-bulk v12] 요청 body 로드 시도...`);
+        // 3. DB Bulk Insert를 위해 데이터를 2차원 배열로 변환
+        // [ ['일산', '홍길동', '남', '맥스고', '3'], ['파주', '김영희', '여', '파주고', '2'] ]
+        const values = students.map(s => [
+            s.branch,
+            s.name,
+            s.gender,
+            s.school,
+            s.grade
+        ]);
 
-        // 1. 입력 데이터 기본 검사
-        if (!students || !Array.isArray(students)) {
-            console.error("[master-bulk v12] 오류: req.body.students가 배열이 아님.");
-            return res.status(400).json({ success: false, message: '학생 데이터 배열 형식이 올바르지 않습니다.' });
-        }
-        console.log(`[master-bulk v12] ${students.length}개 행 데이터 받음.`);
+        // 4. SQL 쿼리 준비
+        // 'INSERT IGNORE' 사용:
+        // - 'students' 테이블에 UNIQUE 키(예: branch, name)가 있다면,
+        // - 중복되는 학생은 무시하고 (오류 X)
+        // - *새로운 학생만* 등록됨.
+        // - 'result.affectedRows'에는 실제로 *새로 추가된* 학생 수가 반환됨.
+        const sql = "INSERT IGNORE INTO students (branch, name, gender, school, grade) VALUES ?";
 
-        // 2. 유효 데이터 필터링
-        const validStudents = students.filter(s =>
-            s && typeof s.branch === 'string' && s.branch.trim() !== '' &&
-            typeof s.name === 'string' && s.name.trim() !== '' &&
-            typeof s.gender === 'string' && ['남', '여'].includes(s.gender) &&
-            (typeof s.grade === 'string' || typeof s.grade === 'number') && s.grade.toString().trim() !== ''
-        );
-        console.log(`[master-bulk v12] 유효 학생 데이터 ${validStudents.length}개 필터링됨.`);
+        // 5. DB에 쿼리 실행
+        // 'db.promise()'를 사용해야 async/await 문법을 쓸 수 있어.
+        const [result] = await db.promise().query(sql, [values]);
 
-        if (validStudents.length === 0) {
-            console.log("[master-bulk v12] 오류: 유효한 학생 데이터 없음.");
-            return res.status(400).json({ success: false, message: '등록할 유효 학생 데이터(지점,이름,성별,학년 필수)가 없습니다.' });
-        }
+        console.log(`[일괄 등록 성공] ✅ 총 ${students.length}건 요청 중 ${result.affectedRows}건 신규 등록 완료.`);
 
-        // 3. 지점별 그룹화
-        const studentsByBranch = validStudents.reduce((acc, s) => {
-            const trimmedBranch = s.branch.trim();
-            (acc[trimmedBranch] = acc[trimmedBranch] || []).push(s);
-            return acc;
-        }, {});
-        const branchNames = Object.keys(studentsByBranch);
-        console.log(`[master-bulk v12] ${branchNames.length}개 지점으로 그룹화 완료.`);
-
-        let totalAdded = 0;
-        const errorDetails = {};
-
-        // 4. 각 지점별로 순차 처리 (커넥션/트랜잭션 없이!)
-        for (const branchName of branchNames) {
-            const branchStudents = studentsByBranch[branchName];
-            console.log(`\n[master-bulk v12] --- ${branchName} 지점 처리 시작 (${branchStudents.length}명) ---`);
-
-            try {
-                // 4-1. 지점 ID 확인/생성 (db.query 직접 사용)
-                console.log(`[master-bulk v12] ${branchName}: 지점 ID 확인/생성...`);
-                // ⭐️ db.query 사용 (await)
-                let [branchRows] = await db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
-                let branchId;
-                if (branchRows.length > 0) {
-                    branchId = branchRows[0].id;
-                } else {
-                     // ⭐️ db.query 사용 (await)
-                    const [insertResult] = await db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
-                    branchId = insertResult.insertId;
-                }
-                console.log(`[master-bulk v12] ${branchName}: 지점 ID ${branchId} 확인/생성 완료.`);
-
-                // 4-2. 학생 데이터 준비
-                console.log(`[master-bulk v12] ${branchName}: 학생 데이터 VALUES 배열 준비...`);
-                const studentValues = branchStudents.map(s => [
-                    s.name.trim(),
-                    s.gender,
-                    branchId,
-                    s.school ? s.school.trim() : null,
-                    s.grade.toString().trim(),
-                    '미정',
-                    '정상'
-                ]);
-
-                // 4-3. 학생 정보 INSERT (db.query 직접 사용)
-                console.log(`[master-bulk v12] ${branchName}: 학생 정보 INSERT 실행...`);
-                const insertSql = `INSERT INTO students (student_name, gender, branch_id, school, grade, attendance, status) VALUES ?`;
-                 // ⭐️ db.query 사용 (await)
-                const [result] = await db.query(insertSql, [studentValues]);
-                totalAdded += result.affectedRows;
-                console.log(`[master-bulk v12] ${branchName}: 학생 ${result.affectedRows}명 INSERT 성공.`);
-
-            } catch (branchErr) {
-                // 4-4. 지점 처리 중 오류 발생 시 에러 기록 (롤백 없음)
-                console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-                console.error(`[master-bulk v12] ERROR!! ${branchName} 지점 처리 중 오류 발생:`);
-                console.error(branchErr.stack || branchErr); // 스택 트레이스 포함
-                console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
-                errorDetails[branchName] = branchErr.sqlMessage || branchErr.message || '알 수 없는 DB 오류';
-            }
-            console.log(`[master-bulk v12] --- ${branchName} 지점 처리 완료 ---`);
-        } // for 루프 끝
-
-        // 5. 최종 결과 응답
-        let message = `총 ${totalAdded}명의 학생 등록 완료.`;
-        const failedBranches = Object.keys(errorDetails);
-        if (failedBranches.length > 0) {
-            message += `\n\n[오류 발생 지점]\n`;
-            failedBranches.forEach(branch => { message += `- ${branch}: ${errorDetails[branch]}\n`; });
-        }
-        const endTime = Date.now();
-        console.log(`[master-bulk v12] 최종 처리 완료 (${endTime - startTime}ms)`);
-        console.log("[master-bulk v12] 최종 응답:", message);
+        // 6. 클라이언트에 성공 응답 전송
+        // 클라이언트가 response.ok (200~299)를 확인하므로 201 (Created) 상태 코드 사용
         res.status(201).json({
             success: true,
-            message: message,
-            insertedCount: totalAdded,
-            errors: errorDetails
+            // 클라이언트 alert에서 result.message를 사용함
+            message: `총 ${students.length}건의 데이터 중 ${result.affectedRows}건이 신규 등록되었습니다. (중복 등 제외)`,
+            // 클라이언트 alert에서 result.insertedCount를 사용함
+            insertedCount: result.affectedRows 
         });
 
-    } catch (err) { // 전체 로직 에러 (예: req.body 파싱 실패 등)
-        const errorTimestamp = new Date().toISOString();
-        console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-        console.error(`[master-bulk v12] FATAL GLOBAL ERROR (${errorTimestamp})`);
-        console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-        console.error(err.stack || err); // 스택 트레이스 포함
-        console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
-        res.status(500).json({ success: false, message: "서버 내부 오류 발생. 관리자에게 문의하세요." });
-    } finally {
-        // 커넥션 관리 안 하므로 release 없음
-        const finalEndTime = Date.now();
-        console.log(`[master-bulk v12] --- API 핸들러 종료 (총 ${finalEndTime - startTime}ms) ---`);
+    } catch (error) {
+        // 7. DB 오류 또는 기타 서버 오류 발생 시
+        console.error('[일괄 등록 실패] ❌ DB 오류 발생:', error);
+        
+        // 500 Internal Server Error: 서버 내부 문제
+        res.status(500).json({
+            success: false,
+            // 클라이언트 alert에서 error.message를 사용함
+            message: '데이터베이스 등록 중 서버 오류가 발생했습니다.',
+            error: error.message // 디버깅을 위한 상세 에러
+        });
     }
-}); // <-- app.post 닫는 괄호
+});
 // --- API: [대체 학생 등록] ---
 app.post('/26susi/students/substitute', async (req, res) => {
     // ... (기존과 거의 동일하나 async/await 사용) ...
