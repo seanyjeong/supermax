@@ -2916,7 +2916,7 @@ app.post('/26susi/records', async (req, res) => {
     }
 
     try {
-        const [students] = db.promise().query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
+        const [students] = await db.promise().query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
         if (students.length === 0) return res.status(404).json({ message: `수험번호 '${examNumber}' 학생 없음.` });
         const student = students[0];
 
@@ -2937,7 +2937,7 @@ app.post('/26susi/records', async (req, res) => {
 
         const sql = `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?)
                      ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
-       db.promise().query(sql, [student.id, event, recordToSave, score]);
+       await db.promise().query(sql, [student.id, event, recordToSave, score]);
 
         const message = (recordValue.toString().toUpperCase() === 'F') ? '파울(F) 기록 저장 완료' : '기록 저장 완료';
         res.status(201).json({ success: true, message: message, score: score });
