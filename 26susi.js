@@ -3174,14 +3174,18 @@ app.get('/26susi/records/calculate-score', async (req, res) => {
 });
 
 // --- API: [순위 시스템] 실시간 순위 조회 (좌전굴 포함) ---
+// --- API: [순위 시스템] 실시간 순위 조회 (좌전굴 포함) ---
 app.get('/26susi/rankings', async (req, res) => {
-    // ... (기존과 거의 동일하나 async/await 사용) ...
+     // ...
      const { classType, gender, event } = req.query;
-     if (!classType || !gender || !event) return res.status(400).json({ message: '반, 성별, 종목 필수.' });
+     // ...
+     
+     // ✅ 1번 수정
      let gradeCondition = ''; // ... 학년 조건 설정 ...
      if (classType === '선행반') gradeCondition = `s.grade IN ('1', '2')`;
      else if (classType === '입시반') gradeCondition = `s.grade = '3'`;
      else if (classType === 'N수반') gradeCondition = `s.grade = 'N'`;
+     else if (classType === '전체') gradeCondition = `1=1`; // ⭐️ '전체' 추가
      else return res.status(400).json({ message: '올바른 반 유형 아님.' });
 
      let sql; const params = [gender];
@@ -3201,7 +3205,9 @@ app.get('/26susi/rankings', async (req, res) => {
                     WHERE ${gradeCondition} AND s.gender = ? AND r.event = ? ORDER BY ranking ASC LIMIT 50`;
              params.push(event);
          }
-         const [results] = db.promise().query(sql, params);
+         
+         // ✅ 2번 수정
+         const [results] = await db.promise().query(sql, params); // ⭐️ 'await' 추가
          res.status(200).json({ success: true, data: results });
      } catch (err) {
          console.error("랭킹 조회 오류:", err);
