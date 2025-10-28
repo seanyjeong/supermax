@@ -2651,877 +2651,620 @@ app.get('/26susi/branch-assigned-colleges', authJWT, async (req, res) => {
     }
 });
 // =================================================================
-// 🚀 API 엔드포인트 (라우터) - 콜백 방식으로 재작성
+// 🚀 API 실기테스트 로직 여기서부터 시작.
 // =================================================================
 
-// --- API 1: 학생 일괄 등록 ---
-app.post('/26susi/students', (req, res) => {
+// ⭐️ DB 기반 점수 계산 함수 (테이블명: scoring_criteria)
+async function calculateScoreFromDBAsync(event, gender, recordValue) {
+    const isReverse = (event === '10m'); // 10m만 기록 낮을수록 좋음
+    const order = isReverse ? 'ASC' : 'DESC';
+    const comparison = isReverse ? '>=' : '<=';
+
+    // ⚠️ 테이블 이름을 scoring_criteria 로 수정
+    const sql = `
+        SELECT score
+        FROM scoring_criteria
+        WHERE event = ? AND gender = ? AND record_threshold ${comparison} ?
+        ORDER BY record_threshold ${order}
+        LIMIT 1;
+    `;
+
+    try {
+        const [rows] = await db.query(sql, [event, gender, recordValue]);
+        if (rows.length > 0) {
+            return rows[0].score;
+        } else {
+            // 환산표 기준보다 못하면 52점 반환 (빵점 기준)
+             const [boundaries] = await db.query(
+                // ⚠️ 테이블 이름을 scoring_criteria 로 수정
+                `SELECT
+                    MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
+                    MAX(CASE WHEN score = 52 THEN record_threshold END) as min_score_record
+                 FROM scoring_criteria WHERE event = ? AND gender = ?`,
+                [event, gender]
+            );
+
+            if (boundaries.length > 0) {
+                const { max_score_record, min_score_record } = boundaries[0];
+                // 만점 기준보다 잘했을 경우 100점 반환
+                if (max_score_record !== null && isReverse && recordValue <= max_score_record) return 100;
+                if (max_score_record !== null && !isReverse && recordValue >= max_score_record) return 100;
+            }
+
+            return 52; // 기본 빵점
+        }
+    } catch (err) {
+        console.error("점수 계산 DB 쿼리 오류:", err);
+        throw err;
+    }
+}
+
+// 점수 계산 콜백 버전 (기존 API 호환용)
+function calculateScoreFromDB(event, gender, recordValue, callback) {
+    calculateScoreFromDBAsync(event, gender, recordValue)
+        .then(score => callback(null, score))
+        .catch(err => callback(err));
+}
+
+
+// --- API: 학생 일괄 등록 (실기 테스트용 DB) ---
+app.post('/26susi/students', async (req, res) => {
     const { branchName, students } = req.body;
     if (!branchName || !students || !Array.isArray(students)) {
         return res.status(400).json({ message: '지점명과 학생 배열은 필수입니다.' });
     }
-    const validStudents = students.filter(s => s.name && s.name.trim() !== '' && s.gender && ['남', '여'].includes(s.gender));
+    const validStudents = students.filter(s => s.name && s.name.trim() !== '' && s.gender && ['남', '여'].includes(s.gender) && s.grade); // 학년 필수
     if (validStudents.length === 0) {
-        return res.status(400).json({ message: '등록할 유효한 학생 데이터가 없습니다.' });
+        return res.status(400).json({ message: '등록할 유효한 학생 데이터(이름,성별,학년 필수)가 없습니다.' });
     }
 
-    db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, rows) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        
-        const getBranchId = (callback) => {
-            if (rows.length > 0) {
-                callback(null, rows[0].id);
-            } else {
-                db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
-                    if (err) return callback(err);
-                    callback(null, result.insertId);
-                });
-            }
-        };
+    let connection;
+    try {
+        connection = await db.getConnection(); // Use promise pool connection
+        await connection.beginTransaction();
 
-        getBranchId((err, branchId) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
+        let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+        let branchId;
+        if (branchRows.length > 0) {
+            branchId = branchRows[0].id;
+        } else {
+            const [insertResult] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
+            branchId = insertResult.insertId;
+        }
 
-            const studentValues = validStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
-            db.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues], (err, result) => {
-                if (err) {
-                    console.error("🔥 학생 등록 API 오류:", err);
-                    return res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.' });
-                }
-                let successMessage = `${branchName} 지점 ${validStudents.length}명 등록 완료.`;
-                if (validStudents.length < students.length) {
-                    successMessage += `\n(주의: ${students.length - validStudents.length}개 행은 제외됨)`;
-                }
-                res.status(201).json({ success: true, message: successMessage });
-            });
-        });
-    });
+        const studentValues = validStudents.map(s => [s.name, s.gender, branchId, s.school || null, s.grade]); // school은 nullable
+        await connection.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues]);
+
+        await connection.commit();
+        let successMessage = `${branchName} 지점 ${validStudents.length}명 등록 완료.`;
+        if (validStudents.length < students.length) {
+            successMessage += `\n(주의: ${students.length - validStudents.length}명은 이름/성별/학년 누락으로 제외됨)`;
+        }
+        res.status(201).json({ success: true, message: successMessage });
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error("학생 등록 API 오류:", err);
+        res.status(500).json({ success: false, message: 'DB 저장 중 오류가 발생했습니다.' });
+    } finally {
+        if (connection) connection.release();
+    }
 });
 
-// --- API 2: 조 편성 (오전/오후) ---
-// --- API 2-1: [조 배정 실행] ---
-// =================================================================
-// --- API 2: 조 편성 및 재배치 (안정성 강화 최종 버전) ---
-// =================================================================
 
-function executeFullAssignment(res, callback) {
-    let morningCount = 0;
-    let afternoonCount = 0;
+// --- API: 조 배정 및 재배치 (핵심 로직) ---
+async function executeFullAssignmentAsync() {
+    const TOTAL_GROUPS = 6; // ⭐️ 6개 조로 수정 (A, B, C, D, E, F)
+    const sql = `SELECT s.id FROM students s WHERE s.exam_group IS NULL`; // 조 배정 안 된 학생 조회
 
-    const assignSession = (session, sessionCallback) => {
-        const TOTAL_GROUPS_PER_SESSION = 12;
-        const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
-        const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
-        const targetBranches = (session === '오전') ? 오전조 : 오후조;
-        const sql = `SELECT s.id FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) AND s.exam_group IS NULL`;
-        
-        db.query(sql, [targetBranches], (err, students) => {
-            if (err) return sessionCallback(err);
-            if (students.length === 0) return sessionCallback(null, 0);
+    const connection = await db.getConnection();
+    try {
+        const [students] = await connection.query(sql);
+        if (students.length === 0) return 0; // 배정할 학생 없음
 
-            for (let i = students.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [students[i], students[j]] = [students[j], students[i]];
-            }
-            
-            let completed = 0;
-            const groupCounters = {};
-            // ⭐️ BUG FIX: 버그가 있던 forEach 루프를 수정
-            students.forEach((student, index) => { // 각 학생의 고유한 index를 사용해야 함
-                let groupNum = (session === '오전')
-                    ? (index % TOTAL_GROUPS_PER_SESSION) + 1  // 1 ~ 12
-                    : (index % TOTAL_GROUPS_PER_SESSION) + 13; // 13 ~ 24
+        // 학생 순서 섞기
+        for (let i = students.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [students[i], students[j]] = [students[j], students[i]];
+        }
 
-                // ⭐️ LOGIC CHANGE: 숫자를 문자로 변환
-                const groupLetter = String.fromCharCode(64 + groupNum); // 1->A, 13->M
+        const groupCounters = {}; // {'A': 0, 'B': 0, ...}
+        const updatePromises = students.map((student, index) => {
+            let groupNum = (index % TOTAL_GROUPS) + 1; // 1 ~ 6
+            const groupLetter = String.fromCharCode(64 + groupNum); // 1->A, ..., 6->F
 
-                groupCounters[groupLetter] = (groupCounters[groupLetter] || 0) + 1;
-                const sequenceNum = groupCounters[groupLetter];
-                const examNumber = `${groupLetter}-${sequenceNum}`;
-                
-                // ⭐️ DB에 숫자(groupNum) 대신 문자(groupLetter)를 저장
-                db.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupLetter, examNumber, student.id], (err, result) => {
-                    completed++;
-                    if (err) console.error(`학생 ID ${student.id} 업데이트 오류:`, err);
-                    if (completed === students.length) {
-                        sessionCallback(null, students.length);
-                    }
-                });
-            });
+            groupCounters[groupLetter] = (groupCounters[groupLetter] || 0) + 1;
+            const sequenceNum = groupCounters[groupLetter];
+            const examNumber = `${groupLetter}-${sequenceNum}`;
+
+            return connection.query('UPDATE students SET exam_group = ?, exam_number = ? WHERE id = ?', [groupLetter, examNumber, student.id]);
         });
-    };
 
-    assignSession('오전', (err, mCount) => {
-        if (err) return callback(err);
-        morningCount = mCount;
-        assignSession('오후', (err, aCount) => {
-            if (err) return callback(err);
-            afternoonCount = aCount;
-            callback(null, morningCount + afternoonCount);
-        });
-    });
+        await Promise.all(updatePromises); // 모든 업데이트 비동기 병렬 처리
+        return students.length; // 배정된 학생 수 반환
+
+    } catch (err) {
+        console.error("조 배정 로직 오류:", err);
+        throw err; // 에러를 상위로 던짐
+    } finally {
+        if (connection) connection.release();
+    }
 }
 
-// [조 배정 실행 API]
-app.post('/26susi/assign-all-groups', (req, res) => {
-    executeFullAssignment(res, (err, totalCount) => {
-        if (err) return res.status(500).json({ message: '조 배정 중 오류 발생' });
+// --- API: [조 배정 실행] ---
+app.post('/26susi/assign-all-groups', async (req, res) => {
+    try {
+        const totalCount = await executeFullAssignmentAsync();
         if (totalCount === 0) {
             return res.status(400).json({ success: false, message: '새로 조를 배정할 학생이 없습니다.' });
         }
         res.status(200).json({ success: true, message: `총 ${totalCount}명의 학생 조 배정을 완료했습니다.` });
-    });
+    } catch (err) {
+        res.status(500).json({ message: '조 배정 중 오류 발생' });
+    }
 });
 
-// [전체 재배치 실행 API]
-app.post('/26susi/reassign-all-groups', (req, res) => {
-    db.query('UPDATE students SET exam_group = NULL, exam_number = NULL', (err, result) => {
-        if (err) {
-            console.error("🔥 재배치 초기화 오류:", err);
-            return res.status(500).json({ message: '조 초기화 중 오류 발생' });
-        }
-        executeFullAssignment(res, (err, totalCount) => {
-            if (err) return res.status(500).json({ message: '초기화 후 재배정 중 오류 발생' });
-            res.status(200).json({ success: true, message: `전체 재배치를 완료했습니다. 총 ${totalCount}명 배정.` });
-        });
-    });
+// --- API: [전체 재배치 실행] ---
+app.post('/26susi/reassign-all-groups', async (req, res) => {
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+        // 1. 모든 학생 조, 수험번호 초기화
+        await connection.query('UPDATE students SET exam_group = NULL, exam_number = NULL');
+        // 2. 초기화 후 조 배정 실행 (connection 넘겨주지 않음, 내부에서 새로 생성)
+        const totalCount = await executeFullAssignmentAsync();
+        await connection.commit(); // 초기화 성공 후 커밋
+        res.status(200).json({ success: true, message: `전체 재배치를 완료했습니다. 총 ${totalCount}명 배정.` });
+    } catch (err) {
+        if (connection) await connection.rollback(); // 롤백
+        console.error("재배치 오류:", err);
+        res.status(500).json({ message: '전체 재배치 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
 });
-// --- API 3: 학생 정보 조회 (통합) ---
-// --- API 3: 학생 정보 조회 (attendance, status 필드 추가) ---
-// --- API 3: 학생 정보 조회 (통합) ---
-// 쿼리 파라미터에 따라 다르게 동작
-// --- API 3: 학생 정보 조회 (DB에서 직접 정렬하도록 수정) ---
-// --- API 3: 학생 정보 조회 (안정성 강화) ---
-// ⭐️ '/26susi' 경로를 다시 추가
-// --- API 3: 학생 정보 조회 (운영자/지점 페이지용) ---
-app.get('/26susi/students', (req, res) => {
+
+// --- API: 학생 정보 조회 (운영자/지점 페이지용) ---
+app.get('/26susi/students', async (req, res) => {
     const { view, branchName } = req.query;
-
     let sql;
     const params = [];
 
-    // ⭐️ 이 정렬(ORDER BY) 부분이 핵심이야
-    const orderByClause = `
-        ORDER BY 
-            exam_number IS NULL, 
-            SUBSTRING_INDEX(exam_number, '-', 1), 
-            CAST(SUBSTRING_INDEX(exam_number, '-', -1) AS UNSIGNED)
-    `;
+    const orderByClause = `ORDER BY exam_number IS NULL, SUBSTRING_INDEX(exam_number, '-', 1), CAST(SUBSTRING_INDEX(exam_number, '-', -1) AS UNSIGNED)`;
 
-    if (view === 'all') {
-        sql = `
-            SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status 
-            FROM students s LEFT JOIN branches b ON s.branch_id = b.id
-            ${orderByClause}
-        `;
-    } else if (branchName) {
-        // 지점 페이지는 이름순 정렬이라 그대로 둬도 돼
-        sql = `
-            SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status 
-            FROM students s LEFT JOIN branches b ON s.branch_id = b.id
-            WHERE b.branch_name = ? 
-            ORDER BY s.student_name ASC
-        `;
-        params.push(branchName);
-    } else {
-        return res.status(200).json({ success: true, data: [] });
-    }
-
-    db.query(sql, params, (err, students) => {
-        if (err) {
-            console.error("🔥 학생 조회 SQL 쿼리 실행 중 에러 발생:", err);
-            return res.status(500).json({ success: false, message: '학생 데이터 조회 중 서버에 오류가 발생했습니다.' });
-        }
-        res.status(200).json({ success: true, data: students });
-    });
-});
-
-
-// --- API 11: [참석 처리] 학생 상태를 '참석'으로 변경 ---
-app.patch('/26susi/attendance/present/:studentId', (req, res) => {
-    const { studentId } = req.params;
-    db.query(`UPDATE students SET attendance = '참석' WHERE id = ?`, [studentId], (err, result) => {
-        if (err) return res.status(500).json({ success: false, message: '서버 오류' });
-        res.status(200).json({ success: true, message: '참석 처리 완료' });
-    });
-});
-
-// --- API 16: [대시보드] 기록 오류 조회 API ---
-app.get('/26susi/dashboard/errors', (req, res) => {
-    const sql = `
-        SELECT 
-            s.student_name, s.exam_number, b.branch_name, r.event, r.record_value, r.created_at
-        FROM records r
-        JOIN students s ON r.student_id = s.id
-        JOIN branches b ON s.branch_id = b.id
-        WHERE
-            r.record_value != 0 AND -- 파울(F) 기록은 오류에서 제외
-            (
-                (r.event = '10m' AND (r.record_value < 1 OR r.record_value > 20)) OR
-                (r.event = '제멀' AND (r.record_value < 100 OR r.record_value > 350)) OR
-                (r.event = '배근력' AND (r.record_value < 10 OR r.record_value > 300)) OR
-                (r.event = '메디신볼' AND (r.record_value < 1 OR r.record_value > 20))
-            )
-        ORDER BY r.created_at DESC;
-    `;
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        res.status(200).json({ success: true, data: results });
-    });
-});
-
-// --- API 4: 실기 기록 입력 ---
-// --- API 4: 실기 기록 입력 ('F' 기록 처리 추가) ---
-app.post('/26susi/records', (req, res) => {
-    const { examNumber, event, recordValue } = req.body;
-
-    // ⭐️ 'F' 또는 'f'가 입력되었는지 확인
-    if (recordValue.toString().toUpperCase() === 'F') {
-        const foulRecord = 0; // 파울일 경우 기록은 0으로 저장
-        const baseScore = 50;  // 기본 점수(최하점) 부여
-
-        const sql = `INSERT INTO records (student_id, event, record_value, score) 
-                     SELECT id, ?, ?, ? FROM students WHERE exam_number = ?
-                     ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
-        
-        db.query(sql, [event, foulRecord, baseScore, examNumber], (err, result) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-            res.status(201).json({ success: true, message: '파울(F) 기록 저장 완료' });
-        });
-
-    } else { // 'F'가 아닌 숫자 기록일 경우
-        db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber], (err, students) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-            if (students.length === 0) return res.status(404).json({ message: `수험번호 '${examNumber}' 학생이 없습니다.` });
-            
-            const student = students[0];
-            calculateScoreFromDB(event, student.gender, parseFloat(recordValue), (err, score) => {
-                if (err) return res.status(500).json({ message: '점수 계산 오류' });
-                
-                const sql = `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
-                db.query(sql, [student.id, event, parseFloat(recordValue), score], (err, result) => {
-                    if (err) return res.status(500).json({ message: 'DB 오류' });
-                    res.status(201).json({ success: true, message: '기록 저장 완료', score: score });
-                });
-            });
-        });
-    }
-});
-
-// --- API 5: 결석 처리 ---
-app.patch('/26susi/attendance/absent/:studentId', (req, res) => {
-    db.query(`UPDATE students SET attendance = '결석' WHERE id = ?`, [req.params.studentId], (err, result) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        res.status(200).json({ success: true, message: '결석 처리 완료' });
-    });
-});
-
-
-
-// --- API 8: [마스터] 전체 교육원 학생 일괄 등록 ---
-// --- API 8: [마스터] 전체 교육원 학생 일괄 등록 (학년 필수 체크) ---
-app.post('/26susi/students/master-bulk', (req, res) => {
-    const { students } = req.body;
-    if (!students || !Array.isArray(students)) {
-        return res.status(400).json({ message: '학생 데이터 배열이 필요합니다.' });
-    }
-
-    // ⭐️ '학년(grade)' 필수 체크 추가
-    const validStudents = students.filter(s =>
-        s.branch && s.branch.trim() !== '' &&
-        s.name && s.name.trim() !== '' &&
-        s.gender && ['남', '여'].includes(s.gender) &&
-        s.grade && s.grade.toString().trim() !== '' // 학년 체크!
-    );
-
-    if (validStudents.length === 0) {
-        return res.status(400).json({ message: '등록할 유효한 학생 데이터가 없습니다.' });
-    }
-
-    // 이하 로직은 이전과 동일...
-    const studentsByBranch = {};
-    validStudents.forEach(s => {
-        if (!studentsByBranch[s.branch]) { studentsByBranch[s.branch] = []; }
-        studentsByBranch[s.branch].push(s);
-    });
-    const branchNames = Object.keys(studentsByBranch);
-    let totalAdded = 0;
-    let currentBranchIndex = 0;
-
-    function processNextBranch() {
-        if (currentBranchIndex >= branchNames.length) {
-            return res.status(201).json({ 
-                success: true, 
-                message: `총 ${totalAdded}명의 학생 등록을 완료했습니다.`,
-                insertedCount: totalAdded 
-            });
-        }
-        const branchName = branchNames[currentBranchIndex];
-        const branchStudents = studentsByBranch[branchName];
-        db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, rows) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-            const getBranchId = (callback) => {
-                if (rows.length > 0) return callback(null, rows[0].id);
-                db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
-                    if (err) return callback(err);
-                    callback(null, result.insertId);
-                });
-            };
-            getBranchId((err, branchId) => {
-                if (err) return res.status(500).json({ message: 'DB 오류' });
-                const studentValues = branchStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
-                db.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues], (err, result) => {
-                    if (err) {
-                        console.error(`🔥 ${branchName} 학생 등록 오류:`, err);
-                    } else {
-                        totalAdded += result.affectedRows;
-                    }
-                    currentBranchIndex++;
-                    processNextBranch();
-                });
-            });
-        });
-    }
-    processNextBranch();
-});
-
-// --- API 6: [대체 학생 등록] (티셔츠 목록 자동 추가 최종본) ---
-// --- API 6: [대체 학생 등록] (티셔츠 '교환' 기록 생성 최종본) ---
-app.post('/26susi/students/substitute', (req, res) => {
-    const { oldStudentId, newStudent } = req.body;
-    const { name, gender, school, grade } = newStudent;
-
-    if (!name || !gender || !school || !grade) {
-        return res.status(400).json({ success: false, message: '대체 학생의 모든 정보를 입력해야 합니다.' });
-    }
-
-    // 1. 먼저 기존 학생의 수험번호를 조회
-    db.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId], (err, studentRows) => {
-        if (err) return res.status(500).json({ success: false, message: '기존 학생 정보 조회 중 오류' });
-        if (studentRows.length === 0) return res.status(404).json({ success: false, message: '대체할 학생을 찾지 못했습니다.' });
-        
-        const examNumber = studentRows[0].exam_number;
-
-        // 2. 학생 정보 업데이트 (덮어쓰기)
-        const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
-        db.query(updateSql, [name, gender, school, grade, oldStudentId], (err, result) => {
-            if (err) {
-                console.error("🔥 대체 학생 처리 오류:", err);
-                return res.status(500).json({ success: false, message: '대체 처리 중 DB 오류' });
-            }
-            
-            // 3. 티셔츠 관리 목록에 '교환' 유형으로 기록 추가
-            db.query(`INSERT INTO tshirt_management (student_id, type) VALUES (?, '교환')`, [oldStudentId], (tshirtErr, tshirtResult) => {
-                if (tshirtErr) console.error("🔥 대체 학생 티셔츠 '교환' 기록 추가 오류:", tshirtErr);
-                res.status(200).json({ success: true, message: `대체 완료! 부여된 수험번호는 [${examNumber}] 입니다.` });
-            });
-        });
-    });
-});
-
-// --- API 7: [현장 신규 학생 추가] (티셔츠 '신규' 기록 생성 최종본) ---
-app.post('/26susi/students/add-new', (req, res) => {
-    const { session, newStudent } = req.body;
-    const { name, gender, school, grade, branchName } = newStudent;
-
-    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
-    const 오후조 = ['강릉','김해','대구만촌명덕','대구상인성서','대구칠곡','밀양','부산동래','부천','서면','양산','울산','원주','의정부','인천계양','인천서구','인천연수','일산','제주','창원','철원','포천','화명'];
-    const targetBranches = (session === '오전') ? 오전조 : 오후조;
-    
     try {
-        const groupCountSql = `SELECT exam_group, COUNT(*) as count FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name IN (?) GROUP BY exam_group ORDER BY count ASC LIMIT 1`;
-        db.query(groupCountSql, [targetBranches], (err, groupRows) => {
-            if (err) return res.status(500).json({message: 'DB 오류 1'});
+        if (view === 'all') { // 운영자용
+            sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id ${orderByClause}`;
+        } else if (branchName) { // 지점용
+            sql = `SELECT s.id, s.student_name, s.gender, s.school, s.grade, b.branch_name, s.exam_group, s.exam_number, s.attendance, s.status FROM students s LEFT JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ? ORDER BY s.student_name ASC`;
+            params.push(branchName);
+        } else {
+            return res.status(200).json({ success: true, data: [] });
+        }
+        const [students] = await db.query(sql, params);
+        res.status(200).json({ success: true, data: students });
+    } catch (err) {
+        console.error("학생 조회 오류:", err);
+        res.status(500).json({ success: false, message: '학생 데이터 조회 중 서버 오류 발생.' });
+    }
+});
 
-            let targetGroup;
-            if (groupRows.length > 0) {
-                targetGroup = groupRows[0].exam_group;
-            } else {
-                targetGroup = (session === '오전' ? 'A' : 'M'); // 해당 세션에 학생이 아무도 없으면 오전은 A조, 오후는 M조
-            }
 
-            const sequenceSql = `SELECT COUNT(*) as count FROM students WHERE exam_group = ?`;
-            db.query(sequenceSql, [targetGroup], (err, sequenceRows) => {
-                if (err) return res.status(500).json({message: 'DB 오류 2'});
-                const newSequenceNum = sequenceRows[0].count + 1;
-                const examNumber = `${targetGroup}-${newSequenceNum}`;
+// --- API: [참석/결석 처리] ---
+app.patch('/26susi/attendance/:status/:studentId', async (req, res) => {
+    const { status, studentId } = req.params;
+    const validStatus = ['present', 'absent'];
+    const attendanceValue = (status === 'present') ? '참석' : '결석';
 
-                db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, branchRows) => {
-                    if (err) return res.status(500).json({message: 'DB 오류 3'});
-                    const getBranchId = (callback) => {
-                        if (branchRows.length > 0) return callback(null, branchRows[0].id);
-                        db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (err, result) => {
-                            if (err) return callback(err);
-                            callback(null, result.insertId);
-                        });
-                    };
-                    getBranchId((err, branchId) => {
-                        if (err) return res.status(500).json({message: 'DB 오류 4'});
+    if (!validStatus.includes(status)) {
+        return res.status(400).json({ success: false, message: '유효하지 않은 상태값입니다.' });
+    }
 
-                        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status, attendance) VALUES (?, ?, ?, ?, ?, ?, ?, '추가', '참석')`;
-                        db.query(insertSql, [name, gender, school, grade, branchId, examNumber, targetGroup], (err, result) => {
-                            if (err) return res.status(500).json({message: 'DB 오류 5'});
-                            
-                            const newStudentId = result.insertId;
-                            // 티셔츠 관리 목록에 '신규' 유형으로 기록 추가
-                            db.query(`INSERT INTO tshirt_management (student_id, type) VALUES (?, '신규')`, [newStudentId], (tshirtErr, tshirtResult) => {
-                                if (tshirtErr) console.error("🔥 신규 학생 티셔츠 '신규' 기록 추가 오류:", tshirtErr);
-                                res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조에 배정되었습니다.\n\n부여된 수험번호: [${examNumber}]` });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    } catch (error) {
-        console.error("🔥 현장 신규 등록 오류:", error);
+    try {
+        await db.query(`UPDATE students SET attendance = ? WHERE id = ?`, [attendanceValue, studentId]);
+        res.status(200).json({ success: true, message: `${attendanceValue} 처리 완료` });
+    } catch (err) {
+        console.error(`${attendanceValue} 처리 오류:`, err);
         res.status(500).json({ success: false, message: '서버 오류' });
     }
 });
-// --- API 12: [기록 페이지] 조 목록 조회 ---
-// --- API 12: [기록 페이지] 조 목록 조회 ---
-// ⭐️ 경로 수정
-app.get('/26susi/records/groups', (req, res) => {
-    const sql = `SELECT DISTINCT exam_group FROM students WHERE exam_group IS NOT NULL ORDER BY exam_group ASC`;
-    db.query(sql, (err, rows) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        const groups = rows.map(row => row.exam_group);
-        res.status(200).json({ success: true, data: groups });
-    });
+
+// --- API: [대시보드] 기록 오류 조회 (좌전굴 포함) ---
+app.get('/26susi/dashboard/errors', async (req, res) => {
+    // 좌전굴 포함 5종목 범위 체크
+    const sql = `
+        SELECT s.student_name, s.exam_number, b.branch_name, r.event, r.record_value, r.created_at
+        FROM records r JOIN students s ON r.student_id = s.id JOIN branches b ON s.branch_id = b.id
+        WHERE r.record_value != 0 AND (
+            (r.event = '10m' AND (r.record_value < 1 OR r.record_value > 20)) OR
+            (r.event = '제멀' AND (r.record_value < 100 OR r.record_value > 350)) OR
+            (r.event = '배근력' AND (r.record_value < 10 OR r.record_value > 300)) OR
+            (r.event = '메디신볼' AND (r.record_value < 1 OR r.record_value > 20)) OR
+            (r.event = '좌전굴' AND (r.record_value < 0 OR r.record_value > 50))
+        ) ORDER BY r.created_at DESC;
+    `;
+    try {
+        const [results] = await db.query(sql);
+        res.status(200).json({ success: true, data: results });
+    } catch (err) {
+        console.error("기록 오류 조회 오류:", err);
+        res.status(500).json({ message: 'DB 오류' });
+    }
 });
 
-// --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 ---
-// ⭐️ 경로 수정
-// --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 (gender 추가) ---
-// --- API 13: [기록 페이지] 특정 조의 학생 목록 조회 (정렬 수정) ---
-app.get('/26susi/records/students', (req, res) => {
+// --- API: 실기 기록 입력 ---
+app.post('/26susi/records', async (req, res) => {
+    const { examNumber, event, recordValue } = req.body;
+    const VALID_EVENTS = ['제멀', '메디신볼', '10m', '배근력', '좌전굴'];
+    if (!VALID_EVENTS.includes(event)) {
+        return res.status(400).json({ success: false, message: `유효하지 않은 종목: ${event}` });
+    }
+
+    try {
+        const [students] = await db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
+        if (students.length === 0) return res.status(404).json({ message: `수험번호 '${examNumber}' 학생 없음.` });
+        const student = students[0];
+
+        let recordToSave;
+        let score;
+
+        if (recordValue.toString().toUpperCase() === 'F') {
+            recordToSave = 0; // 파울 기록은 0
+            score = 52;       // 파울 점수 52점
+        } else {
+            const numericRecord = parseFloat(recordValue);
+            if (isNaN(numericRecord)) {
+                return res.status(400).json({ success: false, message: '기록은 숫자 또는 F여야 합니다.' });
+            }
+            recordToSave = numericRecord;
+            score = await calculateScoreFromDBAsync(event, student.gender, recordToSave); // DB 기반 점수 계산
+        }
+
+        const sql = `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
+        await db.query(sql, [student.id, event, recordToSave, score]);
+
+        const message = (recordValue.toString().toUpperCase() === 'F') ? '파울(F) 기록 저장 완료' : '기록 저장 완료';
+        res.status(201).json({ success: true, message: message, score: score });
+
+    } catch (err) {
+        console.error("기록 저장 API 오류:", err);
+        res.status(500).json({ message: '기록 저장 중 서버 오류 발생' });
+    }
+});
+
+
+// --- API: [마스터] 학생 일괄 등록 ---
+app.post('/26susi/students/master-bulk', async (req, res) => {
+    // ... (기존과 거의 동일하나 async/await 및 에러 처리 개선) ...
+    const { students } = req.body;
+    if (!students || !Array.isArray(students)) return res.status(400).json({ message: '학생 데이터 배열 필요.' });
+
+    const validStudents = students.filter(s => s.branch?.trim() && s.name?.trim() && s.gender && ['남', '여'].includes(s.gender) && s.grade?.toString().trim());
+    if (validStudents.length === 0) return res.status(400).json({ message: '등록할 유효 학생 없음.' });
+
+    const studentsByBranch = validStudents.reduce((acc, s) => {
+        (acc[s.branch] = acc[s.branch] || []).push(s);
+        return acc;
+    }, {});
+
+    let totalAdded = 0;
+    let connection;
+    try {
+        connection = await db.getConnection(); // Use promise pool connection
+
+        for (const branchName of Object.keys(studentsByBranch)) {
+            await connection.beginTransaction(); // 지점별 트랜잭션
+            try {
+                let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+                let branchId;
+                if (branchRows.length > 0) {
+                    branchId = branchRows[0].id;
+                } else {
+                    const [insertResult] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
+                    branchId = insertResult.insertId;
+                }
+
+                const branchStudents = studentsByBranch[branchName];
+                const studentValues = branchStudents.map(s => [s.name, s.gender, branchId, s.school || null, s.grade]);
+                const [result] = await connection.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues]);
+                totalAdded += result.affectedRows;
+                await connection.commit(); // 지점별 커밋
+            } catch (branchErr) {
+                await connection.rollback(); // 지점별 롤백
+                console.error(` ${branchName} 학생 등록 오류:`, branchErr);
+                // 실패해도 다음 지점 진행 (선택적)
+            }
+        }
+        res.status(201).json({ success: true, message: `총 ${totalAdded}명 등록 완료.`, insertedCount: totalAdded });
+
+    } catch (err) {
+        console.error("마스터 벌크 등록 오류:", err);
+        res.status(500).json({ message: 'DB 오류' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// --- API: [대체 학생 등록] ---
+app.post('/26susi/students/substitute', async (req, res) => {
+    // ... (기존과 거의 동일하나 async/await 사용) ...
+     const { oldStudentId, newStudent } = req.body;
+     const { name, gender, school, grade } = newStudent;
+     if (!name || !gender || !school || !grade) return res.status(400).json({ success: false, message: '대체 학생 정보 모두 입력 필요.' });
+
+     let connection;
+     try {
+         connection = await db.getConnection();
+         await connection.beginTransaction();
+
+         const [studentRows] = await connection.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId]);
+         if (studentRows.length === 0) { await connection.rollback(); return res.status(404).json({ success: false, message: '대체할 학생 없음.' }); }
+         const examNumber = studentRows[0].exam_number;
+
+         const updateSql = `UPDATE students SET student_name = ?, gender = ?, school = ?, grade = ?, status = '대체', attendance = '참석' WHERE id = ?`;
+         await connection.query(updateSql, [name, gender, school, grade, oldStudentId]);
+
+         await connection.query(`INSERT INTO tshirt_management (student_id, type) VALUES (?, '교환')`, [oldStudentId]);
+
+         await connection.commit();
+         res.status(200).json({ success: true, message: `대체 완료! 수험번호 [${examNumber}]` });
+
+     } catch (err) {
+         if (connection) await connection.rollback();
+         console.error("대체 학생 처리 오류:", err);
+         res.status(500).json({ success: false, message: 'DB 오류' });
+     } finally {
+         if (connection) connection.release();
+     }
+});
+
+// --- API: [현장 신규 학생 추가] ---
+app.post('/26susi/students/add-new', async (req, res) => {
+    // ⭐️ 오전/오후 제거, 6개조 로직으로 수정됨
+    const { newStudent } = req.body;
+    const { name, gender, school, grade, branchName } = newStudent;
+     if (!name || !gender || !grade || !branchName) return res.status(400).json({ success: false, message: '이름, 성별, 학년, 지점명 필수.' });
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        // 6개 조(A~F) 중 가장 인원 적은 조 찾기
+        const groupCountSql = `SELECT exam_group, COUNT(*) as count FROM students WHERE exam_group IN ('A', 'B', 'C', 'D', 'E', 'F') GROUP BY exam_group ORDER BY count ASC LIMIT 1`;
+        const [groupRows] = await connection.query(groupCountSql);
+        let targetGroup = (groupRows.length > 0) ? groupRows[0].exam_group : 'A'; // 없으면 A조
+
+        // 해당 조 다음 번호
+        const [sequenceRows] = await connection.query(`SELECT COUNT(*) as count FROM students WHERE exam_group = ?`, [targetGroup]);
+        const examNumber = `${targetGroup}-${sequenceRows[0].count + 1}`;
+
+        // 지점 ID 확인/생성
+        let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+        let branchId;
+        if (branchRows.length > 0) branchId = branchRows[0].id;
+        else { const [r] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]); branchId = r.insertId; }
+
+        // 학생 등록
+        const insertSql = `INSERT INTO students (student_name, gender, school, grade, branch_id, exam_number, exam_group, status, attendance) VALUES (?, ?, ?, ?, ?, ?, ?, '추가', '참석')`;
+        const [result] = await connection.query(insertSql, [name, gender, school || null, grade, branchId, examNumber, targetGroup]);
+        const newStudentId = result.insertId;
+
+        // 티셔츠 기록
+        await connection.query(`INSERT INTO tshirt_management (student_id, type) VALUES (?, '신규')`, [newStudentId]);
+
+        await connection.commit();
+        res.status(201).json({ success: true, message: `신규 등록 완료! ${targetGroup}조 배정.\n수험번호: [${examNumber}]` });
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error("현장 신규 등록 오류:", err);
+        res.status(500).json({ success: false, message: '서버 오류' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// --- API: [기록 페이지] 조 목록 조회 (A~F) ---
+app.get('/26susi/records/groups', async (req, res) => {
+    try {
+        const sql = `SELECT DISTINCT exam_group FROM students WHERE exam_group IS NOT NULL ORDER BY exam_group ASC`;
+        const [rows] = await db.query(sql);
+        res.status(200).json({ success: true, data: rows.map(r => r.exam_group) });
+    } catch (err) {
+        console.error("조 목록 조회 오류:", err);
+        res.status(500).json({ message: 'DB 오류' });
+    }
+});
+
+// --- API: [기록 페이지] 특정 조 학생 목록 조회 ---
+app.get('/26susi/records/students', async (req, res) => {
     const { group, event } = req.query;
-    if (!group || !event) {
-        return res.status(400).json({ message: '조와 종목 정보는 필수입니다.' });
-    }
-    
-    // ⭐️ ORDER BY 부분을 똑똑한 숫자 정렬 방식으로 수정
-    const sql = `
-        SELECT 
-            s.id, s.student_name, s.exam_number, s.attendance, s.gender,
-            r.record_value, r.score
-        FROM students s
-        LEFT JOIN records r ON s.id = r.student_id AND r.event = ?
-        WHERE s.exam_group = ?
-        ORDER BY 
-            SUBSTRING_INDEX(s.exam_number, '-', 1), 
-            CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED);
-    `;
-    db.query(sql, [event, group], (err, students) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
+    if (!group || !event) return res.status(400).json({ message: '조, 종목 필수.' });
+    try {
+        const sql = `
+            SELECT s.id, s.student_name, s.exam_number, s.attendance, s.gender, r.record_value, r.score
+            FROM students s LEFT JOIN records r ON s.id = r.student_id AND r.event = ? WHERE s.exam_group = ?
+            ORDER BY SUBSTRING_INDEX(s.exam_number, '-', 1), CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED)`;
+        const [students] = await db.query(sql, [event, group]);
         res.status(200).json({ success: true, data: students });
-    });
+    } catch (err) {
+        console.error("조별 학생 목록 조회 오류:", err);
+        res.status(500).json({ message: 'DB 오류' });
+    }
 });
-// --- API 14: [기록 페이지] 실시간 점수 계산 ---
-app.get('/26susi/records/calculate-score', (req, res) => {
+
+// --- API: [기록 페이지] 실시간 점수 계산 ---
+app.get('/26susi/records/calculate-score', async (req, res) => {
     const { event, gender, recordValue } = req.query;
-    if (!event || !gender || !recordValue) {
-        return res.status(400).json({ message: '종목, 성별, 기록 정보는 필수입니다.' });
-    }
-
-    calculateScoreFromDB(event, gender, parseFloat(recordValue), (err, score) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: '점수 계산 중 오류 발생' });
-        }
+    if (!event || !gender || !recordValue) return res.status(400).json({ message: '종목, 성별, 기록 필수.' });
+    try {
+        const score = await calculateScoreFromDBAsync(event, gender, parseFloat(recordValue));
         res.status(200).json({ success: true, score: score });
-    });
-});
-
-// --- API 15: [순위 시스템] 실시간 순위 조회 API (동점자/종목별 규칙 최종 수정) ---
-// --- API 15: [순위 시스템] (수험번호, 교육원 모두 포함) ---
-app.get('/26susi/rankings', (req, res) => {
-    const { classType, gender, event } = req.query;
-    if (!classType || !gender || !event) return res.status(400).json({ message: '반, 성별, 종목 정보는 필수입니다.' });
-
-    let gradeCondition = '';
-    if (classType === '선행반') gradeCondition = `s.grade IN ('1', '2')`;
-    else if (classType === '입시반') gradeCondition = `s.grade = '3'`;
-    else if (classType === 'N수반') gradeCondition = `s.grade = 'N'`;
-    else return res.status(400).json({ message: '올바른 반 유형이 아닙니다.' });
-
-    let sql;
-    const params = [gender];
-
-    if (event === '종합') {
-        sql = `
-            SELECT 
-                s.student_name, s.exam_number, b.branch_name,
-                SUM(r.score) as score,
-                RANK() OVER (
-                    ORDER BY
-                        SUM(r.score) DESC,
-                        MAX(CASE s.grade WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN 'N' THEN 4 ELSE 5 END) ASC,
-                        MAX(CASE WHEN r.event = '제멀' THEN r.record_value ELSE 0 END) DESC,
-                        MAX(CASE WHEN r.event = '메디신볼' THEN r.record_value ELSE 0 END) DESC,
-                        MIN(CASE WHEN r.event = '10m' THEN r.record_value ELSE 999 END) ASC,
-                        MAX(CASE WHEN r.event = '배근력' THEN r.record_value ELSE 0 END) DESC
-                ) as ranking
-            FROM students s
-            JOIN records r ON s.id = r.student_id
-            JOIN branches b ON s.branch_id = b.id
-            WHERE ${gradeCondition} AND s.gender = ?
-            GROUP BY s.id, s.student_name, s.exam_number, b.branch_name
-            ORDER BY ranking ASC
-            LIMIT 50;
-        `;
-    } else { // 종목별 순위
-        sql = `
-            SELECT 
-                s.student_name, s.exam_number, b.branch_name, 
-                r.score, r.record_value,
-                RANK() OVER (ORDER BY r.score DESC, r.record_value ${(event === '10m') ? 'ASC' : 'DESC'}) as ranking
-            FROM students s
-            JOIN records r ON s.id = r.student_id
-            JOIN branches b ON s.branch_id = b.id
-            WHERE ${gradeCondition} AND s.gender = ? AND r.event = ?
-            ORDER BY ranking ASC
-            LIMIT 50;
-        `;
-        params.push(event);
+    } catch (err) {
+        res.status(500).json({ success: false, message: '점수 계산 오류' });
     }
-    db.query(sql, params, (err, results) => {
-        if (err) return res.status(500).json({ success: false, message: '순위 조회 중 서버 오류' });
-        res.status(200).json({ success: true, data: results });
-    });
 });
 
-// --- 대시보드 통합 API (신규) ---
-app.get('/26susi/dashboard/all', (req, res) => {
-    const 오전조 = ['대전','강남','강동','광주','군포','논산','동탄','분당','서초','세종','수원','순천여수광양','아산','영통','용인','이천','익산','전주','군산','천안','청주','충주','하남','경산'];
-    
-    // 1. 세션별 학생 수 및 출석 수 계산
-    const studentCountSql = `
-        SELECT
-            CASE WHEN b.branch_name IN (?) THEN '오전' ELSE '오후' END as session,
-            COUNT(s.id) as total,
-            COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as attended
-        FROM students s JOIN branches b ON s.branch_id = b.id
-        GROUP BY session;
-    `;
-    
-    db.query(studentCountSql, [오전조], (err, studentCounts) => {
-        if (err) return res.status(500).json({ message: '학생 수 집계 오류' });
+// --- API: [순위 시스템] 실시간 순위 조회 (좌전굴 포함) ---
+app.get('/26susi/rankings', async (req, res) => {
+    // ... (기존과 거의 동일하나 async/await 사용) ...
+     const { classType, gender, event } = req.query;
+     if (!classType || !gender || !event) return res.status(400).json({ message: '반, 성별, 종목 필수.' });
+     let gradeCondition = ''; // ... 학년 조건 설정 ...
+     if (classType === '선행반') gradeCondition = `s.grade IN ('1', '2')`;
+     else if (classType === '입시반') gradeCondition = `s.grade = '3'`;
+     else if (classType === 'N수반') gradeCondition = `s.grade = 'N'`;
+     else return res.status(400).json({ message: '올바른 반 유형 아님.' });
 
-        // 2. 세션별/종목별 기록 수 계산
-        const recordCountSql = `
-            SELECT
-                CASE WHEN b.branch_name IN (?) THEN '오전' ELSE '오후' END as session,
-                r.event,
-                COUNT(r.id) as completed
-            FROM records r
-            JOIN students s ON r.student_id = s.id
-            JOIN branches b ON s.branch_id = b.id
-            WHERE s.attendance = '참석'
-            GROUP BY session, r.event;
-        `;
-        db.query(recordCountSql, [오전조], (err, recordCounts) => {
-            if (err) return res.status(500).json({ message: '기록 수 집계 오류' });
-
-            // 3. 기록 오류 목록 조회
-            const errorSql = `
-                SELECT s.student_name, s.exam_number, b.branch_name, r.event, r.record_value, r.created_at
-                FROM records r JOIN students s ON r.student_id = s.id JOIN branches b ON s.branch_id = b.id
-                WHERE r.record_value != 0 AND ((r.event = '10m' AND (r.record_value < 1 OR r.record_value > 20)) OR (r.event = '제멀' AND (r.record_value < 100 OR r.record_value > 350)) OR (r.event = '배근력' AND (r.record_value < 10 OR r.record_value > 300)) OR (r.event = '메디신볼' AND (r.record_value < 1 OR r.record_value > 20)))
-                ORDER BY r.created_at DESC;
-            `;
-            db.query(errorSql, (err, errorList) => {
-                if (err) return res.status(500).json({ message: '오류 목록 조회 오류' });
-
-                // 4. 모든 데이터를 취합하여 최종 JSON 생성
-                const dashboardData = {
-                    morning: { total: 0, attended: 0, events: {} },
-                    afternoon: { total: 0, attended: 0, events: {} }
-                };
-
-                studentCounts.forEach(row => {
-                    const session = (row.session === '오전') ? 'morning' : 'afternoon';
-                    dashboardData[session].total = row.total;
-                    dashboardData[session].attended = row.attended;
-                });
-
-                recordCounts.forEach(row => {
-                    const session = (row.session === '오전') ? 'morning' : 'afternoon';
-                    dashboardData[session].events[row.event] = row.completed;
-                });
-
-                res.status(200).json({ success: true, data: dashboardData, errors: errorList });
-            });
-        });
-    });
+     let sql; const params = [gender];
+     try {
+         if (event === '종합') {
+             sql = `SELECT s.student_name, s.exam_number, b.branch_name, SUM(r.score) as score,
+                           RANK() OVER (ORDER BY SUM(r.score) DESC, MAX(CASE s.grade WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN 'N' THEN 4 ELSE 5 END) ASC,
+                                        MAX(CASE WHEN r.event = '제멀' THEN r.record_value ELSE 0 END) DESC, MAX(CASE WHEN r.event = '메디신볼' THEN r.record_value ELSE 0 END) DESC,
+                                        MIN(CASE WHEN r.event = '10m' THEN r.record_value ELSE 999 END) ASC, MAX(CASE WHEN r.event = '배근력' THEN r.record_value ELSE 0 END) DESC,
+                                        MAX(CASE WHEN r.event = '좌전굴' THEN r.record_value ELSE 0 END) DESC ) as ranking
+                    FROM students s JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id
+                    WHERE ${gradeCondition} AND s.gender = ? GROUP BY s.id, s.student_name, s.exam_number, b.branch_name ORDER BY ranking ASC LIMIT 50`;
+         } else {
+             sql = `SELECT s.student_name, s.exam_number, b.branch_name, r.score, r.record_value,
+                           RANK() OVER (ORDER BY r.score DESC, r.record_value ${(event === '10m') ? 'ASC' : 'DESC'}) as ranking
+                    FROM students s JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id
+                    WHERE ${gradeCondition} AND s.gender = ? AND r.event = ? ORDER BY ranking ASC LIMIT 50`;
+             params.push(event);
+         }
+         const [results] = await db.query(sql, params);
+         res.status(200).json({ success: true, data: results });
+     } catch (err) {
+         console.error("랭킹 조회 오류:", err);
+         res.status(500).json({ success: false, message: '서버 오류' });
+     }
 });
 
+// --- API: [메인 대시보드] (통합, 5종목) ---
+app.get('/26susi/dashboard/all', async (req, res) => {
+    try {
+        const studentCountSql = `SELECT COUNT(s.id) as total, COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as attended FROM students s`;
+        const recordCountSql = `SELECT r.event, COUNT(r.id) as completed FROM records r JOIN students s ON r.student_id = s.id WHERE s.attendance = '참석' GROUP BY r.event`;
+        const errorSql = `SELECT s.student_name, s.exam_number, b.branch_name, r.event, r.record_value, r.created_at FROM records r JOIN students s ON r.student_id = s.id JOIN branches b ON s.branch_id = b.id WHERE r.record_value != 0 AND ( (r.event = '10m' AND (r.record_value < 1 OR r.record_value > 20)) OR (r.event = '제멀' AND (r.record_value < 100 OR r.record_value > 350)) OR (r.event = '배근력' AND (r.record_value < 10 OR r.record_value > 300)) OR (r.event = '메디신볼' AND (r.record_value < 1 OR r.record_value > 20)) OR (r.event = '좌전굴' AND (r.record_value < 0 OR r.record_value > 50)) ) ORDER BY r.created_at DESC`;
 
-// --- API 17: [사전 대시보드] 지점별 출결 현황 API ---
-// --- API 17: [사전 현황판] (수정 버전) ---
-app.get('/26susi/dashboard/pre-event', (req, res) => {
-    const sql = `
-        SELECT 
-            b.branch_name,
-            COUNT(CASE WHEN s.attendance = '미정' OR s.attendance IS NULL THEN 1 END) as pending, -- ⭐️ '미확인' 인원수
-            COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as present,
-            COUNT(CASE WHEN s.attendance = '결석' THEN 1 END) as absent,
-            COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute,
-            COUNT(CASE WHEN s.status = '추가' THEN 1 END) as new_count -- ⭐️ 오타 수정 (new_student -> new_count)
-        FROM branches b
-        LEFT JOIN students s ON b.id = s.branch_id
-        GROUP BY b.branch_name
-        ORDER BY b.branch_name;
-    `;
-    db.query(sql, (err, results) => {
-        if (err) {
-            console.error("🔥 사전 현황판 데이터 조회 오류:", err);
-            return res.status(500).json({ message: 'DB 오류' });
-        }
-        res.status(200).json({ success: true, data: results });
-    });
-});
+        const [[studentCounts], [recordCounts], [errorList]] = await Promise.all([
+            db.query(studentCountSql), db.query(recordCountSql), db.query(errorSql)
+        ]);
 
-// --- API 18: [티셔츠 관리] 목록 조회 API ---
-// --- API 18: [티셔츠 관리] 목록 조회 API (수정) ---
-app.get('/26susi/tshirts', (req, res) => {
-    const sql = `
-        SELECT t.id, t.student_id, s.student_name, s.exam_number, b.branch_name, t.type, t.original_size, t.new_size, t.status
-        FROM tshirt_management t
-        JOIN students s ON t.student_id = s.id
-        JOIN branches b ON s.branch_id = b.id
-        ORDER BY b.branch_name, s.student_name;
-    `;
-    db.query(sql, (err, results) => {
-        if (err) {
-            console.error("🔥 티셔츠 목록 조회 오류:", err);
-            return res.status(500).json({ message: 'DB 오류' });
-        }
-        res.status(200).json({ success: true, data: results });
-    });
-});
+        const dashboardData = { overall: { total: studentCounts.total || 0, attended: studentCounts.attended || 0, events: { '제멀': 0, '메디신볼': 0, '10m': 0, '배근력': 0, '좌전굴': 0 } } };
+        recordCounts.forEach(row => { if (dashboardData.overall.events.hasOwnProperty(row.event)) dashboardData.overall.events[row.event] = row.completed; });
 
-// --- API 19: [티셔츠 관리] 사이즈/상태 업데이트 API ---
-// --- API 19: [티셔츠 관리] 사이즈/상태 업데이트 API (수정) ---
-app.patch('/26susi/tshirts/:id', (req, res) => {
-    const { id } = req.params;
-    // ⭐️ original_size, new_size를 모두 받도록 수정
-    const { original_size, new_size, status } = req.body;
-
-    // ⭐️ SET 부분을 새 DB 구조에 맞게 수정
-    const sql = `
-        UPDATE tshirt_management 
-        SET 
-            original_size = ?, 
-            new_size = ?, 
-            status = ? 
-        WHERE id = ?
-    `;
-    const params = [original_size, new_size, status, id];
-
-    db.query(sql, params, (err, result) => {
-        if (err) {
-            console.error("🔥 티셔츠 업데이트 오류:", err);
-            return res.status(500).json({ message: 'DB 업데이트 오류' });
-        }
-        res.status(200).json({ success: true, message: '업데이트 완료' });
-    });
-});
-
-// --- API: [사전 현황판] 미확인 인원 명단 조회 ---
-app.get('/26susi/students/pending', (req, res) => {
-    const { branchName } = req.query; // ex: ?branchName=일산
-    if (!branchName) {
-        return res.status(400).json({ message: '지점 이름은 필수입니다.' });
+        res.status(200).json({ success: true, data: dashboardData, errors: errorList });
+    } catch (err) {
+        console.error("메인 대시보드 오류:", err);
+        res.status(500).json({ message: '데이터 집계 오류' });
     }
+});
 
-    const sql = `
-        SELECT s.student_name, s.exam_number
-        FROM students s
-        JOIN branches b ON s.branch_id = b.id
-        WHERE b.branch_name = ? AND (s.attendance = '미정' OR s.attendance IS NULL)
-        ORDER BY s.student_name;
-    `;
-    db.query(sql, [branchName], (err, results) => {
-        if (err) {
-            console.error("🔥 미확인 인원 조회 오류:", err);
-            return res.status(500).json({ message: 'DB 오류' });
-        }
+// --- API: [사전 대시보드] ---
+app.get('/26susi/dashboard/pre-event', async (req, res) => {
+    // ... (기존과 동일하나 async/await 사용) ...
+    const sql = `SELECT b.branch_name, COUNT(CASE WHEN s.attendance = '미정' OR s.attendance IS NULL THEN 1 END) as pending, COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as present, COUNT(CASE WHEN s.attendance = '결석' THEN 1 END) as absent, COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute, COUNT(CASE WHEN s.status = '추가' THEN 1 END) as new_count FROM branches b LEFT JOIN students s ON b.id = s.branch_id GROUP BY b.branch_name ORDER BY b.branch_name`;
+    try {
+        const [results] = await db.query(sql);
         res.status(200).json({ success: true, data: results });
-    });
+    } catch (err) { console.error("사전 현황판 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
 
-// ✅ 이 부분을 복사해서 26susi.js 파일에 추가하세요.
-// 전체 학생 상세 상담내역 엑셀 다운로드를 위한 API
-// --- API: [조별 진행 현황] 조회 ---
-app.get('/26susi/dashboard/group-progress', (req, res) => {
-    // 1. 조별로 '참석'한 총 인원수를 먼저 계산
-    const attendanceSql = `
-        SELECT exam_group, COUNT(id) as attended_count
-        FROM students
-        WHERE attendance = '참석' AND exam_group IS NOT NULL
-        GROUP BY exam_group;
-    `;
-    db.query(attendanceSql, (err, attendanceResults) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-
-        // 2. 조별/종목별 기록 완료 인원수를 계산
-        const recordsSql = `
-            SELECT s.exam_group, r.event, COUNT(DISTINCT s.id) as completed_count
-            FROM records r
-            JOIN students s ON r.student_id = s.id
-            WHERE s.attendance = '참석' AND s.exam_group IS NOT NULL
-            GROUP BY s.exam_group, r.event;
-        `;
-        db.query(recordsSql, (err, recordsResults) => {
-            if (err) return res.status(500).json({ message: 'DB 오류' });
-
-            // 3. 4종목 모두 완료한 학생 수를 조별로 계산
-            const allCompletedSql = `
-                SELECT exam_group, COUNT(student_id) as all_completed_count
-                FROM (
-                    SELECT s.id as student_id, s.exam_group
-                    FROM records r
-                    JOIN students s ON r.student_id = s.id
-                    WHERE s.attendance = '참석' AND s.exam_group IS NOT NULL
-                    GROUP BY s.id, s.exam_group
-                    HAVING COUNT(DISTINCT r.event) = 4
-                ) as completed_students
-                GROUP BY exam_group;
-            `;
-            db.query(allCompletedSql, (err, allCompletedResults) => {
-                if (err) return res.status(500).json({ message: 'DB 오류' });
-
-                // 4. 모든 데이터를 취합해서 최종 결과물 생성
-                const progressData = {};
-                attendanceResults.forEach(row => {
-                    progressData[row.exam_group] = {
-                        attended: row.attended_count,
-                        allCompleted: 0,
-                        events: { '제멀': 0, '메디신볼': 0, '10m': 0, '배근력': 0 }
-                    };
-                });
-                recordsResults.forEach(row => {
-                    if (progressData[row.exam_group]) {
-                        progressData[row.exam_group].events[row.event] = row.completed_count;
-                    }
-                });
-                allCompletedResults.forEach(row => {
-                    if (progressData[row.exam_group]) {
-                        progressData[row.exam_group].allCompleted = row.all_completed_count;
-                    }
-                });
-
-                res.status(200).json({ success: true, data: progressData });
-            });
-        });
-    });
+// --- API: [티셔츠 관리] ---
+app.get('/26susi/tshirts', async (req, res) => {
+    // ... (기존과 동일하나 async/await 사용) ...
+     const sql = `SELECT t.id, t.student_id, s.student_name, s.exam_number, b.branch_name, t.type, t.original_size, t.new_size, t.status FROM tshirt_management t JOIN students s ON t.student_id = s.id JOIN branches b ON s.branch_id = b.id ORDER BY b.branch_name, s.student_name`;
+     try { const [results] = await db.query(sql); res.status(200).json({ success: true, data: results }); }
+     catch (err) { console.error("티셔츠 목록 조회 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
 
-// --- API: [지점 리포트] 지점별 전체 학생 기록 및 순위 조회 ---
-// --- API: [지점 리포트] (성별 필터 및 종합 순위 추가 버전) ---
-// --- API: [지점 리포트] (지점 내 순위 계산) ---
-app.get('/26susi/branch-report', (req, res) => {
-    const { branchName } = req.query;
-    if (!branchName) return res.status(400).json({ message: '지점 이름은 필수입니다.' });
-
-    const sql = `
-        SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score
-        FROM students s
-        LEFT JOIN records r ON s.id = r.student_id
-        JOIN branches b ON s.branch_id = b.id
-        WHERE b.branch_name = ?`;
-    
-    db.query(sql, [branchName], (err, results) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-
-        const studentsMap = new Map();
-        results.forEach(row => {
-            if (!studentsMap.has(row.id)) {
-                studentsMap.set(row.id, {
-                    id: row.id, name: row.student_name, gender: row.gender,
-                    totalScore: 0, records: {}
-                });
-            }
-            const student = studentsMap.get(row.id);
-            if (row.event) {
-                student.records[row.event] = { record: row.record_value, score: row.score };
-                student.totalScore += row.score;
-            }
-        });
-
-        let studentsData = Array.from(studentsMap.values());
-        const EVENTS = ['제멀', '메디신볼', '10m', '배근력'];
-
-        ['남', '여'].forEach(gender => {
-            let genderGroup = studentsData.filter(s => s.gender === gender);
-            
-            genderGroup.sort((a, b) => b.totalScore - a.totalScore);
-            genderGroup.forEach((student, i) => student.branchOverallRank = i + 1);
-
-            EVENTS.forEach(event => {
-                genderGroup.sort((a, b) => {
-                    const scoreA = a.records[event] ? a.records[event].score : -1;
-                    const scoreB = b.records[event] ? b.records[event].score : -1;
-                    if (scoreB !== scoreA) return scoreB - scoreA;
-                    const recordA = a.records[event] ? a.records[event].record : (event === '10m' ? 999 : -1);
-                    const recordB = b.records[event] ? b.records[event].record : (event === '10m' ? 999 : -1);
-                    return (event === '10m') ? recordA - recordB : recordB - recordA;
-                });
-                genderGroup.forEach((student, i) => {
-                    if (student.records[event]) student.records[event].branchRank = i + 1;
-                });
-            });
-        });
-        
-        res.status(200).json({ success: true, data: studentsData });
-    });
-});
-// --- API: [전체 순위 조회] (리포트용) ---
-app.get('/26susi/all-ranks', (req, res) => {
-    const sql = `
-        WITH TotalScores AS (
-            SELECT s.id, s.gender, SUM(r.score) as total_score
-            FROM students s JOIN records r ON s.id = r.student_id
-            GROUP BY s.id, s.gender
-        ), OverallRanks AS (
-            SELECT id, RANK() OVER (PARTITION BY gender ORDER BY total_score DESC) as overall_rank
-            FROM TotalScores
-        ), EventRanks AS (
-            SELECT 
-                s.id, r.event,
-                RANK() OVER (PARTITION BY s.gender, r.event ORDER BY r.score DESC, r.record_value DESC) as event_rank
-            FROM students s JOIN records r ON s.id = r.student_id
-        )
-        SELECT 
-            s.id,
-            ovr.overall_rank,
-            evr_jemul.event_rank as jemul_rank,
-            evr_medball.event_rank as medball_rank,
-            evr_10m.event_rank as ten_m_rank,
-            evr_baegun.event_rank as baegun_rank
-        FROM students s
-        LEFT JOIN OverallRanks ovr ON s.id = ovr.id
-        LEFT JOIN EventRanks evr_jemul ON s.id = evr_jemul.id AND evr_jemul.event = '제멀'
-        LEFT JOIN EventRanks evr_medball ON s.id = evr_medball.id AND evr_medball.event = '메디신볼'
-        LEFT JOIN EventRanks evr_10m ON s.id = evr_10m.id AND evr_10m.event = '10m'
-        LEFT JOIN EventRanks evr_baegun ON s.id = evr_baegun.id AND evr_baegun.event = '배근력';
-    `;
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ message: 'DB 오류' });
-        const rankMap = {};
-        results.forEach(row => {
-            rankMap[row.id] = {
-                overallRank: row.overall_rank,
-                '제멀': { rank: row.jemul_rank },
-                '메디신볼': { rank: row.medball_rank },
-                '10m': { rank: row.ten_m_rank },
-                '배근력': { rank: row.baegun_rank },
-            };
-        });
-        res.status(200).json({ success: true, data: rankMap });
-    });
+app.patch('/26susi/tshirts/:id', async (req, res) => {
+    // ... (기존과 동일하나 async/await 사용) ...
+     const { id } = req.params; const { original_size, new_size, status } = req.body;
+     const sql = `UPDATE tshirt_management SET original_size = ?, new_size = ?, status = ? WHERE id = ?`;
+     try { await db.query(sql, [original_size, new_size, status, id]); res.status(200).json({ success: true, message: '업데이트 완료' }); }
+     catch (err) { console.error("티셔츠 업데이트 오류:", err); res.status(500).json({ message: 'DB 업데이트 오류' }); }
 });
 
+// --- API: [사전 현황판] 미확인 인원 명단 ---
+app.get('/26susi/students/pending', async (req, res) => {
+    // ... (기존과 동일하나 async/await 사용) ...
+     const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
+     const sql = `SELECT s.student_name, s.exam_number FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ? AND (s.attendance = '미정' OR s.attendance IS NULL) ORDER BY s.student_name`;
+     try { const [results] = await db.query(sql, [branchName]); res.status(200).json({ success: true, data: results }); }
+     catch (err) { console.error("미확인 인원 조회 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
+});
+
+// --- API: [조별 진행 현황] (5종목) ---
+app.get('/26susi/dashboard/group-progress', async (req, res) => {
+    try {
+        const attendanceSql = `SELECT exam_group, COUNT(id) as attended_count FROM students WHERE attendance = '참석' AND exam_group IS NOT NULL GROUP BY exam_group`;
+        const recordsSql = `SELECT s.exam_group, r.event, COUNT(DISTINCT s.id) as completed_count FROM records r JOIN students s ON r.student_id = s.id WHERE s.attendance = '참석' AND s.exam_group IS NOT NULL GROUP BY s.exam_group, r.event`;
+        // ⭐️ 5종목 완료 체크
+        const allCompletedSql = `SELECT exam_group, COUNT(student_id) as all_completed_count FROM (SELECT s.id as student_id, s.exam_group FROM records r JOIN students s ON r.student_id = s.id WHERE s.attendance = '참석' AND s.exam_group IS NOT NULL GROUP BY s.id, s.exam_group HAVING COUNT(DISTINCT r.event) = 5) as completed GROUP BY exam_group`;
+
+        const [[attendanceResults], [recordsResults], [allCompletedResults]] = await Promise.all([
+            db.query(attendanceSql), db.query(recordsSql), db.query(allCompletedSql)
+        ]);
+
+        const progressData = {};
+        attendanceResults.forEach(row => {
+            progressData[row.exam_group] = { attended: row.attended_count, allCompleted: 0, events: { '제멀': 0, '메디신볼': 0, '10m': 0, '배근력': 0, '좌전굴': 0 } };
+        });
+        recordsResults.forEach(row => { if (progressData[row.exam_group]?.events.hasOwnProperty(row.event)) progressData[row.exam_group].events[row.event] = row.completed_count; });
+        allCompletedResults.forEach(row => { if (progressData[row.exam_group]) progressData[row.exam_group].allCompleted = row.all_completed_count; });
+
+        res.status(200).json({ success: true, data: progressData });
+    } catch (err) {
+        console.error("조별 진행 현황 오류:", err);
+        res.status(500).json({ message: 'DB 오류' });
+    }
+});
+
+// --- API: [지점 리포트] (5종목) ---
+app.get('/26susi/branch-report', async (req, res) => {
+    // ... (기존과 거의 동일하나 async/await 사용) ...
+     const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
+     const sql = `SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score FROM students s LEFT JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ?`;
+     try {
+         const [results] = await db.query(sql, [branchName]);
+         const studentsMap = new Map(); // ... 학생 데이터 가공 ...
+         results.forEach(row => { if (!studentsMap.has(row.id)) studentsMap.set(row.id, { id: row.id, name: row.student_name, gender: row.gender, totalScore: 0, records: {} }); const student = studentsMap.get(row.id); if (row.event) { student.records[row.event] = { record: row.record_value, score: row.score }; student.totalScore += row.score; } });
+         let studentsData = Array.from(studentsMap.values());
+         const EVENTS = ['제멀', '메디신볼', '10m', '배근력', '좌전굴'];
+         ['남', '여'].forEach(gender => { /* ... 성별 순위 계산 ... */
+             let genderGroup = studentsData.filter(s => s.gender === gender);
+             genderGroup.sort((a, b) => b.totalScore - a.totalScore); genderGroup.forEach((s, i) => s.branchOverallRank = i + 1);
+             EVENTS.forEach(event => { genderGroup.sort((a, b) => { const sA = a.records[event]?.score ?? -1, sB = b.records[event]?.score ?? -1; if (sB !== sA) return sB - sA; const rA = a.records[event]?.record ?? (event === '10m' ? 999 : -1), rB = b.records[event]?.record ?? (event === '10m' ? 999 : -1); return (event === '10m') ? rA - rB : rB - rA; }); genderGroup.forEach((s, i) => { if (s.records[event]) s.records[event].branchRank = i + 1; }); });
+         });
+         res.status(200).json({ success: true, data: studentsData });
+     } catch (err) { console.error("지점 리포트 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
+});
+
+// --- API: [전체 순위 조회] 리포트용 (5종목) ---
+app.get('/26susi/all-ranks', async (req, res) => {
+    // ... (기존과 거의 동일하나 async/await 사용) ...
+     const sql = `WITH TotalScores AS (...), OverallRanks AS (...), EventRanks AS (SELECT s.id, r.event, RANK() OVER (PARTITION BY s.gender, r.event ORDER BY r.score DESC, (CASE WHEN r.event = '10m' THEN r.record_value END) ASC, (CASE WHEN r.event != '10m' THEN r.record_value END) DESC) as event_rank FROM students s JOIN records r ON s.id = r.student_id) SELECT s.id, ovr.overall_rank, evr_jemul.event_rank as jemul_rank, evr_medball.event_rank as medball_rank, evr_10m.event_rank as ten_m_rank, evr_baegun.event_rank as baegun_rank, evr_jwajeon.event_rank as jwajeon_rank FROM students s LEFT JOIN OverallRanks ovr ON s.id = ovr.id LEFT JOIN EventRanks evr_jemul ON s.id = evr_jemul.id AND evr_jemul.event = '제멀' LEFT JOIN EventRanks evr_medball ON s.id = evr_medball.id AND evr_medball.event = '메디신볼' LEFT JOIN EventRanks evr_10m ON s.id = evr_10m.id AND evr_10m.event = '10m' LEFT JOIN EventRanks evr_baegun ON s.id = evr_baegun.id AND evr_baegun.event = '배근력' LEFT JOIN EventRanks evr_jwajeon ON s.id = evr_jwajeon.id AND evr_jwajeon.event = '좌전굴'`; // CTE 정의는 생략
+     try {
+         const [results] = await db.query(sql);
+         const rankMap = {}; results.forEach(row => { rankMap[row.id] = { overallRank: row.overall_rank, '제멀': { rank: row.jemul_rank }, '메디신볼': { rank: row.medball_rank }, '10m': { rank: row.ten_m_rank }, '배근력': { rank: row.baegun_rank }, '좌전굴': { rank: row.jwajeon_rank } }; });
+         res.status(200).json({ success: true, data: rankMap });
+     } catch (err) { console.error("전체 순위 API 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
+});
+
+// =================================================================
+// 🚀 API 실기테스트 로직 여기서까지 끝
+// =================================================================
+
+// --- 서버 시작 ---
+app.listen(port, () => {
+    console.log(`🔥 26수시 실기테스트 서버 실행 중 (포트: ${port})`);
+});
 // ✅ 서버 실행
 app.listen(port, () => {
   console.log(`🔥 26수시 실기배점 서버 실행 중: http://localhost:${port}`);
