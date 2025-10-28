@@ -2670,12 +2670,12 @@ async function calculateScoreFromDBAsync(event, gender, recordValue) {
     `;
 
     try {
-        const [rows] = await db.query(sql, [event, gender, recordValue]);
+        const [rows] = await db.promise().query(sql, [event, gender, recordValue]);
         if (rows.length > 0) {
             return rows[0].score;
         } else {
             // 환산표 기준보다 못하면 52점 반환 (빵점 기준)
-             const [boundaries] = await db.query(
+             const [boundaries] = db.promise().query(
                 // ⚠️ 테이블 이름을 scoring_criteria 로 수정
                 `SELECT
                     MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
@@ -2862,7 +2862,7 @@ app.patch('/26susi/attendance/:status/:studentId', async (req, res) => {
     }
 
     try {
-        await db.query(`UPDATE students SET attendance = ? WHERE id = ?`, [attendanceValue, studentId]);
+        db.promise().query(`UPDATE students SET attendance = ? WHERE id = ?`, [attendanceValue, studentId]);
         res.status(200).json({ success: true, message: `${attendanceValue} 처리 완료` });
     } catch (err) {
         console.error(`${attendanceValue} 처리 오류:`, err);
@@ -2885,7 +2885,7 @@ app.get('/26susi/dashboard/errors', async (req, res) => {
         ) ORDER BY r.created_at DESC;
     `;
     try {
-        const [results] = await db.query(sql);
+        const [results] = db.promise().query(sql);
         res.status(200).json({ success: true, data: results });
     } catch (err) {
         console.error("기록 오류 조회 오류:", err);
@@ -2902,7 +2902,7 @@ app.post('/26susi/records', async (req, res) => {
     }
 
     try {
-        const [students] = await db.query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
+        const [students] = db.promise().query('SELECT id, gender FROM students WHERE exam_number = ?', [examNumber]);
         if (students.length === 0) return res.status(404).json({ message: `수험번호 '${examNumber}' 학생 없음.` });
         const student = students[0];
 
@@ -2923,7 +2923,7 @@ app.post('/26susi/records', async (req, res) => {
 
         const sql = `INSERT INTO records (student_id, event, record_value, score) VALUES (?, ?, ?, ?)
                      ON DUPLICATE KEY UPDATE record_value = VALUES(record_value), score = VALUES(score)`;
-        await db.query(sql, [student.id, event, recordToSave, score]);
+       db.promise().query(sql, [student.id, event, recordToSave, score]);
 
         const message = (recordValue.toString().toUpperCase() === 'F') ? '파울(F) 기록 저장 완료' : '기록 저장 완료';
         res.status(201).json({ success: true, message: message, score: score });
@@ -3139,7 +3139,7 @@ app.get('/26susi/records/students', async (req, res) => {
             SELECT s.id, s.student_name, s.exam_number, s.attendance, s.gender, r.record_value, r.score
             FROM students s LEFT JOIN records r ON s.id = r.student_id AND r.event = ? WHERE s.exam_group = ?
             ORDER BY SUBSTRING_INDEX(s.exam_number, '-', 1), CAST(SUBSTRING_INDEX(s.exam_number, '-', -1) AS UNSIGNED)`;
-        const [students] = await db.query(sql, [event, group]);
+        const [students] = db.promise().query(sql, [event, group]);
         res.status(200).json({ success: true, data: students });
     } catch (err) {
         console.error("조별 학생 목록 조회 오류:", err);
@@ -3187,7 +3187,7 @@ app.get('/26susi/rankings', async (req, res) => {
                     WHERE ${gradeCondition} AND s.gender = ? AND r.event = ? ORDER BY ranking ASC LIMIT 50`;
              params.push(event);
          }
-         const [results] = await db.query(sql, params);
+         const [results] = db.promise().query(sql, params);
          res.status(200).json({ success: true, data: results });
      } catch (err) {
          console.error("랭킹 조회 오류:", err);
@@ -3221,7 +3221,7 @@ app.get('/26susi/dashboard/pre-event', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
     const sql = `SELECT b.branch_name, COUNT(CASE WHEN s.attendance = '미정' OR s.attendance IS NULL THEN 1 END) as pending, COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as present, COUNT(CASE WHEN s.attendance = '결석' THEN 1 END) as absent, COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute, COUNT(CASE WHEN s.status = '추가' THEN 1 END) as new_count FROM branches b LEFT JOIN students s ON b.id = s.branch_id GROUP BY b.branch_name ORDER BY b.branch_name`;
     try {
-        const [results] = await db.query(sql);
+        const [results] = db.promise().query(sql);
         res.status(200).json({ success: true, data: results });
     } catch (err) { console.error("사전 현황판 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
@@ -3230,7 +3230,7 @@ app.get('/26susi/dashboard/pre-event', async (req, res) => {
 app.get('/26susi/tshirts', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
      const sql = `SELECT t.id, t.student_id, s.student_name, s.exam_number, b.branch_name, t.type, t.original_size, t.new_size, t.status FROM tshirt_management t JOIN students s ON t.student_id = s.id JOIN branches b ON s.branch_id = b.id ORDER BY b.branch_name, s.student_name`;
-     try { const [results] = await db.query(sql); res.status(200).json({ success: true, data: results }); }
+     try { const [results] = db.promise().query(sql); res.status(200).json({ success: true, data: results }); }
      catch (err) { console.error("티셔츠 목록 조회 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
 
@@ -3238,7 +3238,7 @@ app.patch('/26susi/tshirts/:id', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
      const { id } = req.params; const { original_size, new_size, status } = req.body;
      const sql = `UPDATE tshirt_management SET original_size = ?, new_size = ?, status = ? WHERE id = ?`;
-     try { await db.query(sql, [original_size, new_size, status, id]); res.status(200).json({ success: true, message: '업데이트 완료' }); }
+     try { db.promise().query(sql, [original_size, new_size, status, id]); res.status(200).json({ success: true, message: '업데이트 완료' }); }
      catch (err) { console.error("티셔츠 업데이트 오류:", err); res.status(500).json({ message: 'DB 업데이트 오류' }); }
 });
 
@@ -3247,7 +3247,7 @@ app.get('/26susi/students/pending', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
      const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
      const sql = `SELECT s.student_name, s.exam_number FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ? AND (s.attendance = '미정' OR s.attendance IS NULL) ORDER BY s.student_name`;
-     try { const [results] = await db.query(sql, [branchName]); res.status(200).json({ success: true, data: results }); }
+     try { const [results] = db.promise().query(sql, [branchName]); res.status(200).json({ success: true, data: results }); }
      catch (err) { console.error("미확인 인원 조회 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
 
@@ -3283,7 +3283,7 @@ app.get('/26susi/branch-report', async (req, res) => {
      const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
      const sql = `SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score FROM students s LEFT JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ?`;
      try {
-         const [results] = await db.query(sql, [branchName]);
+         const [results] = db.promise().query(sql, [branchName]);
          const studentsMap = new Map(); // ... 학생 데이터 가공 ...
          results.forEach(row => { if (!studentsMap.has(row.id)) studentsMap.set(row.id, { id: row.id, name: row.student_name, gender: row.gender, totalScore: 0, records: {} }); const student = studentsMap.get(row.id); if (row.event) { student.records[row.event] = { record: row.record_value, score: row.score }; student.totalScore += row.score; } });
          let studentsData = Array.from(studentsMap.values());
@@ -3302,7 +3302,7 @@ app.get('/26susi/all-ranks', async (req, res) => {
     // ... (기존과 거의 동일하나 async/await 사용) ...
      const sql = `WITH TotalScores AS (...), OverallRanks AS (...), EventRanks AS (SELECT s.id, r.event, RANK() OVER (PARTITION BY s.gender, r.event ORDER BY r.score DESC, (CASE WHEN r.event = '10m' THEN r.record_value END) ASC, (CASE WHEN r.event != '10m' THEN r.record_value END) DESC) as event_rank FROM students s JOIN records r ON s.id = r.student_id) SELECT s.id, ovr.overall_rank, evr_jemul.event_rank as jemul_rank, evr_medball.event_rank as medball_rank, evr_10m.event_rank as ten_m_rank, evr_baegun.event_rank as baegun_rank, evr_jwajeon.event_rank as jwajeon_rank FROM students s LEFT JOIN OverallRanks ovr ON s.id = ovr.id LEFT JOIN EventRanks evr_jemul ON s.id = evr_jemul.id AND evr_jemul.event = '제멀' LEFT JOIN EventRanks evr_medball ON s.id = evr_medball.id AND evr_medball.event = '메디신볼' LEFT JOIN EventRanks evr_10m ON s.id = evr_10m.id AND evr_10m.event = '10m' LEFT JOIN EventRanks evr_baegun ON s.id = evr_baegun.id AND evr_baegun.event = '배근력' LEFT JOIN EventRanks evr_jwajeon ON s.id = evr_jwajeon.id AND evr_jwajeon.event = '좌전굴'`; // CTE 정의는 생략
      try {
-         const [results] = await db.query(sql);
+         const [results] = db.promise().query(sql);
          const rankMap = {}; results.forEach(row => { rankMap[row.id] = { overallRank: row.overall_rank, '제멀': { rank: row.jemul_rank }, '메디신볼': { rank: row.medball_rank }, '10m': { rank: row.ten_m_rank }, '배근력': { rank: row.baegun_rank }, '좌전굴': { rank: row.jwajeon_rank } }; });
          res.status(200).json({ success: true, data: rankMap });
      } catch (err) { console.error("전체 순위 API 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
