@@ -4566,7 +4566,7 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     if (isMgmt) {
         // ⭐️ 관리 권한 사용자: 해당 지점의 *모든* 학생 조회
         console.log(` -> 관리 권한: ${branch} 지점 ${year}년도 모든 학생 조회`);
-        // ⭐️ (수정) 최신 상태 조회를 위한 3개의 서브쿼리 추가
+        // ⭐️ (수정) 최신 상태 + 오늘 운동 현황 조회를 위한 서브쿼리 추가
         sql = `
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
@@ -4586,7 +4586,21 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
                     SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
                     WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈'
                     ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_mental_date
+                ) AS recent_mental_date,
+
+                -- ▼▼▼▼▼ [일일퀘스트 추가] 오늘 운동 현황 ▼▼▼▼▼
+                (
+                    SELECT COUNT(*)
+                    FROM jungsimaxstudent.teacher_daily_assignments tda
+                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE()
+                ) AS today_total_assignments,
+                (
+                    SELECT COUNT(*)
+                    FROM jungsimaxstudent.teacher_daily_assignments tda
+                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE() AND tda.is_completed = 1
+                ) AS today_completed_assignments
+                -- ▲▲▲▲▲ [일일퀘스트 추가] 오늘 운동 현황 ▲▲▲▲▲
+
             FROM jungsimaxstudent.student_account sa
             LEFT JOIN jungsimaxstudent.student_assignments sassign
               ON sa.account_id = sassign.student_account_id AND sassign.year = ?
@@ -4597,7 +4611,7 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     } else {
         // ⭐️ 일반 사용자: 기존처럼 *자신에게 배정된* 학생만 조회
         console.log(` -> 일반 사용자: ${branch} 지점 ${year}년도 ${userid} 담당 학생 조회`);
-        // ⭐️ (수정) 최신 상태 조회를 위한 3개의 서브쿼리 추가
+        // ⭐️ (수정) 최신 상태 + 오늘 운동 현황 조회를 위한 서브쿼리 추가
         sql = `
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
@@ -4617,7 +4631,21 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
                     SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
                     WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈'
                     ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_mental_date
+                ) AS recent_mental_date,
+
+                -- ▼▼▼▼▼ [일일퀘스트 추가] 오늘 운동 현황 ▼▼▼▼▼
+                (
+                    SELECT COUNT(*)
+                    FROM jungsimaxstudent.teacher_daily_assignments tda
+                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE()
+                ) AS today_total_assignments,
+                (
+                    SELECT COUNT(*)
+                    FROM jungsimaxstudent.teacher_daily_assignments tda
+                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE() AND tda.is_completed = 1
+                ) AS today_completed_assignments
+                -- ▲▲▲▲▲ [일일퀘스트 추가] 오늘 운동 현황 ▲▲▲▲▲
+
             FROM jungsimaxstudent.student_assignments sassign
             JOIN jungsimaxstudent.student_account sa ON sassign.student_account_id = sa.account_id
             WHERE sassign.teacher_userid = ?
@@ -4630,8 +4658,8 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
 
     try {
         const [students] = await dbStudent.query(sql, params); // dbStudent 사용!
-        console.log(` -> ${students.length}명의 학생 정보 조회 완료`);
-        res.json({ success: true, students: students }); // ⭐️ 3개의 새 필드가 포함되어 응답
+        console.log(` -> ${students.length}명의 학생 정보 조회 완료 (운동 현황 포함)`); // 로그 수정
+        res.json({ success: true, students: students }); // ⭐️ 운동 현황 필드 2개 포함되어 응답
     } catch (err) {
         console.error('❌ 학생 목록 조회(운동 할당용) API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
