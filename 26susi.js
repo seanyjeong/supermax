@@ -2675,7 +2675,7 @@ async function calculateScoreFromDBAsync(event, gender, recordValue) {
             return rows[0].score;
         } else {
             // 환산표 기준보다 못하면 52점 반환 (빵점 기준)
-             const [boundaries] = db.promise().query(
+             const [boundaries] =await  db.promise().query(
                 // ⚠️ 테이블 이름을 scoring_criteria 로 수정
                 `SELECT
                     MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
