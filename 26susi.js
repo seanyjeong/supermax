@@ -533,16 +533,16 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
 
     // ⭐️ 여러 DB 작업을 하므로 커넥션을 얻어 트랜잭션 사용 고려 (여기선 단순화)
     try {
-        // 1) 학생 계정 정보 가져오기 (dbStudent)
+        // 1) 학생 계정 정보 가져오기 (dbStudent) - school, phone 추가!
         const [rows] = await dbStudent.promise().query(
-            // ⭐️ 필요한 모든 컬럼 가져오기 (name, branch, gender, grade 등)
-            "SELECT account_id, name, branch, gender, grade FROM student_account WHERE account_id=?",
+            "SELECT account_id, name, branch, gender, grade, school, phone FROM student_account WHERE account_id=?", // ⭐️ school, phone 추가
             [student_id]
         );
+
         if (!rows.length) {
             return res.json({ success: false, message: "승인할 학생 계정을 찾을 수 없습니다." });
         }
-        const st = rows[0]; // 승인 대상 학생 정보
+        const st = rows[0]; // 승인 대상 학생 정보 (이제 school, phone 포함됨)
 
         // 2) owner 권한이면 자기 지점 학생만 승인 가능 (기존과 동일)
         if (user.role === 'owner' && user.userid !== 'admin') {
@@ -590,17 +590,18 @@ app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
 
                 const insertSql = `
                     INSERT INTO 학생기본정보
-                        (학년도, branch_name, student_name, grade, gender, school_name, phone_number)
-                    VALUES (?, ?, ?, ?, ?)
+                        (학년도, branch_name, student_name, grade, gender, school_name, phone_number) -- school_name, phone_number 추가
+                    VALUES (?, ?, ?, ?, ?, ?, ?) -- ? 2개 추가
                 `;
+                // ⭐️ 이제 st.school과 st.phone 값이 제대로 들어감
                 const [insertResult] = await dbJungsi.promise().query(insertSql, [
-                    targetYear, // 계산된 학년도
+                    targetYear,
                     st.branch,
                     st.name,
                     st.grade,
                     st.gender || null,
-                    st.school || null, // ⭐️ st 객체에서 school 값 가져오기
-                    st.phone || null   // ⭐️ st 객체에서 phone 값 가져오기
+                    st.school || null, // ✅ st 객체에 school 값이 있음
+                    st.phone || null   // ✅ st 객체에 phone 값이 있음
                 ]);
                 jungsiStudentId = insertResult.insertId; // 새로 생성된 ID 사용
                 jungsiMessage = `정시엔진 학생 ID ${jungsiStudentId}(으)로 신규 등록 및 연결됨`;
