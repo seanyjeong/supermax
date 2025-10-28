@@ -5114,23 +5114,43 @@ app.delete('/jungsi/teacher/notes/delete/:note_id', authMiddleware, async (req, 
         connection = await dbStudent.getConnection();
         await connection.beginTransaction();
 
-        // 1. (보안) 삭제하려는 메모가 이 사용자의 지점 소속 학생의 메모인지 확인
-        // (선택적 강화: 본인(teacher_userid)이 쓴 글만 삭제하게 할 수도 있음)
+        // 1. 삭제하려는 메모 정보 조회 (지점 확인 및 작성자 확인용)
         const [ownerCheck] = await connection.query(
-            `SELECT n.note_id
+            `SELECT n.note_id, n.teacher_userid, s.branch
              FROM jungsimaxstudent.student_teacher_notes n
              JOIN jungsimaxstudent.student_account s ON n.student_account_id = s.account_id
-             WHERE n.note_id = ? AND s.branch = ?`,
-            [note_id, branch]
+             WHERE n.note_id = ?`,
+            [note_id]
         );
 
         if (ownerCheck.length === 0) {
             await connection.rollback();
+            console.warn(` -> 삭제할 메모 없음 (ID: ${note_id})`);
+            return res.status(404).json({ success: false, message: '삭제할 메모를 찾을 수 없습니다.' });
+        }
+        
+        const noteInfo = ownerCheck[0];
+        
+        // 2. (보안) 메모가 로그인한 사용자의 지점 소속인지 확인
+        if (noteInfo.branch !== branch) {
+            await connection.rollback();
             console.warn(` -> 권한 없음: 메모(${note_id})가 ${branch} 지점 소속이 아님.`);
-            return res.status(403).json({ success: false, message: '삭제 권한이 없는 메모입니다.' });
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 메모입니다 (다른 지점).' });
         }
 
-        // 2. 메모 삭제 실행
+        // ⭐️ 3. (보안) 삭제 권한 확인: 관리자(원장/팀장 등)이거나, 본인이 쓴 글인지
+        const isMgmt = hasAdminPermission(req.user); // ⭐️ 관리자 여부 확인
+        const isAuthor = (req.user.userid === noteInfo.teacher_userid);
+        
+        if (!isMgmt && !isAuthor) {
+             await connection.rollback();
+             console.warn(` -> 권한 없음: 메모 작성자(${noteInfo.teacher_userid})와 요청자(${userid})가 다름 (관리자 아님).`);
+             return res.status(403).json({ success: false, message: '본인이 작성한 메모만 삭제할 수 있습니다.' });
+        }
+        
+        console.log(` -> 삭제 권한 확인 (isMgmt: ${isMgmt}, isAuthor: ${isAuthor})`);
+
+        // 4. 메모 삭제 실행
         const [result] = await connection.query(
             'DELETE FROM jungsimaxstudent.student_teacher_notes WHERE note_id = ?',
             [note_id]
@@ -5142,7 +5162,8 @@ app.delete('/jungsi/teacher/notes/delete/:note_id', authMiddleware, async (req, 
             console.log(` -> 메모 삭제 성공 (ID: ${note_id})`);
             res.json({ success: true, message: '메모가 삭제되었습니다.' });
         } else {
-            console.warn(` -> 삭제할 메모 없음 (ID: ${note_id})`);
+            // 이 경우는 거의 없지만, 동시성 문제 대비
+            console.warn(` -> 삭제할 메모 없음 (ID: ${note_id}) - 쿼리 실행 후 0 rows`);
             res.status(404).json({ success: false, message: '삭제할 메모를 찾을 수 없습니다.' });
         }
 
