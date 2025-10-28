@@ -2277,7 +2277,7 @@ function calculateScoreFromDB(event, gender, recordValue, callback) {
     const boundarySql = `
         SELECT 
             MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
-            MAX(CASE WHEN score = 50 THEN record_threshold END) as min_score_record
+            MAX(CASE WHEN score = 52 THEN record_threshold END) as min_score_record
         FROM scoring_criteria
         WHERE event = ? AND gender = ?
     `;
@@ -2293,10 +2293,10 @@ function calculateScoreFromDB(event, gender, recordValue, callback) {
         // 2. 만점 또는 최하점인지 먼저 확인
         if (isLowerBetter) { // 10m 달리기처럼 기록이 낮을수록 좋은 경우
             if (recordValue <= max_score_record) return callback(null, 100); // 최고 기록보다 빠르면 만점
-            if (recordValue > min_score_record) return callback(null, 50);  // 최하 기록보다 느리면 최하점
+            if (recordValue > min_score_record) return callback(null, 52);  // 최하 기록보다 느리면 최하점
         } else { // 제멀처럼 기록이 높을수록 좋은 경우
             if (recordValue >= max_score_record) return callback(null, 100); // 최고 기록보다 높으면 만점
-            if (recordValue < min_score_record) return callback(null, 50);  // 최하 기록보다 낮으면 최하점
+            if (recordValue < min_score_record) return callback(null, 52);  // 최하 기록보다 낮으면 최하점
         }
 
         // 3. 만점/최하점이 아니면, 기존 방식대로 점수 테이블에서 점수를 찾음
@@ -2306,7 +2306,7 @@ function calculateScoreFromDB(event, gender, recordValue, callback) {
             ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
             LIMIT 1;
         `;
-        db.query(findScoreSql, [event, gender, recordValue], (err, rows) => {
+        await db.query(findScoreSql, [event, gender, recordValue], (err, rows) => {
             if (err) {
                 console.error("점수 검색 오류:", err);
                 return callback(err, 0);
