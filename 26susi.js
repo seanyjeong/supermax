@@ -3010,7 +3010,7 @@ app.post('/26susi/students/master-bulk', async (req, res) => {
 
         // 2-B. SQL 쿼리 준비 (students 테이블)
         // ⭐️ 'branch' 컬럼이 아니라 'branch_id' 컬럼이라고 가정
-        const insertStudentsSql = "INSERT IGNORE INTO students (branch_id, name, gender, school, grade) VALUES ?";
+       const insertStudentsSql = "INSERT IGNORE INTO students (branch_id, student_name, gender, school, grade) VALUES ?";
 
         // ----- [ 3단계 ] 학생 데이터 일괄 INSERT 실행 -----
         const [result] = await connection.query(insertStudentsSql, [studentValues]);
