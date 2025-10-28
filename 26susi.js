@@ -524,73 +524,112 @@ app.post('/26susi_student/delete', authOwnerJWT, async (req, res) => {
 
 
 app.post('/26susi_student/approve', authOwnerJWT, async (req, res) => {
-    const user = req.user;
+    const user = req.user; // 승인 요청자 (원장/관리자) 정보
     const { student_id } = req.body; // 프론트에서 보내는 학생ID = account_id
 
     if (!student_id) {
-        return res.json({ success:false, message:"student_id 필요" });
+        return res.json({ success: false, message: "student_id 필요" });
     }
 
+    // ⭐️ 여러 DB 작업을 하므로 커넥션을 얻어 트랜잭션 사용 고려 (여기선 단순화)
     try {
-        // 1) 학생 계정 정보 가져오기 (dbStudent - 이건 문제 없음)
+        // 1) 학생 계정 정보 가져오기 (dbStudent)
         const [rows] = await dbStudent.promise().query(
-            "SELECT * FROM student_account WHERE account_id=?",
+            // ⭐️ 필요한 모든 컬럼 가져오기 (name, branch, gender, grade 등)
+            "SELECT account_id, name, branch, gender, grade FROM student_account WHERE account_id=?",
             [student_id]
         );
         if (!rows.length) {
-            return res.json({ success:false, message:"학생 없음" });
+            return res.json({ success: false, message: "승인할 학생 계정을 찾을 수 없습니다." });
         }
-        const st = rows[0];
+        const st = rows[0]; // 승인 대상 학생 정보
 
-        // 2) owner 권한이면 자기 지점 학생만 승인 가능 (문제 없음)
+        // 2) owner 권한이면 자기 지점 학생만 승인 가능 (기존과 동일)
         if (user.role === 'owner' && user.userid !== 'admin') {
             if (user.branch !== st.branch) {
                 return res.status(403).json({
-                    success:false,
-                    message:"다른 지점 학생은 승인할 수 없습니다."
+                    success: false,
+                    message: "다른 지점 학생은 승인할 수 없습니다."
                 });
             }
         }
 
-        // 3) ⭐️⭐️⭐️ [수정] ⭐️⭐️⭐️
-        //    jungsi.students에서 자동 매칭 시도 -> jungsi.학생기본정보 로 변경
-        let matchedId = null;
-        const [matchRows] = await dbJungsi.promise().query( // dbJungsi (jungsi DB)
+        // 3) ⭐️⭐️⭐️ [핵심 수정] jungsi DB에서 학생 찾기 또는 생성 ⭐️⭐️⭐️
+        let jungsiStudentId = null; // 최종적으로 사용할 jungsi DB의 student_id
+        let jungsiMessage = ""; // 최종 응답 메시지에 추가할 내용
+
+        // 3-A: 먼저 이름/지점/성별로 찾아보기 (dbJungsi 사용)
+        const [matchRows] = await dbJungsi.promise().query(
             `SELECT student_id
-             FROM 학생기본정보  -- ❌ students -> ✅ 학생기본정보
-             WHERE student_name = ? AND branch_name = ? AND gender = ? -- ❌ 이름, 지점 -> ✅ student_name, branch_name, gender
-             LIMIT 1`,
-            [st.name, st.branch, st.gender || ''] // (st.name, st.branch, st.gender 값 자체는 OK)
+             FROM 학생기본정보
+             WHERE student_name = ? AND branch_name = ? AND gender = ?
+             LIMIT 1`, // 중복 시 첫 번째 것 사용 (개선 필요 시 로직 추가)
+            [st.name, st.branch, st.gender || '']
         );
 
         if (matchRows.length === 1) {
-            matchedId = matchRows[0].student_id;
-            console.log(`✅ 자동 매칭 성공: ${st.name}/${st.branch}/${st.gender} -> jungsi.student_id=${matchedId}`);
+            // 3-B: 찾았으면 해당 ID 사용
+            jungsiStudentId = matchRows[0].student_id;
+            jungsiMessage = `정시엔진 학생 ID ${jungsiStudentId}(으)로 연결됨 (기존 정보 활용)`;
+            console.log(`✅ [학생 승인] 자동 매칭 성공: ${st.name}/${st.branch}/${st.gender} -> jungsi.student_id=${jungsiStudentId}`);
+
         } else if (matchRows.length > 1) {
-            console.warn(`⚠️ 중복 매칭: ${st.name}/${st.branch}/${st.gender} 후보 ${matchRows.length}명`);
+            // 3-C: 여러 명 찾아지면 경고만 하고 일단 연결 안 함 (수동 처리 필요)
+            jungsiStudentId = null; // 연결 안 함
+            jungsiMessage = "정시엔진 학생 자동 매칭 실패 (중복 의심, 수동 연결 필요)";
+            console.warn(`⚠️ [학생 승인] 중복 매칭: ${st.name}/${st.branch}/${st.gender} 후보 ${matchRows.length}명. jungsi_student_id는 NULL로 저장됩니다.`);
+
         } else {
-            console.warn(`❌ 매칭 실패: ${st.name}/${st.branch}/${st.gender}`);
+            // 3-D: 못 찾았으면 새로 INSERT (dbJungsi 사용)
+            console.log(`🔍 [학생 승인] 매칭 실패: ${st.name}/${st.branch}/${st.gender}. 정시엔진에 새로 등록합니다.`);
+            try {
+                // 학년도 계산 (예: 3학년이면 내년도, 그 외 학년은?) - 일단 내년도로 가정
+                const currentYear = new Date().getFullYear();
+                const targetYear = currentYear + 1; // 내년도 입시 기준
+                // (st.grade 값에 따라 더 정확한 학년도 계산 로직 추가 가능)
+
+                const insertSql = `
+                    INSERT INTO 학생기본정보
+                        (학년도, branch_name, student_name, grade, gender)
+                    VALUES (?, ?, ?, ?, ?)
+                `;
+                const [insertResult] = await dbJungsi.promise().query(insertSql, [
+                    targetYear, // 계산된 학년도
+                    st.branch,
+                    st.name,
+                    st.grade,
+                    st.gender || null
+                ]);
+                jungsiStudentId = insertResult.insertId; // 새로 생성된 ID 사용
+                jungsiMessage = `정시엔진 학생 ID ${jungsiStudentId}(으)로 신규 등록 및 연결됨`;
+                console.log(`✅ [학생 승인] 정시엔진 신규 등록 성공: ${st.name} -> jungsi.student_id=${jungsiStudentId}`);
+            } catch (insertErr) {
+                // INSERT 실패 시 (예: 필수 컬럼 누락 등 DB 제약 조건)
+                jungsiStudentId = null; // 연결 안 함
+                jungsiMessage = `정시엔진 학생 신규 등록 실패 (DB 오류: ${insertErr.code})`;
+                console.error(`❌ [학생 승인] 정시엔진 신규 등록 실패: ${st.name}`, insertErr);
+                // 여기서 에러를 던지거나, 승인 자체는 진행하고 메시지만 남길 수 있음
+                // 여기서는 승인은 진행하고 메시지만 남기는 것으로 처리
+            }
         }
 
-        // 4) 승인 처리 + 매핑 저장 (dbStudent - 이건 문제 없음)
+        // 4) 최종 승인 처리: status='승인', jungsi_student_id 업데이트 (dbStudent 사용)
         await dbStudent.promise().query(
             "UPDATE student_account SET status='승인', jungsi_student_id=? WHERE account_id=?",
-            [matchedId, student_id]
+            [jungsiStudentId, student_id] // jungsiStudentId가 null일 수도 있음
         );
 
+        // 5) 최종 응답
         return res.json({
-            success:true,
-            message: matchedId
-                ? `승인 완료 (정시엔진 ID ${matchedId} 연결됨)`
-                : `승인 완료 (정시엔진 학생 자동 매칭 실패)`
+            success: true,
+            message: `승인 완료. ${jungsiMessage}` // 정시엔진 처리 결과 메시지 포함
         });
 
     } catch (err) {
-        console.error("학생 승인 처리 오류:", err);
-        return res.status(500).json({ success:false, message:"서버 오류" });
+        console.error("❌ 학생 승인 처리 중 전체 오류:", err);
+        return res.status(500).json({ success: false, message: "서버 오류 발생" });
     }
 });
-
 //실기배점
 
 
