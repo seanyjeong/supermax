@@ -2937,15 +2937,16 @@ app.post('/26susi/records', async (req, res) => {
 
 // --- API: [마스터] 학생 일괄 등록 ---
 // API: [마스터] 학생 일괄 등록 (디버깅 로그 강화)
+// API: [마스터] 학생 일괄 등록 (db 직접 사용 방식 + 디버깅 로그 강화)
 app.post('/26susi/students/master-bulk', async (req, res) => {
-    console.log("[master-bulk] API 시작"); // 👈 로그 추가
+    console.log("[master-bulk] API 시작");
     const { students } = req.body;
 
     if (!students || !Array.isArray(students)) {
-        console.log("[master-bulk] 오류: 학생 데이터 배열 없음"); // 👈 로그 추가
+        console.log("[master-bulk] 오류: 학생 데이터 배열 없음");
         return res.status(400).json({ message: '학생 데이터 배열이 필요합니다.' });
     }
-    console.log(`[master-bulk] ${students.length}개 행 데이터 받음`); // 👈 로그 추가
+    console.log(`[master-bulk] ${students.length}개 행 데이터 받음`);
 
     // 이름, 성별, 학년, 지점명 필수 체크
     const validStudents = students.filter(s =>
@@ -2954,10 +2955,10 @@ app.post('/26susi/students/master-bulk', async (req, res) => {
         s.gender && ['남', '여'].includes(s.gender) &&
         s.grade && s.grade.toString().trim() !== ''
     );
-    console.log(`[master-bulk] 유효한 학생 데이터 ${validStudents.length}개 필터링됨`); // 👈 로그 추가
+    console.log(`[master-bulk] 유효한 학생 데이터 ${validStudents.length}개 필터링됨`);
 
     if (validStudents.length === 0) {
-        console.log("[master-bulk] 오류: 유효한 학생 데이터 없음"); // 👈 로그 추가
+        console.log("[master-bulk] 오류: 유효한 학생 데이터 없음");
         return res.status(400).json({ message: '등록할 유효한 학생 데이터(지점,이름,성별,학년 필수)가 없습니다.' });
     }
 
@@ -2966,66 +2967,73 @@ app.post('/26susi/students/master-bulk', async (req, res) => {
         (acc[s.branch] = acc[s.branch] || []).push(s);
         return acc;
     }, {});
-    console.log(`[master-bulk] ${Object.keys(studentsByBranch).length}개 지점으로 그룹화 완료`); // 👈 로그 추가
+    console.log(`[master-bulk] ${Object.keys(studentsByBranch).length}개 지점으로 그룹화 완료`);
 
     let totalAdded = 0;
     let errors = [];
-    let connection;
+
+    // ⭐️ connection 변수 제거
 
     try {
-        console.log("[master-bulk] DB 커넥션 가져오기 시도..."); // 👈 로그 추가
-        connection = await db.getConnection();
-        console.log("[master-bulk] DB 커넥션 가져오기 성공."); // 👈 로그 추가
+        console.log("[master-bulk] DB 작업 시작...");
 
         for (const branchName of Object.keys(studentsByBranch)) {
             const branchStudents = studentsByBranch[branchName];
-            console.log(`[master-bulk] ${branchName} 지점 처리 시작 (${branchStudents.length}명)`); // 👈 로그 추가
+            console.log(`[master-bulk] ${branchName} 지점 처리 시작 (${branchStudents.length}명)`);
 
+            // ⭐️ 트랜잭션 시작 (pool에서 직접 지원하는지 확인 필요!)
+            // 만약 아래 코드가 에러난다면, getConnection() 방식으로 되돌려야 함
+            // await db.beginTransaction();
+            let currentConnection; // 트랜잭션 지원 안될 경우 대비 getConnection 방식 사용
             try {
-                console.log(`[master-bulk] ${branchName} 트랜잭션 시작...`); // 👈 로그 추가
-                await connection.beginTransaction();
+                // 트랜잭션 지원 가정하고 db 사용 시도 또는 connection 얻기
+                 currentConnection = await db.getConnection(); // Pool에서 connection 얻기
+                 await currentConnection.beginTransaction(); // Connection으로 트랜잭션 시작
 
-                // 1. 지점 ID 확인 또는 생성
-                console.log(`[master-bulk] ${branchName} 지점 ID 조회/생성...`); // 👈 로그 추가
-                let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+                console.log(`[master-bulk] ${branchName} 지점 ID 조회/생성...`);
+                // ⭐️ connection 대신 currentConnection 사용
+                let [branchRows] = await currentConnection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
                 let branchId;
                 if (branchRows.length > 0) {
                     branchId = branchRows[0].id;
-                    console.log(`[master-bulk] ${branchName} 지점 ID ${branchId} 찾음.`); // 👈 로그 추가
+                    console.log(`[master-bulk] ${branchName} 지점 ID ${branchId} 찾음.`);
                 } else {
-                    console.log(`[master-bulk] ${branchName} 지점 없음, 새로 생성...`); // 👈 로그 추가
-                    const [insertResult] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
+                    console.log(`[master-bulk] ${branchName} 지점 없음, 새로 생성...`);
+                     // ⭐️ connection 대신 currentConnection 사용
+                    const [insertResult] = await currentConnection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
                     branchId = insertResult.insertId;
-                    console.log(`[master-bulk] ${branchName} 지점 ID ${branchId} 생성됨.`); // 👈 로그 추가
+                    console.log(`[master-bulk] ${branchName} 지점 ID ${branchId} 생성됨.`);
                 }
 
-                // 2. 학생 데이터 준비
-                console.log(`[master-bulk] ${branchName} 학생 데이터 준비 중...`); // 👈 로그 추가
+                console.log(`[master-bulk] ${branchName} 학생 데이터 준비 중...`);
                 const studentValues = branchStudents.map(s => [
                     s.name, s.gender, branchId, s.school || null, s.grade,
                     '미정', '정상' // attendance, status 기본값
                 ]);
-                // console.log(`[master-bulk] ${branchName} 준비된 학생 데이터:`, JSON.stringify(studentValues, null, 2)); // 👈 필요시 주석 해제 (데이터 너무 많으면 터미널 터짐 주의!)
 
-                // 3. 학생 정보 INSERT
-                console.log(`[master-bulk] ${branchName} 학생 정보 INSERT 실행...`); // 👈 로그 추가
+                console.log(`[master-bulk] ${branchName} 학생 정보 INSERT 실행...`);
                 const insertSql = `INSERT INTO students (student_name, gender, branch_id, school, grade, attendance, status) VALUES ?`;
-                const [result] = await connection.query(insertSql, [studentValues]);
+                // ⭐️ connection 대신 currentConnection 사용
+                const [result] = await currentConnection.query(insertSql, [studentValues]);
                 totalAdded += result.affectedRows;
-                console.log(`[master-bulk] ${branchName} 학생 ${result.affectedRows}명 INSERT 성공.`); // 👈 로그 추가
+                console.log(`[master-bulk] ${branchName} 학생 ${result.affectedRows}명 INSERT 성공.`);
 
-                await connection.commit();
-                console.log(`[master-bulk] ${branchName} 트랜잭션 커밋 완료.`); // 👈 로그 추가
+                // await db.commit(); // <- 트랜잭션 사용 시 (pool 직접 지원 시)
+                await currentConnection.commit(); // Connection으로 커밋
+                console.log(`[master-bulk] ${branchName} 트랜잭션 커밋 완료.`);
 
             } catch (branchErr) {
-                // ⭐️ 여기가 중요! 어떤 에러가 나는지 찍어줌
+                // await db.rollback(); // <- 트랜잭션 사용 시 (pool 직접 지원 시)
+                if (currentConnection) await currentConnection.rollback(); // Connection으로 롤백
                 console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
                 console.error(`[master-bulk] ERROR!! ${branchName} 지점 처리 중 오류 발생:`);
                 console.error(branchErr); // 👈 에러 객체 전체를 출력
                 console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
-                await connection.rollback(); // 롤백
-                console.log(`[master-bulk] ${branchName} 트랜잭션 롤백됨.`); // 👈 로그 추가
+                console.log(`[master-bulk] ${branchName} 트랜잭션 롤백됨.`);
                 errors.push(branchName);
+            } finally {
+                 if (currentConnection) currentConnection.release(); // Connection 사용 시 반드시 반환!
+                 console.log(`[master-bulk] ${branchName} DB 커넥션 반환됨.`);
             }
         } // for 루프 끝
 
@@ -3033,23 +3041,17 @@ app.post('/26susi/students/master-bulk', async (req, res) => {
         if (errors.length > 0) {
             message += `\n(오류 발생 지점: ${errors.join(', ')})`;
         }
-        console.log("[master-bulk] 최종 응답:", message); // 👈 로그 추가
+        console.log("[master-bulk] 최종 응답:", message);
         res.status(201).json({ success: true, message: message, insertedCount: totalAdded });
 
-    } catch (err) { // 전체 로직 또는 커넥션 가져오기 실패 시
-        // ⭐️ 여기가 중요! 어떤 에러가 나는지 찍어줌
+    } catch (err) { // 전체 로직 오류 (예: 첫 getConnection 실패)
         console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
         console.error("[master-bulk] ERROR!! API 전체 처리 중 오류 발생:");
         console.error(err); // 👈 에러 객체 전체를 출력
         console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
-        // ⭐️ 500 에러를 여기서 보내게 됨
         res.status(500).json({ success: false, message: "서버 내부 오류 발생" });
-    } finally {
-        if (connection) {
-            connection.release();
-            console.log("[master-bulk] DB 커넥션 반환 완료."); // 👈 로그 추가
-        }
     }
+    // ⭐️ finally 블록 제거 (connection 방식 사용 시 각 루프에서 release)
 });
 // --- API: [대체 학생 등록] ---
 app.post('/26susi/students/substitute', async (req, res) => {
