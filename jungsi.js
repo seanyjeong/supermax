@@ -5194,16 +5194,361 @@ app.delete('/jungsi/teacher/notes/delete/:note_id', authMiddleware, async (req, 
         if (connection) connection.release();
     }
 });
-// --- 여기 아래에 app.listen(...) 이 와야 함 ---
-// --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
-// --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
-// --- 여기 아래에 app.listen(...) 이 와야 함 ---
+// ----------원장용----------------
+// =============================================
+// ⭐️ 원장 권한 확인 미들웨어 (신규)
+// =============================================
+const isDirectorMiddleware = (req, res, next) => {
+    // authMiddleware가 req.user를 설정했다고 가정
+    // ⭐️ 토큰에 position 정보가 있고 '원장'인지 확인
+    if (req.user && req.user.position === '원장') {
+        console.log(` -> [권한 확인] ✅ 원장 사용자 (${req.user.userid}), 통과`);
+        next(); // 원장이면 통과
+    } else {
+        console.warn(` -> [권한 확인] ❌ 원장 권한 필요 (요청자: ${req.user?.userid}, 직급: ${req.user?.position})`);
+        res.status(403).json({ success: false, message: '원장 권한이 필요합니다.' });
+    }
+};
 
-// --- 여기 아래에 app.listen(...) 이 와야 함 ---
+// =============================================
+// ⭐️ 원장용 종합 관리 API
+// =============================================
 
-// --- app.listen(...) 이 이 아래에 와야 함 ---
+// --- 1.1. 지점 전체 학생 목록 조회 ---
+// GET /jungsi/director/students?year=YYYY&class_name=...&teacher_userid=...&search=...
+app.get('/jungsi/director/students', authMiddleware, isDirectorMiddleware, async (req, res) => {
+    const { year, class_name, teacher_userid, search } = req.query;
+    const { branch } = req.user; // 원장의 지점
+
+    console.log(`[API /director/students] ${branch} 지점 ${year}년도 전체 학생 목록 조회`);
+
+    if (!year) return res.status(400).json({ success: false, message: 'year 파라미터 필수' });
+
+    try {
+        let sql = `
+            SELECT
+                sa.account_id, sa.userid, sa.name AS student_name,
+                sa.grade, sa.gender,
+                sassign.class_name, sassign.teacher_userid,
+                (SELECT stn.injury_level FROM jungsimaxstudent.student_teacher_notes stn WHERE stn.student_account_id = sa.account_id AND stn.category = '부상' ORDER BY stn.note_date DESC LIMIT 1) AS recent_injury_level,
+                (SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn WHERE stn.student_account_id = sa.account_id AND stn.category = '상담' ORDER BY stn.note_date DESC LIMIT 1) AS recent_counseling_date,
+                (SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈' ORDER BY stn.note_date DESC LIMIT 1) AS recent_mental_date
+            FROM jungsimaxstudent.student_account sa
+            LEFT JOIN jungsimaxstudent.student_assignments sassign
+              ON sa.account_id = sassign.student_account_id AND sassign.year = ?
+            WHERE sa.branch = ?
+        `;
+        const params = [year, branch];
+
+        // 필터링 조건 추가
+        if (class_name) {
+            sql += ' AND sassign.class_name = ?';
+            params.push(class_name);
+        }
+        if (teacher_userid) {
+            sql += ' AND sassign.teacher_userid = ?';
+            params.push(teacher_userid);
+        }
+        if (search) {
+            sql += ' AND (sa.name LIKE ? OR sa.userid LIKE ?)';
+            params.push(`%${search}%`, `%${search}%`);
+        }
+
+        sql += ' ORDER BY sa.name ASC';
+
+        const [students] = await dbStudent.query(sql, params);
+        console.log(` -> ${students.length}명 학생 조회 완료`);
+        res.json({ success: true, students: students });
+
+    } catch (err) {
+        console.error('❌ /director/students API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// --- 1.2. 특정 학생 상세 정보 조회 ---
+// GET /jungsi/director/student/:account_id/details
+app.get('/jungsi/director/student/:account_id/details', authMiddleware, isDirectorMiddleware, async (req, res) => {
+    const { account_id } = req.params;
+    const { branch: directorBranch } = req.user;
+
+    console.log(`[API /director/student/details] 학생(${account_id}) 상세 정보 조회`);
+
+    if (!account_id) return res.status(400).json({ success: false, message: 'account_id 필요' });
+
+    let connection;
+    try {
+        connection = await dbStudent.getConnection(); // 여러 DB 접근을 위해 커넥션 사용
+
+        // 1. 학생 기본 정보 및 소속 지점 확인
+        const [studentInfoRows] = await connection.query(
+            'SELECT * FROM jungsimaxstudent.student_account WHERE account_id = ?', [account_id]
+        );
+        if (studentInfoRows.length === 0) {
+            return res.status(404).json({ success: false, message: '학생 정보를 찾을 수 없음' });
+        }
+        const studentInfo = studentInfoRows[0];
+        if (studentInfo.branch !== directorBranch) {
+            return res.status(403).json({ success: false, message: '다른 지점 학생 정보 조회 불가' });
+        }
+
+        // 2. 수능 성적 조회 (jungsi DB)
+        // 학생 기본 정보의 account_id와 jungsi DB의 학생 ID(student_id) 매핑 필요
+        // 여기서는 student_account 테이블에 매핑 정보가 있다고 가정 (없으면 JOIN 필요)
+        const studentIdJungsi = studentInfo.jungsi_student_id; // 예시 필드명, 실제 필드명 확인 필요!
+        let scores = null;
+        if (studentIdJungsi) {
+            const [scoreRows] = await db.query( // ⭐️ jungsi DB 사용 (db)
+                'SELECT * FROM 학생수능성적 WHERE student_id = ? ORDER BY 학년도 DESC LIMIT 1', // 가장 최근 성적
+                [studentIdJungsi]
+            );
+            if (scoreRows.length > 0) scores = scoreRows[0];
+        }
+
+        // 3. 실기 기록 조회 (jungsimaxstudent DB)
+        const [practicalRecords] = await connection.query(
+            'SELECT event_name, record_date, record_value FROM student_practical_records WHERE account_id = ? ORDER BY event_name, record_date DESC', [account_id]
+        );
+        const recordsGrouped = {};
+        practicalRecords.forEach(r => {
+            if (!recordsGrouped[r.event_name]) recordsGrouped[r.event_name] = [];
+            recordsGrouped[r.event_name].push({ date: r.record_date, value: r.record_value });
+        });
+
+        // 4. 실기 목표 조회 (jungsimaxstudent DB)
+        const [practicalGoals] = await connection.query(
+            'SELECT event_name, goal_value FROM student_practical_goals WHERE account_id = ?', [account_id]
+        );
+        const goalsMap = {};
+        practicalGoals.forEach(g => { goalsMap[g.event_name] = g.goal_value; });
+
+        // 5. 모든 메모 조회 (jungsimaxstudent DB)
+        const [allNotes] = await connection.query(
+            `SELECT n.*, t.이름 as teacher_name
+             FROM student_teacher_notes n
+             LEFT JOIN \`26susi\`.원장회원 t ON n.teacher_userid COLLATE utf8mb4_unicode_ci = t.아이디 COLLATE utf8mb4_unicode_ci
+             WHERE n.student_account_id = ? ORDER BY n.note_date DESC`,
+            [account_id]
+        );
+
+        // 6. 저장 대학 목록 조회 (jungsimaxstudent DB)
+        const [savedUniversities] = await connection.query(
+            `SELECT su.*, jb.대학명, jb.학과명, jb.군
+             FROM student_saved_universities su
+             JOIN jungsi.정시기본 jb ON su.U_ID = jb.U_ID AND su.학년도 = jb.학년도
+             WHERE su.account_id = ? ORDER BY su.학년도 DESC, FIELD(jb.군, '가', '나', '다')`,
+            [account_id]
+        );
+
+        res.json({
+            success: true,
+            studentDetails: {
+                basicInfo: studentInfo,
+                scores: scores,
+                practicalRecords: recordsGrouped,
+                practicalGoals: goalsMap,
+                allNotes: allNotes,
+                savedUniversities: savedUniversities
+            }
+        });
+
+    } catch (err) {
+        console.error(`❌ /director/student/${account_id}/details API 오류:`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+
+// --- 2.1. 지점 전체 강사 목록 조회 ---
+// GET /jungsi/director/teachers
+app.get('/jungsi/director/teachers', authMiddleware, isDirectorMiddleware, async (req, res) => {
+    const { branch } = req.user;
+    console.log(`[API /director/teachers] ${branch} 지점 전체 강사 목록 조회`);
+
+    try {
+        // ⭐️ dbSusi (26susi DB) 사용
+        const [teachers] = await dbSusi.query(
+            `SELECT 아이디 AS userid, 이름 AS name, 직급 AS position, 승인여부
+             FROM 원장회원
+             WHERE 지점명 = ?
+             ORDER BY FIELD(직급, '원장', '부원장', '팀장', '강사'), 이름 ASC`,
+            [branch]
+        );
+        console.log(` -> ${teachers.length}명 강사 조회 완료`);
+        res.json({ success: true, teachers: teachers });
+    } catch (err) {
+        console.error('❌ /director/teachers API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// --- 2.2. 특정 강사 담당 학생 목록 조회 ---
+// GET /jungsi/director/teacher/:teacher_userid/assigned-students?year=YYYY
+app.get('/jungsi/director/teacher/:teacher_userid/assigned-students', authMiddleware, isDirectorMiddleware, async (req, res) => {
+    const { teacher_userid } = req.params;
+    const { year } = req.query;
+    const { branch } = req.user; // 원장 지점
+
+    console.log(`[API /director/teacher/assigned-students] 강사(${teacher_userid}) ${year}년도 담당 학생 목록 조회`);
+
+    if (!year || !teacher_userid) return res.status(400).json({ success: false, message: 'year, teacher_userid 필수' });
+
+    try {
+        // (보안 강화) 조회하려는 강사가 원장 지점 소속인지 확인
+        const [teacherCheck] = await dbSusi.query(
+            'SELECT 아이디 FROM 원장회원 WHERE 아이디 = ? AND 지점명 = ?',
+            [teacher_userid, branch]
+        );
+        if (teacherCheck.length === 0) {
+            return res.status(403).json({ success: false, message: '조회 권한 없는 강사' });
+        }
+
+        // ⭐️ dbStudent 사용
+        const [students] = await dbStudent.query(
+            `SELECT sa.account_id, sa.name AS student_name, sa.grade, sa.gender, sassign.class_name
+             FROM student_assignments sassign
+             JOIN student_account sa ON sassign.student_account_id = sa.account_id
+             WHERE sassign.teacher_userid = ? AND sassign.year = ? AND sa.branch = ?
+             ORDER BY sa.name ASC`,
+            [teacher_userid, year, branch]
+        );
+        console.log(` -> ${students.length}명 학생 조회 완료`);
+        res.json({ success: true, assignedStudents: students });
+    } catch (err) {
+        console.error(`❌ /director/teacher/${teacher_userid}/assigned-students API 오류:`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// --- 2.3. 강사 계정 정보 수정 (권한/상태) ---
+// PUT /jungsi/director/teacher/:teacher_userid/account
+app.put('/jungsi/director/teacher/:teacher_userid/account', authMiddleware, isDirectorMiddleware, async (req, res) => {
+    const { teacher_userid } = req.params;
+    const { position, 승인여부 } = req.body;
+    const { branch: directorBranch } = req.user;
+
+    console.log(`[API /director/teacher/account] 강사(${teacher_userid}) 정보 수정 요청:`, req.body);
+
+    if (!position && !승인여부) {
+        return res.status(400).json({ success: false, message: '수정할 정보(position 또는 승인여부) 필요' });
+    }
+
+    // 값 유효성 검사 (예시)
+    const validPositions = ['원장', '부원장', '팀장', '강사'];
+    const validStatus = ['O', 'N', 'X'];
+    if (position && !validPositions.includes(position)) {
+        return res.status(400).json({ success: false, message: '유효하지 않은 직급' });
+    }
+    if (승인여부 && !validStatus.includes(승인여부)) {
+        return res.status(400).json({ success: false, message: '유효하지 않은 승인 상태' });
+    }
+
+    let connection;
+    try {
+        connection = await dbSusi.getConnection(); // ⭐️ dbSusi 사용
+        await connection.beginTransaction();
+
+        // 1. 수정 대상 강사가 원장 지점 소속인지 확인
+        const [ownerCheck] = await connection.query(
+            'SELECT 아이디 FROM 원장회원 WHERE 아이디 = ? AND 지점명 = ?',
+            [teacher_userid, directorBranch]
+        );
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            return res.status(403).json({ success: false, message: '수정 권한 없는 강사' });
+        }
+
+        // 2. 정보 업데이트
+        const updates = [];
+        const params = [];
+        if (position) {
+            updates.push('직급 = ?');
+            params.push(position);
+        }
+        if (승인여부) {
+            updates.push('승인여부 = ?');
+            params.push(승인여부);
+        }
+        params.push(teacher_userid); // WHERE 절 파라미터
+
+        const sql = `UPDATE 원장회원 SET ${updates.join(', ')} WHERE 아이디 = ?`;
+        const [result] = await connection.query(sql, params);
+
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 강사(${teacher_userid}) 정보 업데이트 성공`);
+            res.json({ success: true, message: '강사 정보가 업데이트되었습니다.' });
+        } else {
+            res.status(404).json({ success: false, message: '해당 강사를 찾을 수 없음' });
+        }
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error(`❌ /director/teacher/${teacher_userid}/account API 오류:`, err);
+        res.status(500).json({ success: false, message: 'DB 업데이트 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+
+// --- 3.1. 반별/강사별 학생 수 조회 ---
+// GET /jungsi/director/stats/student-distribution?year=YYYY
+app.get('/jungsi/director/stats/student-distribution', authMiddleware, isDirectorMiddleware, async (req, res) => {
+    const { year } = req.query;
+    const { branch } = req.user;
+
+    console.log(`[API /director/stats/student-distribution] ${branch} 지점 ${year}년도 학생 분포 통계 조회`);
+
+    if (!year) return res.status(400).json({ success: false, message: 'year 파라미터 필수' });
+
+    try {
+        // ⭐️ dbStudent 사용
+        // 학생 계정 테이블(sa)과 배정 테이블(sassign)을 LEFT JOIN 하여 조회
+        const sql = `
+            SELECT
+                IFNULL(sassign.class_name, '미배정') AS class_group,
+                IFNULL(sassign.teacher_userid, '미배정') AS teacher_group,
+                COUNT(sa.account_id) AS student_count
+            FROM jungsimaxstudent.student_account sa
+            LEFT JOIN jungsimaxstudent.student_assignments sassign
+              ON sa.account_id = sassign.student_account_id AND sassign.year = ?
+            WHERE sa.branch = ?
+            GROUP BY class_group, teacher_group
+        `;
+        const [rows] = await dbStudent.query(sql, [year, branch]);
+
+        // 결과 가공
+        const byClass = {};
+        const byTeacher = {};
+        rows.forEach(row => {
+            // 반별 집계
+            if (!byClass[row.class_group]) byClass[row.class_group] = 0;
+            byClass[row.class_group] += row.student_count;
+
+            // 강사별 집계
+            if (!byTeacher[row.teacher_group]) byTeacher[row.teacher_group] = 0;
+            byTeacher[row.teacher_group] += row.student_count;
+        });
+
+        console.log(` -> 학생 분포 통계 집계 완료`);
+        res.json({
+            success: true,
+            distribution: {
+                byClass: byClass,
+                byTeacher: byTeacher
+            }
+        });
+
+    } catch (err) {
+        console.error('❌ /director/stats/student-distribution API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 또는 집계 중 오류 발생' });
+    }
+});
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
