@@ -4790,9 +4790,7 @@ app.get('/jungsi/teacher/assignments/:student_account_id/:date', authMiddleware,
 // --- API 1: (선생님용) 특정 학생의 메모 이력 조회 ---
 // GET /jungsi/teacher/notes/:student_account_id
 app.get('/jungsi/teacher/notes/:student_account_id', authMiddleware, async (req, res) => {
-    // 1. URL에서 학생 account_id 가져오기
     const { student_account_id } = req.params;
-    // 2. 로그인한 선생님 정보 가져오기
     const { branch, userid: teacher_userid } = req.user;
 
     console.log(`[API /teacher/notes GET] 선생님(${teacher_userid})이 학생(${student_account_id}) 메모 조회 (지점: ${branch})`);
@@ -4802,8 +4800,7 @@ app.get('/jungsi/teacher/notes/:student_account_id', authMiddleware, async (req,
     }
 
     try {
-        // 3. (보안) 해당 학생이 요청한 선생님과 같은 지점 소속인지 확인
-        // ⭐️ dbStudent (jungsimaxstudent DB)의 student_account 테이블 사용
+        // (보안) 학생 지점 확인 (기존과 동일)
         const [studentCheck] = await dbStudent.query(
             'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
             [student_account_id, branch]
@@ -4813,14 +4810,13 @@ app.get('/jungsi/teacher/notes/:student_account_id', authMiddleware, async (req,
             return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
         }
 
-        // 4. 메모 조회 (student_teacher_notes 테이블)
+        // ⭐️ SQL 수정: injury_level 컬럼 조회 추가
         const sql = `
-            SELECT note_id, student_account_id, teacher_userid, note_date, note_content, category
+            SELECT note_id, student_account_id, teacher_userid, note_date, note_content, category, injury_level
             FROM jungsimaxstudent.student_teacher_notes
             WHERE student_account_id = ?
-            ORDER BY note_date DESC -- 최신 메모가 위로
+            ORDER BY note_date DESC
         `;
-        // ⭐️ dbStudent 사용!
         const [notes] = await dbStudent.query(sql, [student_account_id]);
 
         console.log(` -> 학생(${student_account_id}) 메모 ${notes.length}건 조회 완료`);
@@ -4833,54 +4829,62 @@ app.get('/jungsi/teacher/notes/:student_account_id', authMiddleware, async (req,
 });
 
 
-// --- API 2: (선생님용) 새 메모 저장 ---
+// --- API 2: (선생님용) 새 메모 저장 (injury_level 추가) ---
 // POST /jungsi/teacher/notes/add
 app.post('/jungsi/teacher/notes/add', authMiddleware, async (req, res) => {
-    // 1. 요청 본문에서 학생 ID와 메모 내용 가져오기
-    const { student_account_id, note_content, category } = req.body;
-    // 2. 로그인한 선생님 정보 가져오기
+    // ⭐️ 1. req.body에서 injury_level 받기
+    const { student_account_id, note_content, category, injury_level } = req.body;
     const { userid: teacher_userid, branch } = req.user;
 
-    console.log(`[API /teacher/notes POST] 선생님(${teacher_userid})이 학생(${student_account_id})에게 메모 작성`);
+    console.log(`[API /teacher/notes POST] 선생님(${teacher_userid})이 학생(${student_account_id})에게 메모 작성 (척도: ${injury_level})`);
 
-    // 3. 유효성 검사
+    // 3. 유효성 검사 (기존과 동일)
     if (!student_account_id || !note_content) {
-        return res.status(400).json({ success: false, message: '학생 ID(student_account_id)와 메모 내용(note_content)은 필수입니다.' });
+        return res.status(400).json({ success: false, message: '학생 ID와 메모 내용은 필수입니다.' });
     }
 
     try {
-        // 4. (보안) 해당 학생이 요청한 선생님과 같은 지점 소속인지 확인
+        // (보안) 학생 지점 확인 (기존과 동일)
         const [studentCheck] = await dbStudent.query(
             'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
             [student_account_id, branch]
         );
         if (studentCheck.length === 0) {
-            console.warn(` -> 권한 없음: 학생(${student_account_id})이 ${branch} 지점 소속이 아님.`);
             return res.status(403).json({ success: false, message: '메모 작성 권한이 없는 학생입니다.' });
         }
 
-        // 5. 메모 저장 (student_teacher_notes 테이블)
+        // ⭐️ 2. SQL 수정: injury_level 컬럼 추가
         const sql = `
             INSERT INTO jungsimaxstudent.student_teacher_notes
-                (student_account_id, teacher_userid, note_content, category, note_date)
-            VALUES (?, ?, ?, ?, NOW())
+                (student_account_id, teacher_userid, note_content, category, injury_level, note_date)
+            VALUES (?, ?, ?, ?, ?, NOW())
         `;
-        const [result] = await dbStudent.query(sql, [student_account_id, teacher_userid, note_content, category || null]);
+        // ⭐️ 3. 파라미터 수정: injury_level 추가
+        //    (카테고리가 '부상'이 아니면 injury_level은 null로 저장)
+        const finalInjuryLevel = (category === '부상' && injury_level) ? injury_level : null;
+        
+        const [result] = await dbStudent.query(sql, [
+            student_account_id, 
+            teacher_userid, 
+            note_content, 
+            category || null, 
+            finalInjuryLevel
+        ]);
 
         console.log(` -> 메모 저장 성공 (ID: ${result.insertId})`);
 
-        // ⭐️⭐️⭐️ 6. [수정] 프론트가 기대하는 insertedNote 객체 반환 ⭐️⭐️⭐️
+        // ⭐️ 4. 응답 객체(insertedNote)에 injury_level 추가
         res.status(201).json({
             success: true,
             message: '메모가 저장되었습니다.',
-            // (프론트엔드에서 즉시 렌더링할 수 있도록 저장된 객체 정보를 반환)
             insertedNote: {
                 note_id: result.insertId,
                 student_account_id: parseInt(student_account_id),
                 teacher_userid: teacher_userid,
                 note_content: note_content,
                 category: category || null,
-                note_date: new Date() // ⭐️ 방금 저장한 시간
+                injury_level: finalInjuryLevel, // ⭐️ 추가
+                note_date: new Date()
             }
         });
 
@@ -4889,7 +4893,6 @@ app.post('/jungsi/teacher/notes/add', authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, message: 'DB 저장 중 오류 발생' });
     }
 });
-
 // =============================================
 // GET /jungsi/teacher/student-saved-list/:student_account_id/:year
 app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMiddleware, async (req, res) => {
