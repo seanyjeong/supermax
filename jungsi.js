@@ -4566,38 +4566,58 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     if (isMgmt) {
         // ⭐️ 관리 권한 사용자: 해당 지점의 *모든* 학생 조회
         console.log(` -> 관리 권한: ${branch} 지점 ${year}년도 모든 학생 조회`);
-        // student_account를 기준으로 LEFT JOIN (반 배정 안 된 학생도 포함)
+        // ⭐️ (수정) 최신 상태 조회를 위한 3개의 서브쿼리 추가
         sql = `
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
                 sa.gender, sa.grade,
-                sassign.class_name, -- 반 배정 정보 추가
-                ( -- 최신 부상 메모 조회
-                    SELECT stn.category FROM jungsimaxstudent.student_teacher_notes stn
+                sassign.class_name,
+                ( -- 1. 최신 '부상' 척도
+                    SELECT stn.injury_level FROM jungsimaxstudent.student_teacher_notes stn
                     WHERE stn.student_account_id = sa.account_id AND stn.category = '부상'
                     ORDER BY stn.note_date DESC LIMIT 1
-                ) AS injury_status
+                ) AS recent_injury_level,
+                ( -- 2. 최신 '상담' 메모 존재 여부 (가장 최신 날짜)
+                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
+                    WHERE stn.student_account_id = sa.account_id AND stn.category = '상담'
+                    ORDER BY stn.note_date DESC LIMIT 1
+                ) AS recent_counseling_date,
+                ( -- 3. 최신 '멘탈' 메모 존재 여부 (가장 최신 날짜)
+                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
+                    WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈'
+                    ORDER BY stn.note_date DESC LIMIT 1
+                ) AS recent_mental_date
             FROM jungsimaxstudent.student_account sa
             LEFT JOIN jungsimaxstudent.student_assignments sassign
               ON sa.account_id = sassign.student_account_id AND sassign.year = ?
             WHERE sa.branch = ?
-              -- AND sa.status = '승인' -- 필요 시 승인된 학생만 필터링
             ORDER BY sa.name ASC
         `;
         params = [year, branch];
     } else {
         // ⭐️ 일반 사용자: 기존처럼 *자신에게 배정된* 학생만 조회
         console.log(` -> 일반 사용자: ${branch} 지점 ${year}년도 ${userid} 담당 학생 조회`);
+        // ⭐️ (수정) 최신 상태 조회를 위한 3개의 서브쿼리 추가
         sql = `
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
                 sa.gender, sa.grade,
                 sassign.class_name,
-                (
-                    SELECT stn.category FROM jungsimaxstudent.student_teacher_notes stn
+                ( -- 1. 최신 '부상' 척도
+                    SELECT stn.injury_level FROM jungsimaxstudent.student_teacher_notes stn
                     WHERE stn.student_account_id = sa.account_id AND stn.category = '부상'
                     ORDER BY stn.note_date DESC LIMIT 1
-                ) AS injury_status
+                ) AS recent_injury_level,
+                ( -- 2. 최신 '상담' 메모 존재 여부 (가장 최신 날짜)
+                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
+                    WHERE stn.student_account_id = sa.account_id AND stn.category = '상담'
+                    ORDER BY stn.note_date DESC LIMIT 1
+                ) AS recent_counseling_date,
+                ( -- 3. 최신 '멘탈' 메모 존재 여부 (가장 최신 날짜)
+                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
+                    WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈'
+                    ORDER BY stn.note_date DESC LIMIT 1
+                ) AS recent_mental_date
             FROM jungsimaxstudent.student_assignments sassign
             JOIN jungsimaxstudent.student_account sa ON sassign.student_account_id = sa.account_id
             WHERE sassign.teacher_userid = ?
@@ -4611,13 +4631,12 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     try {
         const [students] = await dbStudent.query(sql, params); // dbStudent 사용!
         console.log(` -> ${students.length}명의 학생 정보 조회 완료`);
-        res.json({ success: true, students: students });
+        res.json({ success: true, students: students }); // ⭐️ 3개의 새 필드가 포함되어 응답
     } catch (err) {
         console.error('❌ 학생 목록 조회(운동 할당용) API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
-
 // --- API 3: (선생님용) 데일리 운동 할당 (일괄 저장) ---
 // POST /jungsi/teacher/assign-workout
 app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
