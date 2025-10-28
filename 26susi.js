@@ -2270,12 +2270,14 @@ app.post('/26susi/announcements/delete', authJWT, async (req, res) => {
 
 // --- 점수 계산 헬퍼 함수 (콜백 방식) ---
 // --- 점수 계산 헬퍼 함수 (만점/최하점 처리 기능 추가) ---
+// ⭐️ DB 기반 점수 계산 함수 (테이블명: scoring_criteria)
+// [이 함수를 통째로 이걸로 교체해!]
 async function calculateScoreFromDBAsync(event, gender, recordValue) {
     const isReverse = (event === '10m'); // 10m만 기록 낮을수록 좋음
     const order = isReverse ? 'ASC' : 'DESC';
     const comparison = isReverse ? '>=' : '<=';
 
-    // ⚠️ 테이블 이름을 scoring_criteria 로 수정
+    // 1. 점수표에서 기록에 맞는 점수를 바로 찾음
     const sql = `
         SELECT score
         FROM scoring_criteria
@@ -2285,14 +2287,16 @@ async function calculateScoreFromDBAsync(event, gender, recordValue) {
     `;
 
     try {
-        // ✅ 1번 수정
+        // (1번 쿼리)
         const [rows] = await db.promise().query(sql, [event, gender, recordValue]);
+        
         if (rows.length > 0) {
+            // ⭐️ 점수표에 있으면 그 점수 바로 반환
             return rows[0].score;
         } else {
-            // ✅ 2번 수정
-             const [boundaries] = await db.promise().query(
-                // ⚠️ 테이블 이름을 scoring_criteria 로 수정
+            // ⭐️ 점수표에 없으면 (만점이거나, 빵점이거나)
+            //    최고/최저 기준점을 찾음 (2번 쿼리)
+            const [boundaries] = await db.promise().query(
                 `SELECT
                     MIN(CASE WHEN score = 100 THEN record_threshold END) as max_score_record,
                     MAX(CASE WHEN score = 52 THEN record_threshold END) as min_score_record
@@ -2301,37 +2305,30 @@ async function calculateScoreFromDBAsync(event, gender, recordValue) {
             );
 
             if (boundaries.length > 0) {
-            console.error("기준점 조회 오류:", err);
-            return callback(err, 0);
-        }
-
-        const { max_score_record, min_score_record } = boundaries[0];
-
-        // 2. 만점 또는 최하점인지 먼저 확인
-        if (isLowerBetter) { // 10m 달리기처럼 기록이 낮을수록 좋은 경우
-            if (recordValue <= max_score_record) return callback(null, 100); // 최고 기록보다 빠르면 만점
-            if (recordValue > min_score_record) return callback(null, 52);  // 최하 기록보다 느리면 최하점
-        } else { // 제멀처럼 기록이 높을수록 좋은 경우
-            if (recordValue >= max_score_record) return callback(null, 100); // 최고 기록보다 높으면 만점
-            if (recordValue < min_score_record) return callback(null, 52);  // 최하 기록보다 낮으면 최하점
-        }
-
-        // 3. 만점/최하점이 아니면, 기존 방식대로 점수 테이블에서 점수를 찾음
-        const findScoreSql = `
-            SELECT score FROM scoring_criteria 
-            WHERE event = ? AND gender = ? AND record_threshold ${isLowerBetter ? '>=' : '<='} ? 
-            ORDER BY record_threshold ${isLowerBetter ? 'ASC' : 'DESC'}
-            LIMIT 1;
-        `;
-         db.query(findScoreSql, [event, gender, recordValue], (err, rows) => {
-            if (err) {
-                console.error("점수 검색 오류:", err);
-                return callback(err, 0);
+                const { max_score_record, min_score_record } = boundaries[0];
+                
+                // ⭐️ callback() 대신 return을 사용
+                if (isReverse) { // 10m (낮을수록 좋음)
+                    // 만점 기준보다 잘했으면 100점
+                    if (max_score_record !== null && recordValue <= max_score_record) return 100;
+                    // 빵점 기준보다 못했으면 52점
+                    if (min_score_record !== null && recordValue > min_score_record) return 52;
+                } else { // 제멀 등 (높을수록 좋음)
+                    // 만점 기준보다 잘했으면 100점
+                    if (max_score_record !== null && recordValue >= max_score_record) return 100;
+                    // 빵점 기준보다 못했으면 52점
+                    if (min_score_record !== null && recordValue < min_score_record) return 52;
+                }
             }
-            const score = rows.length > 0 ? rows[0].score : 50; // 혹시 못찾으면 최하점
-            callback(null, score);
-        });
-    });
+
+            // ⭐️ 쿼리/기준에 다 없으면 기본 빵점(52점)
+            return 52; 
+        }
+    } catch (err) {
+        // ⭐️ 에러가 나면 API가 500 에러를 뿜도록 함
+        console.error("점수 계산 DB 쿼리 오류 (Async):", err);
+        throw err; 
+    }
 }
 
 // ✅ (신규) 학생별 최종 지원 현황 조회 API
