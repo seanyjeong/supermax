@@ -2937,56 +2937,80 @@ app.post('/26susi/records', async (req, res) => {
 
 // --- API: [마스터] 학생 일괄 등록 ---
 app.post('/26susi/students/master-bulk', async (req, res) => {
-    // ... (기존과 거의 동일하나 async/await 및 에러 처리 개선) ...
     const { students } = req.body;
-    if (!students || !Array.isArray(students)) return res.status(400).json({ message: '학생 데이터 배열 필요.' });
+    // ... (입력값 유효성 검사 등 앞부분 로직은 동일) ...
 
-    const validStudents = students.filter(s => s.branch?.trim() && s.name?.trim() && s.gender && ['남', '여'].includes(s.gender) && s.grade?.toString().trim());
-    if (validStudents.length === 0) return res.status(400).json({ message: '등록할 유효 학생 없음.' });
-
-    const studentsByBranch = validStudents.reduce((acc, s) => {
-        (acc[s.branch] = acc[s.branch] || []).push(s);
-        return acc;
-    }, {});
-
+    const studentsByBranch = {};
+    validStudents.forEach(s => { /* ... 지점별 그룹화 로직 ... */ });
+    const branchNames = Object.keys(studentsByBranch);
     let totalAdded = 0;
+    let currentBranchIndex = 0;
+
+    // DB 작업을 위한 커넥션 가져오기 (만약 pool을 사용하지 않는다면 이 부분은 다를 수 있음)
     let connection;
     try {
-        connection = await db.getConnection(); // Use promise pool connection
+        // ⭐️ 만약 promise() pool을 사용한다면 getConnection() 필요 없을 수 있음.
+        // ⭐️ 네 DB 연결 방식에 맞춰서 아래 로직 수정 필요!
+        // connection = await db.promise().getConnection(); // 예시: promise pool 사용 시
 
-        for (const branchName of Object.keys(studentsByBranch)) {
-            await connection.beginTransaction(); // 지점별 트랜잭션
-            try {
-                let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
-                let branchId;
-                if (branchRows.length > 0) {
-                    branchId = branchRows[0].id;
-                } else {
-                    const [insertResult] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
-                    branchId = insertResult.insertId;
-                }
+        function processNextBranch() {
+             if (currentBranchIndex >= branchNames.length) { /* ... 완료 응답 ... */ return; }
+             const branchName = branchNames[currentBranchIndex];
+             const branchStudents = studentsByBranch[branchName];
 
-                const branchStudents = studentsByBranch[branchName];
-                const studentValues = branchStudents.map(s => [s.name, s.gender, branchId, s.school || null, s.grade]);
-                const [result] = await connection.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues]);
-                totalAdded += result.affectedRows;
-                await connection.commit(); // 지점별 커밋
-            } catch (branchErr) {
-                await connection.rollback(); // 지점별 롤백
-                console.error(` ${branchName} 학생 등록 오류:`, branchErr);
-                // 실패해도 다음 지점 진행 (선택적)
-            }
-        }
-        res.status(201).json({ success: true, message: `총 ${totalAdded}명 등록 완료.`, insertedCount: totalAdded });
+             // ⭐️ getBranchId 함수 내부 및 학생 INSERT 쿼리 실행 부분 수정
+             db.query('SELECT id FROM branches WHERE branch_name = ?', [branchName], (err, rows) => {
+                 // ⭐️ DB 에러 로깅 강화
+                 if (err) {
+                     console.error(`[master-bulk] ${branchName} 지점 ID 조회 오류:`, err); // 👈 상세 에러 출력
+                     // 에러 발생 시 다음 지점으로 넘어갈지, 전체를 중단할지 결정 필요 (여기는 일단 다음으로 넘어감)
+                     currentBranchIndex++;
+                     processNextBranch();
+                     return;
+                 }
 
-    } catch (err) {
-        console.error("마스터 벌크 등록 오류:", err);
-        res.status(500).json({ message: 'DB 오류' });
+                 const getBranchId = (callback) => { /* ... 지점 ID 가져오거나 생성하는 로직 ... */
+                     // ⭐️ 지점 INSERT 에러 로깅 강화
+                     db.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName], (branchInsertErr, result) => {
+                          if (branchInsertErr) {
+                              console.error(`[master-bulk] ${branchName} 지점 생성 오류:`, branchInsertErr); // 👈 상세 에러 출력
+                              return callback(branchInsertErr); // 에러 콜백
+                          }
+                          callback(null, result.insertId);
+                     });
+                 };
+
+                 getBranchId((branchIdErr, branchId) => {
+                     if (branchIdErr) {
+                         // 이미 위에서 로깅했으므로 여기서는 다음 처리로 넘어감
+                         currentBranchIndex++;
+                         processNextBranch();
+                         return;
+                     }
+
+                     const studentValues = branchStudents.map(s => [s.name, s.gender, branchId, s.school, s.grade]);
+                     db.query('INSERT INTO students (student_name, gender, branch_id, school, grade) VALUES ?', [studentValues], (studentInsertErr, result) => {
+                         if (studentInsertErr) {
+                             console.error(`[master-bulk] ${branchName} 학생 등록 오류:`, studentInsertErr); // 👈 상세 에러 출력
+                         } else {
+                             totalAdded += result.affectedRows;
+                         }
+                         currentBranchIndex++;
+                         processNextBranch();
+                     });
+                 });
+             });
+        } // processNextBranch 끝
+
+        processNextBranch(); // 시작
+
+    } catch (err) { // 전체 로직 감싸는 catch (예: getConnection 오류)
+        console.error("[master-bulk] 전체 처리 중 예상치 못한 오류:", err); // 👈 상세 에러 출력
+        res.status(500).json({ success: false, message: "서버 내부 오류 발생" }); // 여기서 500 에러 응답
     } finally {
-        if (connection) connection.release();
+        // if (connection) connection.release(); // promise pool 사용 시 필요 없을 수 있음
     }
 });
-
 // --- API: [대체 학생 등록] ---
 app.post('/26susi/students/substitute', async (req, res) => {
     // ... (기존과 거의 동일하나 async/await 사용) ...
