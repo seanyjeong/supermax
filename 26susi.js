@@ -2936,114 +2936,190 @@ app.post('/26susi/records', async (req, res) => {
 
 
 // // --- API: [마스터] 학생 일괄 등록 ---
-// // API: [마스터] 학생 일괄 등록 (v4 - 에러 로깅 강화)
-// app.post('/26susi/students/master-bulk', async (req, res) => {
-//     console.log("[master-bulk v4] API 시작");
-//     const { students } = req.body;
+// API: [마스터] 학생 일괄 등록 (v5 - 안정성 및 로깅 강화)
+app.post('/26susi/students/master-bulk', async (req, res) => {
+    // 핸들러 시작 로그 (가장 먼저 실행)
+    const startTime = Date.now();
+    console.log(`\n\n[master-bulk v5 @ ${new Date(startTime).toISOString()}] --- API 핸들러 진입 ---`);
 
-//     if (!students || !Array.isArray(students)) { /* ... 유효성 검사 ... */ }
-//     console.log(`[master-bulk v4] ${students.length}개 행 데이터 받음`);
-//     const validStudents = students.filter(s => /* ... 유효성 검사 ... */);
-//     console.log(`[master-bulk v4] 유효 학생 데이터 ${validStudents.length}개 필터링됨`);
-//     if (validStudents.length === 0) { /* ... 유효 데이터 없음 처리 ... */ }
+    let connection; // DB 커넥션 변수 (finally에서 release 보장)
 
-//     const studentsByBranch = validStudents.reduce((acc, s) => { /* ... 그룹화 ... */ }, {});
-//     console.log(`[master-bulk v4] ${Object.keys(studentsByBranch).length}개 지점으로 그룹화 완료`);
+    try {
+        const { students } = req.body;
+        console.log(`[master-bulk v5] 요청 body 로드 시도...`);
 
-//     let totalAdded = 0;
-//     const errorDetails = {};
-//     let connection;
+        // 1. 입력 데이터 기본 검사
+        if (!students || !Array.isArray(students)) {
+            console.error("[master-bulk v5] 오류: req.body.students가 배열이 아님.");
+            return res.status(400).json({ success: false, message: '학생 데이터 배열 형식이 올바르지 않습니다.' });
+        }
+        console.log(`[master-bulk v5] ${students.length}개 행 데이터 받음.`);
 
-//     try {
-//         console.log("[master-bulk v4] DB 커넥션 가져오기 시도...");
-//         connection = await db.getConnection();
-//         console.log("[master-bulk v4] DB 커넥션 가져오기 성공.");
+        // 2. 유효 데이터 필터링 (필수값: 지점, 이름, 성별, 학년)
+        const validStudents = students.filter(s =>
+            s && // 객체 자체가 있는지 확인
+            typeof s.branch === 'string' && s.branch.trim() !== '' &&
+            typeof s.name === 'string' && s.name.trim() !== '' &&
+            typeof s.gender === 'string' && ['남', '여'].includes(s.gender) &&
+            (typeof s.grade === 'string' || typeof s.grade === 'number') && s.grade.toString().trim() !== ''
+        );
+        console.log(`[master-bulk v5] 유효 학생 데이터 ${validStudents.length}개 필터링됨.`);
 
-//         for (const branchName of Object.keys(studentsByBranch)) {
-//             const branchStudents = studentsByBranch[branchName];
-//             console.log(`[master-bulk v4] === ${branchName} 지점 처리 시작 (${branchStudents.length}명) ===`);
+        if (validStudents.length === 0) {
+            console.log("[master-bulk v5] 오류: 유효한 학생 데이터 없음.");
+            return res.status(400).json({ success: false, message: '등록할 유효 학생 데이터(지점,이름,성별,학년 필수)가 없습니다.' });
+        }
 
-//             try {
-//                 console.log(`[master-bulk v4] ${branchName}: 트랜잭션 시작...`);
-//                 await connection.beginTransaction();
+        // 3. 지점별 그룹화 (공백 제거된 지점명 기준)
+        const studentsByBranch = validStudents.reduce((acc, s) => {
+            const trimmedBranch = s.branch.trim();
+            (acc[trimmedBranch] = acc[trimmedBranch] || []).push(s);
+            return acc;
+        }, {});
+        const branchNames = Object.keys(studentsByBranch);
+        console.log(`[master-bulk v5] ${branchNames.length}개 지점으로 그룹화 완료: [${branchNames.join(', ')}]`);
 
-//                 // 1. 지점 ID 확인/생성
-//                 console.log(`[master-bulk v4] ${branchName}: 지점 ID 확인/생성...`);
-//                 let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
-//                 let branchId;
-//                 if (branchRows.length > 0) { branchId = branchRows[0].id; }
-//                 else { const [r] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]); branchId = r.insertId; }
-//                 console.log(`[master-bulk v4] ${branchName}: 지점 ID ${branchId} 확인됨.`);
+        let totalAdded = 0;
+        const errorDetails = {}; // 지점별 오류 상세 내용
 
-//                 // 2. 학생 데이터 준비
-//                 console.log(`[master-bulk v4] ${branchName}: 학생 데이터 VALUES 배열 준비...`);
-//                 const studentValues = branchStudents.map(s => [ /* ... 매핑 ... */
-//                     s.name.trim(), s.gender, branchId, s.school ? s.school.trim() : null, s.grade.toString().trim(), '미정', '정상'
-//                 ]);
+        // 4. DB 커넥션 가져오기
+        console.log("[master-bulk v5] DB 커넥션 가져오기 시도...");
+        connection = await db.getConnection(); // db Pool에서 커넥션 가져오기
+        console.log("[master-bulk v5] DB 커넥션 가져오기 성공.");
 
-//                 // 3. 학생 정보 INSERT
-//                 console.log(`[master-bulk v4] ${branchName}: 학생 정보 INSERT 실행...`);
-//                 const insertSql = `INSERT INTO students (student_name, gender, branch_id, school, grade, attendance, status) VALUES ?`;
-//                 const [result] = await connection.query(insertSql, [studentValues]);
-//                 totalAdded += result.affectedRows;
-//                 console.log(`[master-bulk v4] ${branchName}: 학생 ${result.affectedRows}명 INSERT 성공.`);
+        // 5. 각 지점별로 순차 처리 (for...of 사용)
+        for (const branchName of branchNames) {
+            const branchStudents = studentsByBranch[branchName];
+            console.log(`\n[master-bulk v5] --- ${branchName} 지점 처리 시작 (${branchStudents.length}명) ---`);
 
-//                 await connection.commit();
-//                 console.log(`[master-bulk v4] ${branchName}: 트랜잭션 커밋 완료.`);
+            let branchTransactionStarted = false; // 트랜잭션 시작 여부 플래그
 
-//             } catch (branchErr) {
-//                 // ⭐️⭐️⭐️ 여기가 중요! 에러 로그 강제 출력 ⭐️⭐️⭐️
-//                 const errorTimestamp = new Date().toISOString();
-//                 const errorMessage = branchErr instanceof Error ? branchErr.stack : JSON.stringify(branchErr); // 스택 트레이스 포함
-//                 console.log(`\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-//                 console.log(`[master-bulk v4] FATAL BRANCH ERROR (${errorTimestamp}) - ${branchName}`);
-//                 console.log(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-//                 console.log("Raw Error Object:", branchErr); // 객체 자체도 찍어봄
-//                 console.log("Error Stack Trace or Stringified:", errorMessage); // 스택 또는 문자열
-//                 console.log(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n`);
+            try {
+                // 각 지점마다 트랜잭션 시작
+                console.log(`[master-bulk v5] ${branchName}: 트랜잭션 시작...`);
+                await connection.beginTransaction();
+                branchTransactionStarted = true; // 플래그 설정
+                console.log(`[master-bulk v5] ${branchName}: 트랜잭션 시작됨.`);
 
-//                 if (connection) { // 롤백 시도 전 확인
-//                     try {
-//                         await connection.rollback();
-//                         console.log(`[master-bulk v4] ${branchName}: 트랜잭션 롤백됨.`);
-//                     } catch (rollbackErr) {
-//                         console.error(`[master-bulk v4] ${branchName}: 롤백 중 추가 오류 발생:`, rollbackErr);
-//                     }
-//                 }
-//                 errorDetails[branchName] = branchErr.message || '알 수 없는 DB 오류';
-//             }
-//             console.log(`[master-bulk v4] === ${branchName} 지점 처리 완료 ===\n`);
-//         } // for 루프 끝
+                // 5-1. 지점 ID 확인 또는 신규 생성
+                console.log(`[master-bulk v5] ${branchName}: 지점 ID 확인/생성 쿼리 실행...`);
+                let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
+                let branchId;
+                if (branchRows.length > 0) {
+                    branchId = branchRows[0].id;
+                    console.log(`[master-bulk v5] ${branchName}: 기존 지점 ID ${branchId} 사용.`);
+                } else {
+                    console.log(`[master-bulk v5] ${branchName}: 신규 지점 생성 쿼리 실행...`);
+                    const [insertResult] = await connection.query('INSERT INTO branches (branch_name) VALUES (?)', [branchName]);
+                    branchId = insertResult.insertId;
+                    console.log(`[master-bulk v5] ${branchName}: 신규 지점 ID ${branchId} 생성됨.`);
+                }
 
-//         let message = `총 ${totalAdded}명의 학생 등록 완료.`;
-//         // ... (오류 메시지 조합 로직 동일) ...
-//         const failedBranches = Object.keys(errorDetails);
-//         if (failedBranches.length > 0) { /* ... 오류 메시지 추가 ... */ }
-//         console.log("[master-bulk v4] 최종 응답:", message);
-//         res.status(201).json({ success: true, message: message, insertedCount: totalAdded, errors: errorDetails });
+                // 5-2. 학생 데이터 배열 준비 (기본값 포함)
+                console.log(`[master-bulk v5] ${branchName}: 학생 데이터 VALUES 배열 준비...`);
+                const studentValues = branchStudents.map(s => [
+                    s.name.trim(),
+                    s.gender,
+                    branchId,
+                    s.school ? s.school.trim() : null, // 학교명 공백 제거, 없으면 NULL
+                    s.grade.toString().trim(), // 학년 공백 제거
+                    '미정', // attendance 기본값
+                    '정상'  // status 기본값
+                ]);
+                // console.log(`[master-bulk v5] ${branchName} Student Values Sample:`, JSON.stringify(studentValues.slice(0, 1), null, 2)); // 샘플 데이터 로그 (필요시 주석 해제)
 
-//     } catch (err) { // 전체 로직 또는 커넥션 가져오기 실패 시
-//         // ⭐️⭐️⭐️ 여기가 중요! 에러 로그 강제 출력 ⭐️⭐️⭐️
-//         const errorTimestamp = new Date().toISOString();
-//         const errorMessage = err instanceof Error ? err.stack : JSON.stringify(err);
-//         console.log(`\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-//         console.log(`[master-bulk v4] FATAL GLOBAL ERROR (${errorTimestamp})`);
-//         console.log(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
-//         console.log("Raw Error Object:", err); // 객체 자체도 찍어봄
-//         console.log("Error Stack Trace or Stringified:", errorMessage); // 스택 또는 문자열
-//         console.log(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n`);
+                // 5-3. 학생 정보 Bulk Insert 실행
+                console.log(`[master-bulk v5] ${branchName}: 학생 정보 INSERT 쿼리 실행...`);
+                const insertSql = `
+                    INSERT INTO students
+                        (student_name, gender, branch_id, school, grade, attendance, status)
+                    VALUES ?`;
+                // 쿼리 실행 및 결과 로깅
+                const [result] = await connection.query(insertSql, [studentValues]);
+                console.log(`[master-bulk v5] ${branchName}: INSERT 쿼리 결과:`, result); // 쿼리 결과 상세 로깅
+                totalAdded += result.affectedRows; // 성공적으로 추가된 행 수 누적
+                console.log(`[master-bulk v5] ${branchName}: 학생 ${result.affectedRows}명 INSERT 성공.`);
 
-//         // ⭐️ 여기서 500 에러 응답
-//         res.status(500).json({ success: false, message: "서버 내부 오류 발생. 관리자에게 문의하세요." });
-//     } finally {
-//         if (connection) {
-//             connection.release();
-//             console.log("[master-bulk v4] DB 커넥션 반환 완료.");
-//         } else {
-//             console.log("[master-bulk v4] DB 커넥션 가져오기 실패 또는 finally 블록 진입.");
-//         }
-//     }
-// });
+                // 5-4. 해당 지점 처리 성공 시 커밋
+                console.log(`[master-bulk v5] ${branchName}: 트랜잭션 커밋 시도...`);
+                await connection.commit();
+                console.log(`[master-bulk v5] ${branchName}: 트랜잭션 커밋 완료.`);
+                branchTransactionStarted = false; // 커밋 후 플래그 해제
+
+            } catch (branchErr) {
+                // 5-5. 해당 지점 처리 중 오류 발생 시 롤백 및 에러 기록
+                console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
+                console.error(`[master-bulk v5] FATAL BRANCH ERROR (${new Date().toISOString()}) - ${branchName}`);
+                console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
+                console.error("Raw Branch Error Object:", branchErr); // 객체 자체
+                console.error("Branch Error Stack:", branchErr.stack); // 스택 트레이스
+                console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
+
+                errorDetails[branchName] = branchErr.message || '알 수 없는 DB 오류'; // 에러 메시지 저장
+
+                // 트랜잭션이 시작된 상태에서만 롤백 시도
+                if (branchTransactionStarted) {
+                    try {
+                        console.log(`[master-bulk v5] ${branchName}: 오류 발생, 트랜잭션 롤백 시도...`);
+                        await connection.rollback();
+                        console.log(`[master-bulk v5] ${branchName}: 트랜잭션 롤백 완료.`);
+                    } catch (rollbackErr) {
+                        console.error(`[master-bulk v5] ${branchName}: 롤백 중 추가 오류 발생:`, rollbackErr);
+                    }
+                } else {
+                    console.log(`[master-bulk v5] ${branchName}: 트랜잭션 시작 전에 오류 발생하여 롤백 건너<0xEB><0x9B><0x84>.`);
+                }
+            }
+            console.log(`[master-bulk v5] --- ${branchName} 지점 처리 완료 ---`);
+        } // for 루프 끝
+
+        // 6. 최종 결과 응답
+        let message = `총 ${totalAdded}명의 학생 등록 완료.`;
+        const failedBranches = Object.keys(errorDetails);
+        if (failedBranches.length > 0) {
+            message += `\n\n[오류 발생 지점]\n`;
+            failedBranches.forEach(branch => {
+                message += `- ${branch}: ${errorDetails[branch]}\n`;
+            });
+        }
+        const endTime = Date.now();
+        console.log(`[master-bulk v5] 최종 처리 완료. 총 소요시간: ${endTime - startTime}ms`);
+        console.log("[master-bulk v5] 최종 응답:", message);
+        res.status(201).json({
+            success: true,
+            message: message,
+            insertedCount: totalAdded,
+            errors: errorDetails
+        });
+
+    } catch (err) { // DB 커넥션 가져오기 실패 등 전체 로직 에러
+        const errorTimestamp = new Date().toISOString();
+        console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
+        console.error(`[master-bulk v5] FATAL GLOBAL ERROR (${errorTimestamp})`);
+        console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`);
+        console.error("Raw Global Error Object:", err); // 객체 자체
+        console.error("Global Error Stack:", err.stack); // 스택 트레이스
+        console.error(`!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
+
+        // ⭐️ 여기서 500 에러 응답
+        res.status(500).json({ success: false, message: "서버 내부 오류 발생. 관리자에게 문의하세요." });
+    } finally {
+        // 7. DB 커넥션 반환 (필수!)
+        if (connection) {
+            try {
+                connection.release();
+                console.log("[master-bulk v5] DB 커넥션 반환 완료.");
+            } catch (releaseErr) {
+                console.error("[master-bulk v5] DB 커넥션 반환 중 오류:", releaseErr);
+            }
+        } else {
+            console.log("[master-bulk v5] DB 커넥션이 정상적으로 생성되지 않았거나 이미 반환됨.");
+        }
+        const finalEndTime = Date.now();
+        console.log(`[master-bulk v5] --- API 핸들러 종료 (총 ${finalEndTime - startTime}ms) ---`);
+    }
+});
+
 // --- API: [대체 학생 등록] ---
 app.post('/26susi/students/substitute', async (req, res) => {
     // ... (기존과 거의 동일하나 async/await 사용) ...
