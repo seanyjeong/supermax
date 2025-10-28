@@ -5089,6 +5089,68 @@ app.get('/jungsi/teacher/record-view/records/:account_id', authMiddleware, async
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
+
+// jungsi.js 파일 하단 app.listen(...) 바로 위에 추가
+
+// =============================================
+// ⭐️ [신규] 선생님용: 학생 특이사항 메모 삭제 API
+// =============================================
+// DELETE /jungsi/teacher/notes/delete/:note_id
+app.delete('/jungsi/teacher/notes/delete/:note_id', authMiddleware, async (req, res) => {
+    const { note_id } = req.params;
+    const { userid, branch } = req.user; // 로그인한 사용자 정보
+
+    console.log(`[API /teacher/notes DELETE] 사용자(${userid})가 메모(${note_id}) 삭제 요청`);
+
+    if (!note_id) {
+        return res.status(400).json({ success: false, message: '메모 ID가 필요합니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await dbStudent.getConnection();
+        await connection.beginTransaction();
+
+        // 1. (보안) 삭제하려는 메모가 이 사용자의 지점 소속 학생의 메모인지 확인
+        // (선택적 강화: 본인(teacher_userid)이 쓴 글만 삭제하게 할 수도 있음)
+        const [ownerCheck] = await connection.query(
+            `SELECT n.note_id
+             FROM jungsimaxstudent.student_teacher_notes n
+             JOIN jungsimaxstudent.student_account s ON n.student_account_id = s.account_id
+             WHERE n.note_id = ? AND s.branch = ?`,
+            [note_id, branch]
+        );
+
+        if (ownerCheck.length === 0) {
+            await connection.rollback();
+            console.warn(` -> 권한 없음: 메모(${note_id})가 ${branch} 지점 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '삭제 권한이 없는 메모입니다.' });
+        }
+
+        // 2. 메모 삭제 실행
+        const [result] = await connection.query(
+            'DELETE FROM jungsimaxstudent.student_teacher_notes WHERE note_id = ?',
+            [note_id]
+        );
+
+        await connection.commit();
+
+        if (result.affectedRows > 0) {
+            console.log(` -> 메모 삭제 성공 (ID: ${note_id})`);
+            res.json({ success: true, message: '메모가 삭제되었습니다.' });
+        } else {
+            console.warn(` -> 삭제할 메모 없음 (ID: ${note_id})`);
+            res.status(404).json({ success: false, message: '삭제할 메모를 찾을 수 없습니다.' });
+        }
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 학생 메모 삭제 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 삭제 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 // --- 여기 아래에 app.listen(...) 이 와야 함 ---
 
