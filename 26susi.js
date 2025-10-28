@@ -2720,7 +2720,7 @@ app.post('/26susi/students', async (req, res) => {
 
     let connection;
     try {
-        connection = await db.getConnection(); // Use promise pool connection
+        const connection = await db.promise().getConnection() // Use promise pool connection
         await connection.beginTransaction();
 
         let [branchRows] = await connection.query('SELECT id FROM branches WHERE branch_name = ?', [branchName]);
@@ -2808,7 +2808,7 @@ app.post('/26susi/assign-all-groups', async (req, res) => {
 app.post('/26susi/reassign-all-groups', async (req, res) => {
     let connection;
     try {
-        connection = await db.getConnection();
+         const connection = await db.promise().getConnection()
         await connection.beginTransaction();
         // 1. 모든 학생 조, 수험번호 초기화
         await connection.query('UPDATE students SET exam_group = NULL, exam_number = NULL');
@@ -3047,7 +3047,7 @@ app.post('/26susi/students/substitute', async (req, res) => {
 
      let connection;
      try {
-         connection = await db.getConnection();
+          const connection = await db.promise().getConnection()
          await connection.beginTransaction();
 
          const [studentRows] = await connection.query('SELECT exam_number FROM students WHERE id = ?', [oldStudentId]);
@@ -3080,7 +3080,7 @@ app.post('/26susi/students/add-new', async (req, res) => {
 
     let connection;
     try {
-        connection = await db.getConnection();
+         const connection = await db.promise().getConnection()
         await connection.beginTransaction();
 
         // 6개 조(A~F) 중 가장 인원 적은 조 찾기
