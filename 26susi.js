@@ -2757,7 +2757,7 @@ async function executeFullAssignmentAsync() {
     const TOTAL_GROUPS = 6; // ⭐️ 6개 조로 수정 (A, B, C, D, E, F)
     const sql = `SELECT s.id FROM students s WHERE s.exam_group IS NULL`; // 조 배정 안 된 학생 조회
 
-    const connection = await db.getConnection();
+    const connection = await db.promise().getConnection();
     try {
         const [students] = await connection.query(sql);
         if (students.length === 0) return 0; // 배정할 학생 없음
