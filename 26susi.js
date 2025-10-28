@@ -2941,19 +2941,18 @@ app.post('/26susi/records', async (req, res) => {
 // API: [마스터] 학생 일괄 등록 (v12 - Pool 직접 사용, 트랜잭션 없음)
 // =============================================
 // =================================================================
-// 🚀 [API] 마스터 - 학생 일괄 등록 (POST /26susi/students/master-bulk)
 // =================================================================
-// 위 HTML 파일의 'addStudentsInBulk' 함수가 호출하는 API
+// 🚀 [API] 마스터 - 학생 일괄 등록 (POST /26susi/students/master-bulk)
+// (지점 이름 -> 지점 ID 자동 변환 및 생성 기능 포함)
+// =================================================================
 app.post('/26susi/students/master-bulk', async (req, res) => {
     
     // 1. 클라이언트가 보낸 데이터 받기
-    // req.body에 { students: [ { branch: '...', name: '...' }, ... ] } 형태로 옴
-    const { students } = req.body;
+    const { students } = req.body; // { students: [ { branch: '일산', ... }, ... ] }
 
-    // 2. 서버에서 데이터 유효성 검사 (클라이언트에서 했더라도 서버는 필수!)
+    // 2. 서버에서 데이터 유효성 검사
     if (!students || !Array.isArray(students) || students.length === 0) {
         console.log('[일괄 등록 실패] ❌ 학생 데이터가 비어있습니다.');
-        // 400 Bad Request: 클라이언트가 잘못된 요청을 보냄
         return res.status(400).json({ 
             success: false, 
             message: '등록할 학생 데이터가 없습니다.' 
@@ -2962,52 +2961,81 @@ app.post('/26susi/students/master-bulk', async (req, res) => {
 
     console.log(`[일괄 등록 시작] 총 ${students.length}건의 데이터 처리 시도...`);
 
+    // 여러 쿼리를 순서대로 실행해야 하므로 pool에서 '커넥션'을 하나 빌림
+    const connection = await db.promise().getConnection();
+
     try {
-        // 3. DB Bulk Insert를 위해 데이터를 2차원 배열로 변환
-        // [ ['일산', '홍길동', '남', '맥스고', '3'], ['파주', '김영희', '여', '파주고', '2'] ]
-        const values = students.map(s => [
-            s.branch,
-            s.name,
-            s.gender,
-            s.school,
-            s.grade
-        ]);
+        // ----- [ 1단계 ] 지점(Branch) ID 처리 -----
 
-        // 4. SQL 쿼리 준비
-        // 'INSERT IGNORE' 사용:
-        // - 'students' 테이블에 UNIQUE 키(예: branch, name)가 있다면,
-        // - 중복되는 학생은 무시하고 (오류 X)
-        // - *새로운 학생만* 등록됨.
-        // - 'result.affectedRows'에는 실제로 *새로 추가된* 학생 수가 반환됨.
-        const sql = "INSERT IGNORE INTO students (branch, name, gender, school, grade) VALUES ?";
+        // 1-A. 학생 데이터에서 고유한 '교육원 이름' 목록 추출
+        // new Set()을 사용해 중복 이름(예: '일산'이 여러 개)을 제거
+        const branchNameSet = new Set(students.map(s => s.branch));
+        const uniqueBranchNames = [...branchNameSet]; // ['일산', '파주', '김포']
 
-        // 5. DB에 쿼리 실행
-        // 'db.promise()'를 사용해야 async/await 문법을 쓸 수 있어.
-        const [result] = await db.promise().query(sql, [values]);
+        // 1-B. 'branches' 테이블에 새로운 지점 이름 INSERT IGNORE
+        // (branches 테이블의 branch_name 컬럼에 UNIQUE 키가 걸려있어서 가능)
+        if (uniqueBranchNames.length > 0) {
+            // [ ['일산'], ['파주'], ['김포'] ] 형태로 변환
+            const branchValues = uniqueBranchNames.map(name => [name]);
+            const insertBranchesSql = "INSERT IGNORE INTO branches (branch_name) VALUES ?";
+            await connection.query(insertBranchesSql, [branchValues]);
+            console.log(`[일괄 등록 1/3] ${uniqueBranchNames.length}개 고유 지점 ID 확인/생성 완료.`);
+        }
 
-        console.log(`[일괄 등록 성공] ✅ 총 ${students.length}건 요청 중 ${result.affectedRows}건 신규 등록 완료.`);
+        // 1-C. 'branches' 테이블에서 *모든* 지점 이름과 ID를 가져와 맵(Map)으로 만듦
+        // (방금 추가한 지점 포함)
+        const [allBranches] = await connection.query("SELECT id, branch_name FROM branches");
+        
+        // { "일산" => 1, "파주" => 2, "김포" => 3 }
+        // JavaScript의 Map 객체를 사용하면 조회 속도가 매우 빠름
+        const branchIdMap = new Map(allBranches.map(b => [b.branch_name, b.id]));
+        console.log(`[일괄 등록 2/3] 지점 ID 맵 생성 완료. (총 ${branchIdMap.size}개)`);
 
-        // 6. 클라이언트에 성공 응답 전송
-        // 클라이언트가 response.ok (200~299)를 확인하므로 201 (Created) 상태 코드 사용
+        // ----- [ 2단계 ] 학생 데이터 INSERT 준비 -----
+
+        // 2-A. 학생 데이터를 'students' 테이블에 맞게 2차원 배열로 변환
+        // (이름 -> ID로 변환)
+        const studentValues = students.map(s => {
+            const branchId = branchIdMap.get(s.branch); // 맵(Map)에서 '일산'으로 '1'을 찾음
+            
+            // s.branch (e.g., '일산') -> branchId (e.g., 1)
+            return [
+                branchId, // ⭐️ 'branch' 대신 'branch_id' 컬럼에 ID 삽입
+                s.name,
+                s.gender,
+                s.school,
+                s.grade
+            ];
+        });
+
+        // 2-B. SQL 쿼리 준비 (students 테이블)
+        // ⭐️ 'branch' 컬럼이 아니라 'branch_id' 컬럼이라고 가정
+        const insertStudentsSql = "INSERT IGNORE INTO students (branch_id, name, gender, school, grade) VALUES ?";
+
+        // ----- [ 3단계 ] 학생 데이터 일괄 INSERT 실행 -----
+        const [result] = await connection.query(insertStudentsSql, [studentValues]);
+
+        console.log(`[일괄 등록 3/3] ✅ 총 ${students.length}건 요청 중 ${result.affectedRows}건 신규 등록 완료.`);
+
+        // 4. 성공 응답 전송
         res.status(201).json({
             success: true,
-            // 클라이언트 alert에서 result.message를 사용함
             message: `총 ${students.length}건의 데이터 중 ${result.affectedRows}건이 신규 등록되었습니다. (중복 등 제외)`,
-            // 클라이언트 alert에서 result.insertedCount를 사용함
-            insertedCount: result.affectedRows 
+            insertedCount: result.affectedRows
         });
 
     } catch (error) {
-        // 7. DB 오류 또는 기타 서버 오류 발생 시
+        // 5. 오류 처리
         console.error('[일괄 등록 실패] ❌ DB 오류 발생:', error);
-        
-        // 500 Internal Server Error: 서버 내부 문제
         res.status(500).json({
             success: false,
-            // 클라이언트 alert에서 error.message를 사용함
             message: '데이터베이스 등록 중 서버 오류가 발생했습니다.',
-            error: error.message // 디버깅을 위한 상세 에러
+            error: error.message
         });
+    } finally {
+        // 6. 사용한 커넥션 반납 (필수!)
+        // try/catch/finally 중 어디서 끝나든 항상 실행됨
+        if (connection) connection.release();
     }
 });
 // --- API: [대체 학생 등록] ---
