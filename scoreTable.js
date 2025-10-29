@@ -399,6 +399,67 @@ router.get('/student-history', async (req, res) => {
     res.json({ success: false, error: err });
   }
 });
+// 이름 목록만 (중복 제거)
+router.get('/student-names', async (req, res) => {
+  try {
+    const rows = await dbQuery(`
+      SELECT name, MIN(school) AS school, MIN(grade) AS grade, MIN(gender) AS gender
+      FROM 실기기록_테스트
+      GROUP BY name
+      ORDER BY name
+    `);
+
+    res.json({
+      success: true,
+      students: rows.map(r => ({
+        name: r.name,
+        school: r.school,
+        grade: r.grade,
+        gender: r.gender
+      }))
+    });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
+});
+
+router.get('/student-history-by-name', async (req, res) => {
+  const { name } = req.query;
+  if (!name) {
+    return res.json({ success: false, error: 'name_required' });
+  }
+
+  try {
+    const rows = await dbQuery(
+      `SELECT 
+        test_month,
+        jump_cm,
+        run20m_sec,
+        run10m_sec,
+        sit_reach_cm,
+        situp_count,
+        back_strength,
+        medball_m,
+        total_score,
+        school,
+        grade,
+        gender
+      FROM 실기기록_테스트
+      WHERE name = ?
+      ORDER BY created_at ASC, test_month ASC`,
+      [name]
+    );
+
+    res.json({
+      success: true,
+      history: rows
+    });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
+});
+
 
 module.exports = router;
+
 
