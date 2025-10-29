@@ -335,4 +335,70 @@ router.get('/test-months', async (req, res) => {
   }
 });
 
+// 전체 학생 목록 (select box용)
+router.get('/student-list', async (req, res) => {
+  try {
+    const rows = await dbQuery(`
+      SELECT 
+        MIN(id) AS ref_id,
+        exam_number,
+        name,
+        school,
+        grade,
+        gender
+      FROM 실기기록_테스트
+      GROUP BY exam_number, name, school, grade, gender
+      ORDER BY exam_number
+    `);
+
+    res.json({
+      success: true,
+      students: rows.map(r => ({
+        exam_number: r.exam_number,
+        name: r.name,
+        school: r.school,
+        grade: r.grade,
+        gender: r.gender
+      }))
+    });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
+});
+// 특정 학생 히스토리 (test_month별 전부)
+router.get('/student-history', async (req, res) => {
+  const { exam_number } = req.query;
+  if (!exam_number) {
+    return res.json({ success: false, error: 'exam_number_required' });
+  }
+
+  try {
+    // created_at이 DB에 있으니까 그걸로 시간 순서 정렬
+    const rows = await dbQuery(
+      `SELECT 
+        test_month,
+        jump_cm,
+        run20m_sec,
+        run10m_sec,
+        sit_reach_cm,
+        situp_count,
+        back_strength,
+        medball_m,
+        total_score
+      FROM 실기기록_테스트
+      WHERE exam_number = ?
+      ORDER BY created_at ASC, test_month ASC`,
+      [exam_number]
+    );
+
+    res.json({
+      success: true,
+      history: rows
+    });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
+});
+
 module.exports = router;
+
