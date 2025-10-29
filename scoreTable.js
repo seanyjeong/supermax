@@ -102,50 +102,116 @@ function getScore(event, gender, value) {
 
 // ✅ 명단 선등록 또는 업데이트
 router.post('/test-students', async (req, res) => {
-  const { name, school, grade, gender, test_month } = req.body;
+  const { name, school, grade, gender, test_month, exam_number: clientExamNumber } = req.body;
 
   try {
-    const [existing] = await dbQuery(
+    // 0. 이미 같은 학생이 같은 달에 등록돼 있는지 확인
+    const existingRows = await dbQuery(
       'SELECT exam_number FROM 실기기록_테스트 WHERE name = ? AND school = ? AND grade = ? AND gender = ? AND test_month = ?',
       [name, school, grade, gender, test_month]
     );
 
-    let exam_number;
+    let finalExamNumber;
 
-    if (existing) {
-      // 이미 등록된 경우, 정보만 업데이트
-      exam_number = existing.exam_number;
+    if (existingRows && existingRows.length > 0) {
+      // 이미 등록된 경우 → 기존 번호 재사용 + 정보 업데이트
+      finalExamNumber = existingRows[0].exam_number;
+
       await dbQuery(
         'UPDATE 실기기록_테스트 SET school = ?, grade = ?, gender = ? WHERE exam_number = ? AND test_month = ?',
-        [school, grade, gender, exam_number, test_month]
+        [school, grade, gender, finalExamNumber, test_month]
       );
+
     } else {
-      const isPretest = test_month === '예비반';
-      const prefix = isPretest ? 'YB' : test_month.replace('-', '');
-      const digitStart = prefix.length + 1;
+      // 신규 등록 케이스
 
-      // maxNum 계산
-      const [max] = await dbQuery(
-        `SELECT MAX(CAST(SUBSTRING(exam_number, ?) AS UNSIGNED)) AS maxNum FROM 실기기록_테스트 WHERE test_month = ?`,
-        [digitStart, test_month]
-      );
+      // 1) 우선순위 1: 프론트에서 온 exam_number(YB251101 등)가 있으면 그걸 그대로 쓴다
+      if (clientExamNumber && clientExamNumber.trim() !== '') {
+        finalExamNumber = clientExamNumber.trim();
 
-      const nextNumber = (max?.maxNum || 0) + 1;
-      exam_number = `${prefix}${String(nextNumber).padStart(2, '0')}`;
+      } else {
+        // 2) 프론트에서 exam_number를 안 줬으면 서버에서 새로 만든다
 
-      await dbQuery(
-        'INSERT INTO 실기기록_테스트 (exam_number, name, grade, gender, school, test_month) VALUES (?, ?, ?, ?, ?, ?)',
-        [exam_number, name, grade, gender, school, test_month]
-      );
-    }
+        // 선행반 여부 판별
+        // test_month가 "선행반 11월" 이런 식으로 들어오는 상황을 가정
+        const isSeonhang = test_month.startsWith('선행반');
 
-    res.json({ success: true, exam_number });
-  } catch (err) {
-    console.error('❌ 명단 저장 오류:', err);
-    res.json({ success: false, error: err });
-  }
-});
+        if (isSeonhang) {
+          // ---- 선행반 YB 규칙 ----
+          // test_month 예: "선행반 11월"
+          // 여기서 연도랑 월은 뭐로 잡을지 정해야 함.
+          // 프론트에서는 monthValue가 "2025-11" 이었지?
+          // 프론트에서 그 정보를 안 주고 test_month만 "선행반 11월" 준다면
+          // 서버는 연/월 정보를 복원 못 해. 그래서
+          // => 프론트가 반드시 exam_number를 보내는 게 가장 안전.
+          //
+          // 그래도 서버에서 만드는 경우까지 대비해서 만들자:
+          //
+          // 가정:
+          //  - 올해 연도 사용 (new Date())
+          //  - test_month 안의 "11월" 이런 부분에서 월만 추출
+          const now = new Date();
+          const yy = String(now.getFullYear()).slice(-2); // "25"
+          // "선행반 11월" -> "11"
+          const monthMatch = test_month.match(/(\d+)\s*월/);
+          const mm = monthMatch ? monthMatch[1].padStart(2, '0') : '01';
 
+          // DB에서 이 달(YB + yy + mm) prefix로 된 마지막 번호 찾기
+          // 예: YB2511__
+          const ybPrefix = `YB${yy}${mm}`;
+
+          const maxRows = await dbQuery(
+            `SELECT exam_number 
+             FROM 실기기록_테스트 
+             WHERE test_month = ? AND exam_number LIKE ? 
+             ORDER BY exam_number DESC 
+             LIMIT 1`,
+            [test_month, ybPrefix + '%']
+          );
+
+          let nextSeqNum = 1;
+          if (maxRows && maxRows.length > 0) {
+            const lastExam = maxRows[0].exam_number; // 예: "YB251101"
+            const lastSeq = lastExam.slice(ybPrefix.length); // "01"
+            const parsed = parseInt(lastSeq, 10);
+            if (!isNaN(parsed)) {
+              nextSeqNum = parsed + 1;
+            }
+          }
+
+          const seqStr = String(nextSeqNum).padStart(2, '0'); // "01"
+          finalExamNumber = `${ybPrefix}${seqStr}`; // 예: "YB251101"
+
+        } else {
+          // ---- 일반반 규칙 (기존 로직) ----
+          // ex) test_month = "2025-11"
+          // prefix = "202511"
+          const prefix = test_month.replace('-', ''); // "202511"
+
+          // DB에서 prefix로 시작하는 exam_number 중 마지막꺼 찾아서 +1
+          const maxRows = await dbQuery(
+            `SELECT exam_number 
+             FROM 실기기록_테스트 
+             WHERE test_month = ? AND exam_number LIKE ? 
+             ORDER BY exam_number DESC 
+             LIMIT 1`,
+            [test_month, prefix + '%']
+          );
+
+          let nextSeqNum = 1;
+          if (maxRows && maxRows.length > 0) {
+            const lastExam = maxRows[0].exam_number; // 예: "20251101"
+            const lastSeq = lastExam.slice(prefix.length); // "01"
+            const parsed = parseInt(lastSeq, 10);
+            if (!isNaN(parsed)) {
+              nextSeqNum = parsed + 1;
+            }
+          }
+
+          const seqStr = String(nextSeqNum).padStart(2, '0'); // "01"
+          finalExamNumber = `${prefix}${seqStr}`; // "20251101"
+        }
+      }
 
 // ✅ 종목별 개별 기록 저장
 router.patch('/test-record', async (req, res) => {
@@ -295,3 +361,4 @@ router.post('/save-test-records', async (req, res) => {
 
 
 module.exports = router;
+
