@@ -1,4 +1,3 @@
-// ✅ scoreTable.js
 const express = require('express');
 const router = express.Router();
 const mysql = require('mysql');
@@ -51,54 +50,26 @@ const scoreTable = {
     여: [9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10.0, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 12.0, 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9, 13.0],
     reverse: true
   }
-
 };
 
 function getScore(event, gender, value) {
   const genderKey = gender === '남자' ? '남' : gender === '여자' ? '여' : gender;
   const list = scoreTable[event]?.[genderKey];
-
-  // 🎯 예외 처리: 점수 리스트가 아예 없는 경우
-  if (!list) {
-    console.log('❌ 점수 리스트 없음:', event, genderKey);
-    return 24;
-  }
-
-  // 🎯 'F' 입력 시 기본 점수 처리
-  if (typeof value === 'string' && value.trim().toUpperCase() === 'F') {
-    console.log('⚠️ "F" 입력 감지 → 기본점수 24점 반환');
-    return 24;
-  }
-
+  if (!list) return 24;
+  if (typeof value === 'string' && value.trim().toUpperCase() === 'F') return 24;
   const numericValue = parseFloat(value);
-  console.log('💬 getScore 호출:', event, genderKey, '입력값:', value, '→ 숫자:', numericValue);
-  console.log('🎯 점수 리스트:', list);
-
   const isReverse = scoreTable[event]?.reverse || false;
-
   for (let i = 0; i < list.length; i++) {
     const score = 100 - i * 2;
     const standard = list[i];
-
     if (isReverse) {
-      if (numericValue <= standard) {
-        console.log(`✅ 리턴점수 (reverse): ${score} (기준: ${standard})`);
-        return score;
-      }
+      if (numericValue <= standard) return score;
     } else {
-      if (numericValue >= standard) {
-        console.log(`✅ 리턴점수: ${score} (기준: ${standard})`);
-        return score;
-      }
+      if (numericValue >= standard) return score;
     }
   }
-
-  console.log('⚠️ 조건 만족하는 값 없음 → 24점 리턴');
   return 24;
 }
-
-
-
 
 router.post('/test-students', async (req, res) => {
   const { name, school, grade, gender, test_month, exam_number: clientExamNumber } = req.body;
@@ -146,9 +117,7 @@ router.post('/test-students', async (req, res) => {
             const lastExam = maxRows[0].exam_number;
             const lastSeq = lastExam.slice(ybPrefix.length);
             const parsed = parseInt(lastSeq, 10);
-            if (!isNaN(parsed)) {
-              nextSeqNum = parsed + 1;
-            }
+            if (!isNaN(parsed)) nextSeqNum = parsed + 1;
           }
 
           const seqStr = String(nextSeqNum).padStart(2, '0');
@@ -156,6 +125,7 @@ router.post('/test-students', async (req, res) => {
 
         } else {
           const prefix = test_month.replace('-', '');
+
           const maxRows = await dbQuery(
             `SELECT exam_number 
              FROM 실기기록_테스트 
@@ -170,9 +140,7 @@ router.post('/test-students', async (req, res) => {
             const lastExam = maxRows[0].exam_number;
             const lastSeq = lastExam.slice(prefix.length);
             const parsed = parseInt(lastSeq, 10);
-            if (!isNaN(parsed)) {
-              nextSeqNum = parsed + 1;
-            }
+            if (!isNaN(parsed)) nextSeqNum = parsed + 1;
           }
 
           const seqStr = String(nextSeqNum).padStart(2, '0');
@@ -188,13 +156,10 @@ router.post('/test-students', async (req, res) => {
 
     res.json({ success: true, exam_number: finalExamNumber });
   } catch (err) {
-    console.error('❌ test-students 오류:', err);
     res.json({ success: false, error: 'server_error' });
   }
 });
 
-
-// ✅ 종목별 개별 기록 저장
 router.patch('/test-record', async (req, res) => {
   const { exam_number, test_month, event, value } = req.body;
   const columnMap = {
@@ -208,43 +173,62 @@ router.patch('/test-record', async (req, res) => {
   };
 
   try {
-    const [student] = await dbQuery('SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [exam_number, test_month]);
+    const [student] = await dbQuery(
+      'SELECT gender FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?',
+      [exam_number, test_month]
+    );
     if (!student) return res.json({ success: false, error: '학생 없음' });
 
     const gender = student.gender;
     const score = getScore(event, gender, value);
     const [valCol, scoreCol] = columnMap[event];
 
-    await dbQuery(`UPDATE 실기기록_테스트 SET ${valCol} = ?, ${scoreCol} = ? WHERE exam_number = ? AND test_month = ?`,
-      [value, score, exam_number, test_month]);
+    await dbQuery(
+      `UPDATE 실기기록_테스트 SET ${valCol} = ?, ${scoreCol} = ? WHERE exam_number = ? AND test_month = ?`,
+      [value, score, exam_number, test_month]
+    );
 
-    // 총점 다시 계산
-    const [updated] = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?', [exam_number, test_month]);
-    const sum = [updated.jump_score, updated.run20m_score, updated.sit_score, updated.situp_score, updated.back_score, updated.medball_score, updated.run10m_score]
+    const [updated] = await dbQuery(
+      'SELECT * FROM 실기기록_테스트 WHERE exam_number = ? AND test_month = ?',
+      [exam_number, test_month]
+    );
+
+    const sum = [
+      updated.jump_score,
+      updated.run20m_score,
+      updated.sit_score,
+      updated.situp_score,
+      updated.back_score,
+      updated.medball_score,
+      updated.run10m_score
+    ]
       .filter(v => typeof v === 'number')
       .reduce((a, b) => a + b, 0);
-    await dbQuery('UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?', [sum, exam_number, test_month]);
+
+    await dbQuery(
+      'UPDATE 실기기록_테스트 SET total_score = ? WHERE exam_number = ? AND test_month = ?',
+      [sum, exam_number, test_month]
+    );
 
     res.json({ success: true, score, total_score: sum });
   } catch (err) {
-    console.error('❌ 기록 저장 오류:', err);
     res.json({ success: false, error: err });
   }
 });
 
-// ✅ 해당 월 전체 명단 + 기록 조회
 router.get('/test-records', async (req, res) => {
   const { test_month } = req.query;
   try {
-    const rows = await dbQuery('SELECT * FROM 실기기록_테스트 WHERE test_month = ? ORDER BY exam_number', [test_month]);
+    const rows = await dbQuery(
+      'SELECT * FROM 실기기록_테스트 WHERE test_month = ? ORDER BY exam_number',
+      [test_month]
+    );
     res.json({ success: true, records: rows });
   } catch (err) {
-    console.error('❌ 명단 조회 오류:', err);
     res.json({ success: false, error: err });
   }
 });
 
-// ✅ 전체 월별 명단만 불러오기 (기록 제외)
 router.get('/students-by-month', async (req, res) => {
   const { month } = req.query;
   try {
@@ -254,11 +238,10 @@ router.get('/students-by-month', async (req, res) => {
     );
     res.json({ success: true, students: rows });
   } catch (err) {
-    console.error('❌ 월별 명단 조회 오류:', err);
     res.json({ success: false, error: err });
   }
 });
-//기록 저장
+
 router.post('/save-test-records', async (req, res) => {
   const { records } = req.body;
   let updated = 0;
@@ -266,12 +249,10 @@ router.post('/save-test-records', async (req, res) => {
     for (const r of records) {
       const { user_id, event, record, test_month } = r;
 
-      // ✅ F 처리 먼저
       let rawValue = record;
       let score = 24;
 
       const isDisqualified = typeof record === 'string' && record.trim().toUpperCase() === 'F';
-
       if (!record || (!isDisqualified && isNaN(parseFloat(record)))) continue;
 
       const [student] = await dbQuery(
@@ -285,8 +266,7 @@ router.post('/save-test-records', async (req, res) => {
       if (!isDisqualified) {
         score = getScore(event, gender, parseFloat(record));
       } else {
-        rawValue = 'F'; // 기록은 문자 F로 저장
-        console.log(`⚠️ 실격 처리: ${user_id}, 종목: ${event} → 기록: F, 점수: 24`);
+        rawValue = 'F';
       }
 
       const columnMap = {
@@ -335,12 +315,24 @@ router.post('/save-test-records', async (req, res) => {
 
     res.json({ success: true, updated });
   } catch (err) {
-    console.error('❌ 기록 저장 오류:', err);
     res.json({ success: false, error: err });
   }
 });
 
+router.get('/test-months', async (req, res) => {
+  try {
+    const rows = await dbQuery(
+      'SELECT DISTINCT test_month FROM 실기기록_테스트 ORDER BY test_month DESC'
+    );
+
+    const months = rows
+      .map(r => r.test_month)
+      .filter(m => m && m.trim() !== '');
+
+    res.json({ success: true, months });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
+});
 
 module.exports = router;
-
-
