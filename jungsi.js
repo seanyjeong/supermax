@@ -5629,61 +5629,47 @@ app.get('/jungsi/practical-mode/workers', (req, res) => {
  * - 작업자 구간별 분할
  * - 토큰 없음
  */
+// jungsi.js 안에 그대로 추가
 app.get('/jungsi/practical-mode/list', async (req, res) => {
-  const year = req.query.year ? Number(req.query.year) : (new Date().getFullYear() + 1);
-  const worker = req.query.worker || null;
+  const year = req.query.year ? Number(req.query.year) : new Date().getFullYear() + 1; // 2026 이런 거
+  const worker = (req.query.worker || '').trim();  // 'daejeon' 같은 거
+  const limit = req.query.limit ? Number(req.query.limit) : 40;
+  const offset = req.query.offset ? Number(req.query.offset) : 0;
 
   try {
-    // 실기 비율 있는 학과만
-    const [rows] = await db.promise().query(
+    // 실기 비율 있는 애들만
+    const [rows] = await db.query(
       `
-      SELECT 
+      SELECT
         id,
-        U_ID,
         학년도,
-        계산유형,
-        총점,
+        U_ID,
         실기,
         실기총점,
         실기모드
-      FROM jungsi.${PRACTICAL_TABLE}
+      FROM 정시반영비율
       WHERE 학년도 = ?
-        AND 실기 IS NOT NULL
-        AND TRIM(실기) <> ''
-        AND TRIM(실기) <> '0'
+        AND (실기 IS NOT NULL AND 실기 <> '' AND 실기 <> '0')
       ORDER BY id ASC
+      LIMIT ? OFFSET ?
       `,
-      [year]
+      [year, limit, offset]
     );
 
-    // 인덱스 기반 작업자 할당
-    const indexed = rows.map((row, idx) => {
-      const w = findPracticalWorkerByIndex(idx);
-      return {
-        ...row,
-        _idx: idx,
-        _worker: w.name
-      };
-    });
-
-    const filtered = worker
-      ? indexed.filter(r => r._worker === worker)
-      : indexed;
-
+    // 여기서 worker 로직은 단순 “할당”이라서 프론트에서 limit/offset으로 나누라고 했지?
+    // 그래서 서버는 그냥 덩어리만 던져주도록 할게.
     res.json({
       success: true,
       year,
-      worker: worker || 'all',
-      total: indexed.length,
-      count: filtered.length,
-      items: filtered
+      count: rows.length,
+      rows
     });
-
   } catch (err) {
-    console.error('[practical-mode/list] error:', err);
+    console.error('/jungsi/practical-mode/list error', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
+
 
 /**
  * POST /jungsi/practical-mode/set
@@ -5691,29 +5677,30 @@ app.get('/jungsi/practical-mode/list', async (req, res) => {
  * - 실기모드 변경
  * - 토큰 없음
  */
+// 실기모드(basic/special) 저장
 app.post('/jungsi/practical-mode/set', async (req, res) => {
-  const { U_ID, mode } = req.body || {};
-
-  if (!U_ID || !mode) {
-    return res.status(400).json({ success: false, message: 'U_ID와 mode가 필요합니다.' });
+  const { id, mode } = req.body; // mode: 'basic' | 'special'
+  if (!id || !mode) {
+    return res.status(400).json({ success: false, message: 'id 와 mode 는 필수입니다.' });
   }
+
   if (!['basic', 'special'].includes(mode)) {
-    return res.status(400).json({ success: false, message: 'mode는 basic 또는 special 중 하나여야 합니다.' });
+    return res.status(400).json({ success: false, message: 'mode 는 basic 또는 special 만 가능합니다.' });
   }
 
   try {
-    const [result] = await db.promise().query(
-      `UPDATE jungsi.${PRACTICAL_TABLE} SET 실기모드 = ? WHERE U_ID = ?`,
-      [mode, U_ID]
+    const [result] = await db.query(
+      `UPDATE 정시반영비율 SET 실기모드 = ? WHERE id = ?`,
+      [mode, id]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: '해당 U_ID 레코드를 찾을 수 없습니다.' });
+      return res.status(404).json({ success: false, message: '해당 id 를 가진 행이 없습니다.' });
     }
 
-    res.json({ success: true, U_ID, mode });
+    res.json({ success: true, id, mode });
   } catch (err) {
-    console.error('[practical-mode/set] error:', err);
+    console.error('/jungsi/practical-mode/save error', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
