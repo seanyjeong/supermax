@@ -5816,6 +5816,77 @@ app.post('/jungsi/practical-mode/set', async (req, res) => {
   }
 });
 
+// jungsi.js 안쪽
+
+app.post('/jungsi/match-original-weights', authMiddleware, async (req, res) => {
+  const limit = Number(req.body.limit || 200); // 한 번에 200개만
+
+  try {
+    // 1. 매칭 안 된 원본 가져오기
+    const [rows] = await db.query(`
+      SELECT id, 학년도, 대학명, 학과명
+      FROM 정시_원본반영표
+      WHERE (매칭_U_ID IS NULL OR 매칭_U_ID = '' OR 매칭상태 = '대기')
+      LIMIT ?
+    `, [limit]);
+
+    if (rows.length === 0) {
+      return res.json({ success: true, message: '매칭할 데이터 없음', matched: 0 });
+    }
+
+    let matched = 0, failed = 0, multi = 0;
+
+    for (const r of rows) {
+      // 2. 정시기본에서 찾기
+      const [cands] = await db.query(`
+        SELECT U_ID
+        FROM 정시기본
+        WHERE 학년도 = ? AND 대학명 = ? AND 학과명 = ?
+      `, [r.학년도, r.대학명, r.학과명]);
+
+      if (cands.length === 1) {
+        // 성공
+        await db.query(`
+          UPDATE 정시_원본반영표
+          SET 매칭_U_ID = ?, 매칭상태 = '성공'
+          WHERE id = ?
+        `, [cands[0].U_ID, r.id]);
+        matched++;
+      } else if (cands.length === 0) {
+        // 실패
+        await db.query(`
+          UPDATE 정시_원본반영표
+          SET 매칭상태 = '실패'
+          WHERE id = ?
+        `, [r.id]);
+        failed++;
+      } else {
+        // 여러개
+        await db.query(`
+          UPDATE 정시_원본반영표
+          SET 매칭상태 = '여러개'
+          WHERE id = ?
+        `, [r.id]);
+        multi++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: '매칭 완료',
+      matched,
+      failed,
+      multi,
+      processed: rows.length
+    });
+
+  } catch (err) {
+    console.error('match-original-weights error', err);
+    res.status(500).json({ success: false, message: '서버 오류', error: err.message });
+  }
+});
+
+
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
