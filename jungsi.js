@@ -1542,41 +1542,45 @@ app.post('/jungsi/counseling/wishlist/bulk-save', authMiddleware, async (req, re
 
   const conn = await db.getConnection();
   try {
-    await conn.beginTransaction();
+    await conn.beginTransaction(); // --- 1. 트랜잭션 시작 ---
 
-    const sql = `
+    // ⭐️⭐️⭐️ 2. [수정] 이 학생의 해당 년도 모든 목록을 먼저 삭제 ⭐️⭐️⭐️
+    const deleteSql = 'DELETE FROM jungsi.정시_상담목록 WHERE 학생_ID = ? AND 학년도 = ?';
+    await conn.query(deleteSql, [학생_ID, 학년도]);
+    console.log(`[bulk-save] Cleared old wishlist for student ${학생_ID}, year ${학년도}`);
+
+
+    // 3. [수정] ON DUPLICATE KEY UPDATE 구문이 필요 없는 단순 INSERT 쿼리로 변경
+    const insertSql = `
       INSERT INTO jungsi.정시_상담목록
         (학생_ID, 학년도, 모집군, 대학학과_ID,
          상담_수능점수, 상담_내신점수, 상담_실기기록, 상담_실기반영점수,
          상담_계산총점)
       VALUES (?,?,?,?, ?,?,?,?, ?)
-      ON DUPLICATE KEY UPDATE
-         모집군=VALUES(모집군),
-         상담_수능점수=VALUES(상담_수능점수),
-         상담_내신점수=VALUES(상담_내신점수),
-         상담_실기기록=VALUES(상담_실기기록),
-         상담_실기반영점수=VALUES(상담_실기반영점수),
-         상담_계산총점=VALUES(상담_계산총점)
-    `;
+    `; 
 
-    for (const it of wishlistItems) {
-      const silgiJSON = it.상담_실기기록 && Object.keys(it.상담_실기기록).length
-        ? JSON.stringify(it.상담_실기기록) : null;
+    // 4. 새 목록을 INSERT (wishlistItems가 0개면 이 루프는 그냥 건너뜀)
+    if (wishlistItems.length > 0) {
+        for (const it of wishlistItems) {
+          const silgiJSON = it.상담_실기기록 && Object.keys(it.상담_실기기록).length
+            ? JSON.stringify(it.상담_실기기록) : null;
 
-      await conn.query(sql, [
-        학생_ID, 학년도, it.모집군, it.대학학과_ID,
-        it.상담_수능점수 ?? null,
-        it.상담_내신점수 ?? null,
-        silgiJSON,
-        it.상담_실기반영점수 ?? null,
-        it.상담_계산총점 ?? null
-      ]);
+          await conn.query(insertSql, [ // ⭐️ insertSql 사용
+            학생_ID, 학년도, it.모집군, it.대학학과_ID,
+            it.상담_수능점수 ?? null,
+            it.상담_내신점수 ?? null,
+            silgiJSON,
+            it.상담_실기반영점수 ?? null,
+            it.상담_계산총점 ?? null
+          ]);
+        }
     }
 
-    await conn.commit();
+    await conn.commit(); // --- 5. 커밋 ---
+    console.log(`[bulk-save] Saved ${wishlistItems.length} new items.`);
     res.json({ success:true, saved:wishlistItems.length });
   } catch (e) {
-    await conn.rollback();
+    await conn.rollback(); // --- 6. 롤백 ---
     console.error('wishlist bulk-save error:', e);
     res.status(500).json({ success:false, message:'DB 오류' });
   } finally {
