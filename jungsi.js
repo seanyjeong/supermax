@@ -6041,27 +6041,24 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
     }
 
     try {
-        // ⭐️ 참고: 정시_원본반영표 (jov)는 매칭이 완료 (매칭_U_ID)된 것을 기준으로 LEFT JOIN 합니다.
-        //    매칭이 안된 대학은 jov.* 필드가 NULL로 나옵니다.
-        // ⭐️ 2025-11-01 수정: GROUP BY 기준 컬럼을 원본표(jov)까지 포함하도록 수정
+        // ⭐️ [수정] jb.시구, jb.모집정원 SELECT 및 GROUP BY에 추가
         const sql = `
             SELECT
-                jb.U_ID, jb.대학명, jb.학과명, jb.군, jb.광역 AS '지역', jb.교직,
+                jb.U_ID, jb.대학명, jb.학과명, jb.군, jb.광역 AS '지역', jb.시구, jb.교직, jb.모집정원,
                 jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.한국사_raw, jov.탐구수_raw,
                 GROUP_CONCAT(DISTINCT je.종목명 SEPARATOR ',') AS practical_events
             FROM 정시기본 jb
             LEFT JOIN 정시_원본반영표 jov ON jb.U_ID = jov.매칭_U_ID AND jb.학년도 = jov.학년도
             LEFT JOIN 정시실기배점 je ON jb.U_ID = je.U_ID AND jb.학년도 = je.학년도
             WHERE jb.학년도 = ?
-            GROUP BY jb.U_ID, jb.대학명, jb.학과명, jb.군, jb.광역, jb.교직,
+            GROUP BY jb.U_ID, jb.대학명, jb.학과명, jb.군, jb.광역, jb.시구, jb.교직, jb.모집정원,
                      jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.한국사_raw, jov.탐구수_raw
             ORDER BY jb.대학명, jb.학과명;
         `;
         
-        // ⭐️ db (jungsi DB) 사용
         const [data] = await db.query(sql, [year]);
 
-        console.log(` -> ${data.length}건의 필터 데이터 조회 완료`);
+        console.log(` -> ${data.length}건의 필터 데이터 조회 완료 (시구, 모집정원 포함)`);
         res.json({ success: true, data: data });
 
     } catch (err) {
