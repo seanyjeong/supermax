@@ -5692,38 +5692,58 @@ app.get('/jungsi/practical-mode/workers', (req, res) => {
  */
 // jungsi.js 안에 그대로 추가
 app.get('/jungsi/practical-mode/list', async (req, res) => {
-  const year = req.query.year ? Number(req.query.year) : new Date().getFullYear() + 1; // 2026 이런 거
-  const worker = (req.query.worker || '').trim();  // 'daejeon' 같은 거
-  const limit = req.query.limit ? Number(req.query.limit) : 40;
-  const offset = req.query.offset ? Number(req.query.offset) : 0;
+  const year = req.query.year ? Number(req.query.year) : new Date().getFullYear() + 1; // 2026
+  const worker = (req.query.worker || '').trim();  // '대전', '강남' 등
+
+  // ⭐️ [수정 1] 작업자(worker) 파라미터에 따라 limit, offset 동적 설정
+  let limit = 10000; // '전체' (worker가 null)일 때 기본값 (충분히 크게)
+  let offset = 0;
+
+  if (worker) {
+    const slot = PRACTICAL_WORKER_SLOTS.find(w => w.name === worker);
+    if (slot) {
+      offset = slot.start;
+      limit = slot.end - slot.start;
+      // 대구(end: 999999)가 너무 크지 않게 적당히 제한
+      if (limit > 5000) limit = 5000; 
+    } else {
+      // '전체'가 아닌데 일치하는 작업자가 없으면 빈 값 반환
+      console.log(`[practical-mode/list] 일치하는 작업자 없음: ${worker}`);
+      return res.json({ success: true, year, count: 0, items: [] });
+    }
+  }
+
+  console.log(`[practical-mode/list] Querying: year=${year}, worker=${worker || '전체'}, limit=${limit}, offset=${offset}`);
 
   try {
-    // 실기 비율 있는 애들만
+    // ⭐️ [수정 2] 쿼리 수정: 정시기본 JOIN, 컬럼(대학명, 학과명) 추가, 별칭(id -> _idx)
     const [rows] = await db.query(
       `
       SELECT
-        id,
-        학년도,
-        U_ID,
-        실기,
-        실기총점,
-        실기모드
-      FROM 정시반영비율
-      WHERE 학년도 = ?
-        AND (실기 IS NOT NULL AND 실기 <> '' AND 실기 <> '0')
-      ORDER BY id ASC
+        r.id as _idx,
+        r.학년도,
+        r.U_ID,
+        b.대학명,
+        b.학과명,
+        r.실기,
+        r.실기총점,
+        r.실기모드
+      FROM 정시반영비율 AS r
+      JOIN 정시기본 AS b ON r.U_ID = b.U_ID AND r.학년도 = b.학년도
+      WHERE r.학년도 = ?
+        AND (r.실기 IS NOT NULL AND r.실기 <> '' AND r.실기 <> '0')
+      ORDER BY r.id ASC
       LIMIT ? OFFSET ?
       `,
-      [year, limit, offset]
+      [year, limit, offset] // ⭐️ 수정된 limit, offset 사용
     );
 
-    // 여기서 worker 로직은 단순 “할당”이라서 프론트에서 limit/offset으로 나누라고 했지?
-    // 그래서 서버는 그냥 덩어리만 던져주도록 할게.
+    // ⭐️ [수정 3] 프론트가 기대하는 'items' 키로 응답
     res.json({
       success: true,
       year,
       count: rows.length,
-      rows
+      items: rows
     });
   } catch (err) {
     console.error('/jungsi/practical-mode/list error', err);
