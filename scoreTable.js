@@ -321,145 +321,36 @@ router.post('/save-test-records', async (req, res) => {
 
 router.get('/test-months', async (req, res) => {
   try {
-    const rows = await dbQuery(
-      'SELECT DISTINCT test_month FROM 실기기록_테스트 ORDER BY test_month DESC'
-    );
+    // 1) DB에서 공백 제거해서 가져오고
+    const rows = await dbQuery(`
+      SELECT DISTINCT TRIM(test_month) AS test_month
+      FROM 실기기록_테스트
+      WHERE test_month IS NOT NULL AND TRIM(test_month) <> ''
+      ORDER BY TRIM(test_month) DESC
+    `);
 
-    const months = rows
-      .map(r => r.test_month)
-      .filter(m => m && m.trim() !== '');
+    // 2) 자바스크립트에서 한 번 더 정리 + 중복제거
+    const seen = new Set();
+    const months = [];
+    for (const r of rows) {
+      const m = (r.test_month || '').trim();
+      if (!m) continue;
+      if (!seen.has(m)) {
+        seen.add(m);
+        months.push(m);
+      }
+    }
 
     res.json({ success: true, months });
   } catch (err) {
+    console.error(err);
     res.json({ success: false, error: err });
   }
 });
 
-// 전체 학생 목록 (select box용)
-router.get('/student-list', async (req, res) => {
-  try {
-    const rows = await dbQuery(`
-      SELECT 
-        MIN(id) AS ref_id,
-        exam_number,
-        name,
-        school,
-        grade,
-        gender
-      FROM 실기기록_테스트
-      GROUP BY exam_number, name, school, grade, gender
-      ORDER BY exam_number
-    `);
-
-    res.json({
-      success: true,
-      students: rows.map(r => ({
-        exam_number: r.exam_number,
-        name: r.name,
-        school: r.school,
-        grade: r.grade,
-        gender: r.gender
-      }))
-    });
-  } catch (err) {
-    res.json({ success: false, error: err });
-  }
-});
-// 특정 학생 히스토리 (test_month별 전부)
-router.get('/student-history', async (req, res) => {
-  const { exam_number } = req.query;
-  if (!exam_number) {
-    return res.json({ success: false, error: 'exam_number_required' });
-  }
-
-  try {
-    // created_at이 DB에 있으니까 그걸로 시간 순서 정렬
-    const rows = await dbQuery(
-      `SELECT 
-        test_month,
-        jump_cm,
-        run20m_sec,
-        run10m_sec,
-        sit_reach_cm,
-        situp_count,
-        back_strength,
-        medball_m,
-        total_score
-      FROM 실기기록_테스트
-      WHERE exam_number = ?
-      ORDER BY created_at ASC, test_month ASC`,
-      [exam_number]
-    );
-
-    res.json({
-      success: true,
-      history: rows
-    });
-  } catch (err) {
-    res.json({ success: false, error: err });
-  }
-});
-// 이름 목록만 (중복 제거)
-router.get('/student-names', async (req, res) => {
-  try {
-    const rows = await dbQuery(`
-      SELECT name, MIN(school) AS school, MIN(grade) AS grade, MIN(gender) AS gender
-      FROM 실기기록_테스트
-      GROUP BY name
-      ORDER BY name
-    `);
-
-    res.json({
-      success: true,
-      students: rows.map(r => ({
-        name: r.name,
-        school: r.school,
-        grade: r.grade,
-        gender: r.gender
-      }))
-    });
-  } catch (err) {
-    res.json({ success: false, error: err });
-  }
-});
-
-router.get('/student-history-by-name', async (req, res) => {
-  const { name } = req.query;
-  if (!name) {
-    return res.json({ success: false, error: 'name_required' });
-  }
-
-  try {
-    const rows = await dbQuery(
-      `SELECT 
-        test_month,
-        jump_cm,
-        run20m_sec,
-        run10m_sec,
-        sit_reach_cm,
-        situp_count,
-        back_strength,
-        medball_m,
-        total_score,
-        school,
-        grade,
-        gender
-      FROM 실기기록_테스트
-      WHERE name = ?
-      ORDER BY created_at ASC, test_month ASC`,
-      [name]
-    );
-
-    res.json({
-      success: true,
-      history: rows
-    });
-  } catch (err) {
-    res.json({ success: false, error: err });
-  }
-});
 
 
 module.exports = router;
+
 
 
