@@ -348,48 +348,99 @@ router.get('/test-months', async (req, res) => {
   }
 });
 
+router.get('/student-history', async (req, res) => {
+  const { exam_number } = req.query;
+  if (!exam_number) {
+    return res.json({ success: false, error: 'exam_number_required' });
+  }
+
+  try {
+    // created_at이 DB에 있으니까 그걸로 시간 순서 정렬
+    const rows = await dbQuery(
+      `SELECT 
+        test_month,
+        jump_cm,
+        run20m_sec,
+        run10m_sec,
+        sit_reach_cm,
+        situp_count,
+        back_strength,
+        medball_m,
+        total_score
+      FROM 실기기록_테스트
+      WHERE exam_number = ?
+      ORDER BY created_at ASC, test_month ASC`,
+      [exam_number]
+    );
+
+    res.json({
+      success: true,
+      history: rows
+    });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
+});
+// 이름 목록만 (중복 제거)
 router.get('/student-names', async (req, res) => {
-  try {
-    // 각 학생의 이름과 (가장 최근이든 아니든) 정보를 가져옴
-    // HTML에서 {name, school, grade, gender} 형식을 기대함
-    const studentsList = await dbQuery(`
-      SELECT 
-        name, 
-        ANY_VALUE(school) as school, 
-        ANY_VALUE(grade) as grade, 
-        ANY_VALUE(gender) as gender
-      FROM 실기기록_테스트
-      WHERE name IS NOT NULL AND TRIM(name) <> ''
-      GROUP BY name
-      ORDER BY name
-    `);
-    res.json({ success: true, students: studentsList });
-  } catch (err) {
-    console.error(err);
-    res.json({ success: false, error: 'server_error' });
-  }
+  try {
+    const rows = await dbQuery(`
+      SELECT name, MIN(school) AS school, MIN(grade) AS grade, MIN(gender) AS gender
+      FROM 실기기록_테스트
+      GROUP BY name
+      ORDER BY name
+    `);
+
+    res.json({
+      success: true,
+      students: rows.map(r => ({
+        name: r.name,
+        school: r.school,
+        grade: r.grade,
+        gender: r.gender
+      }))
+    });
+  } catch (err) {
+
+    res.json({ success: false, error: err });
+  }
 });
 
-// [추가] 2. 특정 학생의 전체 기록 (테이블/차트용)
 router.get('/student-history-by-name', async (req, res) => {
-  const { name } = req.query;
-  if (!name) {
-    return res.json({ success: false, error: '이름 없음' });
-  }
+  const { name } = req.query;
+  if (!name) {
+    return res.json({ success: false, error: 'name_required' });
+  }
 
-  try {
-    // 차트가 시간순으로 그려져야 하므로 test_month로 정렬 (ASC:오름차순)
-    const history = await dbQuery(
-      'SELECT * FROM 실기기록_테스트 WHERE name = ? ORDER BY test_month ASC',
-      [name]
-    );
-    res.json({ success: true, history: history });
-  } catch (err) {
-    console.error(err);
-    res.json({ success: false, error: 'server_error' });
-  }
+  try {
+    const rows = await dbQuery(
+      `SELECT 
+        test_month,
+        jump_cm,
+        run20m_sec,
+        run10m_sec,
+        sit_reach_cm,
+        situp_count,
+        back_strength,
+        medball_m,
+        total_score,
+        school,
+        grade,
+        gender
+      FROM 실기기록_테스트
+      WHERE name = ?
+      ORDER BY created_at ASC, test_month ASC`,
+      [name]
+    );
+
+    res.json({
+      success: true,
+      history: rows
+    });
+  } catch (err) {
+    res.json({ success: false, error: err });
+  }
 });
-
 
 
 module.exports = router;
