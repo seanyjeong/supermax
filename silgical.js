@@ -57,6 +57,37 @@ function lookupDeductionLevel(studentScore, scoreTable) {
     // (100점 -> 0 (0감), 98점 -> 1 (1감), 96점 -> 2 (2감))
     return (levelIndex === -1) ? 0 : levelIndex; 
 }
+// ⭐️ 학생 실기기록을 대학 실기배점표와 매칭해서 "종목별 점수 배열"로 돌려주는 헬퍼
+function buildPracticalScoreList(studentRecords = [], scoreTable = []) {
+  // studentRecords: [{event:'제자리멀리뛰기', record:'230', gender:'남'}, ...] 이런 걸로 온다고 가정
+  const out = [];
+
+  for (const rec of studentRecords) {
+    const eventName = rec.event || rec.종목명;
+    if (!eventName) continue;
+
+    // 이 종목에 해당하는 배점표만 필터
+    const tableForEvent = scoreTable.filter(row => {
+      // DB에 성별까지 있으면 맞춰서
+      if (rec.gender && row.성별 && row.성별 !== rec.gender) return false;
+      return row.종목명 === eventName;
+    });
+
+    const { method } = getEventRules(eventName);
+    const score = lookupScore(rec.record, method, tableForEvent, '0점'); // 기존 lookup 그대로
+    const maxScore = findMaxScore(tableForEvent);
+
+    out.push({
+      event: eventName,
+      record: rec.record,
+      score: Number(score || 0),
+      maxScore: Number(maxScore || 100)
+    });
+  }
+
+  return out;
+}
+
 
 
 /**
@@ -319,4 +350,7 @@ module.exports = (db, authMiddleware) => {
   });
 
   return router; // ⭐️ 라우터를 반환
+  
 };
+module.exports.buildPracticalScoreList = buildPracticalScoreList;
+module.exports.findMaxScore = findMaxScore;
