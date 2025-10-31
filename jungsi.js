@@ -5589,6 +5589,136 @@ app.get('/jungsi/director/stats/student-distribution', authMiddleware, isDirecto
     }
 });
 
+
+//실기요청부분
+// ================================
+// 정시 실기모드 관리 (토큰 없이)
+// ================================
+
+// 👉 스키마+테이블명 정확히 맞춤
+const PRACTICAL_TABLE = '정시반영비율';
+
+// 1) 작업자 구간 정의
+const PRACTICAL_WORKER_SLOTS = [
+  { name: '대전', start: 0, end: 40 },    // 0~39
+  { name: '강남', start: 40, end: 80 },   // 40~79
+  { name: '울산', start: 80, end: 120 },  // 80~119
+  { name: '대구', start: 120, end: 999999 } // 나머지 전부
+];
+
+// 헬퍼
+function findPracticalWorkerByIndex(idx) {
+  return PRACTICAL_WORKER_SLOTS.find(w => idx >= w.start && idx < w.end)
+      || PRACTICAL_WORKER_SLOTS[PRACTICAL_WORKER_SLOTS.length - 1];
+}
+
+/**
+ * GET /jungsi/practical-mode/workers
+ * → 현재 작업자 구간 정보
+ */
+app.get('/jungsi/practical-mode/workers', (req, res) => {
+  res.json({
+    success: true,
+    workers: PRACTICAL_WORKER_SLOTS
+  });
+});
+
+/**
+ * GET /jungsi/practical-mode/list?year=2026&worker=대전
+ * - 실기 비율이 있는 학과만
+ * - 작업자 구간별 분할
+ * - 토큰 없음
+ */
+app.get('/jungsi/practical-mode/list', async (req, res) => {
+  const year = req.query.year ? Number(req.query.year) : (new Date().getFullYear() + 1);
+  const worker = req.query.worker || null;
+
+  try {
+    // 실기 비율 있는 학과만
+    const [rows] = await db.promise().query(
+      `
+      SELECT 
+        id,
+        U_ID,
+        학년도,
+        계산유형,
+        총점,
+        실기,
+        실기총점,
+        실기모드
+      FROM jungsi.${PRACTICAL_TABLE}
+      WHERE 학년도 = ?
+        AND 실기 IS NOT NULL
+        AND TRIM(실기) <> ''
+        AND TRIM(실기) <> '0'
+      ORDER BY id ASC
+      `,
+      [year]
+    );
+
+    // 인덱스 기반 작업자 할당
+    const indexed = rows.map((row, idx) => {
+      const w = findPracticalWorkerByIndex(idx);
+      return {
+        ...row,
+        _idx: idx,
+        _worker: w.name
+      };
+    });
+
+    const filtered = worker
+      ? indexed.filter(r => r._worker === worker)
+      : indexed;
+
+    res.json({
+      success: true,
+      year,
+      worker: worker || 'all',
+      total: indexed.length,
+      count: filtered.length,
+      items: filtered
+    });
+
+  } catch (err) {
+    console.error('[practical-mode/list] error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /jungsi/practical-mode/set
+ * body: { U_ID: 123, mode: "basic" | "special" }
+ * - 실기모드 변경
+ * - 토큰 없음
+ */
+app.post('/jungsi/practical-mode/set', async (req, res) => {
+  const { U_ID, mode } = req.body || {};
+
+  if (!U_ID || !mode) {
+    return res.status(400).json({ success: false, message: 'U_ID와 mode가 필요합니다.' });
+  }
+  if (!['basic', 'special'].includes(mode)) {
+    return res.status(400).json({ success: false, message: 'mode는 basic 또는 special 중 하나여야 합니다.' });
+  }
+
+  try {
+    const [result] = await db.promise().query(
+      `UPDATE jungsi.${PRACTICAL_TABLE} SET 실기모드 = ? WHERE U_ID = ?`,
+      [mode, U_ID]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: '해당 U_ID 레코드를 찾을 수 없습니다.' });
+    }
+
+    res.json({ success: true, U_ID, mode });
+  } catch (err) {
+    console.error('[practical-mode/set] error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
