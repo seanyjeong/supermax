@@ -110,51 +110,62 @@ const silgicalRouter = require('./silgical.js')(db, authMiddleware); //
 // ⭐️ [핵심 2] '/jungsi' 라는 주소로 들어오는 모든 요청은 jungsicalRouter(계산기 부품)에게 넘긴다.
 app.use('/jungsi', jungsicalRouter);
 app.use('/silgi', silgicalRouter);
+const { buildPracticalScoreList } = require('./silgical.js');
 
 
+function calcPracticalBasic(F, list) {
+  // F: 정시반영비율 한 줄
+  // list: silgical.buildPracticalScoreList(...) 결과
+  const ratio = Number(F.실기 || 0);       // 실기 비중 (%)
+  const total = Number(F.총점 || 1000);    // 전체 총점 (보통 1000)
+  const slot = total * (ratio / 100);       // 실기에 배정되는 점수
 
-// async function loadYearHighestMap(db, year, exam) {
-//   try { // DB 에러 방지용 try-catch 추가
-//     const [rows] = await db.query(
-//       'SELECT 과목명, 최고점 FROM `정시최고표점` WHERE 학년도=? AND 모형=?',
-//       [year, exam]
-//     );
-//     const map = {};
-//     rows.forEach(r => { map[r.과목명] = Number(r.최고점); });
-//     return map;
-//   } catch (err) {
-//     console.error(`Error loading highest map for ${year} ${exam}:`, err);
-//     return {}; // 에러 시 빈 객체 반환
-//   }
-// }
+  if (!list || list.length === 0) return 0;
 
-// function guessInquiryGroup(subjectName='') {
-//   const s = String(subjectName);
-//   const sci = ['물리','화학','생명','지구'];
-//   if (sci.some(w => s.includes(w))) return '과탐';
-//   // 그 외에는 사탐으로 간주 (직탐 등 예외처리 필요 시 추가)
-//   return '사탐';
-// }
+  // 종목 여러 개 있으면 프론트가 다 보내줄 거니까 평균으로
+  const avg = list.reduce((s, r) => s + (r.score || 0), 0) / list.length; // 0~100이라고 가정
+  return (avg / 100) * slot;
+}
 
-// jungsical.js에서 계산 함수 가져오기 (이미 되어있다면 이 부분은 생략 가능)
-// 만약 jungsical.js export 방식이 다르다면 맞춰서 수정 필요
-// let calculateScoreWithConv; // 전역 변수로 선언
-// try {
-//     // calculateScoreWithConv 함수가 jungsical 모듈의 export 객체에 포함되어 있다고 가정
-//     const jungsicalModule = require('./jungsical.js')(db, authMiddleware);
-//     if (typeof jungsicalModule.calculateScoreWithConv === 'function') {
-//         calculateScoreWithConv = jungsicalModule.calculateScoreWithConv;
-//     } else {
-//         // jungsical.js 가 router만 export 하는 경우, calculateScoreWithConv 정의를 여기로 복사해야 할 수도 있음
-//         console.error("!!! calculateScoreWithConv 함수를 jungsical.js에서 찾을 수 없습니다. !!!");
-//         // 임시 방편으로 calculateScoreWithConv 함수 정의를 여기에 직접 넣거나,
-//         // jungsical.js의 export 방식을 수정해야 함.
-//         // calculateScoreWithConv = function(...) { /* jungsical.js의 함수 내용 복사 */ };
-//     }
-// } catch (e) {
-//     console.error("jungsical.js 로드 또는 calculateScoreWithConv 가져오기 실패:", e);
-//     // calculateScoreWithConv 함수 정의를 복사하는 방식으로 대체 필요
-// }
+function practicalTopN(list, n, maxScore) {
+  if (!list || list.length === 0) return 0;
+  const sorted = [...list].sort((a,b) => (b.score || 0) - (a.score || 0));
+  const picked = sorted.slice(0, n);
+  const sum = picked.reduce((s, r) => s + (r.score || 0), 0);
+  // n개 × 100점 기준을 우리가 원하는 maxScore로 스케일
+  return (sum / (n * 100)) * maxScore;
+}
+
+function practicalAverage(list, maxScore) {
+  if (!list || list.length === 0) return 0;
+  const avg = list.reduce((s, r) => s + (r.score || 0), 0) / list.length;
+  return (avg / 100) * maxScore;
+}
+
+function calcPracticalSpecial(F, list) {
+  // list 중에서 프론트가 "-"로 보였던 애들(점수 0)은 빼고 계산
+  const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
+
+  const uid = Number(F.U_ID);
+  const cfg = typeof F.실기특수설정 === 'string'
+    ? JSON.parse(F.실기특수설정)
+    : (F.실기특수설정 || {});
+
+  switch (uid) {
+    // ↓↓↓ 여기서부터는 네가 실제 있는 학교 U_ID 넣으면 됨 ↓↓↓
+    case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
+      return practicalTopN(cleaned, 2, cfg.maxScore || 180);
+
+    case 5678: // 예: △△대 - 전체 평균, 150점 만점
+      return practicalAverage(cleaned, cfg.maxScore || 150);
+
+    // ↑↑↑ 여기는 네가 필요한 만큼 케이스 추가 ↑↑↑
+
+    default:
+      // special인데도 등록 안 돼 있으면 일단 기본으로라도 돌리기
+      return calcPracticalBasic(F, cleaned);
+  }
+}
 
 // --- API 목록 ---
 // [API #1] 특정 '학년도'의 전체 학교 목록 조회 (모든 규칙 포함 버전)
@@ -634,6 +645,57 @@ app.post('/jungsi/grade-cuts/set-bulk', authMiddleware, async (req, res, next) =
         // (파일 맨 마지막에 에러 핸들링 미들웨어가 있어야 함)
         next(err); 
     }
+});
+
+app.post('/jungsi/calc-practical', authMiddleware, async (req, res) => {
+  try {
+    const { U_ID, year, practical } = req.body;
+    if (!U_ID || !year) {
+      return res.status(400).json({ success:false, message:'U_ID, year 필요' });
+    }
+
+    // 1) 이 대학의 정시반영비율(=실기모드, 실기비중 등) 가져오기
+    const [rows] = await db.query(
+      "SELECT * FROM `정시반영비율` WHERE U_ID=? AND 학년도=?",
+      [U_ID, year]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success:false, message:'대학 정보 없음' });
+    }
+    const F = rows[0];
+
+    // 2) 이 대학의 실기 배점표
+    const [scoreRows] = await db.query(
+      "SELECT * FROM `정시실기배점` WHERE U_ID=? AND 학년도=? ORDER BY 종목명, 성별, 기록",
+      [U_ID, year]
+    );
+
+    // 3) 학생 실기 기록을 → 점수 배열로 변환 (silgical.js 헬퍼 사용)
+    const silgical = require('./silgical.js');
+    const list = silgical.buildPracticalScoreList(practical || [], scoreRows);
+
+    // 4) 모드에 따라 분기
+    const mode = F.실기모드 || 'basic';
+    let practicalScore = 0;
+
+    if (mode === 'special') {
+      practicalScore = calcPracticalSpecial(F, list);
+    } else {
+      practicalScore = calcPracticalBasic(F, list);
+    }
+
+    // 5) 프론트는 종목별 배점 그대로 쓰니까 우리는 총점만 뱉어줌
+    return res.json({
+      success: true,
+      mode,
+      practicalScore,
+      detail: list   // 이건 프론트가 필요하면 쓰고, 아니면 무시
+    });
+
+  } catch (err) {
+    console.error('❌ /jungsi/calc-practical 오류:', err);
+    return res.status(500).json({ success:false, message:'서버 오류', error:String(err) });
+  }
 });
 
 
@@ -5588,7 +5650,6 @@ app.get('/jungsi/director/stats/student-distribution', authMiddleware, isDirecto
         res.status(500).json({ success: false, message: 'DB 조회 또는 집계 중 오류 발생' });
     }
 });
-
 
 //실기요청부분
 // ================================
