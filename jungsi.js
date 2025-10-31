@@ -5886,6 +5886,175 @@ app.post('/jungsi/match-original-weights', authMiddleware, async (req, res) => {
   }
 });
 
+// jungsi.js 안
+app.post('/jungsi/apply-original-weights', authMiddleware, async (req, res) => {
+  const limit = Number(req.body.limit || 200);
+
+  try {
+    // 1. 원본에서 매칭된 애들만
+    const [rows] = await db.query(`
+      SELECT id, 학년도, 매칭_U_ID,
+             국어_raw, 수학_raw, 영어_raw, 탐구_raw, 탐구수_raw, 한국사_raw
+      FROM 정시_원본반영표
+      WHERE 매칭_U_ID IS NOT NULL
+        AND 매칭_U_ID <> ''
+        AND 매칭상태 = '성공'
+      LIMIT ?
+    `, [limit]);
+
+    let updated = 0;
+
+    for (const r of rows) {
+      const pk = { u: r.매칭_U_ID, year: r.학년도 };
+
+      const kor  = parseCell(r.국어_raw);
+      const math = parseCell(r.수학_raw);
+      const eng  = parseCell(r.영어_raw);
+      const inq  = parseCell(r.탐구_raw);
+      const hist = parseHistory(r.한국사_raw);
+
+      // 몇 개가 괄호인지 세자
+      const choiceFlags = [
+        isChoice(kor),
+        isChoice(math),
+        isChoice(eng),
+        isChoice(inq)
+      ];
+      const choiceCount = choiceFlags.filter(Boolean).length;
+
+      // 가중치 하나만 뽑자 (순서대로 찾기)
+      const weight =
+        kor.weight   || 
+        math.weight  || 
+        eng.weight   || 
+        inq.weight   || 
+        null;
+
+      // 탐구 수 (1,2) - 너가 엑셀에 넣어둔 그 값
+      const inqCount = r.탐구수_raw ? Number(r.탐구수_raw) : null;
+
+      // 선택조건 만들기
+      let 선택형여부 = 0;
+      let 선택조건   = null;
+
+      if (choiceCount === 4) {
+        // 국수영탐 다 괄호
+        선택형여부 = 1;
+        if (inqCount === 1) 선택조건 = '국수영탐택1';
+        else 선택조건 = '국수영탐택2';
+      } else if (choiceCount === 3) {
+        // 국수영 셋만 괄호거나, 국+수+탐 이런 조합
+        선택형여부 = 1;
+        if (isChoice(kor) && isChoice(math) && isChoice(eng)) {
+          // 국수영만 선택, 탐구는 고정
+          if (inqCount === 1) 선택조건 = '국수영택1';
+          else 선택조건 = '국수영택2';
+        } else if (isChoice(inq)) {
+          // 탐구는 선택인데 나머지 둘 중 하나가 고정
+          if (inqCount === 1) 선택조건 = '탐구택1';
+          else 선택조건 = '탐구택2';
+        } else {
+          // 애매하면 그냥 전체 선택으로 태그
+          선택조건 = '선택형';
+        }
+      } else if (choiceCount === 2) {
+        // 탐구만 선택으로 쓰는 케이스 많을 거라서 이거 따로
+        if (isChoice(inq)) {
+          선택형여부 = 1;
+          if (inqCount === 1) 선택조건 = '탐구택1';
+          else 선택조건 = '탐구택2';
+        } else {
+          // 나머진 걍 선택형으로만
+          선택형여부 = 1;
+          선택조건 = '선택형';
+        }
+      } else if (choiceCount === 1) {
+        // 한 과목만 괄호 → 이건 진짜 애매하니까 그냥 플래그만
+        선택형여부 = 1;
+        선택조건 = '선택형';
+      } else {
+        // 전부 숫자 → 선택 아님
+        선택형여부 = 0;
+        선택조건 = null;
+      }
+
+      // 한국사
+      const 한국사방식 = hist.mode;   // '가감점' '가산점' '감점' '필수응시' '점수' null
+      const 한국사점수 = hist.value;  // 30 ...
+
+      // 2. UPDATE
+      await db.query(`
+        UPDATE 정시반영비율
+        SET
+          선택형여부 = ?,
+          선택조건   = ?,
+          선택가중치 = ?,
+          한국사방식 = ?,
+          한국사점수 = ?
+        WHERE U_ID = ? AND 학년도 = ?
+      `, [
+        선택형여부,
+        선택조건,
+        weight,
+        한국사방식,
+        한국사점수,
+        pk.u,
+        pk.year
+      ]);
+
+      updated++;
+    }
+
+    res.json({ success: true, updated, processed: rows.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+
+  // ===== helpers =====
+  function isChoice(obj) {
+    return obj && (obj.type === 'choice' || obj.type === 'weight');
+  }
+
+  function parseCell(raw) {
+    if (!raw) return null;
+    const s = raw.trim();
+    // (35), (80/20)
+    if (s.startsWith('(') && s.endsWith(')')) {
+      const inner = s.slice(1, -1);
+      if (inner.includes('/')) {
+        return { type: 'weight', weight: inner };
+      }
+      const num = Number(inner);
+      return { type: 'choice', value: isNaN(num) ? inner : num };
+    }
+    // 숫자
+    const num = Number(s);
+    if (!isNaN(num)) return { type: 'fixed', value: num };
+    // 나머지 글자들은 그냥 냅둠
+    return { type: 'raw', value: s };
+  }
+
+  function parseHistory(raw) {
+    if (!raw) return { mode: null, value: null };
+    const s = raw.trim();
+    // 네가 말한 그 “대괄호 있는 딱 하나”
+    if (s.startsWith('[') && s.endsWith(']')) {
+      const inner = s.slice(1, -1);
+      const num = Number(inner);
+      return { mode: '점수', value: isNaN(num) ? null : num };
+    }
+    if (s === '가감점') return { mode: '가감점', value: null };
+    if (s === '가산점' || s === '가산') return { mode: '가산점', value: null };
+    if (s === '감점') return { mode: '감점', value: null };
+    if (s === '필수응시') return { mode: '필수응시', value: null };
+    const num = Number(s);
+    if (!isNaN(num)) return { mode: '점수', value: num };
+    return { mode: null, value: null };
+  }
+});
+
+
 
 
 app.listen(port, () => {
