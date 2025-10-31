@@ -5695,28 +5695,59 @@ app.get('/jungsi/practical-mode/list', async (req, res) => {
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear() + 1; // 2026
   const worker = (req.query.worker || '').trim();  // '대전', '강남' 등
 
-  // ⭐️ [수정 1] 작업자(worker) 파라미터에 따라 limit, offset 동적 설정
-  let limit = 10000; // '전체' (worker가 null)일 때 기본값 (충분히 크게)
-  let offset = 0;
-
-  if (worker) {
-    const slot = PRACTICAL_WORKER_SLOTS.find(w => w.name === worker);
-    if (slot) {
-      offset = slot.start;
-      limit = slot.end - slot.start;
-      // 대구(end: 999999)가 너무 크지 않게 적당히 제한
-      if (limit > 5000) limit = 5000; 
-    } else {
-      // '전체'가 아닌데 일치하는 작업자가 없으면 빈 값 반환
-      console.log(`[practical-mode/list] 일치하는 작업자 없음: ${worker}`);
-      return res.json({ success: true, year, count: 0, items: [] });
-    }
+  // ⭐️ [수정 1] 작업자(worker)가 없으면 "전체" 대신 무조건 빈 배열 반환
+  if (!worker) {
+    console.log(`[practical-mode/list] 작업자(worker) 파라미터가 없어 빈 값 반환`);
+    return res.json({ success: true, year, count: 0, items: [] });
   }
 
-  console.log(`[practical-mode/list] Querying: year=${year}, worker=${worker || '전체'}, limit=${limit}, offset=${offset}`);
+  // ⭐️ [수정 2] 작업자 순서 정의
+  const regions = ['대전', '강남', '울산', '대구'];
+  const workerIndex = regions.indexOf(worker);
+
+  if (workerIndex === -1) {
+    console.log(`[practical-mode/list] 정의되지 않은 작업자: ${worker}`);
+    return res.json({ success: true, year, count: 0, items: [] });
+  }
 
   try {
-    // ⭐️ [수정 2] 쿼리 수정: 정시기본 JOIN, 컬럼(대학명, 학과명) 추가, 별칭(id -> _idx)
+    // ⭐️ [수정 3] 1단계: n/4 계산을 위해 '총 개수' 먼저 조회
+    const countSql = `
+      SELECT COUNT(*) as totalCount
+      FROM 정시반영비율 AS r
+      WHERE r.학년도 = ?
+        AND (r.실기 IS NOT NULL AND r.실기 <> '' AND r.실기 <> '0')
+    `;
+    const [countRows] = await db.query(countSql, [year]);
+    const totalCount = countRows[0].totalCount;
+
+    if (totalCount === 0) {
+      return res.json({ success: true, year, count: 0, items: [] });
+    }
+
+    // ⭐️ [수정 4] 2단계: 공평 배분 (LIMIT, OFFSET) 계산
+    const totalRegions = regions.length; // 4
+    const baseChunkSize = Math.floor(totalCount / totalRegions); // 100 / 4 = 25
+    const remainder = totalCount % totalRegions; // 101 % 4 = 1 (1명 남음)
+
+    let offset = 0;
+    // 현재 작업자(workerIndex) 직전까지의 offset 누적
+    for (let i = 0; i < workerIndex; i++) {
+      // 나머지(remainder)는 앞 순서 작업자(0, 1, ...)부터 1개씩 나눠줌
+      const sizeForThisRegion = (i < remainder) ? (baseChunkSize + 1) : baseChunkSize;
+      offset += sizeForThisRegion;
+    }
+    // 현재 작업자가 가져갈 개수(limit)
+    const limit = (workerIndex < remainder) ? (baseChunkSize + 1) : baseChunkSize;
+
+    console.log(`[practical-mode/list] Querying: year=${year}, worker=${worker} (Total: ${totalCount}, Limit: ${limit}, Offset: ${offset})`);
+
+    if (limit === 0) {
+      // 할당량이 0이면 쿼리 안 하고 바로 반환
+      return res.json({ success: true, year, count: 0, items: [] });
+    }
+
+    // ⭐️ [수정 5] 3단계: 계산된 limit, offset으로 실제 데이터 조회 (JOIN 쿼리는 동일)
     const [rows] = await db.query(
       `
       SELECT
@@ -5735,10 +5766,10 @@ app.get('/jungsi/practical-mode/list', async (req, res) => {
       ORDER BY r.id ASC
       LIMIT ? OFFSET ?
       `,
-      [year, limit, offset] // ⭐️ 수정된 limit, offset 사용
+      [year, limit, offset] // ⭐️ 계산된 limit, offset 적용
     );
 
-    // ⭐️ [수정 3] 프론트가 기대하는 'items' 키로 응답
+    // ⭐️ [수정 6] 프론트가 기대하는 'items' 키로 응답 (동일)
     res.json({
       success: true,
       year,
@@ -5750,7 +5781,6 @@ app.get('/jungsi/practical-mode/list', async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 });
-
 
 /**
  * POST /jungsi/practical-mode/set
