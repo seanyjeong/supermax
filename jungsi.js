@@ -6030,48 +6030,6 @@ app.post('/jungsi/apply-original-weights', authMiddleware, async (req, res) => {
   }
 });
 
-  // ===== helpers =====
-  function isChoice(obj) {
-    return obj && (obj.type === 'choice' || obj.type === 'weight');
-  }
-
-  function parseCell(raw) {
-    if (!raw) return null;
-    const s = raw.trim();
-    // (35), (80/20)
-    if (s.startsWith('(') && s.endsWith(')')) {
-      const inner = s.slice(1, -1);
-      if (inner.includes('/')) {
-        return { type: 'weight', weight: inner };
-      }
-      const num = Number(inner);
-      return { type: 'choice', value: isNaN(num) ? inner : num };
-    }
-    // 숫자
-    const num = Number(s);
-    if (!isNaN(num)) return { type: 'fixed', value: num };
-    // 나머지 글자들은 그냥 냅둠
-    return { type: 'raw', value: s };
-  }
-
-  function parseHistory(raw) {
-    if (!raw) return { mode: null, value: null };
-    const s = raw.trim();
-    // 네가 말한 그 “대괄호 있는 딱 하나”
-    if (s.startsWith('[') && s.endsWith(']')) {
-      const inner = s.slice(1, -1);
-      const num = Number(inner);
-      return { mode: '점수', value: isNaN(num) ? null : num };
-    }
-    if (s === '가감점') return { mode: '가감점', value: null };
-    if (s === '가산점' || s === '가산') return { mode: '가산점', value: null };
-    if (s === '감점') return { mode: '감점', value: null };
-    if (s === '필수응시') return { mode: '필수응시', value: null };
-    const num = Number(s);
-    if (!isNaN(num)) return { mode: '점수', value: num };
-    return { mode: null, value: null };
-  }
-});
 
 
 
