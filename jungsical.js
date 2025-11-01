@@ -368,7 +368,18 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   // 2. 곱하기 7 버전 (만점: 80 * 7 = 560점)
   ctx.top2_kmInq_scaled_80_x_7 = sum_80pct * 7;
 // ▲▲▲ [신규 추가] 끝 ▲▲▲
+// ... (기존 ctx.max_kor_math_pct = ... 계산 끝난 후)
 
+        // ▼▼▼ [요청 추가] 미적분/기하 선택 시 수학 백분위의 10% 보너스 변수 ▼▼▼
+          // (mathSubject 변수는 이 함수 상단 282라인 근처에 이미 정의되어 있음)
+          ctx.math_bonus_pct_10 = 0; // 기본값 0
+          
+          if (mathSubject === '미적분' || mathSubject === '기하') {
+            ctx.math_bonus_pct_10 = (ctx.math_pct || 0) * 0.1;
+          }
+        // ▲▲▲ [요청 추가] 끝 ▲▲▲
+
+        
    const items_pct = [
     Number(ctx.kor_pct || 0),
     Number(ctx.math_pct || 0),
