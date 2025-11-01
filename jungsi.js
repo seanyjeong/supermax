@@ -733,14 +733,18 @@ const {
 
 // ... (기존의 다른 app.get, app.post 코드들) ...
 
-// jungsi.js 에 추가
+// ✅ 등급별 영어/한국사 벌크 저장 (score_config는 안 건드림)
 app.post('/jungsi/score-config/set-bulk', authMiddleware, async (req, res) => {
   const { year, items } = req.body;
+
+  // 1. 기본 검증
   if (!year || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ success:false, message:'year, items 필요' });
+    return res.status(400).json({
+      success: false,
+      message: 'year, items 필요'
+    });
   }
 
-  // items = [{ U_ID, english, history }, ...] 이런 식으로 온다고 가정
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -749,39 +753,52 @@ app.post('/jungsi/score-config/set-bulk', authMiddleware, async (req, res) => {
       const { U_ID, english, history } = row;
       if (!U_ID) continue;
 
-      // 1) 기존 score_config 먼저 읽기
+      // 이 학년도 + U_ID가 있는지 먼저 확인
       const [rows] = await conn.query(
-        'SELECT score_config FROM `정시반영비율` WHERE U_ID = ? AND 학년도 = ?',
+        'SELECT 1 FROM `정시반영비율` WHERE U_ID = ? AND 학년도 = ?',
         [U_ID, year]
       );
-      if (!rows.length) continue;
+      if (!rows.length) {
+        // 없으면 스킵 (여기서 INSERT 하고 싶으면 INSERT 문 추가)
+        continue;
+      }
 
-      const current = rows[0].score_config ? JSON.parse(rows[0].score_config) : {};
-
-      // 2) 들어온 것만 덮어쓰기 (빈건 무시)
+      // ✅ 영어만 온 경우
       if (english && typeof english === 'object') {
-        current.english_scores = english;
-      }
-      if (history && typeof history === 'object') {
-        current.history_scores = history;
+        await conn.query(
+          'UPDATE `정시반영비율` SET `english_scores` = ? WHERE U_ID = ? AND 학년도 = ?',
+          [JSON.stringify(english), U_ID, year]
+        );
       }
 
-      await conn.query(
-        'UPDATE `정시반영비율` SET score_config = ? WHERE U_ID = ? AND 학년도 = ?',
-        [JSON.stringify(current), U_ID, year]
-      );
+      // ✅ 한국사만 온 경우
+      if (history && typeof history === 'object') {
+        await conn.query(
+          'UPDATE `정시반영비율` SET `history_scores` = ? WHERE U_ID = ? AND 학년도 = ?',
+          [JSON.stringify(history), U_ID, year]
+        );
+      }
+
+      // ✅ 둘 다 온 경우는 위에서 둘 다 실행됨
     }
 
     await conn.commit();
-    res.json({ success:true, message:`${items.length}건 반영` });
+    return res.json({
+      success: true,
+      message: `${items.length}건 처리 (score_config는 안 건드림)`
+    });
   } catch (e) {
     await conn.rollback();
-    console.error(e);
-    res.status(500).json({ success:false, message:'저장 중 오류' });
+    console.error('❌ score-config set-bulk 오류:', e);
+    return res.status(500).json({
+      success: false,
+      message: '저장 중 오류'
+    });
   } finally {
     conn.release();
   }
 });
+
 
 
 // ⭐️⭐️⭐️ [신규 API] 가채점 성적 저장 (Wide 포맷) ⭐️⭐️⭐️
