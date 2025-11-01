@@ -348,6 +348,27 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   ctx.max_kor_math_pct = Math.max(ctx.kor_pct, math_pct_bonused);
   // ▲▲▲ [수정 완료]
 
+  // ▼▼▼ [신규 추가] 국, 수, 탐(평균) 3개 중 상위 2개 (각 40%) * 6 및 * 7 버전 ▼▼▼
+  const items_pct_kmi_for_top2_both = [
+    Number(ctx.kor_pct || 0),            // 1. 국어
+    Number(ctx.math_pct || 0),          // 2. 수학
+    Number(ctx.inq_avg2_percentile || 0)  // 3. 탐구 (2과목 평균)
+  ].map(v => Math.max(0, Math.min(100, v)));
+  
+  items_pct_kmi_for_top2_both.sort((a,b) => b - a); // 3개 점수를 정렬
+  
+  // 상위 2개를 '각각 40%' (0.4) 해서 더함 (80점 만점)
+  const top1_val_40pct = (items_pct_kmi_for_top2_both[0] || 0) * 0.4;
+  const top2_val_40pct = (items_pct_kmi_for_top2_both[1] || 0) * 0.4;
+  const sum_80pct = top1_val_40pct + top2_val_40pct;
+
+  // 1. 곱하기 6 버전 (만점: 80 * 6 = 480점)
+  ctx.top2_kmInq_scaled_80_x_6 = sum_80pct * 6;
+
+  // 2. 곱하기 7 버전 (만점: 80 * 7 = 560점)
+  ctx.top2_kmInq_scaled_80_x_7 = sum_80pct * 7;
+// ▲▲▲ [신규 추가] 끝 ▲▲▲
+
    const items_pct = [
     Number(ctx.kor_pct || 0),
     Number(ctx.math_pct || 0),
