@@ -309,7 +309,12 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
           }
       }
   }
-  
+  // ▼▼▼ [신규 추가] 수학/영어(환산백분위) 중 상위 1개 (택1) ▼▼▼
+  ctx.top1_math_or_eng_pct = Math.max(
+    Number(ctx.math_pct || 0),      // 1. 수학 백분위
+    Number(ctx.eng_pct_est || 0)    // 2. 영어 환산 백분위 (이미 계산되어 있음)
+  );
+// ▲▲▲ [신규 추가] 끝 ▲▲▲
   // 1. 표준점수(표점) 가산점 적용
   const math_std_bonused = ctx.math_std * mathBonus;
   ctx.math_std_bonused = math_std_bonused; // (혹시 모르니 변수로 빼둠)
