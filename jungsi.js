@@ -6036,13 +6036,15 @@ app.post('/jungsi/apply-original-weights', authMiddleware, async (req, res) => {
 
 // jungsi.js 파일의 /jungsi/filter-data/:year API를 이걸로 교체
 
+// jungsi.js 파일의 /jungsi/filter-data/:year API를 이걸로 교체
+
 // =============================================
-// ⭐️ [수정] 필터링용 통합 데이터 조회 API (컷 점수 포함 v3)
+// ⭐️ [수정] 필터링용 통합 데이터 조회 API (비율% 포함 v4)
 // =============================================
 // GET /jungsi/filter-data/:year
 app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
     const { year } = req.params;
-    const { branch } = req.user; // ⭐️ 로그인한 사용자의 지점명
+    const { branch } = req.user; // 로그인한 사용자의 지점명
 
     console.log(`[API /filter-data] Year: ${year} 필터 데이터 조회 요청 (요청자 지점: ${branch})`);
 
@@ -6051,18 +6053,19 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
     }
 
     try {
-        // ⭐️ [수정] 정시_컷점수 테이블을 LEFT JOIN (MAX컷, 지점컷)
-        // ⭐️ [수정] 컷 점수는 '수능컷' (cut.수능컷)을 기준으로 가져옴
+        // ⭐️ [수정] 정시반영비율(jrb) 테이블을 LEFT JOIN 해서 수능/내신/실기 비율 추가
         const sql = `
             SELECT
                 jb.U_ID, jb.대학명, jb.학과명, jb.군, jb.광역 AS '지역', jb.시구, jb.교직, jb.모집정원,
                 jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.한국사_raw, jov.탐구수_raw,
+                jrb.수능, jrb.내신, jrb.실기,  -- ⭐️ 수능/내신/실기 비율 추가
                 GROUP_CONCAT(DISTINCT je.종목명 SEPARATOR ',') AS practical_events,
                 max_cut.수능컷 AS max_suneung_cut,
                 branch_cut.수능컷 AS branch_suneung_cut
             FROM 정시기본 jb
             LEFT JOIN 정시_원본반영표 jov ON jb.U_ID = jov.매칭_U_ID AND jb.학년도 = jov.학년도
             LEFT JOIN 정시실기배점 je ON jb.U_ID = je.U_ID AND jb.학년도 = je.학년도
+            LEFT JOIN 정시반영비율 jrb ON jb.U_ID = jrb.U_ID AND jb.학년도 = jrb.학년도 -- ⭐️ 비율 테이블 JOIN
             
             LEFT JOIN 정시_컷점수 max_cut
               ON jb.U_ID = max_cut.U_ID AND jb.학년도 = max_cut.학년도 AND max_cut.branch_name = 'MAX'
@@ -6074,14 +6077,14 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
             
             GROUP BY jb.U_ID, jb.대학명, jb.학과명, jb.군, jb.광역, jb.시구, jb.교직, jb.모집정원,
                      jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.한국사_raw, jov.탐구수_raw,
+                     jrb.수능, jrb.내신, jrb.실기, -- ⭐️ GROUP BY에 비율 추가
                      max_cut.수능컷, branch_cut.수능컷
             ORDER BY jb.대학명, jb.학과명;
         `;
         
-        // ⭐️ db (jungsi DB) 사용, 파라미터 순서 중요!
         const [data] = await db.query(sql, [branch, year]); // ⭐️ [branch, year] 순서
 
-        console.log(` -> ${data.length}건의 필터 데이터 조회 완료 (컷 점수 포함)`);
+        console.log(` -> ${data.length}건의 필터 데이터 조회 완료 (비율% 포함)`);
         res.json({ success: true, data: data });
 
     } catch (err) {
@@ -6089,7 +6092,6 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
         res.status(500).json({ success: false, message: 'DB 조회 중 오류가 발생했습니다.' });
     }
 });
-
 
 
 
