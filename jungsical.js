@@ -323,7 +323,19 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   if (F.score_config?.math_bonus_cap_100 === true) {
        math_pct_bonused = Math.min(100, math_pct_bonused);
   }
+  // ▼▼▼ [신규 추가] 국, 수, 영, 탐(2과목평균) 4개 중 상위 2개 합계 ▼▼▼
+  const items_pct_kme_inqAvg = [
+    Number(ctx.kor_pct || 0),            // 1. 국어
+    Number(ctx.math_pct || 0),          // 2. 수학
+    Number(ctx.inq_avg2_percentile || 0), // 3. 탐구 (2과목 평균)
+    Number(ctx.eng_pct_est || 0)        // 4. 영어 (추정 백분위)
+  ].map(v => Math.max(0, Math.min(100, v)));
   
+  items_pct_kme_inqAvg.sort((a,b) => b - a); // 4개 점수를 정렬
+  
+  // 4개 중 상위 2개 합 (0~200점 만점)
+  ctx.top2_sum_raw_pct_kme_inqAvg = (items_pct_kme_inqAvg[0] || 0) + (items_pct_kme_inqAvg[1] || 0);
+// ▲▲▲ [신규 추가] 끝 ▲▲▲
   ctx.math_pct_bonused = math_pct_bonused; // (혹시 모르니 변수로 빼둠)
   ctx.max_kor_math_pct = Math.max(ctx.kor_pct, math_pct_bonused);
   // ▲▲▲ [수정 완료]
