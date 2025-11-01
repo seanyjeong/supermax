@@ -733,6 +733,56 @@ const {
 
 // ... (기존의 다른 app.get, app.post 코드들) ...
 
+// jungsi.js 에 추가
+app.post('/jungsi/score-config/set-bulk', authMiddleware, async (req, res) => {
+  const { year, items } = req.body;
+  if (!year || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success:false, message:'year, items 필요' });
+  }
+
+  // items = [{ U_ID, english, history }, ...] 이런 식으로 온다고 가정
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    for (const row of items) {
+      const { U_ID, english, history } = row;
+      if (!U_ID) continue;
+
+      // 1) 기존 score_config 먼저 읽기
+      const [rows] = await conn.query(
+        'SELECT score_config FROM `정시반영비율` WHERE U_ID = ? AND 학년도 = ?',
+        [U_ID, year]
+      );
+      if (!rows.length) continue;
+
+      const current = rows[0].score_config ? JSON.parse(rows[0].score_config) : {};
+
+      // 2) 들어온 것만 덮어쓰기 (빈건 무시)
+      if (english && typeof english === 'object') {
+        current.english_scores = english;
+      }
+      if (history && typeof history === 'object') {
+        current.history_scores = history;
+      }
+
+      await conn.query(
+        'UPDATE `정시반영비율` SET score_config = ? WHERE U_ID = ? AND 학년도 = ?',
+        [JSON.stringify(current), U_ID, year]
+      );
+    }
+
+    await conn.commit();
+    res.json({ success:true, message:`${items.length}건 반영` });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    res.status(500).json({ success:false, message:'저장 중 오류' });
+  } finally {
+    conn.release();
+  }
+});
+
 
 // ⭐️⭐️⭐️ [신규 API] 가채점 성적 저장 (Wide 포맷) ⭐️⭐️⭐️
 app.post('/jungsi/student/score/set-wide', authMiddleware, async (req, res) => {
