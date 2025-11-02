@@ -217,6 +217,22 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
       inq2_max = Number(highestMap[inq2_subject] || 0);
   }
 
+  // ▼▼▼ [신규 추가] 국(표), 수(표), 영(환), 탐(1표) 4개 중 상위 3개 합 (표준점수 기준) ▼▼▼
+  const items_std_kme_inq1 = [
+    Number(ctx.kor_std || 0),            // 1. 국어 (표점)
+    Number(ctx.math_std || 0),          // 2. 수학 (표점)
+    Number(ctx.eng_grade_score || 0),   // 3. 영어 (환산점수)
+    Number(ctx.inq1_std || 0)           // 4. 탐구 (상위 1과목 표점)
+  ].map(v => Math.max(0, v));
+  
+  items_std_kme_inq1.sort((a,b) => b - a); // 4개 점수를 정렬
+  
+  // 4개 중 상위 3개 합
+  ctx.top3_sum_std_kme_inq1 = (items_std_kme_inq1[0] || 0) + 
+                              (items_std_kme_inq1[1] || 0) + 
+                              (items_std_kme_inq1[2] || 0);
+// ▲▲▲ [신규 추가] 끝 ▲▲▲
+
   // [2순위] 만약 '변환표준점수' 테이블(F.탐구변표)이 있다면,
   // '변표'의 최고점을 찾아 덮어쓴다.
   const convTable = F.탐구변표; // 라우터에서 설정해준 convMap
