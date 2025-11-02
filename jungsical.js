@@ -511,6 +511,7 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
     한국사 : subs.find(s => s.name === '한국사') || {},
     탐구   : subs.filter(s => s.name === '탐구')
   };
+  //선문대대
   if (F.U_ID === 148 || F.U_ID === 149) {
     log.push(`<< U_ID ${F.U_ID}번 대학 하드코딩 로직 실행 >>`);
 
@@ -569,6 +570,58 @@ function calculateScore(formulaDataRaw, studentScores, highestMap) {
         calculationLog: log
     };
   }
+
+//경동대 스마
+  if (F.U_ID === 76) { // ⭐️⭐️⭐️ 이 대학의 실제 U_ID로 바꿔야 함 ⭐️⭐️⭐️
+        log.push(`<< U_ID ${F.U_ID}번 대학 (등급 평균) 하드코딩 로직 실행 >>`);
+
+        // 1. 득점표 (Lookup Table)
+        const scoreTable = {
+            1: 700.0, 2: 692.0, 3: 684.0, 4: 676.0,
+            5: 668.0, 6: 660.0, 7: 652.0, 8: 644.0, 9: 630.0
+        };
+
+        // 2. 4개 영역 등급 가져오기 (없으면 9등급 처리)
+        const korGrade = S.국어?.grade || 9;
+        const mathGrade = S.수학?.grade || 9;
+        const engGrade = S.영어?.grade || 9;
+        
+        // 탐구는 상위 1개 등급
+        let bestInqGrade = 9;
+        if (S.탐구 && S.탐구.length > 0) {
+            const inqGrades = S.탐구.map(t => t.grade || 9).sort((a, b) => a - b);
+            bestInqGrade = inqGrades[0]; // 1등급이 제일 좋음
+        }
+
+        log.push(` -> 등급: 국(${korGrade}) + 수(${mathGrade}) + 영(${engGrade}) + 탐1(${bestInqGrade})`);
+
+        // 3. 등급 합산 및 평균 계산
+        const gradeSum = korGrade + mathGrade + engGrade + bestInqGrade;
+        const gradeAvg = gradeSum / 4.0;
+        log.push(` -> 합계: ${gradeSum} / 평균: ${gradeAvg.toFixed(2)}`);
+
+        // 4. 평균 등급을 '대학 자체 등급'으로 변환 (소수점 버림)
+        // (규칙 예시: 1.00~1.99 -> 1등급 / 4.00~4.99 -> 4등급)
+        let uniGrade = Math.floor(gradeAvg);
+        if (gradeAvg < 1.0) uniGrade = 1; // 1 미만이면 1등급
+        if (gradeAvg >= 9.0) uniGrade = 9; // 9 이상이면 9등급 (규칙표에 9등급만 있음)
+        
+        // 1~9 사이로 보정
+        uniGrade = Math.max(1, Math.min(9, uniGrade));
+
+        log.push(` -> 대학 자체 등급으로 변환: ${uniGrade}등급`);
+
+        // 5. 득점표에서 최종 점수 매핑
+        const finalScore = scoreTable[uniGrade] || 630.0; // 맵에 없으면 9등급 점수(630)
+        log.push(` -> 최종 특점: ${finalScore.toFixed(1)}점`);
+        log.push('========== 최종 ==========');
+
+        return {
+            totalScore: finalScore.toFixed(1),
+            breakdown: { special: finalScore },
+            calculationLog: log
+        };
+    }
 
   if (F.계산유형 === '특수공식' && F.특수공식) {
     log.push('<< 특수공식 모드 >>');
