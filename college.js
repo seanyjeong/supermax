@@ -649,6 +649,77 @@ app.patch('/college/admin/order-item/:id/status', (req, res) => {
     }
   );
 });
+app.delete('/college/admin/order-item/:id', (req, res) => {
+  const { id: itemId } = req.params; // item_id
+
+  dbAcademy.getConnection((err, connection) => {
+    if (err) {
+      console.error('DB 커넥션 가져오기 실패:', err);
+      return res.status(500).send({ message: 'DB 연결 실패' });
+    }
+
+    connection.beginTransaction(async (err) => {
+      if (err) {
+        console.error('트랜잭션 시작 실패:', err);
+        connection.release();
+        return res.status(500).send({ message: '트랜잭션 시작 실패' });
+      }
+
+      // 쿼리 함수를 Promise로 래핑 (async/await용)
+      const queryAsync = (sql, params) => {
+        return new Promise((resolve, reject) => {
+          connection.query(sql, params, (err, results) => {
+            if (err) return reject(err);
+            resolve(results);
+          });
+        });
+      };
+
+      try {
+        // 1. 삭제할 아이템 정보 조회 (재고 복원용)
+        const [itemToDelete] = await queryAsync(
+          'SELECT product_id, size, item_status FROM shop_order_items WHERE item_id = ?',
+          [itemId]
+        );
+
+        if (!itemToDelete) {
+          throw new Error('삭제할 주문 항목을 찾을 수 없습니다.');
+        }
+
+        // 2. 주문 아이템 삭제
+        const deleteResult = await queryAsync(
+          'DELETE FROM shop_order_items WHERE item_id = ?',
+          [itemId]
+        );
+
+        if (deleteResult.affectedRows === 0) {
+          throw new Error('주문 항목 삭제에 실패했습니다.');
+        }
+
+        // 3. 만약 '재고 분출' 항목이었다면, 재고 수량 1 복원
+        if (itemToDelete.item_status === 'IN_STOCK') {
+          await queryAsync(
+            'UPDATE shop_inventory SET stock_quantity = stock_quantity + 1 WHERE product_id = ? AND size = ?',
+            [itemToDelete.product_id, itemToDelete.size]
+          );
+        }
+
+        // 4. 성공 시 커밋
+        await connection.commit();
+        res.send({ message: '주문 항목이 삭제되었습니다. (필요시 재고가 복원되었습니다)' });
+
+      } catch (error) {
+        // 5. 실패 시 롤백
+        await connection.rollback();
+        console.error('주문 항목 삭제 실패:', error);
+        res.status(500).send({ message: '주문 항목 삭제 실패: ' + error.message });
+      } finally {
+        // 6. 커넥션 반납
+        connection.release();
+      }
+    });
+  });
+});
 
 
 // ===============================================
