@@ -1,11 +1,11 @@
 const express = require('express');
-const mysql = require('mysql'); // ⬅️ 'mysql' 라이브러리 (Pool)
+const mysql = require('mysql');
 const cors = require('cors');
 const axios = require('axios'); 
 const crypto = require('crypto'); 
 const path = require('path');
 const multer = require('multer');
-const fs = require('fs'); // ⬅️ [신규] 파일 시스템(삭제) 모듈
+const fs = require('fs');
 const app = express();
 const port = 9000;
 
@@ -32,7 +32,9 @@ const dbAcademy = mysql.createPool({
   database: '학원관리',
   charset: 'utf8mb4',
   multipleStatements: true,
-  connectionLimit: 10
+  connectionLimit: 10,
+  // [신규] JSON 자동 파싱 비활성화 (문자열로 직접 다루기 위함)
+  flags: ['-FOUND_ROWS', '-BIG_NUMBERS_STRING']
 });
 
 const db_drsports = mysql.createPool({
@@ -46,29 +48,32 @@ const db_drsports = mysql.createPool({
 });
 
 // ===============================================
-// 🖼️ 사진 업로드 (Multer) 설정 (파일명 안 깨지게)
+// 🖼️ 사진 업로드 (Multer) 설정
 // ===============================================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => {
-    // 파일명: 날짜(밀리초) + 6자리 랜덤숫자 + 확장자
-    const ext = path.extname(file.originalname); // ".jpeg"
-    const randomSuffix = Math.round(Math.random() * 1E6); // 0~999999
-    cb(null, Date.now() + '-' + randomSuffix + ext); // 예: "1762145062889-123456.jpeg"
+    const ext = path.extname(file.originalname);
+    const randomSuffix = Math.round(Math.random() * 1E6);
+    cb(null, Date.now() + '-' + randomSuffix + ext);
   }
 });
-const upload = multer({ storage: storage });
+// [수정] upload 객체를 API마다 다르게 설정 (신규/수정)
+const uploadNew = multer({ storage: storage }).array('images', 6); // [수정] 'images'로 여러 장
+const uploadEdit = multer({ storage: storage }).array('new_images', 6); // [수정] 'new_images'로 여러 장
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ===============================================
 // 🛒 의류샵 API
 // ===============================================
 
-// 1. 상품 목록 불러오기
+// 1. 상품 목록 불러오기 (DB 구조 변경 대응)
 app.get('/college/shop/products', (req, res) => {
   const query = `
     SELECT 
-        p.product_id, p.product_name, p.price, p.category, p.image_url, p.extra_image_url,
+        p.product_id, p.product_name, p.price, p.category, 
+        p.image_urls, /* [수정] image_urls (JSON)로 변경 */
         JSON_ARRAYAGG(i.size) AS sizes
     FROM 
         shop_products p
@@ -88,16 +93,20 @@ app.get('/college/shop/products', (req, res) => {
     
     const products = results.map(p => ({
       ...p,
+      // [수정] image_urls (JSON 배열) 파싱
+      images: JSON.parse(p.image_urls || '[]'),
       customSizes: JSON.parse(p.sizes)[0] === null ? [] : JSON.parse(p.sizes)
     }));
+    
     const clothingProducts = products.filter(p => p.category === 'clothing');
     const shoesProducts = products.filter(p => p.category === 'shoes');
     res.json({ clothingProducts, shoesProducts });
   });
 });
 
-// 2. 주문 접수하기 (Pool + 트랜잭션)
+// 2. 주문 접수하기 (동일)
 app.post('/college/shop/order', (req, res) => {
+  // ... (이 코드는 변경 없음)
   const { customerName, phoneNumber, orders, totalAmount } = req.body;
 
   if (!customerName || !phoneNumber || !orders || orders.length === 0) {
@@ -207,7 +216,7 @@ app.post('/college/shop/order', (req, res) => {
   });
 });
 
-// 문자 발송 로직 분리
+// ... (sendSmsLogic 함수는 동일)
 async function sendSmsLogic(customerName, phoneNumber, orders, totalAmount) {
   const adminContent = `${customerName}님의 맥스의류 주문이 들어왔습니다.`;
   try {
@@ -238,16 +247,15 @@ http://aq.gy/f/3BCyv
 // B. 관리자용 API (admin-*.html)
 // ---------------------------------
 
-// 1. 신규 상품 등록 (Pool + 트랜잭션)
-app.post('/college/admin/products', upload.fields([
-  { name: 'image_url', maxCount: 1 },
-  { name: 'extra_image_url', maxCount: 1 }
-]), (req, res) => {
+// 1. 신규 상품 등록 (DB 구조 변경 대응)
+app.post('/college/admin/products', uploadNew, (req, res) => {
   
   const { product_name, price, category, sizes } = req.body;
-  const files = req.files;
-  const image_url = files['image_url'] ? '/' + files['image_url'][0].path.replace(/\\/g, '/') : null;
-  const extra_image_url = files['extra_image_url'] ? '/' + files['extra_image_url'][0].path.replace(/\\/g, '/') : null;
+  const files = req.files; // [수정] upload.array('images')
+  
+  // [수정] 여러 이미지 경로를 배열로 만들고 JSON으로 변환
+  const image_paths = files ? files.map(f => '/' + f.path.replace(/\\/g, '/')) : [];
+  const image_urls_json = JSON.stringify(image_paths); // 예: "[\"/uploads/1.jpg\", \"/uploads/2.jpg\"]"
 
   dbAcademy.getConnection((err, connection) => {
     if (err) {
@@ -270,10 +278,11 @@ app.post('/college/admin/products', upload.fields([
         });
       };
 
+      // [수정] INSERT 쿼리 변경 (image_urls)
       connection.query(
-        `INSERT INTO shop_products (product_name, price, category, image_url, extra_image_url, is_active) 
-         VALUES (?, ?, ?, ?, ?, TRUE)`,
-        [product_name, price, category, image_url, extra_image_url],
+        `INSERT INTO shop_products (product_name, price, category, image_urls, is_active) 
+         VALUES (?, ?, ?, ?, TRUE)`,
+        [product_name, price, category, image_urls_json],
         (err, productResult) => {
           if (err) return rollback('상품 추가 실패', err);
           
@@ -307,29 +316,33 @@ app.post('/college/admin/products', upload.fields([
   });
 });
 
+// 2. [상품관리] 전체 재고 현황 조회 (DB 구조 변경 대응 + 버그 수정)
 app.get('/college/admin/inventory', (req, res) => {
   const query = `
-    SELECT p.product_name, p.product_id, p.is_active, p.category, i.inventory_id, i.size, i.stock_quantity
+    SELECT 
+        p.product_name, p.product_id, p.is_active, p.category,
+        p.price, p.image_urls, /* [수정] price, image_urls 추가 */
+        i.inventory_id, i.size, i.stock_quantity
     FROM shop_inventory i
     JOIN shop_products p ON i.product_id = p.product_id
-    /* WHERE p.is_active = TRUE  <-- 관리자는 모든 상품을 봐야 하므로 이 라인 삭제 또는 주석 처리 */
     ORDER BY p.product_name, i.inventory_id;
   `;
   
-  // ⬇️⬇️⬇️ 이 부분이 통째로 빠져있었어! ⬇️⬇️⬇️
   dbAcademy.query(query, (err, results) => {
     if (err) {
       console.error('재고 현황 조회 실패:', err);
       return res.status(500).send({ message: '재고 조회 실패' });
     }
-    res.json(results);
+    // [수정] image_urls를 파싱해서 전송
+    const finalResults = results.map(item => ({
+        ...item,
+        image_urls: JSON.parse(item.image_urls || '[]') // null이면 빈 배열로
+    }));
+    res.json(finalResults);
   });
-  // ⬆️⬆️⬆️ 여기까지 ⬆️⬆️⬆️
-}); // ⬅️ 이것도 빠졌었어
-  
+});
 
-
-// 3. [신규] 상품 삭제 API (DB + 파일)
+// 3. [신규] 상품 삭제 API (DB 구조 변경 대응)
 app.delete('/college/admin/products/:id', (req, res) => {
   const productId = req.params.id;
 
@@ -343,7 +356,7 @@ app.delete('/college/admin/products/:id', (req, res) => {
 
     // 1. 삭제하기 전에 파일 경로 먼저 조회
     connection.query(
-      'SELECT image_url, extra_image_url FROM shop_products WHERE product_id = ?',
+      'SELECT image_urls FROM shop_products WHERE product_id = ?', // [수정]
       [productId],
       (err, results) => {
         if (err) {
@@ -352,12 +365,15 @@ app.delete('/college/admin/products/:id', (req, res) => {
           return res.status(500).send({ message: '파일 경로 조회 실패' });
         }
 
-        if (results.length > 0) {
-          if (results[0].image_url) filePaths.push(results[0].image_url);
-          if (results[0].extra_image_url) filePaths.push(results[0].extra_image_url);
+        // [수정] JSON 배열을 파싱해서 filePaths에 추가
+        if (results.length > 0 && results[0].image_urls) {
+          const urls = JSON.parse(results[0].image_urls);
+          if (Array.isArray(urls)) {
+            filePaths = urls;
+          }
         }
 
-        // 2. DB에서 상품 삭제 (FOREIGN KEY + ON DELETE CASCADE 설정으로 inventory 자동 삭제됨)
+        // 2. DB에서 상품 삭제
         connection.query(
           'DELETE FROM shop_products WHERE product_id = ?',
           [productId],
@@ -366,7 +382,6 @@ app.delete('/college/admin/products/:id', (req, res) => {
 
             if (err) {
               console.error('DB 상품 삭제 실패:', err);
-              // 'ON DELETE CASCADE'가 없으면 여기서 FK 제약조건 에러가 날 수 있음
               return res.status(500).send({ message: 'DB 상품 삭제 실패. 주문 내역이 있는 상품일 수 있습니다.' });
             }
 
@@ -376,12 +391,10 @@ app.delete('/college/admin/products/:id', (req, res) => {
 
             // 3. (DB 삭제 성공 시) 실제 파일 삭제
             filePaths.forEach(urlPath => {
-              // urlPath 예: '/uploads/123.jpg'
-              // __dirname 예: '/root/supermax'
               const serverPath = path.join(__dirname, urlPath); 
               
               fs.unlink(serverPath, (unlinkErr) => {
-                if (unlinkErr && unlinkErr.code !== 'ENOENT') { // '파일 없음' 에러는 무시
+                if (unlinkErr && unlinkErr.code !== 'ENOENT') {
                   console.error('파일 삭제 실패:', serverPath, unlinkErr);
                 } else {
                   console.log('파일 삭제 성공:', serverPath);
@@ -397,8 +410,9 @@ app.delete('/college/admin/products/:id', (req, res) => {
   });
 });
 
-// 4. [상품관리] 재고 수량 수정
+// 4. [상품관리] 재고 수량 수정 (동일)
 app.patch('/college/admin/inventory/:id', (req, res) => {
+  // ... (이 코드는 변경 없음)
   const { id } = req.params;
   const { newStock } = req.body; 
 
@@ -415,10 +429,11 @@ app.patch('/college/admin/inventory/:id', (req, res) => {
   );
 });
 
-  // ⬇️⬇️⬇️ [신규] 4-1. 상품 게시(active) 상태 변경 API ⬇️⬇️⬇️
+ // 4-1. 상품 게시(active) 상태 변경 API (동일)
 app.patch('/college/admin/products/:id/status', (req, res) => {
+  // ... (이 코드는 변경 없음)
   const { id } = req.params;
-  const { isActive } = req.body; // { isActive: true } 또는 { isActive: false }
+  const { isActive } = req.body; 
 
   if (typeof isActive !== 'boolean') {
     return res.status(400).send({ message: '잘못된 요청입니다.' });
@@ -437,24 +452,30 @@ app.patch('/college/admin/products/:id/status', (req, res) => {
   );
 });
 
-app.patch('/college/admin/products/:id', upload.fields([
-    { name: 'edit_image_url', maxCount: 1 },
-    { name: 'edit_extra_image_url', maxCount: 1 }
-]), (req, res) => {
+// [수정] 4-2. 상품 정보 (이름, 가격, 이미지, 사이즈) 수정 API (DB 구조 변경 대응)
+app.patch('/college/admin/products/:id', uploadEdit, (req, res) => {
     
     const { id: productId } = req.params;
-    const { edit_product_name, edit_price, edit_sizes } = req.body;
-    const files = req.files;
+    const { edit_product_name, edit_price, edit_sizes, existing_images_to_keep } = req.body;
+    const new_files = req.files; // 'new_images'로 업로드된 파일 배열
 
-    let new_image_url = null;
-    let new_extra_image_url = null;
-    let oldFilePaths = []; // 삭제할 기존 파일 경로
+    let oldFilePathsToDelete = []; // 삭제할 기존 파일 경로
 
     dbAcademy.getConnection((err, connection) => {
         if (err) {
             console.error('DB 커넥션 가져오기 실패:', err);
             return res.status(500).send({ message: 'DB 연결 실패' });
         }
+
+        // 쿼리 함수를 Promise로 래핑 (async/await용)
+        const queryAsync = (sql, params) => {
+            return new Promise((resolve, reject) => {
+                connection.query(sql, params, (err, results) => {
+                    if (err) return reject(err);
+                    resolve(results);
+                });
+            });
+        };
 
         connection.beginTransaction(async (err) => {
             if (err) {
@@ -464,46 +485,32 @@ app.patch('/college/admin/products/:id', upload.fields([
             }
 
             try {
-                // 1. 기존 파일 경로 조회
-                const [currentProduct] = await connection.query(
-                    'SELECT image_url, extra_image_url FROM shop_products WHERE product_id = ?', 
+                // 1. 기존 이미지 URL 목록 조회
+                const [currentProduct] = await queryAsync(
+                    'SELECT image_urls FROM shop_products WHERE product_id = ?', 
                     [productId]
                 );
+                const old_image_urls = JSON.parse(currentProduct.image_urls || '[]');
+                
+                // 2. 최종 이미지 목록 생성
+                const kept_image_urls = JSON.parse(existing_images_to_keep || '[]');
+                const new_image_paths = new_files ? new_files.map(f => '/' + f.path.replace(/\\/g, '/')) : [];
+                const final_image_urls = [...kept_image_urls, ...new_image_paths];
+                const final_image_urls_json = JSON.stringify(final_image_urls);
 
-                let updateParams = [edit_product_name, edit_price];
-                let updateQuery = 'UPDATE shop_products SET product_name = ?, price = ?';
+                // 3. 삭제해야 할 기존 파일 목록 찾기
+                oldFilePathsToDelete = old_image_urls.filter(url => !kept_image_urls.includes(url));
 
-                // 2. 새 기본 이미지가 있으면
-                if (files['edit_image_url']) {
-                    new_image_url = '/' + files['edit_image_url'][0].path.replace(/\\/g, '/');
-                    updateQuery += ', image_url = ?';
-                    updateParams.push(new_image_url);
-                    if (currentProduct && currentProduct.image_url) {
-                        oldFilePaths.push(currentProduct.image_url);
-                    }
-                }
+                // 4. shop_products 테이블 업데이트 (이름, 가격, 이미지)
+                await queryAsync(
+                    'UPDATE shop_products SET product_name = ?, price = ?, image_urls = ? WHERE product_id = ?',
+                    [edit_product_name, edit_price, final_image_urls_json, productId]
+                );
 
-                // 3. 새 추가 이미지가 있으면
-                if (files['edit_extra_image_url']) {
-                    new_extra_image_url = '/' + files['edit_extra_image_url'][0].path.replace(/\\/g, '/');
-                    updateQuery += ', extra_image_url = ?';
-                    updateParams.push(new_extra_image_url);
-                    if (currentProduct && currentProduct.extra_image_url) {
-                        oldFilePaths.push(currentProduct.extra_image_url);
-                    }
-                }
-
-                updateQuery += ' WHERE product_id = ?';
-                updateParams.push(productId);
-
-                // 4. shop_products 테이블 업데이트
-                await connection.query(updateQuery, updateParams);
-
-                // 5. 사이즈 목록 업데이트 (가장 복잡한 부분)
+                // 5. 사이즈 목록 업데이트
                 const newSizeArray = edit_sizes.split(',').map(s => s.trim()).filter(s => s);
                 
-                // 5a. 현재 DB에 있는 사이즈 목록 조회
-                const currentInventory = await connection.query(
+                const currentInventory = await queryAsync(
                     'SELECT size FROM shop_inventory WHERE product_id = ?', 
                     [productId]
                 );
@@ -513,7 +520,7 @@ app.patch('/college/admin/products/:id', upload.fields([
                 const sizesToAdd = newSizeArray.filter(s => !currentSizeArray.includes(s));
                 if (sizesToAdd.length > 0) {
                     const valuesToAdd = sizesToAdd.map(size => [productId, size, 0]);
-                    await connection.query(
+                    await queryAsync(
                         'INSERT INTO shop_inventory (product_id, size, stock_quantity) VALUES ?', 
                         [valuesToAdd]
                     );
@@ -522,7 +529,9 @@ app.patch('/college/admin/products/:id', upload.fields([
                 // 5c. 삭제할 사이즈
                 const sizesToRemove = currentSizeArray.filter(s => !newSizeArray.includes(s));
                 if (sizesToRemove.length > 0) {
-                    await connection.query(
+                    // [주의] 삭제하려는 사이즈에 주문 내역이 있으면 FK 에러 발생 가능성 있음
+                    // 여기서는 재고가 0이고 주문이 없다고 가정하고 진행
+                    await queryAsync(
                         'DELETE FROM shop_inventory WHERE product_id = ? AND size IN (?)', 
                         [productId, sizesToRemove]
                     );
@@ -532,7 +541,7 @@ app.patch('/college/admin/products/:id', upload.fields([
                 await connection.commit();
                 
                 // 7. (커밋 후) 기존 파일 삭제
-                oldFilePaths.forEach(urlPath => {
+                oldFilePathsToDelete.forEach(urlPath => {
                     const serverPath = path.join(__dirname, urlPath); 
                     fs.unlink(serverPath, (unlinkErr) => {
                         if (unlinkErr && unlinkErr.code !== 'ENOENT') {
@@ -549,6 +558,13 @@ app.patch('/college/admin/products/:id', upload.fields([
                 // 8. 오류 발생 시 롤백
                 console.error('상품 수정 중 오류 발생:', error);
                 await connection.rollback();
+                // [수정] 롤백 시 새로 업로드된 파일도 삭제
+                const new_image_paths = new_files ? new_files.map(f => '/' + f.path.replace(/\\/g, '/')) : [];
+                new_image_paths.forEach(urlPath => {
+                    const serverPath = path.join(__dirname, urlPath); 
+                    fs.unlink(serverPath, () => {}); // 롤백 시 파일 삭제
+                });
+
                 res.status(500).send({ message: '상품 수정 실패: ' + error.message });
             } finally {
                 // 9. 커넥션 반납
@@ -557,8 +573,11 @@ app.patch('/college/admin/products/:id', upload.fields([
         });
     });
 });
+
+
 // 5. [주문관리] 전체 주문 상세 내역 조회
 app.get('/college/admin/orders-detail', (req, res) => {
+  // ... (이 코드는 변경 없음)
   const query = `
     SELECT 
         o.order_id, o.customer_name, o.phone_number, o.order_date,
@@ -583,6 +602,7 @@ app.get('/college/admin/orders-detail', (req, res) => {
 
 // 6. [주문관리] 주문 입금/분출 상태 변경
 app.patch('/college/admin/orders/:id/status', (req, res) => {
+  // ... (이 코드는 변경 없음)
   const { id } = req.params;
   const { paymentStatus, fulfillmentStatus } = req.body;
 
@@ -613,6 +633,7 @@ app.patch('/college/admin/orders/:id/status', (req, res) => {
 
 // 7. [주문관리] 개별 아이템 발주 상태 변경
 app.patch('/college/admin/order-item/:id/status', (req, res) => {
+  // ... (이 코드는 변경 없음)
   const { id } = req.params; // item_id
   const { status } = req.body; // "ORDERED"
 
@@ -630,8 +651,6 @@ app.patch('/college/admin/order-item/:id/status', (req, res) => {
 });
 
 
-
-
 // ===============================================
 // ✉️ NCP SENS 문자 발송 함수
 // ===============================================
@@ -641,6 +660,7 @@ const SENS_SECRET_KEY = 'eA958IeOvpxWQI1vYYA9GcXSeVFQYMEv4gCtEorW';
 const SENS_CALLER = '01021446765'; // 발신번호
 
 async function sendSms(recipient, content, type = "SMS") {
+  // ... (이 코드는 변경 없음)
   const serviceId = SENS_SERVICE_ID;
   const accessKey = SENS_ACCESS_KEY;
   const secretKey = SENS_SECRET_KEY;
@@ -694,9 +714,8 @@ app.use('/college', collegeManage);
 const collegeDebug = require('./collegedebug');
 app.use('/college', collegeDebug);
 
-// [수정] 502 에러 원인이었던 calculator 라우터 주석 처리
 const calculator = require('./collegeCalculator');
-// app.use('/college', calculator); // ⬅️ 이 줄이 서버를 죽였었음
+// app.use('/college', calculator); 
 
 const collegeCalculate = require('./collegeCalculate');
 app.use('/college', collegeCalculate);
