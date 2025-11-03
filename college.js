@@ -309,7 +309,7 @@ app.post('/college/admin/products', upload.fields([
 
 app.get('/college/admin/inventory', (req, res) => {
   const query = `
-    SELECT p.product_name, p.product_id, p.is_active, i.inventory_id, i.size, i.stock_quantity
+    SELECT p.product_name, p.product_id, p.is_active, p.category, i.inventory_id, i.size, i.stock_quantity
     FROM shop_inventory i
     JOIN shop_products p ON i.product_id = p.product_id
     /* WHERE p.is_active = TRUE  <-- 관리자는 모든 상품을 봐야 하므로 이 라인 삭제 또는 주석 처리 */
