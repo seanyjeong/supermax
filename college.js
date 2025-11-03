@@ -1,6 +1,8 @@
 const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');
+const axios = require('axios'); // ⬅️ 추가
+const crypto = require('crypto'); // ⬅️ 추가
 const app = express();
 const port = 9000;
 
