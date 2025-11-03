@@ -729,6 +729,114 @@ app.delete('/college/admin/order-item/:id', (req, res) => {
   });
 });
 
+app.get('/college/admin/inventory-in-stock', (req, res) => {
+    const query = `
+        SELECT 
+            i.inventory_id, p.product_name, i.size, i.stock_quantity, p.product_id
+        FROM shop_inventory i
+        JOIN shop_products p ON i.product_id = p.product_id
+        WHERE i.stock_quantity > 0 AND p.is_active = TRUE
+        ORDER BY p.product_name, i.inventory_id;
+    `;
+    dbAcademy.query(query, (err, results) => {
+        if (err) {
+            console.error('재고 있는 상품 조회 실패:', err);
+            return res.status(500).send({ message: '재고 조회 실패' });
+        }
+        res.json(results);
+    });
+});
+
+// 2. [재고출고] 재고 출고 처리 (로그 기록 + 재고 차감)
+app.post('/college/admin/stock-out', (req, res) => {
+    const { inventory_id, reason, recipient_name } = req.body;
+    
+    if (!inventory_id || !reason || !recipient_name) {
+        return res.status(400).send({ message: '필수 항목이 누락되었습니다.' });
+    }
+
+    dbAcademy.getConnection((err, connection) => {
+        if (err) {
+            console.error('DB 커넥션 가져오기 실패:', err);
+            return res.status(500).send({ message: 'DB 연결 실패' });
+        }
+
+        connection.beginTransaction(async (err) => {
+            if (err) {
+                console.error('트랜잭션 시작 실패:', err);
+                connection.release();
+                return res.status(500).send({ message: '트랜잭션 시작 실패' });
+            }
+
+            const queryAsync = (sql, params) => {
+                return new Promise((resolve, reject) => {
+                    connection.query(sql, params, (err, results) => {
+                        if (err) return reject(err);
+                        resolve(results);
+                    });
+                });
+            };
+
+            try {
+                // 1. 재고 정보 조회 (상품명, 사이즈 등)
+                const [itemInfo] = await queryAsync(
+                    `SELECT i.product_id, i.size, p.product_name, i.stock_quantity 
+                     FROM shop_inventory i
+                     JOIN shop_products p ON i.product_id = p.product_id
+                     WHERE i.inventory_id = ? FOR UPDATE`, // [중요] 비관적 락
+                    [inventory_id]
+                );
+
+                if (!itemInfo || itemInfo.stock_quantity <= 0) {
+                    throw new Error('재고가 없거나 존재하지 않는 항목입니다.');
+                }
+
+                // 2. 재고 차감
+                await queryAsync(
+                    'UPDATE shop_inventory SET stock_quantity = stock_quantity - 1 WHERE inventory_id = ?',
+                    [inventory_id]
+                );
+
+                // 3. 로그 기록
+                await queryAsync(
+                    `INSERT INTO shop_stock_log 
+                     (product_id, inventory_id, size, product_name, quantity_changed, reason, recipient_name) 
+                     VALUES (?, ?, ?, ?, -1, ?, ?)`,
+                    [itemInfo.product_id, inventory_id, itemInfo.size, itemInfo.product_name, reason, recipient_name]
+                );
+
+                // 4. 성공 시 커밋
+                await connection.commit();
+                res.status(201).send({ message: '재고가 출고(증정) 처리되었습니다.' });
+
+            } catch (error) {
+                await connection.rollback();
+                console.error('재고 출고 실패:', error);
+                res.status(500).send({ message: '재고 출고 실패: ' + error.message });
+            } finally {
+                connection.release();
+            }
+        });
+    });
+});
+
+// 3. [재고출고] 최근 출고 내역 (로그) 불러오기
+app.get('/college/admin/stock-log', (req, res) => {
+    const query = `
+        SELECT log_id, product_name, size, reason, recipient_name, log_date
+        FROM shop_stock_log
+        ORDER BY log_date DESC
+        LIMIT 50;
+    `;
+    dbAcademy.query(query, (err, results) => {
+        if (err) {
+            console.error('출고 내역 조회 실패:', err);
+            return res.status(500).send({ message: '출고 내역 조회 실패' });
+        }
+        res.json(results);
+    });
+});
+
 
 // ===============================================
 // ✉️ NCP SENS 문자 발송 함수
