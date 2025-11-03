@@ -500,7 +500,7 @@ const collegeDebug = require('./collegedebug');
 app.use('/college', collegeDebug);
 
 const calculator = require('./collegeCalculator');
-app.use('/college', calculator);
+// app.use('/college', calculator);
 
 const collegeCalculate = require('./collegeCalculate');
 app.use('/college', collegeCalculate);
