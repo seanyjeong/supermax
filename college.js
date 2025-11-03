@@ -5,6 +5,7 @@ const axios = require('axios');
 const crypto = require('crypto'); 
 const path = require('path');
 const multer = require('multer');
+const fs = require('fs');
 const app = express();
 const port = 9000;
 
@@ -333,16 +334,82 @@ app.post('/college/admin/products', upload.fields([
     });
   });
 });
+// [신규] 상품 삭제 API (DB + 파일)
+app.delete('/college/admin/products/:id', (req, res) => {
+  const productId = req.params.id;
+
+  // Pool에서 커넥션 빌려오기 (파일 경로 조회 + DB 삭제 = 2단계)
+  dbAcademy.getConnection((err, connection) => {
+    if (err) {
+      console.error('DB 커넥션 가져오기 실패:', err);
+      return res.status(500).send({ message: 'DB 연결 실패' });
+    }
+
+    let filePaths = []; // 삭제할 파일 경로 저장
+
+    // 1. 삭제하기 전에 파일 경로 먼저 조회
+    connection.query(
+      'SELECT image_url, extra_image_url FROM shop_products WHERE product_id = ?',
+      [productId],
+      (err, results) => {
+        if (err) {
+          console.error('파일 경로 조회 실패:', err);
+          connection.release();
+          return res.status(500).send({ message: '파일 경로 조회 실패' });
+        }
+
+        if (results.length > 0) {
+          if (results[0].image_url) filePaths.push(results[0].image_url);
+          if (results[0].extra_image_url) filePaths.push(results[0].extra_image_url);
+        }
+
+        // 2. DB에서 상품 삭제 (FOREIGN KEY + ON DELETE CASCADE 설정으로 inventory, order_items도 자동 삭제됨)
+        connection.query(
+          'DELETE FROM shop_products WHERE product_id = ?',
+          [productId],
+          (err, deleteResult) => {
+            connection.release(); // DB 작업 끝났으니 커넥션 반납
+
+            if (err) {
+              console.error('DB 상품 삭제 실패:', err);
+              return res.status(500).send({ message: 'DB 상품 삭제 실패' });
+            }
+
+            if (deleteResult.affectedRows === 0) {
+              return res.status(404).send({ message: '삭제할 상품을 찾지 못했습니다.' });
+            }
+
+            // 3. (DB 삭제 성공 시) 실제 파일 삭제
+            filePaths.forEach(urlPath => {
+              // '/uploads/123.jpg' -> 'uploads/123.jpg'
+              const serverPath = path.join(__dirname, urlPath); 
+              
+              fs.unlink(serverPath, (unlinkErr) => {
+                if (unlinkErr && unlinkErr.code !== 'ENOENT') { // '파일 없음' 에러는 무시
+                  console.error('파일 삭제 실패:', serverPath, unlinkErr);
+                } else {
+                  console.log('파일 삭제 성공:', serverPath);
+                }
+              });
+            });
+
+            res.send({ message: '상품이 성공적으로 삭제되었습니다.' });
+          }
+        );
+      }
+    );
+  });
+});
 
 // 2. [상품관리] 전체 재고 현황 조회
 app.get('/college/admin/inventory', (req, res) => {
   const query = `
-    SELECT p.product_name, i.inventory_id, i.size, i.stock_quantity
+    SELECT p.product_name, p.product_id, i.inventory_id, i.size, i.stock_quantity
     FROM shop_inventory i
     JOIN shop_products p ON i.product_id = p.product_id
     WHERE p.is_active = TRUE
     ORDER BY p.product_name, i.inventory_id;
-  `;
+  `; // ⬅️ p.product_id 추가됨
   
   dbAcademy.query(query, (err, results) => {
     if (err) {
