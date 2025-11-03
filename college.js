@@ -437,6 +437,126 @@ app.patch('/college/admin/products/:id/status', (req, res) => {
   );
 });
 
+app.patch('/college/admin/products/:id', upload.fields([
+    { name: 'edit_image_url', maxCount: 1 },
+    { name: 'edit_extra_image_url', maxCount: 1 }
+]), (req, res) => {
+    
+    const { id: productId } = req.params;
+    const { edit_product_name, edit_price, edit_sizes } = req.body;
+    const files = req.files;
+
+    let new_image_url = null;
+    let new_extra_image_url = null;
+    let oldFilePaths = []; // 삭제할 기존 파일 경로
+
+    dbAcademy.getConnection((err, connection) => {
+        if (err) {
+            console.error('DB 커넥션 가져오기 실패:', err);
+            return res.status(500).send({ message: 'DB 연결 실패' });
+        }
+
+        connection.beginTransaction(async (err) => {
+            if (err) {
+                console.error('트랜잭션 시작 실패:', err);
+                connection.release();
+                return res.status(500).send({ message: '트랜잭션 시작 실패' });
+            }
+
+            try {
+                // 1. 기존 파일 경로 조회
+                const [currentProduct] = await connection.query(
+                    'SELECT image_url, extra_image_url FROM shop_products WHERE product_id = ?', 
+                    [productId]
+                );
+
+                let updateParams = [edit_product_name, edit_price];
+                let updateQuery = 'UPDATE shop_products SET product_name = ?, price = ?';
+
+                // 2. 새 기본 이미지가 있으면
+                if (files['edit_image_url']) {
+                    new_image_url = '/' + files['edit_image_url'][0].path.replace(/\\/g, '/');
+                    updateQuery += ', image_url = ?';
+                    updateParams.push(new_image_url);
+                    if (currentProduct && currentProduct.image_url) {
+                        oldFilePaths.push(currentProduct.image_url);
+                    }
+                }
+
+                // 3. 새 추가 이미지가 있으면
+                if (files['edit_extra_image_url']) {
+                    new_extra_image_url = '/' + files['edit_extra_image_url'][0].path.replace(/\\/g, '/');
+                    updateQuery += ', extra_image_url = ?';
+                    updateParams.push(new_extra_image_url);
+                    if (currentProduct && currentProduct.extra_image_url) {
+                        oldFilePaths.push(currentProduct.extra_image_url);
+                    }
+                }
+
+                updateQuery += ' WHERE product_id = ?';
+                updateParams.push(productId);
+
+                // 4. shop_products 테이블 업데이트
+                await connection.query(updateQuery, updateParams);
+
+                // 5. 사이즈 목록 업데이트 (가장 복잡한 부분)
+                const newSizeArray = edit_sizes.split(',').map(s => s.trim()).filter(s => s);
+                
+                // 5a. 현재 DB에 있는 사이즈 목록 조회
+                const currentInventory = await connection.query(
+                    'SELECT size FROM shop_inventory WHERE product_id = ?', 
+                    [productId]
+                );
+                const currentSizeArray = currentInventory.map(inv => inv.size);
+                
+                // 5b. 새로 추가할 사이즈
+                const sizesToAdd = newSizeArray.filter(s => !currentSizeArray.includes(s));
+                if (sizesToAdd.length > 0) {
+                    const valuesToAdd = sizesToAdd.map(size => [productId, size, 0]);
+                    await connection.query(
+                        'INSERT INTO shop_inventory (product_id, size, stock_quantity) VALUES ?', 
+                        [valuesToAdd]
+                    );
+                }
+
+                // 5c. 삭제할 사이즈
+                const sizesToRemove = currentSizeArray.filter(s => !newSizeArray.includes(s));
+                if (sizesToRemove.length > 0) {
+                    await connection.query(
+                        'DELETE FROM shop_inventory WHERE product_id = ? AND size IN (?)', 
+                        [productId, sizesToRemove]
+                    );
+                }
+
+                // 6. 모든 DB 작업 성공 시 커밋
+                await connection.commit();
+                
+                // 7. (커밋 후) 기존 파일 삭제
+                oldFilePaths.forEach(urlPath => {
+                    const serverPath = path.join(__dirname, urlPath); 
+                    fs.unlink(serverPath, (unlinkErr) => {
+                        if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+                            console.error('파일 삭제 실패:', serverPath, unlinkErr);
+                        } else {
+                            console.log('기존 파일 삭제 성공:', serverPath);
+                        }
+                    });
+                });
+                
+                res.send({ message: '상품 정보가 성공적으로 수정되었습니다.' });
+
+            } catch (error) {
+                // 8. 오류 발생 시 롤백
+                console.error('상품 수정 중 오류 발생:', error);
+                await connection.rollback();
+                res.status(500).send({ message: '상품 수정 실패: ' + error.message });
+            } finally {
+                // 9. 커넥션 반납
+                connection.release();
+            }
+        });
+    });
+});
 // 5. [주문관리] 전체 주문 상세 내역 조회
 app.get('/college/admin/orders-detail', (req, res) => {
   const query = `
