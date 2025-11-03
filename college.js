@@ -870,6 +870,99 @@ app.get('/college/admin/stock-log', (req, res) => {
     });
 });
 
+//
+// ⬇️⬇️⬇️ [신규] 재고 '일괄' 출고 API (여러 개 동시 처리) ⬇️⬇️⬇️
+//
+app.post('/college/admin/stock-out-multiple', (req, res) => {
+    // [수정] inventory_id 대신 inventory_ids (배열)로 받음
+    const { inventory_ids, reason, recipient_name } = req.body; 
+    
+    if (!inventory_ids || !Array.isArray(inventory_ids) || inventory_ids.length === 0) {
+        return res.status(400).send({ message: '출고할 항목이 없습니다.' });
+    }
+    if (!reason || !recipient_name) {
+        return res.status(400).send({ message: '수령인과 사유를 입력하세요.' });
+    }
+
+    dbAcademy.getConnection((err, connection) => {
+        if (err) {
+          console.error('DB 커넥션 가져오기 실패:', err);
+          return res.status(500).send({ message: 'DB 연결 실패' });
+        }
+
+        connection.beginTransaction(async (err) => {
+            if (err) {
+                console.error('트랜잭션 시작 실패:', err);
+                connection.release();
+                return res.status(500).send({ message: '트랜잭션 시작 실패' });
+            }
+
+            // 쿼리 함수를 Promise로 래핑 (async/await용)
+            const queryAsync = (sql, params) => {
+                return new Promise((resolve, reject) => {
+                    connection.query(sql, params, (err, results) => {
+                        if (err) return reject(err);
+                        resolve(results);
+                    });
+                });
+            };
+
+            try {
+                let processedCount = 0;
+                
+                // [수정] 배열을 순회하며 하나씩 처리
+                for (const inventory_id of inventory_ids) {
+                    
+                    // 1. 재고 정보 조회 (상품명, 사이즈 등) 및 락(Lock)
+                    const [itemInfo] = await queryAsync(
+                        `SELECT i.product_id, i.size, p.product_name, i.stock_quantity 
+                         FROM shop_inventory i
+                         JOIN shop_products p ON i.product_id = p.product_id
+                         WHERE i.inventory_id = ? FOR UPDATE`, // 비관적 락
+                        [inventory_id]
+                    );
+
+                    if (!itemInfo || itemInfo.stock_quantity <= 0) {
+                        // [수정] 재고 부족 시 어떤 항목이 문제인지 알려줌
+                        throw new Error(`'${itemInfo ? itemInfo.product_name : '알수없는'}(${itemInfo ? itemInfo.size : '항목'})'의 재고가 없습니다.`);
+                    }
+
+                    // 2. 재고 차감
+                    await queryAsync(
+                        'UPDATE shop_inventory SET stock_quantity = stock_quantity - 1 WHERE inventory_id = ?',
+                        [inventory_id]
+                    );
+
+                    // 3. 로그 기록
+                    await queryAsync(
+                        `INSERT INTO shop_stock_log 
+                         (product_id, inventory_id, size, product_name, quantity_changed, reason, recipient_name) 
+                         VALUES (?, ?, ?, ?, -1, ?, ?)`,
+                        [itemInfo.product_id, inventory_id, itemInfo.size, itemInfo.product_name, reason, recipient_name]
+                    );
+                    
+                    processedCount++;
+                } // --- for 루프 끝 ---
+
+                // 4. 성공 시 커밋
+                await connection.commit();
+                res.status(201).send({ message: `총 ${processedCount}개 항목이 출고(증정) 처리되었습니다.` });
+
+            } catch (error) {
+                // 5. 실패 시 롤백
+                await connection.rollback();
+                console.error('재고 일괄 출고 실패:', error);
+                // [수정] 에러 메시지를 클라이언트에게 전달
+                res.status(500).send({ message: '재고 출고 실패: ' + error.message });
+            } finally {
+                // 6. 커넥션 반납
+                connection.release();
+            }
+        });
+    });
+});
+
+
 
 // ===============================================
 // ✉️ NCP SENS 문자 발송 함수
