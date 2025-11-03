@@ -224,7 +224,7 @@ async function sendSmsLogic(customerName, phoneNumber, orders, totalAmount) {
   const customerContent = `${customerName}님 ${orderSummary}의 주문이 완료되었습니다.
 ${totalAmount.toLocaleString()}원 입금 부탁드립니다.
 3333288746920 카카오뱅크 -박성준
-http://aq.gy/f/3B8Cyv
+http://aq.gy/f/3BCyv
 링크 클릭시 계좌번호 복사`;
 
   try {
