@@ -747,6 +747,39 @@ app.get('/college/admin/inventory-in-stock', (req, res) => {
     });
 });
 
+app.patch('/college/admin/orders/:orderId/status', (req, res) => {
+  const { orderId } = req.params;
+  const { paymentStatus } = req.body;
+
+  const allowedStatuses = ['PENDING', 'PAID'];
+  if (!allowedStatuses.includes(paymentStatus)) {
+    return res.status(400).send({ message: '허용되지 않은 결제 상태입니다.' });
+  }
+
+  dbAcademy.query(
+    'UPDATE shop_orders SET payment_status = ? WHERE order_id = ?',
+    [paymentStatus, orderId],
+    (err, result) => {
+      if (err) {
+        console.error('결제 상태 변경 실패:', err);
+        return res.status(500).send({ message: '결제 상태 변경 중 서버 오류가 발생했습니다.' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).send({ message: '해당 주문을 찾을 수 없습니다.' });
+      }
+
+      const msg =
+        paymentStatus === 'PAID'
+          ? '입금 상태가 [입금 완료]로 변경되었습니다.'
+          : '입금 상태가 [입금 대기]로 변경되었습니다.';
+
+      res.send({ message: msg });
+    }
+  );
+});
+
+
 // 2. [재고출고] 재고 출고 처리 (로그 기록 + 재고 차감)
 app.post('/college/admin/stock-out', (req, res) => {
     const { inventory_id, reason, recipient_name } = req.body;
