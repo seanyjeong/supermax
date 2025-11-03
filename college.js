@@ -584,8 +584,9 @@ app.get('/college/admin/orders-detail', (req, res) => {
     SELECT 
         o.order_id, o.customer_name, o.phone_number, o.order_date,
         o.payment_status, o.fulfillment_status,
-        oi.item_id, oi.product_name, oi.size, oi.price_per_item, oi.item_status
-    FROM 
+        oi.item_id, oi.product_name, oi.size, oi.price_per_item, oi.item_status,
+        oi.ordered_at, oi.fulfilled_at /* ⬅️ [신규] 이 2개 컬럼 추가 */
+    FROM
         shop_orders o
     JOIN 
         shop_order_items oi ON o.order_id = oi.order_id
@@ -603,31 +604,38 @@ app.get('/college/admin/orders-detail', (req, res) => {
 });
 
 // 6. 주문관리 - 상태 변경 (동일)
-app.patch('/college/admin/orders/:id/status', (req, res) => {
-  const { id } = req.params;
-  const { paymentStatus, fulfillmentStatus } = req.body;
+app.patch('/college/admin/order-item/:id/status', (req, res) => {
+  const { id } = req.params; // item_id
+  const { status } = req.body; // "ORDERED", "FULFILLED" 등
 
-  let query = 'UPDATE shop_orders SET ';
-  const params = [];
-  
-  if (paymentStatus) {
-    query += 'payment_status = ? ';
-    params.push(paymentStatus);
+  // ⬇️⬇️⬇️ [수정] 상태에 따라 쿼리 동적 생성 ⬇️⬇️⬇️
+  let query = 'UPDATE shop_order_items SET item_status = ?';
+  const params = [status];
+
+  if (status === 'ORDERED') {
+    // 발주 완료 시: ordered_at 기록, fulfilled_at 초기화
+    query += ', ordered_at = NOW(), fulfilled_at = NULL';
+  } else if (status === 'FULFILLED') {
+    // 분출 완료 시: fulfilled_at 기록
+    query += ', fulfilled_at = NOW()';
+  } else if (status === 'NEEDS_ORDER') {
+    // (초기화) 발주 필요 시: 모든 타임스탬프 초기화
+    query += ', ordered_at = NULL, fulfilled_at = NULL';
+  } else if (status === 'IN_STOCK') {
+    // 재고 있음 시: fulfilled_at만 초기화 (발주 기록은 남김)
+    query += ', fulfilled_at = NULL';
   }
-  if (fulfillmentStatus) {
-    if(params.length > 0) query += ', ';
-    query += 'fulfillment_status = ? ';
-    params.push(fulfillmentStatus);
-  }
-  query += 'WHERE order_id = ?';
+
+  query += ' WHERE item_id = ?';
   params.push(id);
+  // ⬆️⬆️⬆️ [수정] 여기까지 ⬆️⬆️⬆️
 
   dbAcademy.query(query, params, (err, result) => {
       if (err) {
-        console.error('주문 상태 변경 실패:', err);
-        return res.status(500).send({ message: '주문 상태 변경 실패' });
+        console.error('발주 상태 변경 실패:', err);
+        return res.status(500).send({ message: '발주 상태 변경 실패' });
       }
-      res.send({ message: '주문 상태가 변경되었습니다.' });
+      res.send({ message: '발주 상태가 변경되었습니다.' });
     }
   );
 });
