@@ -54,8 +54,16 @@ const db_drsports = mysql.createPool({
 // ===============================================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  filename: (req, file, cb) => {
+    // [수정] 파일명: 날짜(밀리초) + 6자리 랜덤숫자 + 확장자
+    const ext = path.extname(file.originalname); // ".jpeg"
+    const randomSuffix = Math.round(Math.random() * 1E6); // 0~999999
+    
+    // 예: "1762145062889-123456.jpeg"
+    cb(null, Date.now() + '-' + randomSuffix + ext); 
+  }
 });
+
 const upload = multer({ storage: storage });
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
