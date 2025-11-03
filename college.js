@@ -307,7 +307,6 @@ app.post('/college/admin/products', upload.fields([
   });
 });
 
-// 2. [상품관리] 전체 재고 현황 조회 (is_active 추가, 필터 제거)
 app.get('/college/admin/inventory', (req, res) => {
   const query = `
     SELECT p.product_name, p.product_id, p.is_active, i.inventory_id, i.size, i.stock_quantity
@@ -316,6 +315,17 @@ app.get('/college/admin/inventory', (req, res) => {
     /* WHERE p.is_active = TRUE  <-- 관리자는 모든 상품을 봐야 하므로 이 라인 삭제 또는 주석 처리 */
     ORDER BY p.product_name, i.inventory_id;
   `;
+  
+  // ⬇️⬇️⬇️ 이 부분이 통째로 빠져있었어! ⬇️⬇️⬇️
+  dbAcademy.query(query, (err, results) => {
+    if (err) {
+      console.error('재고 현황 조회 실패:', err);
+      return res.status(500).send({ message: '재고 조회 실패' });
+    }
+    res.json(results);
+  });
+  // ⬆️⬆️⬆️ 여기까지 ⬆️⬆️⬆️
+}); // ⬅️ 이것도 빠졌었어
   
 
 
