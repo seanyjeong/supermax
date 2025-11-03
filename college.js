@@ -8,13 +8,8 @@ const multer = require('multer');
 const app = express();
 const port = 9000;
 
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, PUT, DELETE'); 
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
-  next();
-});
+app.use(cors()); // ⬅️ 모든 CORS 문제를 해결해 줌!
+app.use(express.json());
 
 
 app.use(express.json());
