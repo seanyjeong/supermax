@@ -307,24 +307,17 @@ app.post('/college/admin/products', upload.fields([
   });
 });
 
-// 2. [상품관리] 전체 재고 현황 조회 (product_id 추가)
+// 2. [상품관리] 전체 재고 현황 조회 (is_active 추가, 필터 제거)
 app.get('/college/admin/inventory', (req, res) => {
   const query = `
-    SELECT p.product_name, p.product_id, i.inventory_id, i.size, i.stock_quantity
+    SELECT p.product_name, p.product_id, p.is_active, i.inventory_id, i.size, i.stock_quantity
     FROM shop_inventory i
     JOIN shop_products p ON i.product_id = p.product_id
-    WHERE p.is_active = TRUE
+    /* WHERE p.is_active = TRUE  <-- 관리자는 모든 상품을 봐야 하므로 이 라인 삭제 또는 주석 처리 */
     ORDER BY p.product_name, i.inventory_id;
   `;
   
-  dbAcademy.query(query, (err, results) => {
-    if (err) {
-      console.error('재고 현황 조회 실패:', err);
-      return res.status(500).send({ message: '재고 조회 실패' });
-    }
-    res.json(results);
-  });
-});
+
 
 // 3. [신규] 상품 삭제 API (DB + 파일)
 app.delete('/college/admin/products/:id', (req, res) => {
@@ -412,6 +405,28 @@ app.patch('/college/admin/inventory/:id', (req, res) => {
   );
 });
 
+  // ⬇️⬇️⬇️ [신규] 4-1. 상품 게시(active) 상태 변경 API ⬇️⬇️⬇️
+app.patch('/college/admin/products/:id/status', (req, res) => {
+  const { id } = req.params;
+  const { isActive } = req.body; // { isActive: true } 또는 { isActive: false }
+
+  if (typeof isActive !== 'boolean') {
+    return res.status(400).send({ message: '잘못된 요청입니다.' });
+  }
+
+  dbAcademy.query(
+    'UPDATE shop_products SET is_active = ? WHERE product_id = ?',
+    [isActive, id],
+    (err, result) => {
+      if (err) {
+        console.error('상품 게시 상태 변경 실패:', err);
+        return res.status(500).send({ message: '상태 변경 실패' });
+      }
+      res.send({ message: '상품 게시 상태가 변경되었습니다.' });
+    }
+  );
+});
+
 // 5. [주문관리] 전체 주문 상세 내역 조회
 app.get('/college/admin/orders-detail', (req, res) => {
   const query = `
@@ -483,6 +498,8 @@ app.patch('/college/admin/order-item/:id/status', (req, res) => {
     }
   );
 });
+
+
 
 
 // ===============================================
