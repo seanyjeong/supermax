@@ -733,10 +733,10 @@ app.get('/college/admin/inventory-in-stock', (req, res) => {
     const query = `
         SELECT 
             i.inventory_id, p.product_name, i.size, i.stock_quantity, p.product_id
-        FROM shop_inventory i
-        JOIN shop_products p ON i.product_id = p.product_id
-        WHERE i.stock_quantity > 0 AND p.is_active = TRUE
-        ORDER BY p.product_name, i.inventory_id;
+FROM shop_inventory i
+    JOIN shop_products p ON i.product_id = p.product_id
+    WHERE i.stock_quantity > 0 /* 👈 여기를 이렇게 바꿔! */
+    ORDER BY p.product_name, i.inventory_id;
     `;
     dbAcademy.query(query, (err, results) => {
         if (err) {
