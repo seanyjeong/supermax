@@ -1617,25 +1617,37 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
 
 app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMiddleware 제거 (학생도 접근 가능해야 함)
     const { year } = req.params;
-    const { region, teaching, exclude_events } = req.query; // 필터 파라미터 받기
+    // =============================================
+    // ⭐️ [수정] 신규 필터 파라미터 받기
+    // =============================================
+    const { region, teaching, exclude_events, exclude_subjects, inquiry_count } = req.query; 
 
     console.log(`[API /public/schools] Year: ${year}, Filters:`, req.query); // 로그 추가
 
     try {
 
-        // --- ⭐️ SQL 수정: JOIN 및 SELECT 추가 ---
+        // =============================================
+        // ⭐️ [수정] SQL: JOIN 및 SELECT 추가
+        // =============================================
         let sql = `
             SELECT
                 b.U_ID, b.대학명 AS university, b.학과명 AS department, b.군 AS gun,
                 b.광역 AS regionWide, b.시구 AS regionLocal, b.교직 AS teacher,
                 b.모집정원 AS quota,
-                r.실기 AS practicalRatio, -- ⭐️⭐️⭐️ 실기 비율 추가 (정시반영비율 테이블) ⭐️⭐️⭐️
+                r.실기 AS practicalRatio,
+                
+                -- ⭐️ 과목 반영 정보 추가 (원본반영표)
+                jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw, 
+                
                 GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events
             FROM 정시기본 b
-            LEFT JOIN 정시반영비율 r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도 -- ⭐️⭐️⭐️ 반영비율 테이블 JOIN 추가 ⭐️⭐️⭐️
+            LEFT JOIN 정시반영비율 r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
             LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도
+            
+            -- ⭐️ 원본반영표 JOIN 추가 (매칭된 U_ID 기준)
+            LEFT JOIN 정시_원본반영표 jov ON b.U_ID = jov.매칭_U_ID AND b.학년도 = jov.학년도
         `;
-        // --- ⭐️ SQL 수정 끝 ---
+        // =============================================
 
         const whereClauses = ['b.학년도 = ?'];
         const params = [year];
@@ -1648,11 +1660,9 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
                 params.push(regions);
             }
         }
-        // 교직 필터
-        if (teaching === 'O' || teaching === 'X') {
-            whereClauses.push('b.교직 = ?');
-            params.push(teaching);
-        }
+        // 교직 필터 (프론트에서 처리하므로 여기선 사용 안 함 - 주석 참고)
+        // if (teaching === 'O' || teaching === 'X') { ... }
+
          // ⭐️ 실기 종목 제외 필터
         if (exclude_events) {
             const eventsToExclude = exclude_events.split(',').map(e => e.trim()).filter(Boolean);
@@ -1668,10 +1678,43 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
             }
         }
 
+        // =============================================
+        // ⭐️ [신규] 반영 과목 제외 필터
+        // =============================================
+        if (exclude_subjects) {
+            const subjectsToExclude = exclude_subjects.split(',').map(s => s.trim()).filter(Boolean);
+            if (subjectsToExclude.includes('국어')) {
+                whereClauses.push("(jov.국어_raw IS NULL OR jov.국어_raw = '')");
+            }
+            if (subjectsToExclude.includes('수학')) {
+                whereClauses.push("(jov.수학_raw IS NULL OR jov.수학_raw = '')");
+            }
+            if (subjectsToExclude.includes('영어')) {
+                whereClauses.push("(jov.영어_raw IS NULL OR jov.영어_raw = '')");
+            }
+            if (subjectsToExclude.includes('탐구')) {
+                whereClauses.push("(jov.탐구_raw IS NULL OR jov.탐구_raw = '')");
+            }
+        }
+        
+        // ⭐️ [신규] 탐구 개수 필터
+        if (inquiry_count === '1' || inquiry_count === '2') {
+             // ⭐️ jov.탐구수_raw 컬럼에 대한 필터링
+             whereClauses.push('jov.탐구수_raw = ?');
+             params.push(inquiry_count);
+        }
+        // =============================================
+
+
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
-        // --- ⭐️ GROUP BY 수정: 조인된 테이블의 컬럼 추가 ---
-        sql += ` GROUP BY b.U_ID, b.대학명, b.학과명, b.군, b.광역, b.시구, b.교직, b.모집정원, r.실기 `; // ⭐️ 그룹핑 기준에 r.실기 추가
-        // --- ⭐️ GROUP BY 수정 끝 ---
+        
+        // =============================================
+        // ⭐️ [수정] GROUP BY 절 수정
+        // =============================================
+        sql += ` GROUP BY b.U_ID, b.대학명, b.학과명, b.군, b.광역, b.시구, b.교직, b.모집정원, r.실기,
+                         jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw `;
+        // =============================================
+        
         sql += ` ORDER BY b.대학명, b.학과명 ASC`;
 
         console.log("Executing SQL:", sql);
@@ -1682,9 +1725,8 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
         console.log(` -> Found ${rows.length} universities matching criteria.`);
 
         const formattedRows = rows.map(row => ({
-            ...row,
-            // ⭐️ practicalRatio 값 형 변환 (문자열일 수 있으므로)
-            practicalRatio: row.practicalRatio ? Number(row.practicalRatio) : 0, // ⭐️ 숫자로 변환, 없으면 0
+            ...row, // ⭐️ jov.국어_raw 등 모든 컬럼이 여기에 포함됨
+            practicalRatio: row.practicalRatio ? Number(row.practicalRatio) : 0,
             events: row.events ? row.events.split(',') : []
         }));
 
