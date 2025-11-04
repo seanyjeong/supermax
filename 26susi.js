@@ -136,7 +136,7 @@ const authOwnerJWT = (req, res, next) => {
 };
 
 
-app.post('/26susi_owner/login', async (req, res) => {
+app.post('/26susi/owner_login', async (req, res) => {
     try {
         const { userid, password } = req.body;
         if (!userid || !password) {
