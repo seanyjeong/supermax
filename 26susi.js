@@ -2431,7 +2431,7 @@ app.get('/26susi/branch_summary_by_university', authJWT, async (req, res) => {
         const sql = `
             SELECT
                 d.대학ID, d.대학명, d.학과명, d.전형명, d.실기ID,
-                s.학생ID, s.이름, s.학년, s.성별,
+                s.학생ID, s.이름, s.학년, s.성별,s.학교명, s.지점명,
                 f.내신등급, f.내신점수, f.실기총점, f.합산점수,
                 f.기록1, f.점수1, f.기록2, f.점수2, f.기록3, f.점수3, f.기록4, f.점수4,
                 f.기록5, f.점수5, f.기록6, f.점수6, f.기록7, f.점수7,
