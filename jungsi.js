@@ -220,6 +220,16 @@ app.get('/jungsi/public/shared-wishlist', authShareLinkMiddleware, async (req, r
         if (connection) connection.release();
     }
 });
+
+// 1. 학생 공유 리포트 페이지 서빙
+app.get('/student_report.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'student_report.html'));
+});
+
+// 2. 파비콘 502 에러 안 뜨게 무시 처리 (필수!)
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+// ⭐️⭐️⭐️ [여기까지 추가] ⭐️⭐️⭐️
+
 const dbSusi = mysql.createPool({
     host: '211.37.174.218',
     user: 'maxilsan',
