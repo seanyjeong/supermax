@@ -2917,8 +2917,8 @@ app.patch('/26susi/attendance/:status/:studentId', async (req, res) => {
         return res.status(400).json({ success: false, message: '유효하지 않은 상태값입니다.' });
     }
 
-    try {
-        db.promise().query(`UPDATE students SET attendance = ? WHERE id = ?`, [attendanceValue, studentId]);
+   try {
+        await db.promise().query(`UPDATE students SET attendance = ? WHERE id = ?`, [attendanceValue, studentId]); // ✅ await 추가!
         res.status(200).json({ success: true, message: `${attendanceValue} 처리 완료` });
     } catch (err) {
         console.error(`${attendanceValue} 처리 오류:`, err);
