@@ -3291,7 +3291,7 @@ app.get('/26susi/dashboard/pre-event', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
     const sql = `SELECT b.branch_name, COUNT(CASE WHEN s.attendance = '미정' OR s.attendance IS NULL THEN 1 END) as pending, COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as present, COUNT(CASE WHEN s.attendance = '결석' THEN 1 END) as absent, COUNT(CASE WHEN s.status = '대체' THEN 1 END) as substitute, COUNT(CASE WHEN s.status = '추가' THEN 1 END) as new_count FROM branches b LEFT JOIN students s ON b.id = s.branch_id GROUP BY b.branch_name ORDER BY b.branch_name`;
     try {
-        const [results] = db.promise().query(sql);
+        const [results] = await db.promise().query(sql);
         res.status(200).json({ success: true, data: results });
     } catch (err) { console.error("사전 현황판 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
