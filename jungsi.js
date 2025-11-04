@@ -1617,9 +1617,6 @@ app.get('/jungsi/overview-configs/:year',  async (req, res) => {
 
 app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMiddleware 제거 (학생도 접근 가능해야 함)
     const { year } = req.params;
-    // =============================================
-    // ⭐️ [수정] 신규 필터 파라미터 받기
-    // =============================================
     const { region, teaching, exclude_events, exclude_subjects, inquiry_count } = req.query; 
 
     console.log(`[API /public/schools] Year: ${year}, Filters:`, req.query); // 로그 추가
@@ -1627,24 +1624,25 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
     try {
 
         // =============================================
-        // ⭐️ [수정] SQL: JOIN 및 SELECT 추가
+        // ⭐️ [수정] SQL: r.수능, r.내신, b.단계별 추가
         // =============================================
         let sql = `
             SELECT
                 b.U_ID, b.대학명 AS university, b.학과명 AS department, b.군 AS gun,
                 b.광역 AS regionWide, b.시구 AS regionLocal, b.교직 AS teacher,
                 b.모집정원 AS quota,
-                r.실기 AS practicalRatio,
+                b.단계별 AS stageMultiple, -- ⭐️ 1단계 배수 표시용 (숫자 컬럼)
                 
-                -- ⭐️ 과목 반영 정보 추가 (원본반영표)
-                jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw, 
+                r.실기 AS practicalRatio,
+                r.수능 AS suneungRatio,     -- ⭐️ 수능 비율
+                r.내신 AS naeshinRatio,     -- ⭐️ 내신 비율
+                
+                jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw, jov.한국사_raw,
                 
                 GROUP_CONCAT(DISTINCT ev.종목명 ORDER BY ev.종목명 SEPARATOR ',') AS events
             FROM 정시기본 b
             LEFT JOIN 정시반영비율 r ON b.U_ID = r.U_ID AND b.학년도 = r.학년도
             LEFT JOIN 정시실기배점 ev ON b.U_ID = ev.U_ID AND b.학년도 = ev.학년도
-            
-            -- ⭐️ 원본반영표 JOIN 추가 (매칭된 U_ID 기준)
             LEFT JOIN 정시_원본반영표 jov ON b.U_ID = jov.매칭_U_ID AND b.학년도 = jov.학년도
         `;
         // =============================================
@@ -1652,7 +1650,7 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
         const whereClauses = ['b.학년도 = ?'];
         const params = [year];
 
-        // 지역 필터 (콤마로 구분된 여러 지역 가능)
+        // 지역 필터
         if (region) {
             const regions = region.split(',').map(r => r.trim()).filter(Boolean);
             if (regions.length > 0) {
@@ -1661,7 +1659,7 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
             }
         }
 
-         // ⭐️ 실기 종목 제외 필터
+         // 실기 종목 제외 필터
         if (exclude_events) {
             const eventsToExclude = exclude_events.split(',').map(e => e.trim()).filter(Boolean);
             if (eventsToExclude.length > 0) {
@@ -1676,14 +1674,9 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
             }
         }
 
-        // =============================================
-        // ⭐️⭐️⭐️ [수정] 반영 과목 제외 필터 (선택 과목은 제외 안 함) ⭐️⭐️⭐️
-        // =============================================
+        // 반영 과목 제외 필터
         if (exclude_subjects) {
             const subjectsToExclude = exclude_subjects.split(',').map(s => s.trim()).filter(Boolean);
-            
-            // "국어 제외" = 국어가 *필수*인 곳을 *제외*한다.
-            // = 국어가 (NULL이거나, 비어있거나, 괄호로 시작하는) 곳만 *보여준다*.
             if (subjectsToExclude.includes('국어')) {
                 whereClauses.push("(jov.국어_raw IS NULL OR jov.국어_raw = '' OR jov.국어_raw LIKE '(%)')");
             }
@@ -1698,22 +1691,20 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
             }
         }
         
-        // ⭐️ [신규] 탐구 개수 필터 (이전과 동일)
+        // 탐구 개수 필터
         if (inquiry_count === '1' || inquiry_count === '2') {
-             // ⭐️ jov.탐구수_raw 컬럼에 대한 필터링
              whereClauses.push('jov.탐구수_raw = ?');
              params.push(inquiry_count);
         }
-        // =============================================
-
 
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
         
         // =============================================
-        // ⭐️ [수정] GROUP BY 절 수정 (이전과 동일)
+        // ⭐️ [수정] GROUP BY 절 수정 (수능, 내신, 단계별 추가)
         // =============================================
-        sql += ` GROUP BY b.U_ID, b.대학명, b.학과명, b.군, b.광역, b.시구, b.교직, b.모집정원, r.실기,
-                         jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw `;
+        sql += ` GROUP BY b.U_ID, b.대학명, b.학과명, b.군, b.광역, b.시구, b.교직, b.모집정원, b.단계별,
+                         r.실기, r.수능, r.내신,
+                         jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw, jov.한국사_raw `;
         // =============================================
         
         sql += ` ORDER BY b.대학명, b.학과명 ASC`;
@@ -1725,11 +1716,18 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
 
         console.log(` -> Found ${rows.length} universities matching criteria.`);
 
+        // =============================================
+        // ⭐️ [수정] formattedRows에 새 데이터 추가
+        // =============================================
         const formattedRows = rows.map(row => ({
-            ...row, // ⭐️ jov.국어_raw 등 모든 컬럼이 여기에 포함됨
+            ...row, 
             practicalRatio: row.practicalRatio ? Number(row.practicalRatio) : 0,
+            suneungRatio: row.suneungRatio ? Number(row.suneungRatio) : 0,     // ⭐️ 추가
+            naeshinRatio: row.naeshinRatio ? Number(row.naeshinRatio) : 0,     // ⭐️ 추가
+            stageMultiple: row.stageMultiple || null,                         // ⭐️ 추가 (단계별)
             events: row.events ? row.events.split(',') : []
         }));
+        // =============================================
 
         res.json({ success: true, universities: formattedRows });
 
@@ -1738,6 +1736,7 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
         res.status(500).json({ success: false, message: "DB 오류", error: err.message });
     }
 });
+
 // =============================================
 // ⭐️ [신규] 특정 학생/학년도의 상담 목록 조회 API
 // =============================================
