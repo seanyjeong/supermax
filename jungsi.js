@@ -871,14 +871,6 @@ app.get('/jungsilogin', (req, res) => {
 });
 
 
-app.listen(port, () => {
-    // ... (기존 console.log) ...
-    console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
-    console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
-    console.log(`대량 점수 편집 페이지: http://supermax.kr:${port}/bulk-editor`);
-    // ⭐️ [신규] 로그인 페이지 주소
-    console.log(`로그인 페이지: http://supermax.kr:${port}/jungsilogin`);
-});
 
 // ⭐️ [신규] 1단계에서 만든 헬퍼 함수들 불러오기
 const { 
