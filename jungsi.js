@@ -14,6 +14,70 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 
+
+
+// jungsi.js
+const authMiddleware = (req, res, next) => {
+    console.log(`[jungsi 서버] ${req.path} 경로에 대한 인증 검사를 시작합니다.`);
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+        console.log(` -> [인증 실패] ❌ 토큰 없음.`);
+        return res.status(401).json({ success: false, message: '인증 토큰이 필요합니다.' });
+    }
+
+    try {
+        req.user = jwt.verify(token, JWT_SECRET);
+        const user = req.user;
+
+        // ✅ 학생 계정 차단 (정시엔진 접근 불가)
+        // if (user.role === 'student') {
+        //     console.log(` -> [접근 차단] 🚫 학생 계정 (${user.userid}) 은 정시엔진 접근 불가`);
+        //     return res.status(403).json({ success: false, message: '학생 계정은 정시엔진에 접근할 수 없습니다.' });
+        // }
+
+        // 🟢 인증 성공 로그
+        console.log(` -> [인증 성공] ✅ 사용자: ${user.userid}, 지점: ${user.branch}, 역할: ${user.role} → 다음 단계로 진행`);
+        next();
+
+    } catch (err) {
+        console.error(` -> [인증 실패] ❌ 토큰 검증 오류:`, err.name, err.message);
+        return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
+    }
+};
+
+const authStudentOnlyMiddleware = (req, res, next) => {
+    console.log(`[jungsi 학생 인증] ${req.path} 경로 학생 인증 검사...`);
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ success: false, message: '토큰 필요' });
+    }
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET); // 26susi.js와 SECRET이 같아야 함
+        
+        // 1. 학생이 아니면 차단
+        if (decoded.role !== 'student') {
+            return res.status(403).json({ success: false, message: '학생 전용 API입니다.' });
+        }
+        
+        // 2. 정시 DB와 매핑 ID가 없으면 차단 (승인 안 된 학생)
+        if (!decoded.jungsi_student_id) {
+            return res.status(403).json({ success: false, message: '정시엔진에 매핑되지 않은 학생입니다. (승인 오류)' });
+        }
+        
+        // ⭐️ 3. 성공: req 객체에 학생의 "정시 DB ID"를 주입
+        req.student_id = decoded.jungsi_student_id; 
+        req.user = decoded; // (기존 정보도 일단 유지)
+        
+        console.log(` -> [학생 인증 성공] ✅ 정시DB ID: ${req.student_id}`);
+        next();
+        
+    } catch (err) {
+        return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
+    }
+};
+
 // =============================================
 // ⭐️ [신규] 공유 링크 전용 인증 미들웨어
 // =============================================
@@ -156,68 +220,6 @@ app.get('/jungsi/public/shared-wishlist', authShareLinkMiddleware, async (req, r
         if (connection) connection.release();
     }
 });
-
-// jungsi.js
-const authMiddleware = (req, res, next) => {
-    console.log(`[jungsi 서버] ${req.path} 경로에 대한 인증 검사를 시작합니다.`);
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) {
-        console.log(` -> [인증 실패] ❌ 토큰 없음.`);
-        return res.status(401).json({ success: false, message: '인증 토큰이 필요합니다.' });
-    }
-
-    try {
-        req.user = jwt.verify(token, JWT_SECRET);
-        const user = req.user;
-
-        // ✅ 학생 계정 차단 (정시엔진 접근 불가)
-        // if (user.role === 'student') {
-        //     console.log(` -> [접근 차단] 🚫 학생 계정 (${user.userid}) 은 정시엔진 접근 불가`);
-        //     return res.status(403).json({ success: false, message: '학생 계정은 정시엔진에 접근할 수 없습니다.' });
-        // }
-
-        // 🟢 인증 성공 로그
-        console.log(` -> [인증 성공] ✅ 사용자: ${user.userid}, 지점: ${user.branch}, 역할: ${user.role} → 다음 단계로 진행`);
-        next();
-
-    } catch (err) {
-        console.error(` -> [인증 실패] ❌ 토큰 검증 오류:`, err.name, err.message);
-        return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
-    }
-};
-
-const authStudentOnlyMiddleware = (req, res, next) => {
-    console.log(`[jungsi 학생 인증] ${req.path} 경로 학생 인증 검사...`);
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (!token) {
-        return res.status(401).json({ success: false, message: '토큰 필요' });
-    }
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET); // 26susi.js와 SECRET이 같아야 함
-        
-        // 1. 학생이 아니면 차단
-        if (decoded.role !== 'student') {
-            return res.status(403).json({ success: false, message: '학생 전용 API입니다.' });
-        }
-        
-        // 2. 정시 DB와 매핑 ID가 없으면 차단 (승인 안 된 학생)
-        if (!decoded.jungsi_student_id) {
-            return res.status(403).json({ success: false, message: '정시엔진에 매핑되지 않은 학생입니다. (승인 오류)' });
-        }
-        
-        // ⭐️ 3. 성공: req 객체에 학생의 "정시 DB ID"를 주입
-        req.student_id = decoded.jungsi_student_id; 
-        req.user = decoded; // (기존 정보도 일단 유지)
-        
-        console.log(` -> [학생 인증 성공] ✅ 정시DB ID: ${req.student_id}`);
-        next();
-        
-    } catch (err) {
-        return res.status(403).json({ success: false, message: '토큰이 유효하지 않습니다.' });
-    }
-};
 const dbSusi = mysql.createPool({
     host: '211.37.174.218',
     user: 'maxilsan',
