@@ -1660,8 +1660,6 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
                 params.push(regions);
             }
         }
-        // 교직 필터 (프론트에서 처리하므로 여기선 사용 안 함 - 주석 참고)
-        // if (teaching === 'O' || teaching === 'X') { ... }
 
          // ⭐️ 실기 종목 제외 필터
         if (exclude_events) {
@@ -1679,25 +1677,28 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
         }
 
         // =============================================
-        // ⭐️ [신규] 반영 과목 제외 필터
+        // ⭐️⭐️⭐️ [수정] 반영 과목 제외 필터 (선택 과목은 제외 안 함) ⭐️⭐️⭐️
         // =============================================
         if (exclude_subjects) {
             const subjectsToExclude = exclude_subjects.split(',').map(s => s.trim()).filter(Boolean);
+            
+            // "국어 제외" = 국어가 *필수*인 곳을 *제외*한다.
+            // = 국어가 (NULL이거나, 비어있거나, 괄호로 시작하는) 곳만 *보여준다*.
             if (subjectsToExclude.includes('국어')) {
-                whereClauses.push("(jov.국어_raw IS NULL OR jov.국어_raw = '')");
+                whereClauses.push("(jov.국어_raw IS NULL OR jov.국어_raw = '' OR jov.국어_raw LIKE '(%)')");
             }
             if (subjectsToExclude.includes('수학')) {
-                whereClauses.push("(jov.수학_raw IS NULL OR jov.수학_raw = '')");
+                whereClauses.push("(jov.수학_raw IS NULL OR jov.수학_raw = '' OR jov.수학_raw LIKE '(%)')");
             }
             if (subjectsToExclude.includes('영어')) {
-                whereClauses.push("(jov.영어_raw IS NULL OR jov.영어_raw = '')");
+                whereClauses.push("(jov.영어_raw IS NULL OR jov.영어_raw = '' OR jov.영어_raw LIKE '(%)')");
             }
             if (subjectsToExclude.includes('탐구')) {
-                whereClauses.push("(jov.탐구_raw IS NULL OR jov.탐구_raw = '')");
+                whereClauses.push("(jov.탐구_raw IS NULL OR jov.탐구_raw = '' OR jov.탐구_raw LIKE '(%)')");
             }
         }
         
-        // ⭐️ [신규] 탐구 개수 필터
+        // ⭐️ [신규] 탐구 개수 필터 (이전과 동일)
         if (inquiry_count === '1' || inquiry_count === '2') {
              // ⭐️ jov.탐구수_raw 컬럼에 대한 필터링
              whereClauses.push('jov.탐구수_raw = ?');
@@ -1709,7 +1710,7 @@ app.get('/jungsi/public/schools/:year', async (req, res) => { // ⭐️ authMidd
         sql += ` WHERE ${whereClauses.join(' AND ')}`;
         
         // =============================================
-        // ⭐️ [수정] GROUP BY 절 수정
+        // ⭐️ [수정] GROUP BY 절 수정 (이전과 동일)
         // =============================================
         sql += ` GROUP BY b.U_ID, b.대학명, b.학과명, b.군, b.광역, b.시구, b.교직, b.모집정원, r.실기,
                          jov.국어_raw, jov.수학_raw, jov.영어_raw, jov.탐구_raw, jov.탐구수_raw `;
