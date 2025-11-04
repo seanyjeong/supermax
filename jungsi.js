@@ -6433,7 +6433,7 @@ app.get('/jungsi/admin/exercise-categories', authMiddleware, async (req, res) =>
     }
 });
 
-// --- 3. 관리자용: 새 운동 추가 ---
+// --- 3. 관리자용: 새 운동 추가 (is_active 값 1/0으로 수정) ---
 // POST /jungsi/admin/master-exercises
 app.post('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
     if (!hasAdminPermission(req.user)) {
@@ -6450,11 +6450,16 @@ app.post('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
                 (exercise_name, category, sub_category, is_active, created_at, updated_at)
             VALUES (?, ?, ?, ?, NOW(), NOW())
         `;
+        
+        // ▼▼▼▼▼ [수정] true/false 대신 1/0 전달 ▼▼▼▼▼
+        const isActiveValue = (is_active !== false) ? 1 : 0; // 기본값 1(true)
+        // ▲▲▲▲▲ [수정] 끝 ▲▲▲▲▲
+
         const [result] = await dbStudent.query(sql, [
             exercise_name,
             category || 'Other',
             sub_category || null,
-            is_active !== false // 기본값 true
+            isActiveValue // ⭐️ 수정된 값 사용
         ]);
         res.status(201).json({ success: true, message: '새 운동 추가 완료', insertedId: result.insertId });
     } catch (err) {
@@ -6467,7 +6472,7 @@ app.post('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
     }
 });
 
-// --- 4. 관리자용: 운동 정보 수정 ---
+// --- 4. 관리자용: 운동 정보 수정 (is_active 값 1/0으로 수정) ---
 // PUT /jungsi/admin/master-exercises/:id
 app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) => {
     if (!hasAdminPermission(req.user)) {
@@ -6489,11 +6494,16 @@ app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) =
                 updated_at = NOW()
             WHERE exercise_id = ?
         `;
+
+        // ▼▼▼▼▼ [수정] true/false 대신 1/0 전달 ▼▼▼▼▼
+        const isActiveValue = (is_active !== false) ? 1 : 0; // is_active가 true 또는 undefined이면 1, false면 0
+        // ▲▲▲▲▲ [수정] 끝 ▲▲▲▲▲
+
         const [result] = await dbStudent.query(sql, [
             exercise_name,
             category || 'Other',
             sub_category || null,
-            is_active !== false,
+            isActiveValue, // ⭐️ 수정된 값 사용
             id
         ]);
         
@@ -6502,7 +6512,9 @@ app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) =
         }
         res.json({ success: true, message: '운동 정보 수정 완료' });
     } catch (err) {
-        console.error(`❌ /admin/master-exercises PUT (${id}) 오류:`, err);
+        // ⭐️ 디버깅을 위해 에러 객체 전체를 로깅
+        console.error(`❌ /admin/master-exercises PUT (${id}) 오류:`, err); 
+        
         if (err.code === 'ER_DUP_ENTRY') {
             res.status(409).json({ success: false, message: '이미 존재하는 운동 이름입니다.' });
         } else {
@@ -6510,7 +6522,6 @@ app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) =
         }
     }
 });
-
 // --- 5. 관리자용: 운동 삭제 ---
 // DELETE /jungsi/admin/master-exercises/:id
 app.delete('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) => {
