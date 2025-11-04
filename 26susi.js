@@ -787,6 +787,88 @@ app.get('/26susi/admin/branch_summary', authJWT, async (req, res) => {
     }
 });
 
+// =================================================================
+// 🚀 [신규] admin 전용 - "전 지점" 수합 데이터 조회 API
+// (대학명 내림차순 정렬 포함)
+// =================================================================
+app.get('/26susi/admin/all_branch_summary', authJWT, async (req, res) => {
+    // 1. admin이 아니면 접근 거부
+    if (!isAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "관리자 전용 API입니다." });
+    }
+
+    try {
+        // 2. [수정] WHERE 절을 빼서 전 지점을 조회하고, ORDER BY를 대학명 내림차순으로 변경
+        const sql = `
+            SELECT
+                d.대학ID, d.대학명, d.학과명, d.전형명, d.실기ID,
+                s.학생ID, s.이름, s.학년, s.성별, s.학교명, s.지점명,
+                f.내신등급, f.내신점수, f.실기총점, f.합산점수,
+                f.기록1, f.점수1, f.기록2, f.점수2, f.기록3, f.점수3, f.기록4, f.점수4,
+                f.기록5, f.점수5, f.기록6, f.점수6, f.기록7, f.점수7,
+                f.최초합여부, f.최종합여부, f.실기일정
+            FROM 대학정보 d
+            JOIN 확정대학정보 f ON d.대학ID = f.대학ID
+            JOIN 학생기초정보 s ON f.학생ID = s.학생ID
+            /* WHERE 절 없음 (전 지점) */
+            ORDER BY d.대학명 DESC, d.학과명, d.전형명, f.합산점수 DESC;
+        `;
+        const [rows] = await db.promise().query(sql);
+
+        // 3. 대학별로 데이터를 재조립
+        const universityMap = new Map();
+        for (const row of rows) {
+            const key = row.대학ID;
+            if (!universityMap.has(key)) {
+                universityMap.set(key, {
+                    대학ID: row.대학ID,
+                    대학명: row.대학명,
+                    학과명: row.학과명,
+                    전형명: row.전형명,
+                    실기ID: row.실기ID,
+                    학생들: []
+                });
+            }
+            // 4. 학생 정보 PUSH (학교명, 지점명 포함)
+            universityMap.get(key).학생들.push({
+                학생ID: row.학생ID, 이름: row.이름, 학년: row.학년, 성별: row.성별,
+                학교명: row.학교명,
+                지점명: row.지점명,
+                내신등급: row.내신등급, 내신점수: row.내신점수, 실기총점: row.실기총점, 합산점수: row.합산점수,
+                기록1: row.기록1, 점수1: row.점수1, 기록2: row.기록2, 점수2: row.점수2, 기록3: row.기록3, 점수3: row.점수3,
+                기록4: row.기록4, 점수4: row.점수4, 기록5: row.기록5, 점수5: row.점수5, 기록6: row.기록6, 점수6: row.점수6,
+                기록7: row.기록7, 점수7: row.점수7,
+                최초합여부: row.최초합여부, 최종합여부: row.최종합여부, 실기일정: row.실기일정
+            });
+        }
+
+        // 5. 실기 종목 정보 합치기
+        const practicalIds = [...universityMap.values()]
+            .map(uni => uni.실기ID)
+            .filter(id => id); 
+
+        if (practicalIds.length > 0) {
+            const [events] = await db.promise().query(
+                "SELECT 실기ID, GROUP_CONCAT(DISTINCT 종목명 ORDER BY 종목명 SEPARATOR ',') as 종목들 FROM `26수시실기배점` WHERE 실기ID IN (?) GROUP BY 실기ID",
+                [practicalIds]
+            );
+            const eventMap = new Map(events.map(e => [e.실기ID, e.종목들.split(',')]));
+            universityMap.forEach(uni => {
+                if (uni.실기ID && eventMap.has(uni.실기ID)) {
+                    uni.실기종목 = eventMap.get(uni.실기ID);
+                }
+            });
+        }
+        
+        const results = Array.from(universityMap.values());
+        res.json({ success: true, universities: results });
+
+    } catch (err) {
+        console.error("Admin '전 지점' 수합 조회 API 오류:", err);
+        res.status(500).json({ success: false, message: "서버 오류 발생" });
+    }
+});
+
 // ✅ (신규) 대학 상세정보 전체 조회 API
 app.get('/26susi/university-details', authJWT, async (req, res) => {
     // 프론트에서 ?college_id=123 형식으로 대학ID를 받음
