@@ -6384,6 +6384,162 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
 });
 
 
+// =============================================
+// ⭐️ [신규] 퀘스트(운동) 목록 관리 API (관리자 전용)
+// =============================================
+
+// --- 1. 관리자용: 전체 운동 목록 조회 (활성/비활성 포함) ---
+// GET /jungsi/admin/master-exercises
+app.get('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
+    // ⭐️ 관리 권한 확인
+    if (!hasAdminPermission(req.user)) {
+        return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
+    }
+    console.log(`[API /admin/master-exercises] 관리자(${req.user.userid}) 전체 운동 목록 조회`);
+    try {
+        const [exercises] = await dbStudent.query(
+            `SELECT exercise_id, exercise_name, category, sub_category, default_unit, is_active
+             FROM jungsimaxstudent.master_exercises
+             ORDER BY category, sub_category, exercise_name`
+        );
+        res.json({ success: true, exercises: exercises });
+    } catch (err) {
+        console.error('❌ /admin/master-exercises GET 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 오류' });
+    }
+});
+
+// --- 2. 관리자용: 기존 카테고리/세부 카테고리 목록 조회 (Datalist용) ---
+// GET /jungsi/admin/exercise-categories
+app.get('/jungsi/admin/exercise-categories', authMiddleware, async (req, res) => {
+    if (!hasAdminPermission(req.user)) {
+        return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
+    }
+    try {
+        const [cats] = await dbStudent.query(
+            `SELECT DISTINCT category FROM jungsimaxstudent.master_exercises WHERE category IS NOT NULL AND category != '' ORDER BY category`
+        );
+        const [subCats] = await dbStudent.query(
+            `SELECT DISTINCT sub_category FROM jungsimaxstudent.master_exercises WHERE sub_category IS NOT NULL AND sub_category != '' ORDER BY sub_category`
+        );
+        res.json({
+            success: true,
+            categories: cats.map(c => c.category),
+            subCategories: subCats.map(s => s.sub_category)
+        });
+    } catch (err) {
+        console.error('❌ /admin/exercise-categories GET 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 오류' });
+    }
+});
+
+// --- 3. 관리자용: 새 운동 추가 ---
+// POST /jungsi/admin/master-exercises
+app.post('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
+    if (!hasAdminPermission(req.user)) {
+        return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
+    }
+    const { exercise_name, category, sub_category, is_active } = req.body;
+    if (!exercise_name) {
+        return res.status(400).json({ success: false, message: '운동명(exercise_name)은 필수입니다.' });
+    }
+    console.log(`[API /admin/master-exercises POST] 새 운동 추가: ${exercise_name}`);
+    try {
+        const sql = `
+            INSERT INTO jungsimaxstudent.master_exercises
+                (exercise_name, category, sub_category, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, NOW(), NOW())
+        `;
+        const [result] = await dbStudent.query(sql, [
+            exercise_name,
+            category || 'Other',
+            sub_category || null,
+            is_active !== false // 기본값 true
+        ]);
+        res.status(201).json({ success: true, message: '새 운동 추가 완료', insertedId: result.insertId });
+    } catch (err) {
+        console.error('❌ /admin/master-exercises POST 오류:', err);
+        if (err.code === 'ER_DUP_ENTRY') {
+            res.status(409).json({ success: false, message: '이미 존재하는 운동 이름입니다.' });
+        } else {
+            res.status(500).json({ success: false, message: 'DB 저장 오류' });
+        }
+    }
+});
+
+// --- 4. 관리자용: 운동 정보 수정 ---
+// PUT /jungsi/admin/master-exercises/:id
+app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) => {
+    if (!hasAdminPermission(req.user)) {
+        return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
+    }
+    const { id } = req.params;
+    const { exercise_name, category, sub_category, is_active } = req.body;
+    if (!exercise_name) {
+        return res.status(400).json({ success: false, message: '운동명(exercise_name)은 필수입니다.' });
+    }
+    console.log(`[API /admin/master-exercises PUT] 운동(${id}) 수정: ${exercise_name}`);
+    try {
+        const sql = `
+            UPDATE jungsimaxstudent.master_exercises SET
+                exercise_name = ?,
+                category = ?,
+                sub_category = ?,
+                is_active = ?,
+                updated_at = NOW()
+            WHERE exercise_id = ?
+        `;
+        const [result] = await dbStudent.query(sql, [
+            exercise_name,
+            category || 'Other',
+            sub_category || null,
+            is_active !== false,
+            id
+        ]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: '해당 운동을 찾을 수 없습니다.' });
+        }
+        res.json({ success: true, message: '운동 정보 수정 완료' });
+    } catch (err) {
+        console.error(`❌ /admin/master-exercises PUT (${id}) 오류:`, err);
+        if (err.code === 'ER_DUP_ENTRY') {
+            res.status(409).json({ success: false, message: '이미 존재하는 운동 이름입니다.' });
+        } else {
+            res.status(500).json({ success: false, message: 'DB 수정 오류' });
+        }
+    }
+});
+
+// --- 5. 관리자용: 운동 삭제 ---
+// DELETE /jungsi/admin/master-exercises/:id
+app.delete('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) => {
+    if (!hasAdminPermission(req.user)) {
+        return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
+    }
+    const { id } = req.params;
+    console.log(`[API /admin/master-exercises DELETE] 운동(${id}) 삭제`);
+    try {
+        // (주의: 이 운동을 사용한 기존 할당 내역(teacher_daily_assignments)이 있다면 FK 제약조건 오류가 날 수 있음)
+        // (실제 운영 시에는 is_active = false 로 처리하는 것을 권장함)
+        const sql = `DELETE FROM jungsimaxstudent.master_exercises WHERE exercise_id = ?`;
+        const [result] = await dbStudent.query(sql, [id]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, message: '해당 운동을 찾을 수 없습니다.' });
+        }
+        res.json({ success: true, message: '운동 삭제 완료' });
+    } catch (err) {
+        console.error(`❌ /admin/master-exercises DELETE (${id}) 오류:`, err);
+        if (err.code === 'ER_ROW_IS_REFERENCED_2') {
+             res.status(400).json({ success: false, message: '이 운동을 사용 중인 할당 내역이 있어 삭제할 수 없습니다. 대신 비활성화하세요.' });
+        } else {
+            res.status(500).json({ success: false, message: 'DB 삭제 오류' });
+        }
+    }
+});
+
+
 
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
