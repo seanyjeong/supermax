@@ -2941,7 +2941,7 @@ app.get('/26susi/dashboard/errors', async (req, res) => {
         ) ORDER BY r.created_at DESC;
     `;
     try {
-        const [results] = db.promise().query(sql);
+        const [results] = await db.promise().query(sql);
         res.status(200).json({ success: true, data: results });
     } catch (err) {
         console.error("기록 오류 조회 오류:", err);
@@ -3317,7 +3317,7 @@ app.get('/26susi/students/pending', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
      const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
      const sql = `SELECT s.student_name, s.exam_number FROM students s JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ? AND (s.attendance = '미정' OR s.attendance IS NULL) ORDER BY s.student_name`;
-     try { const [results] = db.promise().query(sql, [branchName]); res.status(200).json({ success: true, data: results }); }
+     try { const [results] = await db.promise().query(sql, [branchName]); res.status(200).json({ success: true, data: results }); }
      catch (err) { console.error("미확인 인원 조회 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
 });
 
@@ -3379,7 +3379,7 @@ app.get('/26susi/all-ranks', async (req, res) => {
     // ... (기존과 거의 동일하나 async/await 사용) ...
      const sql = `WITH TotalScores AS (...), OverallRanks AS (...), EventRanks AS (SELECT s.id, r.event, RANK() OVER (PARTITION BY s.gender, r.event ORDER BY r.score DESC, (CASE WHEN r.event = '10m' THEN r.record_value END) ASC, (CASE WHEN r.event != '10m' THEN r.record_value END) DESC) as event_rank FROM students s JOIN records r ON s.id = r.student_id) SELECT s.id, ovr.overall_rank, evr_jemul.event_rank as jemul_rank, evr_medball.event_rank as medball_rank, evr_10m.event_rank as ten_m_rank, evr_baegun.event_rank as baegun_rank, evr_jwajeon.event_rank as jwajeon_rank FROM students s LEFT JOIN OverallRanks ovr ON s.id = ovr.id LEFT JOIN EventRanks evr_jemul ON s.id = evr_jemul.id AND evr_jemul.event = '제멀' LEFT JOIN EventRanks evr_medball ON s.id = evr_medball.id AND evr_medball.event = '메디신볼' LEFT JOIN EventRanks evr_10m ON s.id = evr_10m.id AND evr_10m.event = '10m' LEFT JOIN EventRanks evr_baegun ON s.id = evr_baegun.id AND evr_baegun.event = '배근력' LEFT JOIN EventRanks evr_jwajeon ON s.id = evr_jwajeon.id AND evr_jwajeon.event = '좌전굴'`; // CTE 정의는 생략
      try {
-         const [results] = db.promise().query(sql);
+         const [results] = await db.promise().query(sql);
          const rankMap = {}; results.forEach(row => { rankMap[row.id] = { overallRank: row.overall_rank, '제멀': { rank: row.jemul_rank }, '메디신볼': { rank: row.medball_rank }, '10m': { rank: row.ten_m_rank }, '배근력': { rank: row.baegun_rank }, '좌전굴': { rank: row.jwajeon_rank } }; });
          res.status(200).json({ success: true, data: rankMap });
      } catch (err) { console.error("전체 순위 API 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
