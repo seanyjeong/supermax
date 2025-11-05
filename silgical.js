@@ -496,6 +496,36 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       );
       return totalScore;
     }
+      // ======================================================
+    // ID 151, 152번 학교 (3종목 평균)
+    // ======================================================
+    case 151:
+    case 152:
+    {
+      // (3개종목점수의합 /3 -80)* 7/6 +560
+      // ⭐️ 0점/null 포함 합산 (sumOfAllScores 사용)
+      const avg = sumOfAllScores / 3; // 3개 종목 평균
+      const totalScore = (avg - 80) * (7/6) + 560;
+      
+      log.push(`[Special-Case ${uid}] ((합산 ${sumOfAllScores}점 / 3) - 80) * (7/6) + 560`);
+      log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 151, 152 끝)
+    
+    // ======================================================
+    // ID 153번 학교 (2종목 평균)
+    // ======================================================
+    case 153:
+    {
+      // (2개종목의합 /2-80)+480
+      // ⭐️ 0점/null 포함 합산 (sumOfAllScores 사용)
+      const avg = sumOfAllScores / 2; // 2개 종목 평균
+      const totalScore = (avg - 80) + 480;
+      
+      log.push(`[Special-Case 153] ((합산 ${sumOfAllScores}점 / 2) - 80) + 480`);
+      log.push(`[Special-Case 153] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 153 끝)
 
     /* 예시: 상위 2종목만, 180점 만점 */
     case 1234:
