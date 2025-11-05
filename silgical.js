@@ -526,6 +526,99 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case 153] 최종 합산 점수: ${totalScore.toFixed(3)}`);
       return totalScore;
     } // (case 153 끝)
+      // ======================================================
+    // ID 160번 학교 (가중치 4:3:3 -> 1000점 -> 700점 환산)
+    // ======================================================
+    case 160:
+    {
+      // 100점 만점 배점표 기준
+      // (20m왕복 * 4) + (제멀 * 3) + (메디신 * 3)
+      const runScore = scoreMap.get('20m왕복달리기') || 0;
+      const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
+      const throwScore = scoreMap.get('메디신볼던지기') || 0;
+      
+      const rawTotal_1000 = (runScore * 4) + (jumpScore * 3) + (throwScore * 3);
+      log.push(`[Special-Case 160] (20m왕복 ${runScore}*4) + (제멀 ${jumpScore}*3) + (메디신 ${throwScore}*3) = ${rawTotal_1000}점`);
+      
+      // 1000점 만점을 700점으로 환산
+      const finalTotal_700 = (rawTotal_1000 / 1000) * 700;
+      
+      log.push(`[Special-Case 160] (${rawTotal_1000} / 1000) * 700`);
+      log.push(`[Special-Case 160] 최종 합산 점수: ${finalTotal_700.toFixed(3)}`);
+      return finalTotal_700;
+    } // (case 160 끝)
+    // ======================================================
+    // ID 175번 학교 (3종목 평균)
+    // ======================================================
+    case 175:
+    {
+      // (3종목의 합산 점수) ÷ 3
+      // ⭐️ 0점/null 포함 합산 (sumOfAllScores 사용)
+      const totalScore = sumOfAllScores / 3; // 3개 종목 평균
+      
+      log.push(`[Special-Case 175] (전체 합산 ${sumOfAllScores}점 / 3)`);
+      log.push(`[Special-Case 175] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 175 끝)
+// ======================================================
+    // ID 184번 학교 (3종목 합산 300 -> 280점 만점 환산)
+    // ======================================================
+    case 184:
+    {
+      // (3종목의 합산 점수 / 300) * 280
+      // ⭐️ 0점/null 포함 합산 (sumOfAllScores 사용, 100점 만점 3종목=300점 기준)
+      const totalScore = (sumOfAllScores / 300) * 280;
+      
+      log.push(`[Special-Case 184] (전체 합산 ${sumOfAllScores}점 / 300) * 280`);
+      log.push(`[Special-Case 184] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 184 끝)
+
+ // ======================================================
+    // ID 186번 학교 (배점 총합 + 기본점수 300점)
+    // ======================================================
+    case 186:
+    {
+      // 0점/null 제외 합산 (cleaned 사용)
+      const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+      const totalScore = sumOfScores + 300;
+      
+      log.push(`[Special-Case 186] 배점 합(${sumOfScores}) + 기본점수(300)`);
+      log.push(`[Special-Case 186] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 186 끝)    
+      // ======================================================
+    // ID 189번 학교 (배점 총합 + 기본점수 20점)
+    // ======================================================
+    case 189:
+    case 199:
+    {
+      // 0점/null 제외 합산 (cleaned 사용)
+      const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+      const totalScore = sumOfScores + 20;
+      
+      log.push(`[Special-Case 189] 배점 합(${sumOfScores}) + 기본점수(20)`);
+      log.push(`[Special-Case 189] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 189 끝)
+      // ======================================================
+    // ID 194, 197번 학교 (배점 총합 * 0.5)
+    // ======================================================
+    case 194:
+    case 197:
+    {
+      // 0점/null 제외 합산 (cleaned 사용)
+      const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+      const totalScore = sumOfScores * 0.5;
+      
+      log.push(`[Special-Case ${uid}] 배점 합(${sumOfScores}) * 0.5`);
+      log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 194, 197 끝)
+
+      
+      
+      
 
     /* 예시: 상위 2종목만, 180점 만점 */
     case 1234:
