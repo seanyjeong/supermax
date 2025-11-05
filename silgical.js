@@ -214,36 +214,116 @@ function practicalAverage(list, maxScore) {
   return (avg / 100) * maxScore;
 }
 
-function calcPracticalSpecial(F, list, log) { // ⭐️ log 파라미터 추가
-  // list 중에서 프론트가 "-"로 보였던 애들(점수 0)은 빼고 계산
-  const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
+// ▼▼▼▼▼ [수정 1] studentGender 인자 받도록 수정 ▼▼▼▼▼
+function calcPracticalSpecial(F, list, log, studentGender) {
+// ▲▲▲▲▲ [수정 1] ▲▲▲▲▲
 
   const uid = Number(F.U_ID);
   const cfg = typeof F.실기특수설정 === 'string'
     ? JSON.parse(F.실기특수설정)
     : (F.실기특수설정 || {});
 
+  // ======================================================
+  // ⭐️ [신규 추가] ID 13번 학교 (수동 공식 계산)
+  // (cleaned 변수 선언 *전에* 와야 함. 'list'를 직접 써야 함)
+  // ======================================================
+  if (uid === 13) {
+      log.push(`[Special-Case 13] 수동 공식 계산 시작 (Gender: ${studentGender})`);
+      
+      // 1. 성별 없으면 계산 불가
+      if (studentGender !== '남' && studentGender !== '여') {
+          log.push(`[오류] 성별 정보 없음. 0점 반환.`);
+          return 0;
+      }
+
+      // 2. 기준표 정의 (네가 알려준 값)
+      const standards = {
+          '배근력':       { '남': { min: 130, max: 220 }, '여': { min: 60, max: 151 } },
+          '좌전굴':       { '남': { min: 11.9, max: 30 }, '여': { min: 13.9, max: 32 } },
+          '제자리멀리뛰기': { '남': { min: 254, max: 300 }, '여': { min: 199, max: 250 } },
+          '중량메고달리기': { '남': { min: 9.9, max: 7.19 }, '여': { min: 10.9, max: 7.6 } }
+      };
+
+      let totalScore = 0; // 400점 만점 (합산)
+
+      // 3. 'list' (DB 조회 실패로 score:0 일 수 있음)를 순회
+      for (const item of list) {
+          const eventName = item.event;
+          const std = standards[eventName]?.[studentGender]; // 이 종목, 이 성별의 기준
+          const record = parseFloat(item.record); // ⭐️ 'score'가 아닌 'record' 사용
+
+          // 4. 기준표에 없거나(e.g., '10m왕복') 기록이 없으면(isNaN) 점수 없음
+          if (!std || isNaN(record)) {
+              log.push(`[Special-Case 13] ${eventName}: 계산 스킵 (기준 없거나 기록 없음)`);
+              continue;
+          }
+
+          let eventScore = 0;
+          const min = std.min; // 최저기준 (e.g., 배근력 남 130)
+          const max = std.max; // 최고기준 (e.g., 배근력 남 220)
+
+          // 5. Capping (Clamping): 기록이 min/max 범위를 벗어나면 min/max로 고정
+          let cappedRecord = record;
+          const isLowerBetter = max < min; // e.g., 중량달리기 (7.19 < 9.9)
+
+          if (isLowerBetter) {
+              if (record < max) cappedRecord = max; // 최고기록(7.19)보다 잘했으면 (7.0) -> 7.19
+              if (record > min) cappedRecord = min; // 최저기록(9.9)보다 못했으면 (10.0) -> 9.9
+          } else { // (Higher is better)
+              if (record > max) cappedRecord = max; // 최고기록(220)보다 잘했으면 (230) -> 220
+              if (record < min) cappedRecord = min; // 최저기록(130)보다 못했으면 (120) -> 130
+          }
+          
+          // 6. Formula: (기록 - 최저) / (최고 - 최저) * 100
+          if (max - min === 0) {
+              eventScore = 0; // 0으로 나누기 방지
+          } else {
+              eventScore = ((cappedRecord - min) / (max - min)) * 100;
+          }
+
+          log.push(`[Special-Case 13] ${eventName}: (기록 ${record} -> ${cappedRecord}) → (${cappedRecord} - ${min}) / (${max} - ${min}) * 100 = ${eventScore.toFixed(3)}`);
+          totalScore += eventScore;
+      }
+      
+      log.push(`[Special-Case 13] 최종 합산 점수: ${totalScore}`);
+      return totalScore; // ⭐️ 400점 만점 합계 점수 반환
+  }
+  // ======================================================
+
+
+  // list 중에서 프론트가 "-"로 보였던 애들(점수 0)은 빼고 계산
+  // (주의: Case 13은 이 로직 *전에* 처리해야 함)
+  const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
+
   switch (uid) {
     // ↓↓↓ 여기에 네가 원하는 대학 케이스를 계속 추가하면 됨 ↓↓↓
 
     // ======================================================
-    // ⭐️ [신규 추가] ID 2번 학교 (배점 총합 -> 점수 환산)
+    // ID 2번 학교 (배점 총합 -> 점수 환산) - ⭐️ 1점 더하는 거 뺌 (원복)
     // ======================================================
     case 2:
     {
-      // (이하 로직 동일...)
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
-      if (sumOfScores >= 286) return 700;
-      else if (sumOfScores >= 271) return 691;
-      else if (sumOfScores >= 256) return 682;
-      else if (sumOfScores >= 241) return 673;
-      else if (sumOfScores >= 226) return 664;
-      else if (sumOfScores >= 211) return 655;
-      else if (sumOfScores >= 196) return 646;
-      else if (sumOfScores >= 181) return 637;
-      else return 630;
+      
+      let lookedUpScore; 
+      if (sumOfScores >= 286) lookedUpScore = 700;
+      else if (sumOfScores >= 271) lookedUpScore = 691;
+      else if (sumOfScores >= 256) lookedUpScore = 682;
+      else if (sumOfScores >= 241) lookedUpScore = 673;
+      else if (sumOfScores >= 226) lookedUpScore = 664;
+      else if (sumOfScores >= 211) lookedUpScore = 655;
+      else if (sumOfScores >= 196) lookedUpScore = 646;
+      else if (sumOfScores >= 181) lookedUpScore = 637;
+      else lookedUpScore = 630;
+      
+      log.push(`[Special-Case 2] 배점 합(${sumOfScores}) -> 환산 점수(${lookedUpScore})`);
+      return lookedUpScore; // ⭐️ 1점 더하는 거 뺌
     }
-       case 3:
+    
+    // ======================================================
+    // ID 3번 학교 (배점 총합 + 기본점수 1점)
+    // ======================================================
+    case 3:
     {
       // 1. 배점 합계 (모든 종목 점수 다 더하기)
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
@@ -357,8 +437,9 @@ function calculateScore(F, S_original) {
     // ⭐️ 1. 계산 끝: eventBreakdowns가 'Basic'처럼 완벽하게 채워짐
     
     // 2. ⭐️ 특수 총점 계산: calcPracticalSpecial에는 이 풍부한 `eventBreakdowns` 배열을 전달
-    // (calcPracticalSpecial 함수는 내부적으로 `item.score`만 사용하므로 수정할 필요 없음)
-    const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log);
+    // ▼▼▼▼▼ [수정 2] studentGender 인자 추가 ▼▼▼▼▼
+    const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log, studentGender);
+    // ▲▲▲▲▲ [수정 2] ▲▲▲▲▲
     
     log.push('========== 실기 최종 ==========');
     log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`); // 예: 700점
