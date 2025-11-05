@@ -274,7 +274,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     : (F.실기특수설정 || {});
 
   // ======================================================
-  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림) 동국체교
+  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림)
   // ======================================================
   if (uid === 13) {
       log.push(`[Special-Case 13] 수동 공식 계산 시작 (Gender: ${studentGender})`);
@@ -293,39 +293,35 @@ function calcPracticalSpecial(F, list, log, studentGender) {
 
       let totalScore = 0; // 400점 만점 (합산)
 
-      // ⭐️ 'list'는 calculateScore에서 보낸 eventBreakdowns 배열임
       for (const item of list) {
           const eventName = item.event;
           const std = standards[eventName]?.[studentGender];
-          const record = parseFloat(item.record); // ⭐️ 'record' 사용
+          const record = parseFloat(item.record); 
 
-          // ▼▼▼▼▼ [수정됨] 'F'나 '미응시' 등으로 0점이 들어올 때 처리 ▼▼▼▼▼
           if (!std || isNaN(record)) {
-              // ⭐️ 'F' 등이 들어와서 record가 NaN이 되면 0점 처리
               log.push(`[Special-Case 13] ${eventName}: 기록(${item.record})이 없거나 숫자가 아님. 0점 처리.`);
-              item.score = 0; // ⭐️ 0점 처리
-              item.deduction_level = 0; // ⭐️ 0감 처리
-              continue; // ⭐️ totalScore에 0이 더해짐 (합산)
+              item.score = 0; 
+              item.deduction_level = 0; 
+              continue; 
           }
-          // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
 
-          let eventScoreRaw = 0; // ⭐️ 반올림 전 원본
-          const min = std.min; // 최저기준 (e.g., 배근력 남 130)
-          const max = std.max; // 최고기준 (e.g., 배근력 남 220)
+          let eventScoreRaw = 0; 
+          const min = std.min; 
+          const max = std.max; 
 
           let cappedRecord = record;
-          const isLowerBetter = max < min; // e.g., 중량달리기 (7.19 < 9.9)
+          const isLowerBetter = max < min; 
 
           if (isLowerBetter) {
-              if (record < max) cappedRecord = max; // 최고기록(7.19)보다 잘했으면 (7.0) -> 7.19
-              if (record > min) cappedRecord = min; // 최저기록(9.9)보다 못했으면 (10.0) -> 9.9
-          } else { // (Higher is better)
-              if (record > max) cappedRecord = max; // 최고기록(220)보다 잘했으면 (230) -> 220
-              if (record < min) cappedRecord = min; // 최저기록(130)보다 못했으면 (120) -> 130
+              if (record < max) cappedRecord = max; 
+              if (record > min) cappedRecord = min; 
+          } else { 
+              if (record > max) cappedRecord = max; 
+              if (record < min) cappedRecord = min; 
           }
           
           if (max - min === 0) {
-              eventScoreRaw = 0; // 0으로 나누기 방지
+              eventScoreRaw = 0; 
           } else {
               eventScoreRaw = ((cappedRecord - min) / (max - min)) * 100;
           }
@@ -345,13 +341,27 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       return finalTotalScore; 
   }
   // ======================================================
+  // ⭐️ (Case 13 끝)
+  // ======================================================
 
   
+  // ▼▼▼▼▼ [⭐️ 중요] case 16, 17을 위한 점수 맵 ▼▼▼▼▼
+  // 이 로직이 빠지면 case 16, 17에서 'scoreMap is not defined' 에러 남
+  const scoreMap = new Map();
+  for (const item of list) {
+      // ⭐️ 'F'등으로 점수(e.g. 30)가 있든, '미입력'(null)으로 0점이 되든 맵에 저장
+      scoreMap.set(item.event, item.score || 0); 
+  }
+  // ▲▲▲▲▲ [⭐️ 중요] ▲▲▲▲▲
+
+
+  // ⭐️ (기존) 합산 케이스(2, 3)를 위한 'cleaned' 배열 (0점/null 제외)
   const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
 
+  // ⭐️ 'switch' 문 시작
   switch (uid) {
     // ======================================================
-    // ID 2번 학교 (원복됨) 경동체육
+    // ID 2번 학교
     // ======================================================
     case 2:
     {
@@ -369,53 +379,56 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       
       log.push(`[Special-Case 2] 배점 합(${sumOfScores}) -> 환산 점수(${lookedUpScore})`);
       return lookedUpScore;
-    }
+    } // (case 2 끝)
     
     // ======================================================
-    // ID 3번 학교 (배점 총합 + 기본점수 1점) 고대스과
+    // ID 3번 학교
     // ======================================================
     case 3:
     {
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
       log.push(`[Special-Case 3] 배점 합(${sumOfScores}) + 기본점수(1)`);
       return sumOfScores + 1;
-    }
+    } // (case 3 끝)
 
-  // // ======================================================
-  //   // ID 17번 학교 (가중치 합산 1) 백석스과
-  //   // ======================================================
-  //   case 17:
-  //   {
-  //       // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
-  //       const runScore = scoreMap.get('10m왕복달리기') || 0;
-  //       const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
-  //       const situpScore = scoreMap.get('윗몸일으키기') || 0;
+    // ▼▼▼▼▼ [⭐️ 신규 추가된 케이스] ▼▼▼▼▼
+    // ======================================================
+    // ID 17번 학교 (가중치 합산 1)
+    // ======================================================
+    case 17:
+    {
+        // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
+        const runScore = scoreMap.get('10m왕복달리기') || 0;
+        const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
+        const situpScore = scoreMap.get('윗몸일으키기') || 0;
         
-  //       // 1) {(10m왕복 × 5.6) + (제멀 × 5.6) + (윗몸 × 4.8)}
-  //       const totalScore = (runScore * 5.6) + (jumpScore * 5.6) + (situpScore * 4.8);
+        // 1) {(10m왕복 × 5.6) + (제멀 × 5.6) + (윗몸 × 4.8)}
+        const totalScore = (runScore * 5.6) + (jumpScore * 5.6) + (situpScore * 4.8);
         
-  //       log.push(`[Special-Case 17] (10m왕복 ${runScore}점 * 5.6) + (제멀 ${jumpScore}점 * 5.6) + (윗몸 ${situpScore}점 * 4.8)`);
-  //       log.push(`[Special-Case 17] 최종 합산 점수: ${totalScore.toFixed(3)}`);
-  //       return totalScore;
-  //   }
+        log.push(`[Special-Case 17] (10m왕복 ${runScore}점 * 5.6) + (제멀 ${jumpScore}점 * 5.6) + (윗몸 ${situpScore}점 * 4.8)`);
+        log.push(`[Special-Case 17] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+        return totalScore;
+    } // (case 17 끝)
     
-  //   // ======================================================
-  //   // ID 16번 학교 (가중치 합산 2) 백석특체
-  //   // ======================================================
-  //   case 16:
-  //   {
-  //       // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
-  //       const runScore = scoreMap.get('10m왕복달리기') || 0;
-  //       const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
-  //       const situpScore = scoreMap.get('윗몸일으키기') || 0;
+    // ======================================================
+    // ID 16번 학교 (가중치 합산 2)
+    // ======================================================
+    case 16:
+    {
+        // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
+        const runScore = scoreMap.get('10m왕복달리기') || 0;
+        const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
+        const situpScore = scoreMap.get('윗몸일으키기') || 0;
         
-  //       // 2) {(10m왕복 × 9.8) + (제멀 × 9.8) + (윗몸 × 8.4)}
-  //       const totalScore = (runScore * 9.8) + (jumpScore * 9.8) + (situpScore * 8.4);
+        // 2) {(10m왕복 × 9.8) + (제멀 × 9.8) + (윗몸 × 8.4)}
+        const totalScore = (runScore * 9.8) + (jumpScore * 9.8) + (situpScore * 8.4);
 
-  //       log.push(`[Special-Case 16] (10m왕복 ${runScore}점 * 9.8) + (제멀 ${jumpScore}점 * 9.8) + (윗몸 ${situpScore}점 * 8.4)`);
-  //       log.push(`[Special-Case 16] 최종 합산 점수: ${totalScore.toFixed(3)}`);
-  //       return totalScore;
-  //   }    
+        log.push(`[Special-Case 16] (10m왕복 ${runScore}점 * 9.8) + (제멀 ${jumpScore}점 * 9.8) + (윗몸 ${situpScore}점 * 8.4)`);
+        log.push(`[Special-Case 16] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+        return totalScore;
+    } // (case 16 끝)
+    // ▲▲▲▲▲ [⭐️ 신규 추가된 케이스 끝] ▲▲▲▲▲
+
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
       return practicalTopN(cleaned, 2, cfg.maxScore || 180);
@@ -423,14 +436,11 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     case 5678: // 예: △△대 - 전체 평균, 150점 만점
       return practicalAverage(cleaned, cfg.maxScore || 150);
 
-    // ↑↑↑ 여기는 네가 필요한 만큼 케이스 추가 ↑↑↑
-
     default:
       log.push(`[경고] Special 모드 U_ID(${uid})가 분기에 없습니다. 0점을 반환합니다.`);
       return 0;
-  }
+  } // ⭐️ 'switch' 문 끝
 }
-// ▲▲▲▲▲ [수정됨] calcPracticalSpecial 함수 끝 ▲▲▲▲▲
 
 
 /**
