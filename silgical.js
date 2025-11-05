@@ -93,6 +93,7 @@ function lookupDeductionLevel(studentScore, scoreTable) {
     // (100점 -> 0 (0감), 98점 -> 1 (1감), 96점 -> 2 (2감))
     return (levelIndex === -1) ? 0 : levelIndex; 
 }
+
 // ⭐️ 학생 실기기록을 대학 실기배점표와 매칭해서 "종목별 점수 배열"로 돌려주는 헬퍼
 function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGender = '') {
   
@@ -239,9 +240,15 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
  * [규칙 3] '배점 등급'을 '최종 점수'로 환산
  */
 function convertGradeToScore(grade, U_ID, eventName) {
+  // ⭐️ P/NP/PASS 처리 (기본적으로 PASS = 100, NP = 0)
+  const g = String(grade).toUpperCase();
+  if (g === 'P' || g === 'PASS') return 100;
+  if (g === 'NP' || g === 'N' || g === 'FAIL') return 0;
+
   const score = Number(grade);
   return Number.isNaN(score) ? 0 : score;
 }
+
 function practicalTopN(list, n, maxScore) {
   if (!list || list.length === 0) return 0;
   const sorted = [...list].sort((a,b) => (b.score || 0) - (a.score || 0));
@@ -451,7 +458,29 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
       return totalScore;
     } // (case 69, 70 끝)
-     case 99:
+
+    // ======================================================
+    // ID 121번 학교 (PASS 개수 기반: (100 * P 개수) + 200)
+    // ======================================================
+    case 121:
+    {
+      let passCount = 0;
+
+      for (const item of list || []) {
+        // special 모드에서 breakdown에 rawGrade 넣어둘 거라 그걸 우선 사용
+        const raw = item.rawGrade || item.grade || item.score;
+        const upper = String(raw).toUpperCase();
+        if (upper === 'P' || upper === 'PASS') {
+          passCount++;
+        }
+      }
+
+      const totalScore = (100 * passCount) + 200;
+      log.push(`[Special-Case 121] PASS 종목 수: ${passCount}개 → (100 * ${passCount}) + 200 = ${totalScore}`);
+      return totalScore;
+    } // (case 121 끝)
+
+    case 99:
     case 147:      
     {
       // 0점/null 제외 (cleaned 사용)
@@ -461,7 +490,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       return finalScore;
     } 
 
-      case 146:
+    case 146:
     {
       // 0점/null 제외 (cleaned 사용)
       const finalScore = practicalTopN(cleaned, 3,400);
@@ -469,7 +498,6 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case 99] 최종 점수: ${finalScore.toFixed(3)}`);
       return finalScore;
     } 
-
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
       return practicalTopN(cleaned, 2, cfg.maxScore || 180);
@@ -526,7 +554,7 @@ function calculateScore(F, S_original) {
   // --- 2. 모드 분기 ---
 
   if (mode === 'special') {
-    // ⭐️ [Special 로직] ⭐️ (수정 없음)
+    // ⭐️ [Special 로직] ⭐️
     
     log.push(`[Special] 'special' 모드 실행...`);
     
@@ -543,6 +571,7 @@ function calculateScore(F, S_original) {
           event: eventName,
           record: '',
           score: null,
+          rawGrade: null,
           deduction_level: null
         });
         return;
@@ -565,7 +594,8 @@ function calculateScore(F, S_original) {
       eventBreakdowns.push({
           event: eventName,
           record: eventValue,
-          score: score, 
+          score: score,
+          rawGrade: rawGrade,      // ⭐️ 121번용: 원래 등급(P/NP 등) 보존
           deduction_level: deductionLevel 
       });
     });
@@ -704,7 +734,7 @@ function calculateScore(F, S_original) {
 
 
 // -----------------------------------------------------------------
-// ⭐️ [2] 라우터 모듈 (이 부분은 수정 없음)
+// ⭐️ [2] 라우터 모듈
 // -----------------------------------------------------------------
 module.exports = (db, authMiddleware) => {
 
@@ -737,8 +767,8 @@ module.exports = (db, authMiddleware) => {
   });
 
   return router; // ⭐️ 라우터를 반환
-  
 };
+
 module.exports.buildPracticalScoreList = buildPracticalScoreList;
 module.exports.findMaxScore = findMaxScore;
 module.exports.findMinScore = findMinScore;
