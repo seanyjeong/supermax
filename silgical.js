@@ -35,7 +35,6 @@ function findMaxScore(scoreTable) {
     return max;
 }
 
-// ▼▼▼▼▼ [⭐️ 신규 헬퍼 추가] ▼▼▼▼▼
 /**
  * ⭐️ [신규 헬퍼] 배점표에서 'F', 'P' 등을 제외한 '순수 숫자 최하점'을 찾음
  * (예: [100, 90, ..., 30] 과 {'F': 0}이 섞여있어도 '30'을 반환)
@@ -70,7 +69,6 @@ function findMinScore(scoreTable) {
         return '0'; // 배점표에 숫자 점수가 아예 없으면 0점
     }
 }
-// ▲▲▲▲▲ [⭐️ 신규 헬퍼 추가] ▲▲▲▲▲
 
 
 /**
@@ -134,8 +132,8 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGe
 /**
  * ⭐️ [규칙 2] 학생 기록으로 '배점 등급' 찾기
  * (수정) 'F', 'G' 등이 들어오면 '최하점' 헬퍼 즉시 호출
+ * (수정) higher_is_better에서 numericLevels가 비어있을 때 에러 수정
  */
-// ▼▼▼▼▼ [수정됨] lookupScore 함수 (F, G 최하점 처리) ▼▼▼▼▼
 function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   // 1. 배점표가 아예 없으면 0점
   if (!scoreTable || scoreTable.length === 0) {
@@ -145,15 +143,12 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   // ⭐️ 학생 기록(f)과 DB 기록(F)을 비교하기 위해 둘 다 대문자로 통일
   const studentValueStr = String(studentRecord).trim().toUpperCase(); // ⭐️ .toUpperCase()
   
-  // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
   // ⭐️ 'F', 'G' 등이면 'findMinScore' 헬퍼를 즉시 호출
-  // ⭐️ (이 로직이 3번[문자일치]보다 *먼저* 실행되어야 'F'->'0' 매핑을 무시할 수 있음)
   const FORCE_MIN_SCORE_KEYWORDS = ['F', 'G', '미응시', '파울', '실격'];
   if (FORCE_MIN_SCORE_KEYWORDS.includes(studentValueStr)) {
       // ⭐️ 'F' -> '0' 매핑을 무시하고, 배점표의 실제 최하점(e.g. 30)을 찾음
       return findMinScore(scoreTable);
   }
-  // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
 
   const studentValueNum = Number(studentValueStr);
   const isNumericInput = !Number.isNaN(studentValueNum) && studentValueStr !== '';
@@ -180,7 +175,6 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   }
 
   // 3. [1순위] 문자 일치 (e.g., "P" -> "P")
-  // ⭐️ (이제 'F'는 위에서 걸러졌으므로, 'P', 'PASS' 같은 것만 여기서 처리됨)
   if (exactMatchLevels.has(studentValueStr)) {
     return exactMatchLevels.get(studentValueStr);
   }
@@ -213,33 +207,32 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
         }
         
       } else { // higher_is_better (제자리멀리뛰기)
-        // [제멀: 300(100), 290(90), 254(60)]
         numericLevels.sort((a, b) => b.record - a.record);
         for (const level of numericLevels) {
           if (studentValueNum >= level.record) return level.grade;
         }
         
-        // ▼▼▼▼▼ [수정됨] (원본 로직 유지) ▼▼▼▼▼
-        // 학생 200 (기준 미달) -> 루프 통과 (못 찾음)
-        // ⭐️ 'outOfRangeRule'을 무시하고 '최하점'을 강제로 반환.
-        return numericLevels[numericLevels.length - 1].grade; // e.g. 60점 반환
-        // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
+        // ▼▼▼▼▼ [⭐️ 수정됨 - 11/05 버그 수정] ▼▼▼▼▼
+        // ⭐️ 'numericLevels' 배열이 비어있지 않을 때만 이 로직을 실행
+        if (numericLevels.length > 0) {
+          // 학생 200 (기준 미달) -> 루프 통과 (못 찾음)
+          // 'outOfRangeRule'을 무시하고 '최하점'을 강제로 반환.
+          return numericLevels[numericLevels.length - 1].grade; // e.g. 60점 반환
+        }
+        // ▲▲▲▲▲ [⭐️ 수정됨 - 11/05 버그 수정] ▲▲▲▲▲
       }
     }
   }
   
   // 5. [4순위] 어디에도 해당 안 됨 (e.g. 배점표에 없는 문자 "H", "J" 등)
   if (outOfRangeRule === '최하점') {
-    // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
-    // ⭐️ (수정) 'findMinScore' 헬퍼를 사용
-    // (이제 이 로직은 'F'가 아닌, 배점표에 아예 없는 문자가 '최하점' 규칙일 때만 실행됨)
+    // ⭐️ 'findMinScore' 헬퍼를 사용 (F/G 등을 제외한 순수 숫자 최하점)
     return findMinScore(scoreTable);
-    // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
   } else {
     return '0'; // '0점' 규칙이면 0점
   }
 }
-// ▲▲▲▲▲ [수정됨] lookupScore 함수 끝 ▲▲▲▲▲
+// ▲▲▲▲▲ lookupScore 함수 끝 ▲▲▲▲▲
 
 
 /**
@@ -274,7 +267,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     : (F.실기특수설정 || {});
 
   // ======================================================
-  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림)동대체교
+  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림)
   // ======================================================
   if (uid === 13) {
       log.push(`[Special-Case 13] 수동 공식 계산 시작 (Gender: ${studentGender})`);
@@ -345,26 +338,32 @@ function calcPracticalSpecial(F, list, log, studentGender) {
   // ======================================================
 
   
-  // ▼▼▼▼▼ [⭐️ 중요] case 16, 17을 위한 점수 맵 ▼▼▼▼▼
-  // 이 로직이 빠지면 case 16, 17에서 'scoreMap is not defined' 에러 남
+  // ▼▼▼▼▼ [⭐️ 중요] case 16, 17, 69, 70을 위한 점수 맵 ▼▼▼▼▼
+  // (null은 0점으로, F는 30점 등으로 매핑됨)
   const scoreMap = new Map();
   for (const item of list) {
-      // ⭐️ 'F'등으로 점수(e.g. 30)가 있든, '미입력'(null)으로 0점이 되든 맵에 저장
       scoreMap.set(item.event, item.score || 0); 
   }
   // ▲▲▲▲▲ [⭐️ 중요] ▲▲▲▲▲
 
 
-  // ⭐️ (기존) 합산 케이스(2, 3)를 위한 'cleaned' 배열 (0점/null 제외)
+  // ⭐️ (기존) 합산 케이스(2, 3, 19)를 위한 'cleaned' 배열 (0점/null 제외)
   const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
+
+  // ▼▼▼▼▼ [⭐️ 신규] case 69, 70을 위한 '모든' 종목 합산 ▼▼▼▼▼
+  // (scoreMap의 모든 점수를 합산. [100, 80, null] -> 100+80+0 = 180)
+  const sumOfAllScores = Array.from(scoreMap.values()).reduce((sum, score) => sum + score, 0);
+  // ▲▲▲▲▲ [⭐️ 신규] ▲▲▲▲▲
+
 
   // ⭐️ 'switch' 문 시작
   switch (uid) {
     // ======================================================
-    // ID 2번 학교 경동체육
+    // ID 2번 학교
     // ======================================================
     case 2:
     {
+      // 0점/null 제외 합산
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
       let lookedUpScore; 
       if (sumOfScores >= 286) lookedUpScore = 700;
@@ -386,23 +385,22 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     // ======================================================
     case 3:
     {
+      // 0점/null 제외 합산
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
       log.push(`[Special-Case 3] 배점 합(${sumOfScores}) + 기본점수(1)`);
       return sumOfScores + 1;
     } // (case 3 끝)
 
-    // ▼▼▼▼▼ [⭐️ 신규 추가된 케이스] ▼▼▼▼▼
     // ======================================================
-    // ID 17번 학교 (가중치 합산 1)백석특체
+    // ID 17번 학교 (가중치 합산 1)
     // ======================================================
     case 17:
     {
-        // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
+        // 0점/null 포함 (scoreMap 사용)
         const runScore = scoreMap.get('10m왕복달리기') || 0;
         const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
         const situpScore = scoreMap.get('윗몸일으키기') || 0;
         
-        // 1) {(10m왕복 × 5.6) + (제멀 × 5.6) + (윗몸 × 4.8)}
         const totalScore = (runScore * 5.6) + (jumpScore * 5.6) + (situpScore * 4.8);
         
         log.push(`[Special-Case 17] (10m왕복 ${runScore}점 * 5.6) + (제멀 ${jumpScore}점 * 5.6) + (윗몸 ${situpScore}점 * 4.8)`);
@@ -411,32 +409,34 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     } // (case 17 끝)
     
     // ======================================================
-    // ID 16번 학교 (가중치 합산 2)백석스과
+    // ID 16번 학교 (가중치 합산 2)
     // ======================================================
     case 16:
     {
-        // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
+        // 0점/null 포함 (scoreMap 사용)
         const runScore = scoreMap.get('10m왕복달리기') || 0;
         const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
         const situpScore = scoreMap.get('윗몸일으키기') || 0;
         
-        // 2) {(10m왕복 × 9.8) + (제멀 × 9.8) + (윗몸 × 8.4)}
         const totalScore = (runScore * 9.8) + (jumpScore * 9.8) + (situpScore * 8.4);
 
         log.push(`[Special-Case 16] (10m왕복 ${runScore}점 * 9.8) + (제멀 ${jumpScore}점 * 9.8) + (윗몸 ${situpScore}점 * 8.4)`);
         log.push(`[Special-Case 16] 최종 합산 점수: ${totalScore.toFixed(3)}`);
         return totalScore;
     } // (case 16 끝)
+
     // ======================================================
-    // ID 19번 학교 (배점 총합 + 기본점수 2점) 성대
+    // ID 19번 학교
     // ======================================================
     case 19:
     {
+      // 0점/null 제외 합산
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
       log.push(`[Special-Case 19] 배점 합(${sumOfScores}) + 기본점수(2)`);
       return sumOfScores + 2;
-    }
-// ======================================================
+    } // (case 19 끝)
+
+    // ======================================================
     // ID 69, 70번 학교 (평균 × 4 + 기본점수 400)
     // ======================================================
     case 69:
@@ -450,7 +450,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case ${uid}] (전체 합산 ${sumOfAllScores}점 / 3) * 4 + 400`);
       log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
       return totalScore;
-    } 
+    } // (case 69, 70 끝)
 
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
@@ -464,6 +464,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       return 0;
   } // ⭐️ 'switch' 문 끝
 }
+// ▲▲▲▲▲ calcPracticalSpecial 함수 끝 ▲▲▲▲▲
 
 
 /**
@@ -506,107 +507,14 @@ function calculateScore(F, S_original) {
 
   // --- 2. 모드 분기 ---
 
-  // ▼▼▼▼▼ [Special 로직 수정] ▼▼▼▼▼
   if (mode === 'special') {
+    // ⭐️ [Special 로직] ⭐️ (수정 없음)
+    
     log.push(`[Special] 'special' 모드 실행...`);
     
     const eventBreakdowns = []; 
     const schoolOutOfRangeRule = F.미달처리 || '0점'; 
     
-    studentRecords.forEach((record) => {
-      const eventName = record.event;
-      const eventValue = String(record.value || '').trim();
-
-      if (eventValue === '') {
-        log.push(`[${eventName}] 기록 없음. 계산 보류.`);
-        eventBreakdowns.push({
-          event: eventName,
-          record: '',
-          score: null,
-          deduction_level: null // ⭐️ 감수 필드
-        });
-        return;
-      }
-
-      const { method } = getEventRules(eventName);
-      const scoreTable = allScoreData.filter(
-        (r) => r.종목명 === eventName && r.성별 === studentGender
-      );
-
-      // ⭐️ (수정) 13번 케이스는 배점표가 없으므로 rawGrade가 '0'
-      // ⭐️ (수정) 'F'를 넣으면 이제 lookupScore가 최하점(e.g. '30') 반환
-      const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
-      const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
-      
-      // ⭐️ (수정) 13번 케이스는 deductionLevel이 0
-      // ⭐️ (수정) 'F' -> 30점 -> deductionLevel이 15감 (e.g.)
-      const deductionLevel = lookupDeductionLevel(score, scoreTable); 
-      
-      log.push(
-        `[${eventName}] (규칙: ${method}) 기록: ${eventValue} → 배점: "${rawGrade}"(환산: ${score}점) → ⭐️급간(감수): ${deductionLevel}감`
-      );
-      
-      eventBreakdowns.push({
-          event: eventName,
-          record: eventValue,
-          score: score, 
-          deduction_level: deductionLevel 
-      });
-    });
-    
-    // 2. ⭐️ 특수 총점 계산
-    // (case 13은 eventBreakdowns를 *직접 수정*함)
-    const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log, studentGender);
-    
-    log.push('========== 실기 최종 ==========');
-    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`);
-    
-    // 3. ⭐️ 반환:
-    // (Case 13은 eventBreakdowns가 [ { event: '배근력', score: 95.x, ... } ] 로 수정됨)
-    // (Case 13이 아니면 eventBreakdowns가 [ { event: '제멀', score: 30, ... } ] 로 채워짐)
-    return {
-      totalScore: finalPracticalScore.toFixed(3),
-      breakdown: { 
-          events: eventBreakdowns, 
-          practical_raw_sum: finalPracticalScore, 
-          total_deduction_level: 0 // ⭐️ Special 모드는 '총 감수' 개념 없음
-      },
-      calculationLog: log,
-    };
-    // ▲▲▲▲▲ [Special 로직 수정 끝] ▲▲▲▲▲
-
-  } else {
-    // ⭐️ [Basic 로직] ⭐️ (수정됨 - lookupScore가 고쳐졌으므로 'F' 처리 자동 수정됨)
-    
-    log.push(`[Basic] 'basic' 모드(기존 로직) 실행...`);
-    
-    const practicalRatio = (Number(F.실기) || 0) / 100;
-    if (practicalRatio <= 0) {
-      log.push('[패스] 실기 반영 비율 0%');
-      return { totalScore: 0, breakdown: { events: [], practical_raw_sum: 0, total_deduction_level: 0 }, calculationLog: log };
-    }
-
-    const SCHOOL_TOTAL = Number(F?.총점) > 0 ? Number(F.총점) : 1000;
-    const PRACTICAL_MAX = Number(F.실기총점) || 0;
-    const schoolTotalBaseScore = Number(F.기본점수) || 0;
-    const schoolOutOfRangeRule = F.미달처리 || '0점';
-
-    log.push(`[정보] 학교총점=${SCHOOL_TOTAL}, 실기만점(DB)=${PRACTICAL_MAX}, 실기비율=${practicalRatio}`);
-    log.push(`[정보] 학교기본점수(추가)=${schoolTotalBaseScore}, 미달처리규칙=${schoolOutOfRangeRule}`);
-
-    if (PRACTICAL_MAX <= 0) {
-      log.push(`[오류] '정시반영비율.실기총점'이 0입니다. 계산 불가.`);
-      return { totalScore: 0, breakdown: {}, calculationLog: log };
-    }
-    if (studentGender !== '남' && studentGender !== '여') {
-      log.push(`[오류] 학생 성별(S.gender)이 '남' 또는 '여'가 아닙니다.`);
-      return { totalScore: 0, breakdown: {}, calculationLog: log };
-    }
-
-    let rawPracticalSum = 0;
-    const eventBreakdowns = [];
-    let totalDeductionLevel = 0;
-
     studentRecords.forEach((record) => {
       const eventName = record.event;
       const eventValue = String(record.value || '').trim();
@@ -627,11 +535,94 @@ function calculateScore(F, S_original) {
         (r) => r.종목명 === eventName && r.성별 === studentGender
       );
 
-      // ⭐️ 'F'가 들어오면, 수정된 lookupScore가 '최하점'(e.g. '30') 반환
       const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
       const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
       
-      // ⭐️ score가 30이면, deductionLevel이 15감 (e.g.)
+      const deductionLevel = lookupDeductionLevel(score, scoreTable); 
+      
+      log.push(
+        `[${eventName}] (규칙: ${method}) 기록: ${eventValue} → 배점: "${rawGrade}"(환산: ${score}점) → ⭐️급간(감수): ${deductionLevel}감`
+      );
+      
+      eventBreakdowns.push({
+          event: eventName,
+          record: eventValue,
+          score: score, 
+          deduction_level: deductionLevel 
+      });
+    });
+    
+    const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log, studentGender);
+    
+    log.push('========== 실기 최종 ==========');
+    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`);
+    
+    return {
+      totalScore: finalPracticalScore.toFixed(3),
+      breakdown: { 
+          events: eventBreakdowns, 
+          practical_raw_sum: finalPracticalScore, 
+          total_deduction_level: 0 
+      },
+      calculationLog: log,
+    };
+    
+  } else {
+    // ▼▼▼▼▼ [⭐️ 'Basic' 로직 수정됨 - 11/05] ▼▼▼▼▼
+    
+    log.push(`[Basic] 'basic' 모드(신규 로직) 실행...`);
+    
+    // ⭐️ (신규) F.실기총점 (e.g., 700)이 최종 목표 만점
+    const PRACTICAL_MAX = Number(F.실기총점) || 0; 
+    
+    const schoolTotalBaseScore = Number(F.기본점수) || 0;
+    const schoolOutOfRangeRule = F.미달처리 || '0점';
+
+    log.push(`[정보] 실기총점(목표 만점)=${PRACTICAL_MAX}, 기본점수(추가)=${schoolTotalBaseScore}`);
+
+    if (studentGender !== '남' && studentGender !== '여') {
+      log.push(`[오류] 학생 성별(S.gender)이 '남' 또는 '여'가 아닙니다.`);
+      return { totalScore: 0, breakdown: {}, calculationLog: log };
+    }
+
+    let rawPracticalSum = 0; // 학생이 받은 배점표 점수 합계 (e.g., 280)
+    let scoreTableMaxSum = 0; // ⭐️ (신규) 배점표 원점수 만점 합계 (e.g., 300)
+    const eventBreakdowns = [];
+    let totalDeductionLevel = 0;
+
+    studentRecords.forEach((record) => {
+      const eventName = record.event;
+      const eventValue = String(record.value || '').trim();
+
+      // 1. ⭐️ (신규) 이 종목의 '배점표' 만점을 찾기 위해 scoreTable을 먼저 필터
+      const scoreTable = allScoreData.filter(
+        (r) => r.종목명 === eventName && r.성별 === studentGender
+      );
+      
+      // 2. ⭐️ (신규) 'findMaxScore' 헬퍼로 이 종목의 배점표 만점(e.g. 100)을 찾아서 합산
+      const eventMaxScore = findMaxScore(scoreTable);
+      scoreTableMaxSum += eventMaxScore;
+      log.push(`[정보] ${eventName} 배점표 만점: ${eventMaxScore}점 (누적 배점표 만점: ${scoreTableMaxSum}점)`);
+
+
+      // (이하는 기존 로직)
+      if (eventValue === '') {
+        log.push(`[${eventName}] 기록 없음. 계산 보류.`);
+        eventBreakdowns.push({
+          event: eventName,
+          record: '',
+          score: null,
+          deduction_level: null
+        });
+        return; // (rawPracticalSum에는 0이 더해짐)
+      }
+
+      const { method } = getEventRules(eventName);
+      // (scoreTable은 위에서 이미 만듦)
+
+      const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
+      const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
+      
       const deductionLevel = lookupDeductionLevel(score, scoreTable);
       
       log.push(
@@ -650,31 +641,46 @@ function calculateScore(F, S_original) {
 
     log.push(`[결과] 종목 합계: ${rawPracticalSum}점`);
     
+    // 3. ⭐️ (신규) 0으로 나누기 방지
+    if (scoreTableMaxSum <= 0) {
+      log.push(`[오류] 배점표 만점 합계(${scoreTableMaxSum})가 0입니다. 계산 불가.`);
+      // (기본점수만 반환)
+      return { 
+          totalScore: schoolTotalBaseScore.toFixed(3), 
+          breakdown: { events: eventBreakdowns, practical_raw_sum: schoolTotalBaseScore, total_deduction_level: totalDeductionLevel }, 
+          calculationLog: log 
+      };
+    }
+    
+    // 4. ⭐️ (수정) 학생 총점 (기본점수 포함)
     const finalRawScore = rawPracticalSum + schoolTotalBaseScore;
     log.push(`[조정] 종목 합계(${rawPracticalSum}) + 기본 점수(${schoolTotalBaseScore}) = ${finalRawScore}점`);
-    log.push(`[결과] 실기 원점수 합계 (최종): ${finalRawScore} / ${PRACTICAL_MAX}`);
+    log.push(`[결과] 실기 원점수 합계 (최종): ${finalRawScore} / ${scoreTableMaxSum}`);
     log.push(`[결과] ⭐️ 총 감수 (레벨 합): ${totalDeductionLevel}감`);
 
-    const rawPracticalTotal = (finalRawScore / PRACTICAL_MAX) * SCHOOL_TOTAL;
-    const finalPracticalScore = rawPracticalTotal * practicalRatio;
+    // 5. ▼▼▼▼▼ [⭐️ 최종 계산 수정] ▼▼▼▼▼
+    // (학생 성취도) * (최종 목표 만점)
+    // (e.g., (280+0) / 300) * 700 = 653.33점
+    const finalPracticalScore = (finalRawScore / scoreTableMaxSum) * PRACTICAL_MAX;
 
     log.push('========== 실기 최종 ==========');
     log.push(
-      `실기 환산 점수 (총점화) = (${finalRawScore} / ${PRACTICAL_MAX}) * ${SCHOOL_TOTAL} = ${rawPracticalTotal.toFixed(3)}`
+      `실기 환산 점수 = (학생 원점수 ${finalRawScore} / 배점표 만점 ${scoreTableMaxSum}) * 실기총점(DB) ${PRACTICAL_MAX}`
     );
     log.push(
-      `실기 최종 점수 (비율 적용) = ${rawPracticalTotal.toFixed(3)} * ${practicalRatio} = ${finalPracticalScore.toFixed(3)}`
+      `실기 최종 점수: ${finalPracticalScore.toFixed(3)}`
     );
 
     return {
       totalScore: finalPracticalScore.toFixed(3),
       breakdown: { 
         events: eventBreakdowns,
-        practical_raw_sum: finalRawScore,
+        practical_raw_sum: finalPracticalScore, // ⭐️ breakdown에도 최종 환산 점수
         total_deduction_level: totalDeductionLevel
       },
       calculationLog: log,
     };
+    // ▲▲▲▲▲ [⭐️ 'Basic' 로직 수정 끝] ▲▲▲▲▲
   }
 }
 
@@ -717,6 +723,4 @@ module.exports = (db, authMiddleware) => {
 };
 module.exports.buildPracticalScoreList = buildPracticalScoreList;
 module.exports.findMaxScore = findMaxScore;
-// ▼▼▼▼▼ [⭐️ 신규 헬퍼 export 추가] ▼▼▼▼▼
 module.exports.findMinScore = findMinScore;
-// ▲▲▲▲▲ [⭐️ 신규 헬퍼 export 추가] ▲▲▲▲▲
