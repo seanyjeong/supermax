@@ -74,12 +74,20 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = []) {
     });
 
     const { method } = getEventRules(eventName);
-    const score = lookupScore(rec.record, method, tableForEvent, '0점'); // 기존 lookup 그대로
+    
+    // ▼▼▼▼▼ [수정 1] ▼▼▼▼▼
+    // 'rec.record' (구형식) 또는 'rec.value' (신형식) 둘 다 읽도록 수정
+    const studentRawRecord = rec.record !== undefined ? rec.record : rec.value;
+    const score = lookupScore(studentRawRecord, method, tableForEvent, '0점'); // 기존 lookup 그대로
+    // ▲▲▲▲▲ [수정 1] ▲▲▲▲▲
+    
     const maxScore = findMaxScore(tableForEvent);
 
     out.push({
       event: eventName,
-      record: rec.record,
+      // ▼▼▼▼▼ [수정 2] ▼▼▼▼▼
+      record: studentRawRecord, // 'rec.record' 대신 위에서 찾은 값(studentRawRecord) 사용
+      // ▲▲▲▲▲ [수정 2] ▲▲▲▲▲
       score: Number(score || 0),
       maxScore: Number(maxScore || 100)
     });
