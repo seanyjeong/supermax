@@ -307,7 +307,17 @@ function calcPracticalSpecial(F, list) {
   // list 중에서 프론트가 "-"로 보였던 애들(점수 0)은 빼고 계산
   const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
 
-  const uid = Number(F.U_ID);
+  const uid = Number(F.U_ID); // ⭐️ F.U_ID가 2인지 확인해야 함
+  
+  // ======================================================
+  // ⭐️ [디버깅 코드 추가] ⭐️
+  // ======================================================
+  const sumOfScores_DEBUG = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+  console.log(`[calcPracticalSpecial] 🚀 함수 실행됨!`);
+  console.log(` -> 들어온 F.U_ID (uid 변수): ${uid}`);
+  console.log(` -> 배점 합계 (sumOfScores): ${sumOfScores_DEBUG}`);
+  // ======================================================
+
   const cfg = typeof F.실기특수설정 === 'string'
     ? JSON.parse(F.실기특수설정)
     : (F.실기특수설정 || {});
@@ -321,8 +331,9 @@ function calcPracticalSpecial(F, list) {
     case 2:
     {
       // 1. cleaned 배열에 있는 모든 실기 종목의 배점(score)을 합산
-      // (cleaned는 [{event: "A", score: 95}, {event: "B", score: 90}, ...] 형태)
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+      
+      console.log(` -> ✅ case 2: 로직 진입! (합계: ${sumOfScores})`); // ⭐️ 디버깅
 
       // 2. 합산 점수(sumOfScores)에 따라 최종 점수 매핑
       if (sumOfScores >= 286) {
@@ -350,12 +361,10 @@ function calcPracticalSpecial(F, list) {
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
       return practicalTopN(cleaned, 2, cfg.maxScore || 180);
 
-    case 5678: // 예: △△대 - 전체 평균, 150점 만점
-      return practicalAverage(cleaned, cfg.maxScore || 150);
-
-    // ↑↑↑ 여기는 네가 필요한 만큼 케이스 추가 ↑↑↑
+    // ... (이하 동일) ...
 
     default:
+      console.log(` -> ❌ case 2: 로직 진입 실패! default로 빠짐!`); // ⭐️ 디버깅
       // special인데도 등록 안 돼 있으면 일단 기본으로라도 돌리기
       return calcPracticalBasic(F, cleaned);
   }
