@@ -451,6 +451,14 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
       return totalScore;
     } // (case 69, 70 끝)
+      case 99:
+    {
+      // 0점/null 제외 (cleaned 사용)
+      const finalScore = practicalTopN(cleaned, 3, 400);
+      log.push(`[Special-Case 99] 상위 3종목 합산 (400점 만점 환산)`);
+      log.push(`[Special-Case 99] 최종 점수: ${finalScore.toFixed(3)}`);
+      return finalScore;
+    } // (case 99 끝)
 
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
