@@ -152,21 +152,20 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     // 4b. [3순위] 숫자 비교 ("12.20" 등)
     if (numericLevels.length > 0) {
       if (method === 'lower_is_better') {
-        // [달리기: 9.51(100), 9.61(90), 9.71(80)]
+        // [달리기: 9.71(80), 9.61(90), 9.51(100)]
         // (sort 9.71, 9.61, 9.51)
         numericLevels.sort((a, b) => b.record - a.record); 
         for (const level of numericLevels) {
-          // 학생 9.65 -> 9.65 >= 9.71 (X)
-          //         -> 9.65 >= 9.61 (O) -> 90점 반환
           // 학생 9.80 -> 9.80 >= 9.71 (O) -> 80점 반환 (최하점)
           if (studentValueNum >= level.record) return level.grade; 
         }
-        // 학생 9.50 -> 9.50 < 9.51
+        // 학생 9.50 (만점 초과)
         if (studentValueNum < numericLevels[numericLevels.length - 1].record) {
           return numericLevels[numericLevels.length - 1].grade; // 만점
         }
+        // (이 로직은 '최하점' 규칙으로 절대 빠지지 않음)
 
-      } else { // higher_is_better (이건 기존 로직 유지)
+      } else { // higher_is_better (제자리멀리뛰기)
         // [제멀: 300(100), 290(90), 254(60)]
         // (sort 300, 290, 254)
         numericLevels.sort((a, b) => b.record - a.record);
@@ -175,17 +174,22 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
           //         -> 295 >= 290 (O) -> 90점 반환
           if (studentValueNum >= level.record) return level.grade;
         }
-        // 학생 310 -> 310 > 300
-        if (studentValueNum > numericLevels[0].record) {
-          return numericLevels[0].grade; // 만점
-        }
-        // 학생 150 -> (루프 통과) -> (만점 통과) -> (Step 5로 Fall-through)
+        
+        // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
+        // 학생 200 -> 루프 통과 (못 찾음)
+        // 학생 310 (만점 초과) -> 루프 통과 (첫 번째 if (310 >= 300)에서 100점 반환됨)
+        
+        // ⭐️ 'lower_is_better'와 동작을 통일하기 위해,
+        // ⭐️ 루프를 통과했다는 것은 254보다 낮은 기록(e.g. 200)이라는 뜻이므로
+        // ⭐️ 'outOfRangeRule'을 무시하고 '최하점'을 강제로 반환.
+        return numericLevels[numericLevels.length - 1].grade; 
+        // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
       }
     }
   }
   
-  // 5. [4순위] 어디에도 해당 안 됨 (기준 미달 - 숫자/문자 모두)
-  // ▼▼▼▼▼ [수정됨] Rule 2, 3 해결 ▼▼▼▼▼
+  // 5. [4순위] 어디에도 해당 안 됨 (기준 미달 - e.g. "F", "G" 등)
+  // (이제 'higher_is_better' 숫자 기록은 여기로 빠지지 않음)
   if (outOfRangeRule === '최하점') {
     // 1. 숫자 배점 (e.g., 60, 80, 100)
     const scoresFromNumeric = numericLevels
@@ -203,18 +207,14 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     if (allScores.length > 0) {
       // 4. 합쳐진 배점 중 *최하점*을 찾아서 반환
       const minScore = Math.min(...allScores);
-      return String(minScore); // e.g., '6' (E등급 점수) 또는 '60' (제멀 최하점)
+      return String(minScore); // e.g., '6' (E등급 점수)
     } else {
       return '0'; // 배점표에 숫자가 하나도 없으면 0점
     }
   } else {
     return '0'; // '0점' 규칙이면 0점
   }
-  // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
 }
-// ▲▲▲▲▲ [수정됨] lookupScore 함수 끝 ▲▲▲▲▲
-
-
 /**
  * [규칙 3] '배점 등급'을 '최종 점수'로 환산
  */
