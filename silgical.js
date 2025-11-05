@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 // -----------------------------------------------------------------
-// ⭐️ [1] 내부 헬퍼 함수들 (수정 없음)
+// ⭐️ [1] 내부 헬퍼 함수들
 // -----------------------------------------------------------------
 
 /**
@@ -34,6 +34,44 @@ function findMaxScore(scoreTable) {
         .reduce((max, current) => Math.max(max, current), 0);
     return max;
 }
+
+// ▼▼▼▼▼ [⭐️ 신규 헬퍼 추가] ▼▼▼▼▼
+/**
+ * ⭐️ [신규 헬퍼] 배점표에서 'F', 'P' 등을 제외한 '순수 숫자 최하점'을 찾음
+ * (예: [100, 90, ..., 30] 과 {'F': 0}이 섞여있어도 '30'을 반환)
+ */
+function findMinScore(scoreTable) {
+    if (!scoreTable || scoreTable.length === 0) return '0';
+    
+    // 최하점 계산 시 무시할 '기록' 키워드 (e.g., 'F', 'P'는 점수가 아님)
+    const keywordsToIgnore = ['F', 'G', '미응시', '파울', '실격', 'P', 'PASS'];
+    const allScores = [];
+
+    for (const level of scoreTable) {
+        const recordStr = String(level.기록).trim().toUpperCase();
+        
+        // ⭐️ 'F' 같이 무시할 키워드 '기록'을 가진 항목은 최하점 계산에서 제외
+        if (keywordsToIgnore.includes(recordStr)) {
+            continue;
+        }
+        
+        // ⭐️ '기록'이 숫자인 항목 (e.g. 254) 또는
+        // ⭐️ '기록'이 A,B,C 등급인 항목 (e.g. 'E')의 '배점'만 추출
+        const score = Number(level.배점);
+        if (!Number.isNaN(score)) {
+            allScores.push(score);
+        }
+    }
+
+    if (allScores.length > 0) {
+        // [100, 90, 80, ..., 30] 중에서 최하점 '30'을 찾아 반환
+        return String(Math.min(...allScores));
+    } else {
+        return '0'; // 배점표에 숫자 점수가 아예 없으면 0점
+    }
+}
+// ▲▲▲▲▲ [⭐️ 신규 헬퍼 추가] ▲▲▲▲▲
+
 
 /**
  * ⭐️ [신규 헬퍼] "감수" (급간 레벨)을 찾음
@@ -77,14 +115,7 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGe
     // (이전 수정사항) rec.record 또는 rec.value 둘 다 읽기
     const studentRawRecord = rec.record !== undefined ? rec.record : rec.value;
     
-    // ▼▼▼▼▼ [수정] outOfRangeRule을 '0점'으로 하드코딩하지 않고, 상위에서 받도록 함 ▼▼▼▼▼
-    // (이 함수는 calculateScore 함수에 의해 더 이상 사용되지 않지만, 혹시 모르니 수정)
-    // const score = lookupScore(studentRawRecord, method, tableForEvent, '0점'); 
-    // -> 이 함수는 이제 calculateScore 안에서만 쓰이므로 이 헬퍼는 사실상 무시됨.
-    //    calculateScore 함수 내부의 lookupScore 호출부를 확인하는 것이 중요.
-    //    (calculateScore는 F.미달처리 값을 잘 넘기고 있음. OK)
     const score = lookupScore(studentRawRecord, method, tableForEvent, '0점'); // ⭐️ 원본 유지 (혹시 다른 곳에서 쓸까봐)
-    // ▲▲▲▲▲ [수정] ▲▲▲▲▲
 
     const maxScore = findMaxScore(tableForEvent);
 
@@ -102,19 +133,28 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGe
 
 /**
  * ⭐️ [규칙 2] 학생 기록으로 '배점 등급' 찾기
- * (수정) "최소값" 규칙 적용 (달리기)
- * (수정) 'higher_is_better'도 'lower_is_better'처럼 최하점 강제 반환
- * (수정) '대소문자' 무시
- * (수정) '미응시', 'F', 'G' 등도 '최하점' 규칙 적용
+ * (수정) 'F', 'G' 등이 들어오면 '최하점' 헬퍼 즉시 호출
  */
-// ▼▼▼▼▼ [수정됨] lookupScore 함수 (최하점/대소문자 로직 수정) ▼▼▼▼▼
+// ▼▼▼▼▼ [수정됨] lookupScore 함수 (F, G 최하점 처리) ▼▼▼▼▼
 function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   // 1. 배점표가 아예 없으면 0점
   if (!scoreTable || scoreTable.length === 0) {
     return '0';
   }
-  // ⭐️ 학생 기록(e)과 DB 기록(E)을 비교하기 위해 둘 다 대문자로 통일
-  const studentValueStr = String(studentRecord).trim().toUpperCase(); // ⭐️ .toUpperCase() 추가
+  
+  // ⭐️ 학생 기록(f)과 DB 기록(F)을 비교하기 위해 둘 다 대문자로 통일
+  const studentValueStr = String(studentRecord).trim().toUpperCase(); // ⭐️ .toUpperCase()
+  
+  // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
+  // ⭐️ 'F', 'G' 등이면 'findMinScore' 헬퍼를 즉시 호출
+  // ⭐️ (이 로직이 3번[문자일치]보다 *먼저* 실행되어야 'F'->'0' 매핑을 무시할 수 있음)
+  const FORCE_MIN_SCORE_KEYWORDS = ['F', 'G', '미응시', '파울', '실격'];
+  if (FORCE_MIN_SCORE_KEYWORDS.includes(studentValueStr)) {
+      // ⭐️ 'F' -> '0' 매핑을 무시하고, 배점표의 실제 최하점(e.g. 30)을 찾음
+      return findMinScore(scoreTable);
+  }
+  // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
+
   const studentValueNum = Number(studentValueStr);
   const isNumericInput = !Number.isNaN(studentValueNum) && studentValueStr !== '';
 
@@ -134,12 +174,13 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     ) {
       rangeLevels.push({ rangeStr: recordStr, grade: level.배점 });
     } else {
-      // ⭐️ DB 기록도 대문자로 저장 (e.g., "E" -> "E", "P" -> "P")
-      exactMatchLevels.set(recordStr.toUpperCase(), level.배점); // ⭐️ .toUpperCase() 추가
+      // ⭐️ DB 기록도 대문자로 저장 (e.g., "P" -> "P", "F" -> "F")
+      exactMatchLevels.set(recordStr.toUpperCase(), level.배점); // ⭐️ .toUpperCase()
     }
   }
 
-  // 3. [1순위] 문자 일치 (e.g., "e" -> "E"로 "E" 키를 찾음)
+  // 3. [1순위] 문자 일치 (e.g., "P" -> "P")
+  // ⭐️ (이제 'F'는 위에서 걸러졌으므로, 'P', 'PASS' 같은 것만 여기서 처리됨)
   if (exactMatchLevels.has(studentValueStr)) {
     return exactMatchLevels.get(studentValueStr);
   }
@@ -163,32 +204,23 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     if (numericLevels.length > 0) {
       if (method === 'lower_is_better') {
         // [달리기: 9.71(80), 9.61(90), 9.51(100)]
-        // (sort 9.71, 9.61, 9.51)
         numericLevels.sort((a, b) => b.record - a.record); 
         for (const level of numericLevels) {
-          // 학생 9.80 -> 9.80 >= 9.71 (O) -> 80점 반환 (최하점)
           if (studentValueNum >= level.record) return level.grade; 
         }
-        // 학생 9.50 (만점 초과)
         if (studentValueNum < numericLevels[numericLevels.length - 1].record) {
           return numericLevels[numericLevels.length - 1].grade; // 만점
         }
-        // (이 로직은 '최하점' 규칙으로 절대 빠지지 않음)
-
+        
       } else { // higher_is_better (제자리멀리뛰기)
         // [제멀: 300(100), 290(90), 254(60)]
-        // (sort 300, 290, 254)
         numericLevels.sort((a, b) => b.record - a.record);
         for (const level of numericLevels) {
-          // 학생 295 -> 295 >= 300 (X)
-          //         -> 295 >= 290 (O) -> 90점 반환
           if (studentValueNum >= level.record) return level.grade;
         }
         
-        // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
+        // ▼▼▼▼▼ [수정됨] (원본 로직 유지) ▼▼▼▼▼
         // 학생 200 (기준 미달) -> 루프 통과 (못 찾음)
-        // ⭐️ 'lower_is_better'와 동작을 통일하기 위해,
-        // ⭐️ 루프를 통과했다는 것은 254보다 낮은 기록(e.g. 200)이라는 뜻이므로
         // ⭐️ 'outOfRangeRule'을 무시하고 '최하점'을 강제로 반환.
         return numericLevels[numericLevels.length - 1].grade; // e.g. 60점 반환
         // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
@@ -196,29 +228,13 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     }
   }
   
-  // 5. [4순위] 어디에도 해당 안 됨 (e.g. "G", "H", "F", "미응시" 등 배점표에 없는 문자)
-  // (이제 'higher_is_better' 숫자 기록은 여기로 빠지지 않음)
+  // 5. [4순위] 어디에도 해당 안 됨 (e.g. 배점표에 없는 문자 "H", "J" 등)
   if (outOfRangeRule === '최하점') {
-    // 1. 숫자 배점 (e.g., 60, 80, 100)
-    const scoresFromNumeric = numericLevels
-      .map(l => Number(l.grade))
-      .filter(n => !Number.isNaN(n));
-      
-    // 2. 문자 배점 (e.g., A=10, B=8, E=6)
-    const scoresFromText = Array.from(exactMatchLevels.values())
-      .map(l => Number(l))
-      .filter(n => !Number.isNaN(n));
-      
-    // 3. 모든 배점을 합침
-    const allScores = [...scoresFromNumeric, ...scoresFromText];
-
-    if (allScores.length > 0) {
-      // 4. 합쳐진 배점 중 *최하점*을 찾아서 반환
-      const minScore = Math.min(...allScores);
-      return String(minScore); // e.g., '6' (E등급 점수) 또는 '60' (제멀 최하점)
-    } else {
-      return '0'; // 배점표에 숫자가 하나도 없으면 0점
-    }
+    // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
+    // ⭐️ (수정) 'findMinScore' 헬퍼를 사용
+    // (이제 이 로직은 'F'가 아닌, 배점표에 아예 없는 문자가 '최하점' 규칙일 때만 실행됨)
+    return findMinScore(scoreTable);
+    // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
   } else {
     return '0'; // '0점' 규칙이면 0점
   }
@@ -283,12 +299,15 @@ function calcPracticalSpecial(F, list, log, studentGender) {
           const std = standards[eventName]?.[studentGender];
           const record = parseFloat(item.record); // ⭐️ 'record' 사용
 
+          // ▼▼▼▼▼ [수정됨] 'F'나 '미응시' 등으로 0점이 들어올 때 처리 ▼▼▼▼▼
           if (!std || isNaN(record)) {
-              log.push(`[Special-Case 13] ${eventName}: 계산 스킵`);
+              // ⭐️ 'F' 등이 들어와서 record가 NaN이 되면 0점 처리
+              log.push(`[Special-Case 13] ${eventName}: 기록(${item.record})이 없거나 숫자가 아님. 0점 처리.`);
               item.score = 0; // ⭐️ 0점 처리
               item.deduction_level = 0; // ⭐️ 0감 처리
-              continue;
+              continue; // ⭐️ totalScore에 0이 더해짐 (합산)
           }
+          // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
 
           let eventScoreRaw = 0; // ⭐️ 반올림 전 원본
           const min = std.min; // 최저기준 (e.g., 배근력 남 130)
@@ -311,29 +330,23 @@ function calcPracticalSpecial(F, list, log, studentGender) {
               eventScoreRaw = ((cappedRecord - min) / (max - min)) * 100;
           }
 
-          // ▼▼▼▼▼ [수정] 3자리에서 반올림 (소수점 2자리) ▼▼▼▼▼
           const eventScore = Math.round(eventScoreRaw * 100) / 100;
-          // ▲▲▲▲▲ [수정] ▲▲▲▲▲
 
-          // ⭐️ (중요) 계산된 100점 만점 점수를 list(eventBreakdowns)에 덮어쓰기
-          item.score = eventScore; // ⭐️ 반올림된 점수
-          item.deduction_level = 0; // ⭐️ 공식 계산은 "감수" 개념이 없으므로 0감으로 고정
+          item.score = eventScore; 
+          item.deduction_level = 0; 
           
           log.push(`[Special-Case 13] ${eventName}: (기록 ${record} -> ${cappedRecord}) → ${eventScore.toFixed(2)}점 (0감)`);
           
-          totalScore += eventScore; // ⭐️ 반올림된 점수 합산
+          totalScore += eventScore; 
       }
       
-      // ⭐️ totalScore도 마지막에 한 번 더 반올림 (합산 과정에서 소수점 길어질 수 있으므로)
       const finalTotalScore = Math.round(totalScore * 100) / 100;
       log.push(`[Special-Case 13] 최종 합산 점수: ${finalTotalScore.toFixed(2)} (반올림 전: ${totalScore})`);
-      return finalTotalScore; // ⭐️ 400점 만점 합계 점수 (반올림) 반환
+      return finalTotalScore; 
   }
   // ======================================================
 
   
-  // list 중에서 프론트가 "-"로 보였던 애들(점수 0)은 빼고 계산
-  // (주의: Case 13은 이 로직 *전에* 처리해야 함)
   const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
 
   switch (uid) {
@@ -428,11 +441,8 @@ function calculateScore(F, S_original) {
   if (mode === 'special') {
     log.push(`[Special] 'special' 모드 실행...`);
     
-    // ⭐️ 1. 'Basic' 로직에서 `eventBreakdowns` 계산 로직을 그대로 가져옴
-    const eventBreakdowns = []; // 감수 포함, 'score'만 있는 객체 배열
-    // ▼▼▼▼▼ [수정] schoolOutOfRangeRule을 F.미달처리 값으로 설정 ▼▼▼▼▼
-    const schoolOutOfRangeRule = F.미달처리 || '0점'; // 'Special' 모드도 '최하점' 규칙 적용
-    // ▲▲▲▲▲ [수정] ▲▲▲▲▲
+    const eventBreakdowns = []; 
+    const schoolOutOfRangeRule = F.미달처리 || '0점'; 
     
     studentRecords.forEach((record) => {
       const eventName = record.event;
@@ -454,11 +464,13 @@ function calculateScore(F, S_original) {
         (r) => r.종목명 === eventName && r.성별 === studentGender
       );
 
-      // ⭐️ (수정) 13번 케이스는 배점표가 없으므로 rawGrade가 0이 나옴 (정상)
+      // ⭐️ (수정) 13번 케이스는 배점표가 없으므로 rawGrade가 '0'
+      // ⭐️ (수정) 'F'를 넣으면 이제 lookupScore가 최하점(e.g. '30') 반환
       const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
       const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
       
-      // ⭐️ (수정) 13번 케이스는 배점표가 없으므로 deductionLevel이 0이 나옴 (정상)
+      // ⭐️ (수정) 13번 케이스는 deductionLevel이 0
+      // ⭐️ (수정) 'F' -> 30점 -> deductionLevel이 15감 (e.g.)
       const deductionLevel = lookupDeductionLevel(score, scoreTable); 
       
       log.push(
@@ -468,36 +480,34 @@ function calculateScore(F, S_original) {
       eventBreakdowns.push({
           event: eventName,
           record: eventValue,
-          score: score, // ⭐️ 'score' (e.g., 0점)
-          deduction_level: deductionLevel // ⭐️ 'deduction_level' (e.g., 0감)
+          score: score, 
+          deduction_level: deductionLevel 
       });
     });
-    // ⭐️ 1. 계산 끝: eventBreakdowns가 'Basic'처럼 완벽하게 채워짐
-    //    (13번 케이스는 score: 0, deduction_level: 0 으로 채워짐)
     
-    // 2. ⭐️ 특수 총점 계산: calcPracticalSpecial에는 이 풍부한 `eventBreakdowns` 배열을 전달
-    //    (case 13은 이 배열을 *직접 수정*하고, 총점을 반환)
+    // 2. ⭐️ 특수 총점 계산
+    // (case 13은 eventBreakdowns를 *직접 수정*함)
     const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log, studentGender);
     
     log.push('========== 실기 최종 ==========');
-    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`); // 예: 400점
+    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`);
     
-    // 3. ⭐️ 반환: totalScore는 특수 점수(400)를, breakdown.events는 *수정된* `eventBreakdowns`를 반환
+    // 3. ⭐️ 반환:
+    // (Case 13은 eventBreakdowns가 [ { event: '배근력', score: 95.x, ... } ] 로 수정됨)
+    // (Case 13이 아니면 eventBreakdowns가 [ { event: '제멀', score: 30, ... } ] 로 채워짐)
     return {
       totalScore: finalPracticalScore.toFixed(3),
       breakdown: { 
-          // ⭐️ case 13이 'list'(eventBreakdowns)를 수정했으므로, 
-          // ⭐️ events 배열은 [ { event: '배근력', score: 95.x, deduction_level: 0 }, ... ] 로 채워짐
           events: eventBreakdowns, 
           practical_raw_sum: finalPracticalScore, 
-          total_deduction_level: 0 
+          total_deduction_level: 0 // ⭐️ Special 모드는 '총 감수' 개념 없음
       },
       calculationLog: log,
     };
     // ▲▲▲▲▲ [Special 로직 수정 끝] ▲▲▲▲▲
 
   } else {
-    // ⭐️ [Basic 로직] ⭐️ (수정 없음, 그대로 둠)
+    // ⭐️ [Basic 로직] ⭐️ (수정됨 - lookupScore가 고쳐졌으므로 'F' 처리 자동 수정됨)
     
     log.push(`[Basic] 'basic' 모드(기존 로직) 실행...`);
     
@@ -548,9 +558,11 @@ function calculateScore(F, S_original) {
         (r) => r.종목명 === eventName && r.성별 === studentGender
       );
 
+      // ⭐️ 'F'가 들어오면, 수정된 lookupScore가 '최하점'(e.g. '30') 반환
       const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
       const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
       
+      // ⭐️ score가 30이면, deductionLevel이 15감 (e.g.)
       const deductionLevel = lookupDeductionLevel(score, scoreTable);
       
       log.push(
@@ -636,3 +648,6 @@ module.exports = (db, authMiddleware) => {
 };
 module.exports.buildPracticalScoreList = buildPracticalScoreList;
 module.exports.findMaxScore = findMaxScore;
+// ▼▼▼▼▼ [⭐️ 신규 헬퍼 export 추가] ▼▼▼▼▼
+module.exports.findMinScore = findMinScore;
+// ▲▲▲▲▲ [⭐️ 신규 헬퍼 export 추가] ▲▲▲▲▲
