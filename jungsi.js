@@ -4085,23 +4085,29 @@ app.get('/jungsi/student/get-history/:uid/:year', authStudentOnlyMiddleware, asy
         const [historyList] = await dbStudent.query(selectSql, [studentAccountId, U_ID, year]);
         
         console.log(` -> ${historyList.length}건 조회 완료`);
+
+        // (중요) silgi_records_json 컬럼 타입이 JSON 이라면
+        // mysql2에서 이미 JS 객체(배열)로 넘어오기 때문에
+        // 여기서 JSON.parse를 다시 할 필요가 없다.
+        // 그대로 프론트로 전달하면 history_view.html 에서 바로 쓸 수 있음.
+        if (historyList.length > 0) {
+            console.log('예시 history row:', {
+                history_id: historyList[0].history_id,
+                silgi_type: typeof historyList[0].silgi_records_json,
+                silgi_value: historyList[0].silgi_records_json
+            });
+        }
         
-        // 4. (중요) silgi_records_json 필드를 다시 JSON 객체로 파싱해서 전달
-        const formattedList = historyList.map(item => {
-            try {
-                item.silgi_records_json = item.silgi_records_json ? JSON.parse(item.silgi_records_json) : null;
-            } catch (e) {
-                console.warn(` -> JSON 파싱 실패 (history_id: ${item.history_id}):`, item.silgi_records_json);
-                item.silgi_records_json = null; // 파싱 실패 시 null 처리
-            }
-            return item;
-        });
-        
-        res.json({ success: true, history: formattedList });
+        // 그대로 전달
+        res.json({ success: true, history: historyList });
 
     } catch (err) {
         console.error('❌ 학생 성적 기록 조회 API 오류:', err);
-        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생', error: err.message });
+        res.status(500).json({
+            success: false,
+            message: 'DB 조회 중 오류 발생',
+            error: err.message
+        });
     }
 });
 
