@@ -6612,48 +6612,52 @@ const upload = multer({ dest: tempDir });
 
 
 // =============================================
-// ⭐️ [신규 API] 대학 로고 업로드 API
+// ⭐️ [신규 API] 대학 로고 업로드 API (디버깅 강화)
 // =============================================
 // POST /jungsi/admin/upload-logo
 app.post('/jungsi/admin/upload-logo', authMiddleware, upload.single('logoFile'), async (req, res) => {
-    // 1. 파일과 U_ID, 학년도 정보 받기
     const file = req.file;
     const { U_ID, year } = req.body;
     const { branch } = req.user; 
 
     console.log(`[API /upload-logo] ${branch} 지점, ${year}학년도 U_ID(${U_ID}) 로고 업로드 시도`);
+    console.log(` -> 파일 정보:`, file); 
+    console.log(` -> 바디 정보:`, req.body); 
 
     if (!file || !U_ID || !year) {
         if (file) await fs.unlink(file.path);
         return res.status(400).json({ success: false, message: 'U_ID, year, 로고 파일이 모두 필요합니다.' });
     }
 
-    // 2. 파일 정보
-    const tempPath = file.path; // 임시 경로 (예: univlogos/temp/abc1234)
-    const ext = path.extname(file.originalname); // 확장자 (예: .png)
-    
-    // 3. 새 파일명 및 영구 경로 설정 (예: 6.png)
+    const tempPath = file.path; 
+    const ext = path.extname(file.originalname); 
     const newFileName = `${U_ID}${ext}`;
-    const permPath = path.join(logosDir, newFileName); // ⭐️ (예: .../univlogos/6.png)
+    const permPath = path.join(logosDir, newFileName); 
+    const logoUrl = `/univlogos/${newFileName}`; 
     
-    // 4. DB에 저장할 URL (서버 루트 기준)
-    const logoUrl = `/univlogos/${newFileName}`; // ⭐️ (예: /univlogos/6.png)
+    console.log(` -> 임시경로: ${tempPath}`);
+    console.log(` -> 영구경로: ${permPath}`);
+    console.log(` -> DB URL: ${logoUrl}`); 
 
     try {
-        // 5. 임시 파일을 영구 경로로 이동/이름변경
         await fs.rename(tempPath, permPath);
+        console.log(` -> 파일 이동 성공: ${permPath}`); 
 
-        // 6. DB 업데이트 (정시기본 테이블)
-        const [updateResult] = await db.query(
-            'UPDATE `정시기본` SET `logo_url` = ? WHERE `U_ID` = ? AND `학년도` = ?',
-            [logoUrl, U_ID, year]
-        );
+        const sql = 'UPDATE `정시기본` SET `logo_url` = ? WHERE `U_ID` = ? AND `학년도` = ?';
+        console.log(` -> DB 실행: ${sql}`, [logoUrl, U_ID, year]); 
         
+        const [updateResult] = await db.query(sql, [logoUrl, U_ID, year]);
+        
+        console.log(' -> [DB UPDATE 결과]', JSON.stringify(updateResult)); 
+
+        // ⭐️ [수정] 덮어쓰기(affectedRows=1, changedRows=0)도 성공으로 처리
+        // ⭐️ affectedRows가 0일 때만 (매칭된 row가 없을 때만) 에러
         if (updateResult.affectedRows === 0) {
+             console.warn(' -> DB 업데이트 실패: 매칭된 row 없음'); 
              throw new Error('해당 U_ID와 학년도의 대학을 DB에서 찾을 수 없습니다.');
         }
 
-        console.log(` -> 로고 저장 성공: ${logoUrl}`);
+        console.log(` -> 로고 저장/업데이트 성공: ${logoUrl}`);
         res.json({ 
             success: true, 
             message: `U_ID ${U_ID} 로고 저장 완료!`,
@@ -6661,35 +6665,43 @@ app.post('/jungsi/admin/upload-logo', authMiddleware, upload.single('logoFile'),
         });
 
     } catch (err) {
-        // 7. 실패 시 임시 파일 삭제
-        await fs.unlink(tempPath); 
-        console.error('❌ 로고 업로드 API 오류:', err);
+        if (tempPath) {
+             try { await fs.unlink(tempPath); } catch (e) {} // ⭐️ 실패 시 임시 파일 삭제
+        }
+        console.error('❌ 로고 업로드 API 오류:', err.message); 
         res.status(500).json({ success: false, message: err.message || '서버 오류' });
     }
 });
 // =============================================
-// ⭐️ [신규 API] 로고 업로더용: 학년도별 전체 대학 목록 조회
+// ⭐️ 로고 업로더용: 학년도별 전체 대학 목록 조회 (디버깅 강화)
 // =============================================
 // GET /jungsi/admin/all-universities?year=YYYY
 app.get('/jungsi/admin/all-universities', authMiddleware, async (req, res) => {
     const { year } = req.query;
-    const { branch } = req.user; // (로그용)
+    const { branch } = req.user; 
 
-    console.log(`[API /all-universities] ${branch} 지점에서 ${year}학년도 전체 대학 목록(U_ID, 이름) 요청`);
+    console.log(`[API /all-universities] ${branch} 지점에서 ${year}학년도 전체 대학 목록(U_ID, 이름, logo_url) 요청`); // ⭐️ logo_url 추가
 
     if (!year) {
         return res.status(400).json({ success: false, message: '학년도(year) 쿼리 파라미터가 필요합니다.' });
     }
 
     try {
-        const [rows] = await db.query(
-            "SELECT U_ID, 대학명, 학과명 FROM `정시기본` WHERE 학년도 = ? ORDER BY 대학명, 학과명",
-            [year]
-        );
+        const sql = "SELECT U_ID, 대학명, 학과명, logo_url FROM `정시기본` WHERE 학년도 = ? ORDER BY 대학명, 학과명"; // ⭐️ logo_url 추가
+        console.log(` -> DB 실행: ${sql}`, [year]); // ⭐️ 디버깅
         
+        const [rows] = await db.query(sql, [year]);
+        
+        console.log(` -> ${rows.length}건 조회 완료.`); // ⭐️ 디버깅
+        
+        // ⭐️ 디버깅: 로고 URL이 몇 개나 있는지 확인
+        const logoCount = rows.filter(r => r.logo_url).length;
+        console.log(` -> 그 중 logo_url이 null이 아닌 개수: ${logoCount}개`);
+
         const universities = rows.map(r => ({
             U_ID: r.U_ID,
-            name: `${r.대학명} - ${r.학과명}` // 프론트에서 보여줄 이름
+            name: `${r.대학명} - ${r.학과명}`,
+            logo_url: r.logo_url // ⭐️ 로고 URL 포함
         }));
 
         res.json({ success: true, universities: universities });
