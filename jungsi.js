@@ -313,7 +313,40 @@ function calcPracticalSpecial(F, list) {
     : (F.실기특수설정 || {});
 
   switch (uid) {
-    // ↓↓↓ 여기서부터는 네가 실제 있는 학교 U_ID 넣으면 됨 ↓↓↓
+    // ↓↓↓ 여기에 네가 원하는 대학 케이스를 계속 추가하면 됨 ↓↓↓
+
+    // ======================================================
+    // ⭐️ [신규 추가] ID 2번 학교 (배점 총합 -> 점수 환산)
+    // ======================================================
+    case 2:
+    {
+      // 1. cleaned 배열에 있는 모든 실기 종목의 배점(score)을 합산
+      // (cleaned는 [{event: "A", score: 95}, {event: "B", score: 90}, ...] 형태)
+      const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+
+      // 2. 합산 점수(sumOfScores)에 따라 최종 점수 매핑
+      if (sumOfScores >= 286) {
+        return 700; // 286~300점 (혹은 그 이상)
+      } else if (sumOfScores >= 271) {
+        return 691; // 271~285점
+      } else if (sumOfScores >= 256) {
+        return 682; // 256~270점
+      } else if (sumOfScores >= 241) {
+        return 673; // 241~255점
+      } else if (sumOfScores >= 226) {
+        return 664; // 226~240점
+      } else if (sumOfScores >= 211) {
+        return 655; // 211~225점
+      } else if (sumOfScores >= 196) {
+        return 646; // 196~210점
+      } else if (sumOfScores >= 181) {
+        return 637; // 181~195점
+      } else {
+        return 630; // 180점 이하
+      }
+    }
+    // ======================================================
+
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
       return practicalTopN(cleaned, 2, cfg.maxScore || 180);
 
