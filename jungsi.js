@@ -3779,7 +3779,7 @@ app.get('/jungsi/student/saved-universities', authStudentOnlyMiddleware, async (
         const sql = `
             SELECT 
                 su.saved_id, su.U_ID, su.학년도, su.calculated_suneung_score, su.saved_at,
-                jb.대학명, jb.학과명, jb.군 -- jungsi DB에서 대학 정보 JOIN
+                jb.대학명, jb.학과명, jb.군, jb.logo_url -- jungsi DB에서 대학 정보 JOIN
             FROM jungsimaxstudent.student_saved_universities su -- 학생 DB 테이블
             JOIN jungsi.정시기본 jb ON su.U_ID = jb.U_ID AND su.학년도 = jb.학년도 -- jungsi DB 테이블 JOIN
             WHERE su.account_id = ?
