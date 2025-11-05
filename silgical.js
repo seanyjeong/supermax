@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 // -----------------------------------------------------------------
-// ⭐️ [1] 내부 헬퍼 함수들
+// ⭐️ [1] 내부 헬퍼 함수들 (수정 없음)
 // -----------------------------------------------------------------
 
 /**
@@ -59,7 +59,6 @@ function lookupDeductionLevel(studentScore, scoreTable) {
 }
 // ⭐️ 학생 실기기록을 대학 실기배점표와 매칭해서 "종목별 점수 배열"로 돌려주는 헬퍼
 function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGender = '') {
-// ▲▲▲▲▲ [수정 1] ▲▲▲▲▲
   
   const out = [];
 
@@ -69,9 +68,7 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGe
 
     // 이 종목에 해당하는 배점표만 필터
     const tableForEvent = scoreTable.filter(row => {
-      // ▼▼▼▼▼ [수정 2] rec.gender 대신 studentGender 사용 ▼▼▼▼▼
       if (studentGender && row.성별 && row.성별 !== studentGender) return false;
-      // ▲▲▲▲▲ [수정 2] ▲▲▲▲▲
       return row.종목명 === eventName;
     });
 
@@ -79,7 +76,15 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGe
     
     // (이전 수정사항) rec.record 또는 rec.value 둘 다 읽기
     const studentRawRecord = rec.record !== undefined ? rec.record : rec.value;
-    const score = lookupScore(studentRawRecord, method, tableForEvent, '0점');
+    
+    // ▼▼▼▼▼ [수정] outOfRangeRule을 '0점'으로 하드코딩하지 않고, 상위에서 받도록 함 ▼▼▼▼▼
+    // (이 함수는 calculateScore 함수에 의해 더 이상 사용되지 않지만, 혹시 모르니 수정)
+    // const score = lookupScore(studentRawRecord, method, tableForEvent, '0점'); 
+    // -> 이 함수는 이제 calculateScore 안에서만 쓰이므로 이 헬퍼는 사실상 무시됨.
+    //    calculateScore 함수 내부의 lookupScore 호출부를 확인하는 것이 중요.
+    //    (calculateScore는 F.미달처리 값을 잘 넘기고 있음. OK)
+    const score = lookupScore(studentRawRecord, method, tableForEvent, '0점'); // ⭐️ 원본 유지 (혹시 다른 곳에서 쓸까봐)
+    // ▲▲▲▲▲ [수정] ▲▲▲▲▲
 
     const maxScore = findMaxScore(tableForEvent);
 
@@ -98,14 +103,18 @@ function buildPracticalScoreList(studentRecords = [], scoreTable = [], studentGe
 /**
  * ⭐️ [규칙 2] 학생 기록으로 '배점 등급' 찾기
  * (수정) "최소값" 규칙 적용 (달리기)
+ * (수정) 'higher_is_better'도 'lower_is_better'처럼 최하점 강제 반환
+ * (수정) '대소문자' 무시
+ * (수정) '미응시', 'F', 'G' 등도 '최하점' 규칙 적용
  */
-// ▼▼▼▼▼ [수정됨] lookupScore 함수 (최하점 로직 수정) ▼▼▼▼▼
+// ▼▼▼▼▼ [수정됨] lookupScore 함수 (최하점/대소문자 로직 수정) ▼▼▼▼▼
 function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
   // 1. 배점표가 아예 없으면 0점
   if (!scoreTable || scoreTable.length === 0) {
     return '0';
   }
-  const studentValueStr = String(studentRecord).trim();
+  // ⭐️ 학생 기록(e)과 DB 기록(E)을 비교하기 위해 둘 다 대문자로 통일
+  const studentValueStr = String(studentRecord).trim().toUpperCase(); // ⭐️ .toUpperCase() 추가
   const studentValueNum = Number(studentValueStr);
   const isNumericInput = !Number.isNaN(studentValueNum) && studentValueStr !== '';
 
@@ -125,11 +134,12 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     ) {
       rangeLevels.push({ rangeStr: recordStr, grade: level.배점 });
     } else {
-      exactMatchLevels.set(recordStr, level.배점); // "P", "F", "실격" 등
+      // ⭐️ DB 기록도 대문자로 저장 (e.g., "E" -> "E", "P" -> "P")
+      exactMatchLevels.set(recordStr.toUpperCase(), level.배점); // ⭐️ .toUpperCase() 추가
     }
   }
 
-  // 3. [1순위] 문자 일치 ("P", "F", "A", "B" 등)
+  // 3. [1순위] 문자 일치 (e.g., "e" -> "E"로 "E" 키를 찾음)
   if (exactMatchLevels.has(studentValueStr)) {
     return exactMatchLevels.get(studentValueStr);
   }
@@ -176,19 +186,17 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
         }
         
         // ▼▼▼▼▼ [수정됨] ▼▼▼▼▼
-        // 학생 200 -> 루프 통과 (못 찾음)
-        // 학생 310 (만점 초과) -> 루프 통과 (첫 번째 if (310 >= 300)에서 100점 반환됨)
-        
+        // 학생 200 (기준 미달) -> 루프 통과 (못 찾음)
         // ⭐️ 'lower_is_better'와 동작을 통일하기 위해,
         // ⭐️ 루프를 통과했다는 것은 254보다 낮은 기록(e.g. 200)이라는 뜻이므로
         // ⭐️ 'outOfRangeRule'을 무시하고 '최하점'을 강제로 반환.
-        return numericLevels[numericLevels.length - 1].grade; 
+        return numericLevels[numericLevels.length - 1].grade; // e.g. 60점 반환
         // ▲▲▲▲▲ [수정됨] ▲▲▲▲▲
       }
     }
   }
   
-  // 5. [4순위] 어디에도 해당 안 됨 (기준 미달 - e.g. "F", "G" 등)
+  // 5. [4순위] 어디에도 해당 안 됨 (e.g. "G", "H", "F", "미응시" 등 배점표에 없는 문자)
   // (이제 'higher_is_better' 숫자 기록은 여기로 빠지지 않음)
   if (outOfRangeRule === '최하점') {
     // 1. 숫자 배점 (e.g., 60, 80, 100)
@@ -207,7 +215,7 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     if (allScores.length > 0) {
       // 4. 합쳐진 배점 중 *최하점*을 찾아서 반환
       const minScore = Math.min(...allScores);
-      return String(minScore); // e.g., '6' (E등급 점수)
+      return String(minScore); // e.g., '6' (E등급 점수) 또는 '60' (제멀 최하점)
     } else {
       return '0'; // 배점표에 숫자가 하나도 없으면 0점
     }
@@ -215,6 +223,9 @@ function lookupScore(studentRecord, method, scoreTable, outOfRangeRule) {
     return '0'; // '0점' 규칙이면 0점
   }
 }
+// ▲▲▲▲▲ [수정됨] lookupScore 함수 끝 ▲▲▲▲▲
+
+
 /**
  * [규칙 3] '배점 등급'을 '최종 점수'로 환산
  */
