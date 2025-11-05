@@ -274,7 +274,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     : (F.실기특수설정 || {});
 
   // ======================================================
-  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림)
+  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림)동대체교
   // ======================================================
   if (uid === 13) {
       log.push(`[Special-Case 13] 수동 공식 계산 시작 (Gender: ${studentGender})`);
@@ -361,7 +361,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
   // ⭐️ 'switch' 문 시작
   switch (uid) {
     // ======================================================
-    // ID 2번 학교
+    // ID 2번 학교 경동체육
     // ======================================================
     case 2:
     {
@@ -393,7 +393,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
 
     // ▼▼▼▼▼ [⭐️ 신규 추가된 케이스] ▼▼▼▼▼
     // ======================================================
-    // ID 17번 학교 (가중치 합산 1)
+    // ID 17번 학교 (가중치 합산 1)백석특체
     // ======================================================
     case 17:
     {
@@ -411,7 +411,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     } // (case 17 끝)
     
     // ======================================================
-    // ID 16번 학교 (가중치 합산 2)
+    // ID 16번 학교 (가중치 합산 2)백석스과
     // ======================================================
     case 16:
     {
@@ -427,7 +427,15 @@ function calcPracticalSpecial(F, list, log, studentGender) {
         log.push(`[Special-Case 16] 최종 합산 점수: ${totalScore.toFixed(3)}`);
         return totalScore;
     } // (case 16 끝)
-    // ▲▲▲▲▲ [⭐️ 신규 추가된 케이스 끝] ▲▲▲▲▲
+    // ======================================================
+    // ID 19번 학교 (배점 총합 + 기본점수 2점) 성대
+    // ======================================================
+    case 19:
+    {
+      const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+      log.push(`[Special-Case 19] 배점 합(${sumOfScores}) + 기본점수(2)`);
+      return sumOfScores + 2;
+    }
 
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
