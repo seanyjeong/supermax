@@ -243,7 +243,15 @@ function calcPracticalSpecial(F, list, log) { // ⭐️ log 파라미터 추가
       else if (sumOfScores >= 181) return 637;
       else return 630;
     }
-    // ======================================================
+       case 3:
+    {
+      // 1. 배점 합계 (모든 종목 점수 다 더하기)
+      const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
+      
+      // 2. 기본점수 1점 더하기
+      log.push(`[Special-Case 3] 배점 합(${sumOfScores}) + 기본점수(1)`);
+      return sumOfScores + 1; // ⭐️⭐️⭐️ 여기에 1점 추가 ⭐️⭐️⭐️
+    }
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
       return practicalTopN(cleaned, 2, cfg.maxScore || 180);
