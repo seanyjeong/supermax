@@ -274,7 +274,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     : (F.실기특수설정 || {});
 
   // ======================================================
-  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림)
+  // ⭐️ ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정 + 반올림) 동국체교
   // ======================================================
   if (uid === 13) {
       log.push(`[Special-Case 13] 수동 공식 계산 시작 (Gender: ${studentGender})`);
@@ -351,7 +351,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
 
   switch (uid) {
     // ======================================================
-    // ID 2번 학교 (원복됨)
+    // ID 2번 학교 (원복됨) 경동체육
     // ======================================================
     case 2:
     {
@@ -372,7 +372,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     }
     
     // ======================================================
-    // ID 3번 학교 (배점 총합 + 기본점수 1점)
+    // ID 3번 학교 (배점 총합 + 기본점수 1점) 고대스과
     // ======================================================
     case 3:
     {
@@ -380,6 +380,42 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case 3] 배점 합(${sumOfScores}) + 기본점수(1)`);
       return sumOfScores + 1;
     }
+
+  // ======================================================
+    // ID 17번 학교 (가중치 합산 1) 백석스과
+    // ======================================================
+    case 17:
+    {
+        // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
+        const runScore = scoreMap.get('10m왕복달리기') || 0;
+        const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
+        const situpScore = scoreMap.get('윗몸일으키기') || 0;
+        
+        // 1) {(10m왕복 × 5.6) + (제멀 × 5.6) + (윗몸 × 4.8)}
+        const totalScore = (runScore * 5.6) + (jumpScore * 5.6) + (situpScore * 4.8);
+        
+        log.push(`[Special-Case 17] (10m왕복 ${runScore}점 * 5.6) + (제멀 ${jumpScore}점 * 5.6) + (윗몸 ${situpScore}점 * 4.8)`);
+        log.push(`[Special-Case 17] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+        return totalScore;
+    }
+    
+    // ======================================================
+    // ID 16번 학교 (가중치 합산 2) 백석특체
+    // ======================================================
+    case 16:
+    {
+        // scoreMap에서 종목명으로 점수 추출 (없으면 0점)
+        const runScore = scoreMap.get('10m왕복달리기') || 0;
+        const jumpScore = scoreMap.get('제자리멀리뛰기') || 0;
+        const situpScore = scoreMap.get('윗몸일으키기') || 0;
+        
+        // 2) {(10m왕복 × 9.8) + (제멀 × 9.8) + (윗몸 × 8.4)}
+        const totalScore = (runScore * 9.8) + (jumpScore * 9.8) + (situpScore * 8.4);
+
+        log.push(`[Special-Case 16] (10m왕복 ${runScore}점 * 9.8) + (제멀 ${jumpScore}점 * 9.8) + (윗몸 ${situpScore}점 * 8.4)`);
+        log.push(`[Special-Case 16] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+        return totalScore;
+    }    
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
       return practicalTopN(cleaned, 2, cfg.maxScore || 180);
