@@ -36,7 +36,7 @@ function findMaxScore(scoreTable) {
 }
 
 /**
- * ⭐️ [신규 헬퍼] "감수" (급간 레벨)를 찾음
+ * ⭐️ [신규 헬퍼] "감수" (급간 레벨)을 찾음
  */
 function lookupDeductionLevel(studentScore, scoreTable) {
     if (!scoreTable || scoreTable.length === 0) return 0;
@@ -269,8 +269,8 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       }
 
       const standards = {
-          '배근력':       { '남': { min: 130, max: 220 }, '여': { min: 60, max: 151 } },
-          '좌전굴':       { '남': { min: 11.9, max: 30 }, '여': { min: 13.9, max: 32 } },
+          '배근력':        { '남': { min: 130, max: 220 }, '여': { min: 60, max: 151 } },
+          '좌전굴':        { '남': { min: 11.9, max: 30 }, '여': { min: 13.9, max: 32 } },
           '제자리멀리뛰기': { '남': { min: 254, max: 300 }, '여': { min: 199, max: 250 } },
           '중량메고달리기': { '남': { min: 9.9, max: 7.19 }, '여': { min: 10.9, max: 7.6 } }
       };
@@ -560,10 +560,10 @@ function calculateScore(F, S_original) {
       totalDeductionLevel += deductionLevel;
       
       eventBreakdowns.push({
-          event: eventName,
-          record: eventValue,
-          score: score,
-          deduction_level: deductionLevel
+        event: eventName,
+        record: eventValue,
+        score: score,
+        deduction_level: deductionLevel
       });
     });
 
@@ -588,9 +588,9 @@ function calculateScore(F, S_original) {
     return {
       totalScore: finalPracticalScore.toFixed(3),
       breakdown: { 
-          events: eventBreakdowns,
-          practical_raw_sum: finalRawScore,
-          total_deduction_level: totalDeductionLevel
+        events: eventBreakdowns,
+        practical_raw_sum: finalRawScore,
+        total_deduction_level: totalDeductionLevel
       },
       calculationLog: log,
     };
