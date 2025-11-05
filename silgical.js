@@ -301,34 +301,74 @@ function calculateScore(F, S_original) {
 
   // --- 2. 모드 분기 ---
 
+  // ▼▼▼▼▼ [Special 로직 수정] ▼▼▼▼▼
   if (mode === 'special') {
-    // ⭐️ [Special 로직] ⭐️
-    // 'special' 모드는 '감수' 계산 없이, U-ID별 특수 계산만 실행
+    log.push(`[Special] 'special' 모드 실행...`);
     
-    // 2-1. 학생 기록(S)을 점수 목록(list)으로 변환
-    // (주의: buildPracticalScoreList는 감수(deduction) 계산은 안 하고 배점(score)만 찾음)
-    const list = buildPracticalScoreList(studentRecords, allScoreData, studentGender);
-    log.push(`[Special] 학생 기록을 ${list.length}건의 점수 목록으로 변환 완료.`);
+    // ⭐️ 1. 'Basic' 로직에서 `eventBreakdowns` 계산 로직을 그대로 가져옴
+    const eventBreakdowns = []; // 감수 포함, 'score'만 있는 객체 배열
+    const schoolOutOfRangeRule = F.미달처리 || '0점'; // Special 모드도 미달처리 규칙 필요
     
-    // 2-2. 1단계에서 복사한 calcPracticalSpecial 함수 호출
-    const finalPracticalScore = calcPracticalSpecial(F, list, log);
+    studentRecords.forEach((record) => {
+      const eventName = record.event;
+      const eventValue = String(record.value || '').trim();
+
+      if (eventValue === '') {
+        log.push(`[${eventName}] 기록 없음. 계산 보류.`);
+        eventBreakdowns.push({
+          event: eventName,
+          record: '',
+          score: null,
+          deduction_level: null // ⭐️ 감수 필드
+        });
+        return;
+      }
+
+      const { method } = getEventRules(eventName);
+      const scoreTable = allScoreData.filter(
+        (r) => r.종목명 === eventName && r.성별 === studentGender
+      );
+
+      const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
+      const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
+      
+      // ⭐️ 핵심: Special 모드에서도 감수 계산
+      const deductionLevel = lookupDeductionLevel(score, scoreTable); 
+      
+      log.push(
+        `[${eventName}] (규칙: ${method}) 기록: ${eventValue} → 배점: "${rawGrade}"(환산: ${score}점) → ⭐️급간(감수): ${deductionLevel}감`
+      );
+      
+      eventBreakdowns.push({
+          event: eventName,
+          record: eventValue,
+          score: score, // ⭐️ 'score' (e.g., 100점)
+          deduction_level: deductionLevel // ⭐️ 'deduction_level' (e.g., 0감)
+      });
+    });
+    // ⭐️ 1. 계산 끝: eventBreakdowns가 'Basic'처럼 완벽하게 채워짐
+    
+    // 2. ⭐️ 특수 총점 계산: calcPracticalSpecial에는 이 풍부한 `eventBreakdowns` 배열을 전달
+    // (calcPracticalSpecial 함수는 내부적으로 `item.score`만 사용하므로 수정할 필요 없음)
+    const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log);
     
     log.push('========== 실기 최종 ==========');
-    log.push(`'special' 모드 계산 최종 점수: ${finalPracticalScore}`);
+    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`); // 예: 700점
     
+    // 3. ⭐️ 반환: totalScore는 특수 점수(700)를, breakdown.events는 감수가 포함된 `eventBreakdowns`를 반환
     return {
-      totalScore: finalPracticalScore.toFixed(3),
+      totalScore: finalPracticalScore.toFixed(3), // ⭐️ 700.000
       breakdown: { 
-          events: list, // 'special' 모드는 breakdown이 list와 동일 (감수 없음)
-          practical_raw_sum: finalPracticalScore, // (임시로 동일 값)
-          total_deduction_level: 0 // 'special' 모드는 감수 계산 안 함
+          events: eventBreakdowns, // ⭐️ [{ event: '제멀', score: 100, deduction_level: 0 }, ...]
+          practical_raw_sum: finalPracticalScore, 
+          total_deduction_level: 0 // 'special'은 총 감수는 0으로 고정 (totalScore에 영향 안 줌)
       },
       calculationLog: log,
     };
+    // ▲▲▲▲▲ [Special 로직 수정 끝] ▲▲▲▲▲
 
   } else {
-    // ⭐️ [Basic 로직] ⭐️
-    // 기존 calculateScore 함수 내용을 그대로 여기에 둠 (감수 계산 포함)
+    // ⭐️ [Basic 로직] ⭐️ (수정 없음, 그대로 둠)
     
     log.push(`[Basic] 'basic' 모드(기존 로직) 실행...`);
     
