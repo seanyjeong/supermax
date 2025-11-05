@@ -436,6 +436,21 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case 19] 배점 합(${sumOfScores}) + 기본점수(2)`);
       return sumOfScores + 2;
     }
+// ======================================================
+    // ID 69, 70번 학교 (평균 × 4 + 기본점수 400)
+    // ======================================================
+    case 69:
+    case 70:
+    {
+      // (3종목의 합산 점수) ÷ 3× 4 + 기본점수 400점
+      // ⭐️ 0점/null 포함 합산 (sumOfAllScores 사용)
+      const avg = sumOfAllScores / 3; // 3개 종목 평균
+      const totalScore = (avg * 4) + 400;
+      
+      log.push(`[Special-Case ${uid}] (전체 합산 ${sumOfAllScores}점 / 3) * 4 + 400`);
+      log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } 
 
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
