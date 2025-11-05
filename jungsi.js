@@ -4,6 +4,8 @@ const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fetch = require('node-fetch');
+const multer = require('multer');
+const fs = require('fs').promises;
 const app = express();
 const port = 9090;
 
