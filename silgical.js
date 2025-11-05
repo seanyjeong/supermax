@@ -451,7 +451,8 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
       return totalScore;
     } // (case 69, 70 끝)
-case 99:
+     case 99:
+    case 147:      
     {
       // 0점/null 제외 (cleaned 사용)
       const finalScore = practicalTopN(cleaned, 3,800);
