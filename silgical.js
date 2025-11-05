@@ -214,29 +214,23 @@ function practicalAverage(list, maxScore) {
   return (avg / 100) * maxScore;
 }
 
-// ▼▼▼▼▼ [수정 1] studentGender 인자 받도록 수정 ▼▼▼▼▼
 function calcPracticalSpecial(F, list, log, studentGender) {
-// ▲▲▲▲▲ [수정 1] ▲▲▲▲▲
-
   const uid = Number(F.U_ID);
   const cfg = typeof F.실기특수설정 === 'string'
     ? JSON.parse(F.실기특수설정)
     : (F.실기특수설정 || {});
 
   // ======================================================
-  // ⭐️ [신규 추가] ID 13번 학교 (수동 공식 계산)
-  // (cleaned 변수 선언 *전에* 와야 함. 'list'를 직접 써야 함)
+  // ⭐️ [수정] ID 13번 학교 (수동 공식 계산 + 'list' 배열 직접 수정)
   // ======================================================
   if (uid === 13) {
       log.push(`[Special-Case 13] 수동 공식 계산 시작 (Gender: ${studentGender})`);
       
-      // 1. 성별 없으면 계산 불가
       if (studentGender !== '남' && studentGender !== '여') {
           log.push(`[오류] 성별 정보 없음. 0점 반환.`);
           return 0;
       }
 
-      // 2. 기준표 정의 (네가 알려준 값)
       const standards = {
           '배근력':       { '남': { min: 130, max: 220 }, '여': { min: 60, max: 151 } },
           '좌전굴':       { '남': { min: 11.9, max: 30 }, '여': { min: 13.9, max: 32 } },
@@ -246,15 +240,17 @@ function calcPracticalSpecial(F, list, log, studentGender) {
 
       let totalScore = 0; // 400점 만점 (합산)
 
-      // 3. 'list' (DB 조회 실패로 score:0 일 수 있음)를 순회
+      // ⭐️ 'list'는 calculateScore에서 보낸 eventBreakdowns 배열임
       for (const item of list) {
           const eventName = item.event;
-          const std = standards[eventName]?.[studentGender]; // 이 종목, 이 성별의 기준
-          const record = parseFloat(item.record); // ⭐️ 'score'가 아닌 'record' 사용
+          const std = standards[eventName]?.[studentGender];
+          const record = parseFloat(item.record); // ⭐️ 'record' 사용
 
-          // 4. 기준표에 없거나(e.g., '10m왕복') 기록이 없으면(isNaN) 점수 없음
           if (!std || isNaN(record)) {
-              log.push(`[Special-Case 13] ${eventName}: 계산 스킵 (기준 없거나 기록 없음)`);
+              log.push(`[Special-Case 13] ${eventName}: 계산 스킵`);
+              // ⭐️ item.score (0), item.deduction_level (0)은 그대로 둠 (수정)
+              item.score = 0; // ⭐️ 명시적으로 0점 처리
+              item.deduction_level = 0; // ⭐️ 명시적으로 0감 처리
               continue;
           }
 
@@ -262,7 +258,6 @@ function calcPracticalSpecial(F, list, log, studentGender) {
           const min = std.min; // 최저기준 (e.g., 배근력 남 130)
           const max = std.max; // 최고기준 (e.g., 배근력 남 220)
 
-          // 5. Capping (Clamping): 기록이 min/max 범위를 벗어나면 min/max로 고정
           let cappedRecord = record;
           const isLowerBetter = max < min; // e.g., 중량달리기 (7.19 < 9.9)
 
@@ -274,14 +269,20 @@ function calcPracticalSpecial(F, list, log, studentGender) {
               if (record < min) cappedRecord = min; // 최저기록(130)보다 못했으면 (120) -> 130
           }
           
-          // 6. Formula: (기록 - 최저) / (최고 - 최저) * 100
           if (max - min === 0) {
               eventScore = 0; // 0으로 나누기 방지
           } else {
               eventScore = ((cappedRecord - min) / (max - min)) * 100;
           }
 
-          log.push(`[Special-Case 13] ${eventName}: (기록 ${record} -> ${cappedRecord}) → (${cappedRecord} - ${min}) / (${max} - ${min}) * 100 = ${eventScore.toFixed(3)}`);
+          // ⭐️ (중요) 계산된 100점 만점 점수를 list(eventBreakdowns)에 덮어쓰기
+          item.score = eventScore;
+          // ⭐️ (중요) 공식 계산은 "감수" 개념이 없으므로 0감으로 고정
+          item.deduction_level = 0; 
+          
+          log.push(`[Special-Case 13] ${eventName}: (기록 ${record} -> ${cappedRecord}) → ${eventScore.toFixed(3)}점 (0감)`);
+          
+          // ⭐️ 최종 총점에 합산
           totalScore += eventScore;
       }
       
@@ -290,21 +291,18 @@ function calcPracticalSpecial(F, list, log, studentGender) {
   }
   // ======================================================
 
-
+  
   // list 중에서 프론트가 "-"로 보였던 애들(점수 0)은 빼고 계산
   // (주의: Case 13은 이 로직 *전에* 처리해야 함)
   const cleaned = (list || []).filter(it => Number.isFinite(it.score) && it.score > 0);
 
   switch (uid) {
-    // ↓↓↓ 여기에 네가 원하는 대학 케이스를 계속 추가하면 됨 ↓↓↓
-
     // ======================================================
-    // ID 2번 학교 (배점 총합 -> 점수 환산) - ⭐️ 1점 더하는 거 뺌 (원복)
+    // ID 2번 학교 (원복됨)
     // ======================================================
     case 2:
     {
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
-      
       let lookedUpScore; 
       if (sumOfScores >= 286) lookedUpScore = 700;
       else if (sumOfScores >= 271) lookedUpScore = 691;
@@ -317,7 +315,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       else lookedUpScore = 630;
       
       log.push(`[Special-Case 2] 배점 합(${sumOfScores}) -> 환산 점수(${lookedUpScore})`);
-      return lookedUpScore; // ⭐️ 1점 더하는 거 뺌
+      return lookedUpScore;
     }
     
     // ======================================================
@@ -325,12 +323,9 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     // ======================================================
     case 3:
     {
-      // 1. 배점 합계 (모든 종목 점수 다 더하기)
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
-      
-      // 2. 기본점수 1점 더하기
       log.push(`[Special-Case 3] 배점 합(${sumOfScores}) + 기본점수(1)`);
-      return sumOfScores + 1; // ⭐️⭐️⭐️ 여기에 1점 추가 ⭐️⭐️⭐️
+      return sumOfScores + 1;
     }
 
     case 1234: // 예: ○○대 - 상위 2종목만, 180점 만점
@@ -339,15 +334,13 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     case 5678: // 예: △△대 - 전체 평균, 150점 만점
       return practicalAverage(cleaned, cfg.maxScore || 150);
 
-    // ↑↑↑ 여기는 네가 필요한 만큼 케이스 추가 ↑↑↑
-
     default:
-      // special인데도 등록 안 돼 있으면 일단 기본으로라도 돌리기
-      // (주의: Special인데 분기 없으면 기본 점수(0) 반환)
       log.push(`[경고] Special 모드 U_ID(${uid})가 분기에 없습니다. 0점을 반환합니다.`);
-      return 0; // ⭐️ Special인데 분기 없으면 0점 처리 (Basic으로 빠지면 안 됨)
+      return 0;
   }
 }
+// ▲▲▲▲▲ [수정] 이 함수만 교체 ▲▲▲▲▲
+
 
 /**
  * ⭐️ [메인] 실기 점수 계산 함수 (수정됨)
@@ -417,10 +410,11 @@ function calculateScore(F, S_original) {
         (r) => r.종목명 === eventName && r.성별 === studentGender
       );
 
+      // ⭐️ (수정) 13번 케이스는 배점표가 없으므로 rawGrade가 0이 나옴 (정상)
       const rawGrade = lookupScore(eventValue, method, scoreTable, schoolOutOfRangeRule);
       const score = convertGradeToScore(rawGrade, F.U_ID, eventName);
       
-      // ⭐️ 핵심: Special 모드에서도 감수 계산
+      // ⭐️ (수정) 13번 케이스는 배점표가 없으므로 deductionLevel이 0이 나옴 (정상)
       const deductionLevel = lookupDeductionLevel(score, scoreTable); 
       
       log.push(
@@ -430,27 +424,29 @@ function calculateScore(F, S_original) {
       eventBreakdowns.push({
           event: eventName,
           record: eventValue,
-          score: score, // ⭐️ 'score' (e.g., 100점)
+          score: score, // ⭐️ 'score' (e.g., 0점)
           deduction_level: deductionLevel // ⭐️ 'deduction_level' (e.g., 0감)
       });
     });
     // ⭐️ 1. 계산 끝: eventBreakdowns가 'Basic'처럼 완벽하게 채워짐
+    //    (13번 케이스는 score: 0, deduction_level: 0 으로 채워짐)
     
     // 2. ⭐️ 특수 총점 계산: calcPracticalSpecial에는 이 풍부한 `eventBreakdowns` 배열을 전달
-    // ▼▼▼▼▼ [수정 2] studentGender 인자 추가 ▼▼▼▼▼
+    //    (case 13은 이 배열을 *직접 수정*하고, 총점을 반환)
     const finalPracticalScore = calcPracticalSpecial(F, eventBreakdowns, log, studentGender);
-    // ▲▲▲▲▲ [수정 2] ▲▲▲▲▲
     
     log.push('========== 실기 최종 ==========');
-    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`); // 예: 700점
+    log.push(`'special' 모드 계산 최종 총점: ${finalPracticalScore}`); // 예: 400점
     
-    // 3. ⭐️ 반환: totalScore는 특수 점수(700)를, breakdown.events는 감수가 포함된 `eventBreakdowns`를 반환
+    // 3. ⭐️ 반환: totalScore는 특수 점수(400)를, breakdown.events는 *수정된* `eventBreakdowns`를 반환
     return {
-      totalScore: finalPracticalScore.toFixed(3), // ⭐️ 700.000
+      totalScore: finalPracticalScore.toFixed(3),
       breakdown: { 
-          events: eventBreakdowns, // ⭐️ [{ event: '제멀', score: 100, deduction_level: 0 }, ...]
+          // ⭐️ case 13이 'list'(eventBreakdowns)를 수정했으므로, 
+          // ⭐️ events 배열은 [ { event: '배근력', score: 95.x, deduction_level: 0 }, ... ] 로 채워짐
+          events: eventBreakdowns, 
           practical_raw_sum: finalPracticalScore, 
-          total_deduction_level: 0 // 'special'은 총 감수는 0으로 고정 (totalScore에 영향 안 줌)
+          total_deduction_level: 0 
       },
       calculationLog: log,
     };
