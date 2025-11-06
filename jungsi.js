@@ -6666,6 +6666,136 @@ app.get('/jungsi/admin/all-universities', authMiddleware, async (req, res) => {
     }
 });
 
+// =============================================
+// ⭐️ [신규] 실기 배점표 관리 API (Admin 전용)
+// =============================================
+
+/**
+ * API 1: (Admin) 배점표가 등록된 학교/학과 목록 조회
+ * GET /jungsi/admin/practical-table/schools?year=2026
+ */
+app.get('/jungsi/admin/practical-table/schools', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { year } = req.query;
+    if (!year) {
+        return res.status(400).json({ success: false, message: 'year 쿼리 파라미터가 필요합니다.' });
+    }
+
+    try {
+        // 정시실기배점(s)에 데이터가 있는 학교의 기본정보(b)를 조회
+        const sql = `
+            SELECT DISTINCT b.U_ID, b.대학명, b.학과명
+            FROM 정시실기배점 s
+            JOIN 정시기본 b ON s.U_ID = b.U_ID AND s.학년도 = b.학년도
+            WHERE s.학년도 = ?
+            ORDER BY b.대학명, b.학과명
+        `;
+        const [schools] = await db.query(sql, [year]);
+        res.json({ success: true, schools: schools });
+    } catch (err) {
+        console.error('❌ /admin/practical-table/schools 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 오류' });
+    }
+});
+
+/**
+ * API 2: (Admin) 특정 학교/학년도의 전체 배점표 데이터 조회
+ * GET /jungsi/admin/practical-table/data?year=2026&U_ID=123
+ */
+app.get('/jungsi/admin/practical-table/data', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { year, U_ID } = req.query;
+    if (!year || !U_ID) {
+        return res.status(400).json({ success: false, message: 'year, U_ID 쿼리 파라미터가 필요합니다.' });
+    }
+
+    try {
+        const sql = `
+            SELECT id, 종목명, 성별, 기록, 배점
+            FROM 정시실기배점
+            WHERE U_ID = ? AND 학년도 = ?
+            ORDER BY 종목명, 성별, id ASC
+        `; // id 오름차순으로 정렬해야 순서가 맞음
+        const [data] = await db.query(sql, [U_ID, year]);
+        res.json({ success: true, data: data });
+    } catch (err) {
+        console.error('❌ /admin/practical-table/data 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 오류' });
+    }
+});
+
+/**
+ * API 3: (Admin) 배점표 일괄 저장/수정/삭제 (핵심 API)
+ * POST /jungsi/admin/practical-table/bulk-update
+ */
+app.post('/jungsi/admin/practical-table/bulk-update', authMiddleware, isAdminMiddleware, async (req, res) => {
+    const { U_ID, year, updates, additions, deletions } = req.body;
+    
+    if (!U_ID || !year || !updates || !additions || !deletions) {
+        return res.status(400).json({ success: false, message: '필수 데이터(U_ID, year, updates, additions, deletions) 누락' });
+    }
+
+    let connection;
+    try {
+        connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        let totalAffected = 0;
+
+        // 1. 삭제 (Deletions)
+        if (deletions.length > 0) {
+            const deleteSql = 'DELETE FROM 정시실기배점 WHERE id = ? AND U_ID = ?';
+            for (const id of deletions) {
+                const [result] = await connection.query(deleteSql, [id, U_ID]);
+                totalAffected += result.affectedRows;
+            }
+            console.log(`[실기배점표] ${deletions.length}건 삭제됨`);
+        }
+
+        // 2. 수정 (Updates)
+        if (updates.length > 0) {
+            const updateSql = 'UPDATE 정시실기배점 SET 기록 = ?, 배점 = ?, 종목명 = ?, 성별 = ? WHERE id = ? AND U_ID = ?';
+            for (const item of updates) {
+                // ⭐️ 모든 필드 수정 가능하게 (종목명, 성별 포함)
+                const [result] = await connection.query(updateSql, [
+                    item.기록,
+                    item.배점,
+                    item.종목명, // ⭐️ 추가
+                    item.성별,   // ⭐️ 추가
+                    item.id,
+                    U_ID
+                ]);
+                totalAffected += result.affectedRows;
+            }
+            console.log(`[실기배점표] ${updates.length}건 수정됨`);
+        }
+
+        // 3. 추가 (Additions)
+        if (additions.length > 0) {
+            const insertSql = 'INSERT INTO 정시실기배점 (U_ID, 학년도, 종목명, 성별, 기록, 배점) VALUES ?';
+            const values = additions.map(item => [
+                U_ID,
+                year,
+                item.종목명,
+                item.성별,
+                item.기록,
+                item.배점
+            ]);
+            const [result] = await connection.query(insertSql, [values]);
+            totalAffected += result.affectedRows;
+            console.log(`[실기배점표] ${additions.length}건 추가됨`);
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: '배점표가 성공적으로 저장되었습니다.', totalAffected: totalAffected });
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ /admin/practical-table/bulk-update 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
