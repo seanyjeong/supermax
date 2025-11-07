@@ -3521,24 +3521,27 @@ app.get('/26susi/dashboard/group-progress', async (req, res) => {
 
 // --- API: [지점 리포트] (5종목) ---
 app.get('/26susi/branch-report', async (req, res) => {
-    // ... (기존과 거의 동일하나 async/await 사용) ...
-     const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
-     const sql = `SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score FROM students s LEFT JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ?`;
-     try {
-         const [results] = db.promise().query(sql, [branchName]);
-         const studentsMap = new Map(); // ... 학생 데이터 가공 ...
-         results.forEach(row => { if (!studentsMap.has(row.id)) studentsMap.set(row.id, { id: row.id, name: row.student_name, gender: row.gender, totalScore: 0, records: {} }); const student = studentsMap.get(row.id); if (row.event) { student.records[row.event] = { record: row.record_value, score: row.score }; student.totalScore += row.score; } });
-         let studentsData = Array.from(studentsMap.values());
-         const EVENTS = ['제멀', '메디신볼', '10m', '배근력', '좌전굴'];
-         ['남', '여'].forEach(gender => { /* ... 성별 순위 계산 ... */
-             let genderGroup = studentsData.filter(s => s.gender === gender);
-             genderGroup.sort((a, b) => b.totalScore - a.totalScore); genderGroup.forEach((s, i) => s.branchOverallRank = i + 1);
-             EVENTS.forEach(event => { genderGroup.sort((a, b) => { const sA = a.records[event]?.score ?? -1, sB = b.records[event]?.score ?? -1; if (sB !== sA) return sB - sA; const rA = a.records[event]?.record ?? (event === '10m' ? 999 : -1), rB = b.records[event]?.record ?? (event === '10m' ? 999 : -1); return (event === '10m') ? rA - rB : rB - rA; }); genderGroup.forEach((s, i) => { if (s.records[event]) s.records[event].branchRank = i + 1; }); });
-         });
-         res.status(200).json({ success: true, data: studentsData });
-     } catch (err) { console.error("지점 리포트 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
-});
+     const { branchName } = req.query; if (!branchName) return res.status(400).json({ message: '지점 이름 필수.' });
+     const sql = `SELECT s.id, s.student_name, s.gender, r.event, r.record_value, r.score FROM students s LEFT JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id WHERE b.branch_name = ?`;
+     try {
+         // 
+         // ⭐️⭐️⭐️ 여기!!! await 추가 ⭐️⭐️⭐️
+         const [results] = await db.promise().query(sql, [branchName]);
+         // 
+         // 
 
+         const studentsMap = new Map(); // ... 학생 데이터 가공 ...
+         results.forEach(row => { if (!studentsMap.has(row.id)) studentsMap.set(row.id, { id: row.id, name: row.student_name, gender: row.gender, totalScore: 0, records: {} }); const student = studentsMap.get(row.id); if (row.event) { student.records[row.event] = { record: row.record_value, score: row.score }; student.totalScore += row.score; } });
+         let studentsData = Array.from(studentsMap.values());
+         const EVENTS = ['제멀', '메디신볼', '10m', '배근력', '좌전굴'];
+         ['남', '여'].forEach(gender => { /* ... 성별 순위 계산 ... */
+             let genderGroup = studentsData.filter(s => s.gender === gender);
+             genderGroup.sort((a, b) => b.totalScore - a.totalScore); genderGroup.forEach((s, i) => s.branchOverallRank = i + 1);
+             EVENTS.forEach(event => { genderGroup.sort((a, b) => { const sA = a.records[event]?.score ?? -1, sB = b.records[event]?.score ?? -1; if (sB !== sA) return sB - sA; const rA = a.records[event]?.record ?? (event === '10m' ? 999 : -1), rB = b.records[event]?.record ?? (event === '10m' ? 999 : -1); return (event === '10m') ? rA - rB : rB - rA; }); genderGroup.forEach((s, i) => { if (s.records[event]) s.records[event].branchRank = i + 1; }); });
+         });
+         res.status(200).json({ success: true, data: studentsData });
+     } catch (err) { console.error("지점 리포트 오류:", err); res.status(500).json({ message: 'DB 오류' }); }
+});
 // --- API: [전체 순위 조회] 리포트용 (5종목) ---
 app.get('/26susi/all-ranks', async (req, res) => {
     // ... (기존과 거의 동일하나 async/await 사용) ...
