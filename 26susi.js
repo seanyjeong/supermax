@@ -3382,44 +3382,60 @@ app.get('/26susi/records/calculate-score', async (req, res) => {
 
 // --- API: [순위 시스템] 실시간 순위 조회 (좌전굴 포함) ---
 // --- API: [순위 시스템] 실시간 순위 조회 (좌전굴 포함) ---
+// --- API: [순위 시스템] 실시간 순위 조회 (⭐️ '전체' 성별 조회 기능 추가, LIMIT 확장) ---
 app.get('/26susi/rankings', async (req, res) => {
-     // ...
-     const { classType, gender, event } = req.query;
-     // ...
-     
-     // ✅ 1번 수정
-     let gradeCondition = ''; // ... 학년 조건 설정 ...
-     if (classType === '선행반') gradeCondition = `s.grade IN ('1', '2')`;
-     else if (classType === '입시반') gradeCondition = `s.grade = '3'`;
-     else if (classType === 'N수반') gradeCondition = `s.grade = 'N'`;
-     else if (classType === '전체') gradeCondition = `1=1`; // ⭐️ '전체' 추가
-     else return res.status(400).json({ message: '올바른 반 유형 아님.' });
+    const { classType, gender, event } = req.query;
 
-     let sql; const params = [gender];
-     try {
-         if (event === '종합') {
-             sql = `SELECT s.student_name, s.exam_number, b.branch_name, SUM(r.score) as score,
-                           RANK() OVER (ORDER BY SUM(r.score) DESC, MAX(CASE s.grade WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN 'N' THEN 4 ELSE 5 END) ASC,
-                                        MAX(CASE WHEN r.event = '제멀' THEN r.record_value ELSE 0 END) DESC, MAX(CASE WHEN r.event = '메디신볼' THEN r.record_value ELSE 0 END) DESC,
-                                        MIN(CASE WHEN r.event = '10m' THEN r.record_value ELSE 999 END) ASC, MAX(CASE WHEN r.event = '배근력' THEN r.record_value ELSE 0 END) DESC,
-                                        MAX(CASE WHEN r.event = '좌전굴' THEN r.record_value ELSE 0 END) DESC ) as ranking
+    // --- 1. classType 조건 (이전과 동일) ---
+    let gradeCondition = ''; 
+    if (classType === '선행반') gradeCondition = `s.grade IN ('1', '2')`;
+    else if (classType === '입시반') gradeCondition = `s.grade = '3'`;
+    else if (classType === 'N수반') gradeCondition = `s.grade = 'N'`;
+    else if (classType === '전체') gradeCondition = `1=1`; 
+    else return res.status(400).json({ message: '올바른 반 유형 아님.' });
+
+    // --- 2. gender 조건 (⭐️ 핵심 수정 ⭐️) ---
+    let genderCondition = '';
+    const params = []; // params를 비워둠
+    
+    if (gender === '남' || gender === '여') {
+        genderCondition = `AND s.gender = ?`;
+        params.push(gender); // '남' 또는 '여'를 params에 추가
+    } else if (gender === '전체') {
+        genderCondition = ''; // '전체'일 경우, 성별 조건을 아예 추가하지 않음
+    } else {
+        // '남', '여', '전체'가 아니면 에러
+        return res.status(400).json({ message: '올바른 성별이 아닙니다 (남, 여, 전체 중 하나).' });
+    }
+
+    let sql;
+    try {
+        if (event === '종합') {
+            sql = `SELECT s.student_name, s.exam_number, b.branch_name, s.gender, SUM(r.score) as score,
+                        RANK() OVER (ORDER BY SUM(r.score) DESC, MAX(CASE s.grade WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN 'N' THEN 4 ELSE 5 END) ASC,
+                        MAX(CASE WHEN r.event = '제멀' THEN r.record_value ELSE 0 END) DESC, MAX(CASE WHEN r.event = '메디신볼' THEN r.record_value ELSE 0 END) DESC,
+                        MIN(CASE WHEN r.event = '10m' THEN r.record_value ELSE 999 END) ASC, MAX(CASE WHEN r.event = '배근력' THEN r.record_value ELSE 0 END) DESC,
+                        MAX(CASE WHEN r.event = '좌전굴' THEN r.record_value ELSE 0 END) DESC ) as ranking
                     FROM students s JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id
-                    WHERE ${gradeCondition} AND s.gender = ? GROUP BY s.id, s.student_name, s.exam_number, b.branch_name ORDER BY ranking ASC LIMIT 50`;
-         } else {
-             sql = `SELECT s.student_name, s.exam_number, b.branch_name, r.score, r.record_value,
-                           RANK() OVER (ORDER BY r.score DESC, r.record_value ${(event === '10m') ? 'ASC' : 'DESC'}) as ranking
+                    WHERE ${gradeCondition} ${genderCondition}
+                    GROUP BY s.id, s.student_name, s.exam_number, b.branch_name, s.gender 
+                    ORDER BY ranking ASC LIMIT 2000`; // ⭐️ LIMIT 500으로 수정
+        } else {
+            sql = `SELECT s.student_name, s.exam_number, b.branch_name, s.gender, r.score, r.record_value,
+                        RANK() OVER (ORDER BY r.score DESC, r.record_value ${(event === '10m') ? 'ASC' : 'DESC'}) as ranking
                     FROM students s JOIN records r ON s.id = r.student_id JOIN branches b ON s.branch_id = b.id
-                    WHERE ${gradeCondition} AND s.gender = ? AND r.event = ? ORDER BY ranking ASC LIMIT 50`;
-             params.push(event);
-         }
-         
-         // ✅ 2번 수정
-         const [results] = await db.promise().query(sql, params); // ⭐️ 'await' 추가
-         res.status(200).json({ success: true, data: results });
-     } catch (err) {
-         console.error("랭킹 조회 오류:", err);
-         res.status(500).json({ success: false, message: '서버 오류' });
-     }
+                    WHERE ${gradeCondition} ${genderCondition} AND r.event = ?
+                    ORDER BY ranking ASC LIMIT 2000`; // ⭐️ LIMIT 500으로 수정
+            params.push(event); // event는 params에 추가 (성별 뒤에)
+        }
+        
+        const [results] = await db.promise().query(sql, params);
+        res.status(200).json({ success: true, data: results });
+
+    } catch (err) {
+        console.error("랭킹 조회 오류:", err);
+        res.status(500).json({ success: false, message: '서버 오류' });
+    }
 });
 
 // --- API: [메인 대시보드] (통합, 5종목) ---
