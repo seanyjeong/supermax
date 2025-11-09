@@ -434,6 +434,101 @@ app.post('/26susi_student/login', async (req, res) => {
     }
 });
 
+// ✅ 학생 비밀번호 재설정: 인증번호 발송 (아이디 + 가입폰번호 일치해야만)
+app.post('/26susi_student/request-reset-sms', async (req, res) => {
+    const { userid, phone } = req.body;
+
+    if (!userid || !phone) {
+        return res.status(400).json({
+            success: false,
+            message: "아이디와 전화번호를 모두 입력해주세요."
+        });
+    }
+
+    try {
+        // 1. 학생 DB에서 아이디 + 전화번호가 모두 일치하는지 확인
+        const [rows] = await dbStudent.promise().query(
+            "SELECT account_id FROM student_account WHERE userid = ? AND phone = ?",
+            [userid, phone]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "일치하는 학생 정보가 없습니다."
+            });
+        }
+
+        // 2. 일치하면 인증번호 생성 + SMS 발송
+        const code = generateCode();
+        const smsResult = await sendVerificationSMS(phone, code);
+
+        if (!smsResult.success) {
+            throw new Error(smsResult.message || "SMS 발송 실패");
+        }
+
+        // 3. 인증번호를 메모리에 저장 (3분 유효)
+        verificationCodes[phone] = {
+            code,
+            expires: Date.now() + 3 * 60 * 1000
+        };
+
+        console.log(`[학생 비밀번호 재설정] 인증번호 발송 성공. ID: ${userid}, 번호: ${phone}`);
+        res.json({
+            success: true,
+            message: "인증번호가 발송되었습니다."
+        });
+    } catch (err) {
+        console.error("학생 비밀번호 재설정 요청 오류:", err);
+        res.status(500).json({
+            success: false,
+            message: "서버 오류가 발생했습니다."
+        });
+    }
+});
+
+// ✅ 학생 비밀번호 재설정: 새 비밀번호 저장
+app.post('/26susi_student/reset-password', async (req, res) => {
+    const { userid, newPassword } = req.body;
+
+    if (!userid || !newPassword) {
+        return res.status(400).json({
+            success: false,
+            message: "아이디와 새 비밀번호를 모두 입력해주세요."
+        });
+    }
+
+    try {
+        // 1. 새 비밀번호 해시
+        const hash = await bcrypt.hash(newPassword, 10);
+
+        // 2. 학생 계정 비밀번호(pw_hash) 수정
+        const [result] = await dbStudent.promise().query(
+            "UPDATE student_account SET pw_hash = ? WHERE userid = ?",
+            [hash, userid]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "해당 아이디의 학생을 찾을 수 없습니다."
+            });
+        }
+
+        console.log(`[학생 비밀번호 재설정] 성공. ID: ${userid}`);
+        res.json({
+            success: true,
+            message: "비밀번호가 성공적으로 변경되었습니다."
+        });
+    } catch (err) {
+        console.error("학생 비밀번호 업데이트 오류:", err);
+        res.status(500).json({
+            success: false,
+            message: "서버 오류로 비밀번호 변경에 실패했습니다."
+        });
+    }
+});
+
 
 app.get('/26susi_student/pending-list', authOwnerJWT, async (req, res) => {
     const user = req.user; 
