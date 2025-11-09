@@ -4838,6 +4838,10 @@ app.post('/jungsi/admin/save-assignments', authMiddleware, async (req, res) => {
 
 // --- API 1: (선생님용) 내 담당 학생 목록 조회 ---
 // GET /jungsi/teacher/my-students?year=YYYY
+// jungsi.js 파일에서 이 API 전체를 교체하세요.
+
+// --- API 1: (선생님용) 내 담당 학생 목록 조회 ---
+// GET /jungsi/teacher/my-students?year=YYYY
 app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     // 1. 로그인한 사용자 정보 (userid, branch, position 등)
     const { userid, branch, position, role } = req.user;
@@ -4856,98 +4860,91 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     let sql;
     let params;
 
+    // ▼▼▼▼▼ [리팩토링 시작] ▼▼▼▼▼
+
+    // ⭐️ [개선] 1. 성능 향상을 위해 CTE(Common Table Expressions) 사용
+    // 학생별 최신 메모 정보와 오늘 퀘스트 정보를 미리 집계합니다.
+    const ctes = `
+        WITH RankedNotes AS (
+            SELECT
+                student_account_id,
+                category,
+                note_date,
+                injury_level,
+                ROW_NUMBER() OVER(PARTITION BY student_account_id, category ORDER BY note_date DESC) as rn
+            FROM jungsimaxstudent.student_teacher_notes
+            WHERE category IN ('부상', '상담', '멘탈')
+        ),
+        LatestNotes AS (
+            SELECT
+                student_account_id,
+                MAX(CASE WHEN category = '부상' THEN injury_level ELSE NULL END) AS recent_injury_level,
+                MAX(CASE WHEN category = '상담' THEN note_date ELSE NULL END) AS recent_counseling_date,
+                MAX(CASE WHEN category = '멘탈' THEN note_date ELSE NULL END) AS recent_mental_date
+            FROM RankedNotes
+            WHERE rn = 1
+            GROUP BY student_account_id
+        ),
+        DailyQuests AS (
+            SELECT
+                student_account_id,
+                COUNT(*) AS today_total_assignments,
+                SUM(IF(is_completed = 1, 1, 0)) AS today_completed_assignments
+            FROM jungsimaxstudent.teacher_daily_assignments
+            WHERE assignment_date = CURDATE()
+            GROUP BY student_account_id
+        )
+    `;
+
     if (isMgmt) {
-        // ⭐️ 관리 권한 사용자: 해당 지점의 *모든* 학생 조회
-        console.log(` -> 관리 권한: ${branch} 지점 ${year}년도 모든 학생 조회`);
-        // ⭐️ (수정) 최신 상태 + 오늘 운동 현황 조회를 위한 서브쿼리 추가
+        // ⭐️ [개선] 2. 관리자 쿼리: Correlated Subquery -> LEFT JOIN으로 변경
+        console.log(` -> 관리 권한: ${branch} 지점 ${year}년도 모든 학생 조회 (Refactored)`);
         sql = `
+            ${ctes}
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
                 sa.gender, sa.grade,
                 sassign.class_name,
-                ( -- 1. 최신 '부상' 척도
-                    SELECT stn.injury_level FROM jungsimaxstudent.student_teacher_notes stn
-                    WHERE stn.student_account_id = sa.account_id AND stn.category = '부상'
-                    ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_injury_level,
-                ( -- 2. 최신 '상담' 메모 존재 여부 (가장 최신 날짜)
-                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
-                    WHERE stn.student_account_id = sa.account_id AND stn.category = '상담'
-                    ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_counseling_date,
-                ( -- 3. 최신 '멘탈' 메모 존재 여부 (가장 최신 날짜)
-                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
-                    WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈'
-                    ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_mental_date,
-
-                -- ▼▼▼▼▼ [일일퀘스트 추가] 오늘 운동 현황 ▼▼▼▼▼
-                (
-                    SELECT COUNT(*)
-                    FROM jungsimaxstudent.teacher_daily_assignments tda
-                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE()
-                ) AS today_total_assignments,
-                (
-                    SELECT COUNT(*)
-                    FROM jungsimaxstudent.teacher_daily_assignments tda
-                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE() AND tda.is_completed = 1
-                ) AS today_completed_assignments
-                -- ▲▲▲▲▲ [일일퀘스트 추가] 오늘 운동 현황 ▲▲▲▲▲
-
+                ln.recent_injury_level,
+                ln.recent_counseling_date,
+                ln.recent_mental_date,
+                COALESCE(dq.today_total_assignments, 0) AS today_total_assignments,
+                COALESCE(dq.today_completed_assignments, 0) AS today_completed_assignments
             FROM jungsimaxstudent.student_account sa
             LEFT JOIN jungsimaxstudent.student_assignments sassign
               ON sa.account_id = sassign.student_account_id AND sassign.year = ?
+            LEFT JOIN LatestNotes ln ON sa.account_id = ln.student_account_id
+            LEFT JOIN DailyQuests dq ON sa.account_id = dq.student_account_id
             WHERE sa.branch = ?
             ORDER BY sa.name ASC
         `;
         params = [year, branch];
     } else {
-        // ⭐️ 일반 사용자: 기존처럼 *자신에게 배정된* 학생만 조회
-        console.log(` -> 일반 사용자: ${branch} 지점 ${year}년도 ${userid} 담당 학생 조회`);
-        // ⭐️ (수정) 최신 상태 + 오늘 운동 현황 조회를 위한 서브쿼리 추가
+        // ⭐️ [개선] 3. 일반 사용자 쿼리: Correlated Subquery -> LEFT JOIN으로 변경
+        console.log(` -> 일반 사용자: ${branch} 지점 ${year}년도 ${userid} 담당 학생 조회 (Refactored)`);
         sql = `
+            ${ctes}
             SELECT
                 sa.account_id, sa.userid, sa.name AS student_name,
                 sa.gender, sa.grade,
                 sassign.class_name,
-                ( -- 1. 최신 '부상' 척도
-                    SELECT stn.injury_level FROM jungsimaxstudent.student_teacher_notes stn
-                    WHERE stn.student_account_id = sa.account_id AND stn.category = '부상'
-                    ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_injury_level,
-                ( -- 2. 최신 '상담' 메모 존재 여부 (가장 최신 날짜)
-                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
-                    WHERE stn.student_account_id = sa.account_id AND stn.category = '상담'
-                    ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_counseling_date,
-                ( -- 3. 최신 '멘탈' 메모 존재 여부 (가장 최신 날짜)
-                    SELECT stn.note_date FROM jungsimaxstudent.student_teacher_notes stn
-                    WHERE stn.student_account_id = sa.account_id AND stn.category = '멘탈'
-                    ORDER BY stn.note_date DESC LIMIT 1
-                ) AS recent_mental_date,
-
-                -- ▼▼▼▼▼ [일일퀘스트 추가] 오늘 운동 현황 ▼▼▼▼▼
-                (
-                    SELECT COUNT(*)
-                    FROM jungsimaxstudent.teacher_daily_assignments tda
-                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE()
-                ) AS today_total_assignments,
-                (
-                    SELECT COUNT(*)
-                    FROM jungsimaxstudent.teacher_daily_assignments tda
-                    WHERE tda.student_account_id = sa.account_id AND tda.assignment_date = CURDATE() AND tda.is_completed = 1
-                ) AS today_completed_assignments
-                -- ▲▲▲▲▲ [일일퀘스트 추가] 오늘 운동 현황 ▲▲▲▲▲
-
+                ln.recent_injury_level,
+                ln.recent_counseling_date,
+                ln.recent_mental_date,
+                COALESCE(dq.today_total_assignments, 0) AS today_total_assignments,
+                COALESCE(dq.today_completed_assignments, 0) AS today_completed_assignments
             FROM jungsimaxstudent.student_assignments sassign
             JOIN jungsimaxstudent.student_account sa ON sassign.student_account_id = sa.account_id
+            LEFT JOIN LatestNotes ln ON sa.account_id = ln.student_account_id
+            LEFT JOIN DailyQuests dq ON sa.account_id = dq.student_account_id
             WHERE sassign.teacher_userid = ?
               AND sassign.year = ?
               AND sa.branch = ?
             ORDER BY sa.name ASC
         `;
-        params = [userid, year, branch]; // teacher_userid 사용
+        params = [userid, year, branch];
     }
+    // ▲▲▲▲▲ [리팩토링 끝] ▲▲▲▲▲
 
     try {
         const [students] = await dbStudent.query(sql, params); // dbStudent 사용!
