@@ -6346,7 +6346,7 @@ app.post('/jungsi/apply-original-weights', authMiddleware, async (req, res) => {
 // jungsi.js 파일의 /jungsi/filter-data/:year API를 이걸로 교체
 
 // =============================================
-// ⭐️ [수정] 필터링용 통합 데이터 조회 API (비율% 포함 v4)
+// ⭐️ [수정] 필터링용 통합 데이터 조회 API (v4.1 - '기타' 비율 추가)
 // =============================================
 // GET /jungsi/filter-data/:year
 app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
@@ -6360,9 +6360,7 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
     }
 
     try {
-        // ✅ 여기서 정시_컷점수를 두 번 붙인다:
-        //   1) MAX 용
-        //   2) 로그인한 지점용
+        // ✅ '기타' 컬럼 추가됨
         const sql = `
             SELECT
                 jb.U_ID,
@@ -6386,6 +6384,7 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
                 jrb.수능,
                 jrb.내신,
                 jrb.실기,
+                jrb.기타, -- ⭐️⭐️⭐️ [추가] '기타' 컬럼 ⭐️⭐️⭐️
 
                 -- 실기 종목 모아주기
                 GROUP_CONCAT(DISTINCT je.종목명 SEPARATOR ',') AS practical_events,
@@ -6411,7 +6410,7 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
               ON jb.U_ID = je.U_ID
              AND jb.학년도 = je.학년도
 
-            -- 수능/내신/실기 비율
+            -- 수능/내신/실기/기타 비율
             LEFT JOIN 정시반영비율 jrb
               ON jb.U_ID = jrb.U_ID
              AND jb.학년도 = jrb.학년도
@@ -6448,6 +6447,7 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
                 jrb.수능,
                 jrb.내신,
                 jrb.실기,
+                jrb.기타, -- ⭐️⭐️⭐️ [추가] '기타' 컬럼 (GROUP BY에도 필수) ⭐️⭐️⭐️
                 max_cut.수능컷,
                 max_cut.총점컷,
                 max_cut.\`25년총점컷\`,
@@ -6460,7 +6460,7 @@ app.get('/jungsi/filter-data/:year', authMiddleware, async (req, res) => {
 
         // 순서 중요: [branch, year]
         const [rows] = await db.query(sql, [branch, year]);
-        console.log(` -> /jungsi/filter-data ${rows.length}건 조회됨 (컷 포함)`);
+        console.log(` -> /jungsi/filter-data ${rows.length}건 조회됨 (컷+기타 포함)`); // ⭐️ 로그 수정
 
         return res.json({
             success: true,
