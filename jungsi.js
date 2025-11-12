@@ -756,6 +756,98 @@ app.post('/jungsi/grade-cuts/set-bulk', authMiddleware, async (req, res, next) =
     }
 });
 
+app.post('/jungsi/students/scores/recompute', authMiddleware, async (req, res) => {
+  const { year, exam_type = '수능', scope = 'branch', student_ids } = req.body;
+  if (!year) return res.status(400).json({ success:false, message:'year 필요' });
+
+  const { branch } = req.user;
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1) 등급컷 로드
+    const [allCuts] = await conn.query(
+      'SELECT 선택과목명, 원점수, 표준점수, 백분위, 등급 FROM `정시예상등급컷` WHERE 학년도=? AND 모형=?',
+      [year, exam_type]
+    );
+    const cutsMap = new Map();
+    for (const c of allCuts) {
+      if (!cutsMap.has(c.선택과목명)) cutsMap.set(c.선택과목명, []);
+      cutsMap.get(c.선택과목명).push(c);
+    }
+
+    // 2) 대상 학생(원점수/선택과목은 기존 테이블에서)
+    let where = 's.학년도=?';
+    const params = [year];
+    if (scope === 'branch') { where += ' AND b.branch_name=?'; params.push(branch); }
+    if (Array.isArray(student_ids) && student_ids.length) {
+      where += ` AND s.student_id IN (${student_ids.map(()=>'?').join(',')})`;
+      params.push(...student_ids);
+    }
+    const [rows] = await conn.query(
+      `SELECT s.student_id,
+              s.국어_선택과목, s.국어_원점수,
+              s.수학_선택과목, s.수학_원점수,
+              s.영어_원점수, s.한국사_원점수,
+              s.탐구1_선택과목, s.탐구1_원점수,
+              s.탐구2_선택과목, s.탐구2_원점수
+       FROM \`학생수능성적\` s
+       JOIN \`학생기본정보\` b ON b.student_id=s.student_id
+       WHERE ${where}`, params
+    );
+
+    const { interpolateScore, getEnglishGrade, getHistoryGrade } = require('./utils/scoreEstimator.js');
+
+    // 3) 재계산 + 업데이트
+    for (const r of rows) {
+      const pack = (subj, raw) => (raw!=null && subj && cutsMap.has(subj))
+        ? interpolateScore(raw, cutsMap.get(subj)) : null;
+
+      await conn.query(
+        `UPDATE \`학생수능성적\` SET
+           국어_표준점수=?, 국어_백분위=?, 국어_등급=?,
+           수학_표준점수=?, 수학_백분위=?, 수학_등급=?,
+           영어_등급=?,
+           한국사_등급=?,
+           탐구1_표준점수=?, 탐구1_백분위=?, 탐구1_등급=?,
+           탐구2_표준점수=?, 탐구2_백분위=?, 탐구2_등급=?
+         WHERE student_id=? AND 학년도=?`,
+        [
+          pack(r.국어_선택과목, r.국어_원점수)?.std ?? null,
+          pack(r.국어_선택과목, r.국어_원점수)?.pct ?? null,
+          pack(r.국어_선택과목, r.국어_원점수)?.grade ?? null,
+
+          pack(r.수학_선택과목, r.수학_원점수)?.std ?? null,
+          pack(r.수학_선택과목, r.수학_원점수)?.pct ?? null,
+          pack(r.수학_선택과목, r.수학_원점수)?.grade ?? null,
+
+          (r.영어_원점수!=null)   ? getEnglishGrade(r.영어_원점수)   : null,
+          (r.한국사_원점수!=null) ? getHistoryGrade(r.한국사_원점수) : null,
+
+          pack(r.탐구1_선택과목, r.탐구1_원점수)?.std ?? null,
+          pack(r.탐구1_선택과목, r.탐구1_원점수)?.pct ?? null,
+          pack(r.탐구1_선택과목, r.탐구1_원점수)?.grade ?? null,
+
+          pack(r.탐구2_선택과목, r.탐구2_원점수)?.std ?? null,
+          pack(r.탐구2_선택과목, r.탐구2_원점수)?.pct ?? null,
+          pack(r.탐구2_선택과목, r.탐구2_원점수)?.grade ?? null,
+
+          r.student_id, year
+        ]
+      );
+    }
+
+    await conn.commit();
+    res.json({ success:true, year, exam_type, updated: rows.length });
+  } catch (e) {
+    await conn.rollback();
+    console.error('❌ 재계산 오류:', e);
+    res.status(500).json({ success:false, message:'재계산 중 오류' });
+  } finally {
+    conn.release();
+  }
+});
+
 app.post('/jungsi/calc-practical', authMiddleware, async (req, res) => {
   try {
     const { U_ID, year, practical } = req.body;
