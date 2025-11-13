@@ -6938,28 +6938,27 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
       // 해당 학년도의 모든 학생 성적 조회
       const [students] = await connection.query(`
         SELECT
-          s.student_id,
-          s.student_name,
-          sc.국어_선택과목,
-          sc.국어_등급,
-          sc.수학_선택과목,
-          sc.수학_등급,
-          sc.영어_등급,
-          sc.한국사_등급,
-          sc.탐구1_선택과목,
-          sc.탐구1_등급,
-          sc.탐구2_선택과목,
-          sc.탐구2_등급
-        FROM students s
-        LEFT JOIN student_scores sc ON s.student_id = sc.student_id
-          AND sc.exam_type = '수능'
-        WHERE s.year = ?
-          AND (sc.국어_등급 IS NOT NULL
-               OR sc.수학_등급 IS NOT NULL
-               OR sc.영어_등급 IS NOT NULL
-               OR sc.한국사_등급 IS NOT NULL
-               OR sc.탐구1_등급 IS NOT NULL
-               OR sc.탐구2_등급 IS NOT NULL)
+          b.student_id,
+          b.student_name,
+          s.국어_선택과목,
+          s.국어_등급,
+          s.수학_선택과목,
+          s.수학_등급,
+          s.영어_등급,
+          s.한국사_등급,
+          s.탐구1_선택과목,
+          s.탐구1_등급,
+          s.탐구2_선택과목,
+          s.탐구2_등급
+        FROM 학생기본정보 b
+        LEFT JOIN 학생수능성적 s ON b.student_id = s.student_id AND b.학년도 = s.학년도
+        WHERE b.학년도 = ?
+          AND (s.국어_등급 IS NOT NULL
+               OR s.수학_등급 IS NOT NULL
+               OR s.영어_등급 IS NOT NULL
+               OR s.한국사_등급 IS NOT NULL
+               OR s.탐구1_등급 IS NOT NULL
+               OR s.탐구2_등급 IS NOT NULL)
       `, [year]);
 
       // 등급 분포 계산
@@ -7081,6 +7080,7 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
     });
   }
 });
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
