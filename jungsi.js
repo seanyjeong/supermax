@@ -6924,14 +6924,6 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
   try {
     const { year } = req.query;
 
-    // admin 계정 체크
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: '관리자만 접근 가능합니다.'
-      });
-    }
-
     if (!year) {
       return res.status(400).json({
         success: false,
