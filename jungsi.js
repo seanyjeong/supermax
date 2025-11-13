@@ -6931,8 +6931,8 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
       });
     }
 
-    // DB 쿼리 (MySQL 예시)
-    const connection = await pool.getConnection();
+    // DB 쿼리
+    const connection = await db.getConnection();
 
     try {
       // 해당 학년도의 모든 학생 성적 조회
@@ -7081,7 +7081,6 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
     });
   }
 });
-
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
