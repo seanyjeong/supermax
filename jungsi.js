@@ -6920,6 +6920,169 @@ app.post('/jungsi/admin/practical-table/bulk-update', authMiddleware, isAdminMid
     }
 });
 
+app.get('/jungsi/grade-distribution', authenticateToken, async (req, res) => {
+  try {
+    const { year } = req.query;
+
+    // admin 계정 체크
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '관리자만 접근 가능합니다.'
+      });
+    }
+
+    if (!year) {
+      return res.status(400).json({
+        success: false,
+        message: '학년도를 입력하세요.'
+      });
+    }
+
+    // DB 쿼리 (MySQL 예시)
+    const connection = await pool.getConnection();
+
+    try {
+      // 해당 학년도의 모든 학생 성적 조회
+      const [students] = await connection.query(`
+        SELECT
+          s.student_id,
+          s.student_name,
+          sc.국어_선택과목,
+          sc.국어_등급,
+          sc.수학_선택과목,
+          sc.수학_등급,
+          sc.영어_등급,
+          sc.한국사_등급,
+          sc.탐구1_선택과목,
+          sc.탐구1_등급,
+          sc.탐구2_선택과목,
+          sc.탐구2_등급
+        FROM students s
+        LEFT JOIN student_scores sc ON s.student_id = sc.student_id
+          AND sc.exam_type = '수능'
+        WHERE s.year = ?
+          AND sc.국어_등급 IS NOT NULL
+      `, [year]);
+
+      // 등급 분포 계산
+      const distribution = {
+        국어: {},
+        수학: {},
+        영어: {},
+        한국사: {},
+        사회탐구: {},
+        과학탐구: {}
+      };
+
+      // 초기화 함수
+      const initGradeCount = () => ({
+        '1': 0, '2': 0, '3': 0, '4': 0, '5': 0,
+        '6': 0, '7': 0, '8': 0, '9': 0
+      });
+
+      // 사회탐구, 과학탐구 과목 목록
+      const socialSubjects = ['생활과윤리', '윤리와사상', '한국지리', '세계지리',
+                              '동아시아사', '세계사', '정치와법', '경제', '사회문화'];
+      const scienceSubjects = ['물리학1', '화학1', '생명과학1', '지구과학1',
+                               '물리학2', '화학2', '생명과학2', '지구과학2'];
+
+      // 각 학생의 성적을 분포에 반영
+      students.forEach(student => {
+        // 국어
+        const korSubj = student.국어_선택과목 || '화법과작문';
+        if (!distribution.국어[korSubj]) {
+          distribution.국어[korSubj] = initGradeCount();
+        }
+        if (student.국어_등급) {
+          distribution.국어[korSubj][String(student.국어_등급)]++;
+        }
+
+        // 수학
+        const mathSubj = student.수학_선택과목 || '확률과통계';
+        if (!distribution.수학[mathSubj]) {
+          distribution.수학[mathSubj] = initGradeCount();
+        }
+        if (student.수학_등급) {
+          distribution.수학[mathSubj][String(student.수학_등급)]++;
+        }
+
+        // 영어
+        if (!distribution.영어.전체) {
+          distribution.영어.전체 = initGradeCount();
+        }
+        if (student.영어_등급) {
+          distribution.영어.전체[String(student.영어_등급)]++;
+        }
+
+        // 한국사
+        if (!distribution.한국사.전체) {
+          distribution.한국사.전체 = initGradeCount();
+        }
+        if (student.한국사_등급) {
+          distribution.한국사.전체[String(student.한국사_등급)]++;
+        }
+
+        // 탐구1
+        if (student.탐구1_선택과목) {
+          const inq1 = student.탐구1_선택과목;
+          let category;
+          if (socialSubjects.includes(inq1)) {
+            category = distribution.사회탐구;
+          } else if (scienceSubjects.includes(inq1)) {
+            category = distribution.과학탐구;
+          }
+          if (category) {
+            if (!category[inq1]) {
+              category[inq1] = initGradeCount();
+            }
+            if (student.탐구1_등급) {
+              category[inq1][String(student.탐구1_등급)]++;
+            }
+          }
+        }
+
+        // 탐구2
+        if (student.탐구2_선택과목) {
+          const inq2 = student.탐구2_선택과목;
+          let category;
+          if (socialSubjects.includes(inq2)) {
+            category = distribution.사회탐구;
+          } else if (scienceSubjects.includes(inq2)) {
+            category = distribution.과학탐구;
+          }
+          if (category) {
+            if (!category[inq2]) {
+              category[inq2] = initGradeCount();
+            }
+            if (student.탐구2_등급) {
+              category[inq2][String(student.탐구2_등급)]++;
+            }
+          }
+        }
+      });
+
+      res.json({
+        success: true,
+        year: parseInt(year),
+        totalStudents: students.length,
+        distribution
+      });
+
+    } finally {
+      connection.release();
+    }
+
+  } catch (error) {
+    console.error('등급 분포 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '등급 분포 조회 중 오류가 발생했습니다.',
+      error: error.message
+    });
+  }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
