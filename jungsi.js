@@ -6920,7 +6920,7 @@ app.post('/jungsi/admin/practical-table/bulk-update', authMiddleware, isAdminMid
     }
 });
 
-app.get('/jungsi/grade-distribution', authenticateToken, async (req, res) => {
+app.get('/jungsi/grade-distribution', async (req, res) => {
   try {
     const { year } = req.query;
 
