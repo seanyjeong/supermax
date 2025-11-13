@@ -2955,6 +2955,39 @@ app.get('/jungsi/counseling-schedules/:year/:month', authMiddleware, async (req,
     }
 });
 
+// ⭐️ [신규] GET /jungsi/counsel-schedule : 특정 날짜의 상담 일정 조회 (index.html 알림용)
+app.get('/jungsi/counsel-schedule', authMiddleware, async (req, res) => {
+    const { date, branch } = req.query;
+    console.log(`[API GET /jungsi/counsel-schedule] 날짜: ${date}, 지점: ${branch}`);
+
+    if (!date || !branch) {
+        return res.status(400).json({ success: false, message: '날짜(date)와 지점(branch)이 필요합니다.' });
+    }
+
+    try {
+        const [schedules] = await db.query(
+            `SELECT
+                s.schedule_id AS id,
+                s.student_id,
+                st.student_name AS name,
+                st.phone_number AS phone,
+                s.counseling_time AS startTime,
+                s.counseling_type
+             FROM \`상담일정\` s
+             LEFT JOIN \`학생기본정보\` st ON s.student_id = st.student_id
+             WHERE s.branch_name = ? AND s.counseling_date = ?
+             ORDER BY s.counseling_time`,
+            [branch, date]
+        );
+
+        console.log(` -> ${schedules.length}건 조회 완료`);
+        res.json({ success: true, list: schedules });
+    } catch (err) {
+        console.error('❌ 상담 일정 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
 // jungsi.js 파일에서 POST /jungsi/counseling-schedules/add API를 찾아 교체
 
 // POST /jungsi/counseling-schedules/add : 새 상담 일정 추가 (로그인한 지점)
