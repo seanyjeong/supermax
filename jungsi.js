@@ -6954,7 +6954,12 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
         LEFT JOIN student_scores sc ON s.student_id = sc.student_id
           AND sc.exam_type = '수능'
         WHERE s.year = ?
-          AND sc.국어_등급 IS NOT NULL
+          AND (sc.국어_등급 IS NOT NULL
+               OR sc.수학_등급 IS NOT NULL
+               OR sc.영어_등급 IS NOT NULL
+               OR sc.한국사_등급 IS NOT NULL
+               OR sc.탐구1_등급 IS NOT NULL
+               OR sc.탐구2_등급 IS NOT NULL)
       `, [year]);
 
       // 등급 분포 계산
@@ -6976,8 +6981,8 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
       // 사회탐구, 과학탐구 과목 목록
       const socialSubjects = ['생활과윤리', '윤리와사상', '한국지리', '세계지리',
                               '동아시아사', '세계사', '정치와법', '경제', '사회문화'];
-      const scienceSubjects = ['물리학1', '화학1', '생명과학1', '지구과학1',
-                               '물리학2', '화학2', '생명과학2', '지구과학2'];
+      const scienceSubjects = ['물리1', '화학1', '생명과학1', '지구과학1',
+                               '물리2', '화학2', '생명과학2', '지구과학2'];
 
       // 각 학생의 성적을 분포에 반영
       students.forEach(student => {
@@ -7067,10 +7072,12 @@ app.get('/jungsi/grade-distribution', async (req, res) => {
 
   } catch (error) {
     console.error('등급 분포 조회 오류:', error);
+    console.error('에러 스택:', error.stack);
     res.status(500).json({
       success: false,
       message: '등급 분포 조회 중 오류가 발생했습니다.',
-      error: error.message
+      error: error.message,
+      details: error.toString()
     });
   }
 });
