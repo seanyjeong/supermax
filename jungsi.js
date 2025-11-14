@@ -3845,6 +3845,9 @@ app.post('/jungsi/student/save-university', authStudentOnlyMiddleware, async (re
 app.get('/jungsi/student/saved-universities', authStudentOnlyMiddleware, async (req, res) => {
     const { account_id: studentAccountId } = req.user; // 학생 계정 DB ID
     console.log(`[API /student/saved-universities] 학생계정ID: ${studentAccountId} 저장 목록 조회 요청`);
+      console.log(`[API /student/saved-universities] 학생계정ID: ${studentAccountId} 저장 목록 조회 요청`);
+  console.log(`🔍 [DEBUG] 토큰 전체 정보:`, req.user); 
+  console.log(`🔍 [DEBUG] account_id 타입:`, typeof studentAccountId, studentAccountId);  
 
     if (!studentAccountId) return res.status(403).json({ success: false, message: '학생 계정 ID 없음' });
 
