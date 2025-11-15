@@ -1572,17 +1572,17 @@ app.delete('/jungsi/students/delete/:student_id', authMiddleware, async (req, re
         // 예시: 최종지원 삭제 (jungsi DB) - 만약 ON DELETE CASCADE 없다면
         // await connection.query('DELETE FROM 정시_최종지원 WHERE 학생_ID = ?', [student_id]);
         
-        // 예시: 학생 실기 기록 삭제 (jungsimaxstudent DB) - 다른 DB 풀 사용!
-        await dbStudent.query('DELETE FROM student_practical_records WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
-        // 예시: 학생 실기 목표 삭제 (jungsimaxstudent DB)
-        await dbStudent.query('DELETE FROM student_practical_goals WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
-        // 예시: 학생 실기 설정 삭제 (jungsimaxstudent DB)
-        await dbStudent.query('DELETE FROM student_practical_settings WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
-        // 예시: 학생 저장 대학 삭제 (jungsimaxstudent DB)
-        await dbStudent.query('DELETE FROM student_saved_universities WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
-        // 예시: 학생 점수 기록 삭제 (jungsimaxstudent DB)
-        await dbStudent.query('DELETE FROM student_score_history WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
-        // --- ⭐️⭐️⭐️ 관련 데이터 삭제 끝 ⭐️⭐️⭐️ ---
+        // // 예시: 학생 실기 기록 삭제 (jungsimaxstudent DB) - 다른 DB 풀 사용!
+        // await dbStudent.query('DELETE FROM student_practical_records WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // // 예시: 학생 실기 목표 삭제 (jungsimaxstudent DB)
+        // await dbStudent.query('DELETE FROM student_practical_goals WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // // 예시: 학생 실기 설정 삭제 (jungsimaxstudent DB)
+        // await dbStudent.query('DELETE FROM student_practical_settings WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // // 예시: 학생 저장 대학 삭제 (jungsimaxstudent DB)
+        // await dbStudent.query('DELETE FROM student_saved_universities WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // // 예시: 학생 점수 기록 삭제 (jungsimaxstudent DB)
+        // await dbStudent.query('DELETE FROM student_score_history WHERE account_id = (SELECT account_id FROM jungsi.학생기본정보 WHERE student_id = ?)', [student_id]);
+        // // --- ⭐️⭐️⭐️ 관련 데이터 삭제 끝 ⭐️⭐️⭐️ ---
 
         // 3. 학생 기본 정보 삭제 (jungsi DB)
         const deleteSql = 'DELETE FROM 학생기본정보 WHERE student_id = ?';
