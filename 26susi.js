@@ -3536,32 +3536,67 @@ app.get('/26susi/rankings', async (req, res) => {
 // --- API: [메인 대시보드] (통합, 5종목) ---
 // --- API: [메인 대시보드] (통합, 5종목) ---
 app.get('/26susi/dashboard/all', async (req, res) => {
-    try {
-        const studentCountSql = `SELECT COUNT(s.id) as total, COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as attended FROM students s`;
-        const recordCountSql = `SELECT r.event, COUNT(r.id) as completed FROM records r JOIN students s ON r.student_id = s.id WHERE s.attendance = '참석' GROUP BY r.event`;
-        const errorSql = `SELECT s.student_name, s.exam_number, b.branch_name, r.event, r.record_value, r.created_at FROM records r JOIN students s ON r.student_id = s.id JOIN branches b ON s.branch_id = b.id WHERE r.record_value != 0 AND ( (r.event = '10m' AND (r.record_value < 1 OR r.record_value > 20)) OR (r.event = '제멀' AND (r.record_value < 100 OR r.record_value > 350)) OR (r.event = '배근력' AND (r.record_value < 10 OR r.record_value > 300)) OR (r.event = '메디신볼' AND (r.record_value < 1 OR r.record_value > 20)) OR (r.event = '좌전굴' AND (r.record_value < 0 OR r.record_value > 50)) ) ORDER BY r.created_at DESC`;
+    try {
+        const studentCountSql = `
+            SELECT 
+                COUNT(s.id) as total, 
+                COUNT(CASE WHEN s.attendance = '참석' THEN 1 END) as attended 
+            FROM students s
+        `;
+        const recordCountSql = `
+            SELECT r.event, COUNT(r.id) as completed 
+            FROM records r 
+            JOIN students s ON r.student_id = s.id 
+            WHERE s.attendance = '참석' 
+            GROUP BY r.event
+        `;
+        const errorSql = `
+            SELECT s.student_name, s.exam_number, b.branch_name, r.event, r.record_value, r.created_at 
+            FROM records r 
+            JOIN students s ON r.student_id = s.id 
+            JOIN branches b ON s.branch_id = b.id 
+            WHERE r.record_value != 0 
+              AND ( 
+                    (r.event = '10m' AND (r.record_value < 1 OR r.record_value > 20)) 
+                 OR (r.event = '제멀' AND (r.record_value < 100 OR r.record_value > 350)) 
+                 OR (r.event = '배근력' AND (r.record_value < 10 OR r.record_value > 300)) 
+                 OR (r.event = '메디신볼' AND (r.record_value < 1 OR r.record_value > 20)) 
+                 OR (r.event = '좌전굴' AND (r.record_value < 0 OR r.record_value > 50)) 
+                  ) 
+            ORDER BY r.created_at DESC
+        `;
 
-        // ❌ 여기도 문제였음: db.query
-        // const [[studentCounts], [recordCounts], [errorList]] = await Promise.all([
-        //     db.query(studentCountSql), db.query(recordCountSql), db.query(errorSql)
-        // ]);
-
-        // ✅ 이렇게 수정: db.promise().query
-        const [[studentCounts], [recordCounts], [errorList]] = await Promise.all([
-            db.promise().query(studentCountSql), 
-            db.promise().query(recordCountSql), 
+        // ✅ rows 배열과 fields를 분리해서 받기
+        const [[studentCountRows], [recordCounts], [errorList]] = await Promise.all([
+            db.promise().query(studentCountSql),
+            db.promise().query(recordCountSql),
             db.promise().query(errorSql)
-        ]);
+        ]);
 
-        const dashboardData = { overall: { total: studentCounts.total || 0, attended: studentCounts.attended || 0, events: { '제멀': 0, '메디신볼': 0, '10m': 0, '배근력': 0, '좌전굴': 0 } } };
-        recordCounts.forEach(row => { if (dashboardData.overall.events.hasOwnProperty(row.event)) dashboardData.overall.events[row.event] = row.completed; });
+        // ✅ 첫 번째 행만 꺼내서 사용
+        const studentCounts = studentCountRows[0] || { total: 0, attended: 0 };
 
-        res.status(200).json({ success: true, data: dashboardData, errors: errorList });
-    } catch (err) {
-        console.error("메인 대시보드 오류:", err);
-        res.status(500).json({ message: '데이터 집계 오류' });
-    }
+        const dashboardData = {
+            overall: {
+                total: studentCounts.total || 0,
+                attended: studentCounts.attended || 0,
+                events: { '제멀': 0, '메디신볼': 0, '10m': 0, '배근력': 0, '좌전굴': 0 }
+            }
+        };
+
+        recordCounts.forEach(row => {
+            if (dashboardData.overall.events.hasOwnProperty(row.event)) {
+                dashboardData.overall.events[row.event] = row.completed;
+            }
+        });
+
+        res.status(200).json({ success: true, data: dashboardData, errors: errorList });
+    } catch (err) {
+        console.error("메인 대시보드 오류:", err);
+        res.status(500).json({ message: '데이터 집계 오류' });
+    }
 });
+
 // --- API: [사전 대시보드] ---
 app.get('/26susi/dashboard/pre-event', async (req, res) => {
     // ... (기존과 동일하나 async/await 사용) ...
