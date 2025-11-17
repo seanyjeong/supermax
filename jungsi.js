@@ -5399,6 +5399,8 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
             SELECT
                 su.saved_id, su.U_ID, su.calculated_suneung_score,
                 jb.대학명, jb.학과명, jb.군,
+                jb.수능비율, jb.내신비율, jb.실기비율,
+                jb.지원컷, jb.총점컷,
                 -- ⭐️ 이 대학의 모든 실기 종목을 콤마(,)로 연결해서 가져옴
                 GROUP_CONCAT(DISTINCT je.종목명 ORDER BY je.종목명 SEPARATOR ', ') AS events
             FROM jungsimaxstudent.student_saved_universities su
@@ -5425,6 +5427,51 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
 
     } catch (err) {
         console.error('❌ 학생 저장 대학 목록 조회 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// GET /jungsi/teacher/student-score-history/:student_account_id/:year
+app.get('/jungsi/teacher/student-score-history/:student_account_id/:year', authMiddleware, async (req, res) => {
+    // 1. URL 파라미터 및 로그인한 선생님 정보
+    const { student_account_id, year } = req.params;
+    const { branch, userid: teacher_userid } = req.user;
+
+    console.log(`[API /teacher/student-score-history] 선생님(${teacher_userid})이 학생(${student_account_id}, ${year}년도) 점수 기록 조회`);
+
+    if (!student_account_id || !year) {
+        return res.status(400).json({ success: false, message: '학생 ID와 학년도가 필요합니다.' });
+    }
+
+    try {
+        // 2. (보안) 해당 학생이 요청한 선생님 지점 소속인지 확인
+        const [studentCheck] = await dbStudent.query(
+            'SELECT account_id FROM student_account WHERE account_id = ? AND branch = ?',
+            [student_account_id, branch]
+        );
+        if (studentCheck.length === 0) {
+            console.warn(` -> 권한 없음: 학생(${student_account_id})이 ${branch} 지점 소속이 아님.`);
+            return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
+        }
+
+        // 3. 학생의 점수 기록 조회 (최신순)
+        const sql = `
+            SELECT
+                history_id, account_id, U_ID, 학년도,
+                record_date, suneung_score, naeshin_score,
+                silgi_records_json, silgi_score, total_score
+            FROM jungsimaxstudent.student_score_history
+            WHERE account_id = ? AND 학년도 = ?
+            ORDER BY record_date DESC
+        `;
+        const [history] = await dbStudent.query(sql, [student_account_id, year]);
+
+        console.log(` -> 학생(${student_account_id})의 점수 기록 ${history.length}건 조회 완료`);
+
+        res.json({ success: true, history });
+
+    } catch (err) {
+        console.error('❌ 학생 점수 기록 조회 API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
