@@ -351,8 +351,8 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   const ratio_eng_norm_local_v2 = (Number(F['영어'] || 0) / 100.0);
   
   // 1. 각 영역별 환산점수 계산
-  const scaled_kor_v2 = (ctx.kor_pct || 0) * (ctx.ratio_kor_norm || 0);
-  const scaled_math_v2 = (ctx.math_pct || 0) * (ctx.ratio_math_norm || 0);
+  const scaled_kor_v2 = (ctx.kor_pct || 0) * (ctx.ratio_kor_norm || 0); //
+  const scaled_math_v2 = (ctx.math_pct || 0) * (ctx.ratio_math_norm || 0); //
   // ⭐️⭐️⭐️ {eng_pct_est} 대신 1번에서 만든 {eng_norm100_pct} 사용 ⭐️⭐️⭐️
   const scaled_eng_v2 = (ctx.eng_norm100_pct || 0) * ratio_eng_norm_local_v2; 
   
@@ -360,7 +360,7 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   const items_scaled_kme_v2 = [ scaled_kor_v2, scaled_math_v2, scaled_eng_v2 ];
   items_scaled_kme_v2.sort((a,b) => b - a);
   
-  // 3. 상위 2개 합을 새 변수에 저장 (이름은 헷갈리지 않게 top2_sum_scaled_kme_v2로 바꿈)
+  // 3. 상위 2개 합을 새 변수에 저장
   ctx.top2_sum_scaled_kme_v2 = (items_scaled_kme_v2[0] || 0) + (items_scaled_kme_v2[1] || 0);
 // ▲▲▲ [신규 추가] 2. 끝 ▲▲▲
 
