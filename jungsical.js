@@ -333,8 +333,8 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   // 1. 각 영역별 환산점수 계산
   const scaled_kor = (ctx.kor_pct || 0) * (ctx.ratio_kor_norm || 0); //
   const scaled_math = (ctx.math_pct || 0) * (ctx.ratio_math_norm || 0); //
-  // ⭐️⭐️⭐️ 그냥 {eng_pct_est} (65점) 사용 ⭐️⭐️⭐️
-  const scaled_eng = (ctx.eng_pct_est || 0) * ratio_eng_norm_local; //
+  // ⭐️⭐️⭐️ {eng_pct_est} 대신 원본 점수인 {eng_grade_score} 사용 ⭐️⭐️⭐️
+  const scaled_eng = (ctx.eng_grade_score || 0) * ratio_eng_norm_local; //
   
   // 2. 3개 환산점수를 정렬
   const items_scaled_kme = [ scaled_kor, scaled_math, scaled_eng ];
