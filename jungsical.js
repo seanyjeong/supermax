@@ -326,6 +326,44 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
       }
   }
 
+  // ▼▼▼ [신규 추가] 1. 영어 1등급 점수를 100으로 정규화한 백분위 ({eng_norm100_pct}) ▼▼▼
+  // F.english_scores (DB에서 온 환산표)에서 1등급 점수를 찾는다.
+  let grade_1_score = 0;
+  if (F.english_scores && typeof F.english_scores === 'object') {
+      grade_1_score = Number(F.english_scores['1'] || 0); // '1'등급의 점수를 찾음
+  }
+  
+  // 1등급 점수가 0이 아니면, (내점수 / 1등급점수) * 100
+  if (grade_1_score > 0) {
+      // ctx.eng_grade_score는 학생의 실제 환산 점수 (예: 95점)
+      ctx.eng_norm100_pct = (ctx.eng_grade_score / grade_1_score) * 100.0;
+  } else {
+      // 1등급 점수가 0이거나 없으면, {eng_pct_est}를 그대로 쓴다 (안전장치).
+      ctx.eng_norm100_pct = ctx.eng_pct_est; 
+  }
+  // 100점 상한선 설정
+  ctx.eng_norm100_pct = Math.min(100, ctx.eng_norm100_pct);
+// ▲▲▲ [신규 추가] 1. 끝 ▲▲▲
+
+
+// ▼▼▼ [신규 추가] 2. (국*국비율), (수*수비율), (영*영비율) 3개 환산점수 중 상위 2개 합 ▼▼▼
+  // '영어' 비율은 DB에서 직접 읽어와야 함 (ctx에 ratio_eng_norm가 없음)
+  const ratio_eng_norm_local_v2 = (Number(F['영어'] || 0) / 100.0);
+  
+  // 1. 각 영역별 환산점수 계산
+  const scaled_kor_v2 = (ctx.kor_pct || 0) * (ctx.ratio_kor_norm || 0);
+  const scaled_math_v2 = (ctx.math_pct || 0) * (ctx.ratio_math_norm || 0);
+  // ⭐️⭐️⭐️ {eng_pct_est} 대신 1번에서 만든 {eng_norm100_pct} 사용 ⭐️⭐️⭐️
+  const scaled_eng_v2 = (ctx.eng_norm100_pct || 0) * ratio_eng_norm_local_v2; 
+  
+  // 2. 3개 환산점수를 정렬
+  const items_scaled_kme_v2 = [ scaled_kor_v2, scaled_math_v2, scaled_eng_v2 ];
+  items_scaled_kme_v2.sort((a,b) => b - a);
+  
+  // 3. 상위 2개 합을 새 변수에 저장 (이름은 헷갈리지 않게 top2_sum_scaled_kme_v2로 바꿈)
+  ctx.top2_sum_scaled_kme_v2 = (items_scaled_kme_v2[0] || 0) + (items_scaled_kme_v2[1] || 0);
+// ▲▲▲ [신규 추가] 2. 끝 ▲▲▲
+
   // ▼▼▼ [신규 추가] 국, 수, 영(환산백) 3개 중 상위 2개 '평균' ▼▼▼
   const items_pct_kme_for_top2_avg = [
     Number(ctx.kor_pct || 0),            // 1. 국어
