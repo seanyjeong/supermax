@@ -5408,8 +5408,8 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
               ON su.U_ID = jb.U_ID AND su.학년도 = jb.학년도
             LEFT JOIN jungsi.정시반영비율 r -- 비율 정보
               ON su.U_ID = r.U_ID AND su.학년도 = r.학년도
-            LEFT JOIN jungsi.정시_컷점수 jc -- 컷 점수 정보 (MAX 지점 기준)
-              ON su.U_ID = jc.U_ID AND su.학년도 = jc.학년도 AND jc.branch_name = 'MAX'
+            LEFT JOIN jungsi.정시_컷점수 jc -- 컷 점수 정보 (현재 로그인한 지점 기준)
+              ON su.U_ID = jc.U_ID AND su.학년도 = jc.학년도 AND jc.branch_name = ?
             LEFT JOIN jungsi.정시실기배점 je -- 실기 종목이 없는 대학도 있으므로 LEFT JOIN
               ON su.U_ID = je.U_ID AND su.학년도 = je.학년도
             WHERE su.account_id = ? AND su.학년도 = ?
@@ -5418,8 +5418,8 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
                      r.수능, r.내신, r.실기, jc.수능컷, jc.총점컷
             ORDER BY FIELD(jb.군, '가', '나', '다'), jb.대학명;
         `;
-        // ⭐️ dbStudent 사용!
-        const [savedList] = await dbStudent.query(sql, [student_account_id, year]);
+        // ⭐️ dbStudent 사용! (branch를 파라미터로 추가)
+        const [savedList] = await dbStudent.query(sql, [branch, student_account_id, year]);
 
         console.log(` -> 학생(${student_account_id})의 저장 대학 ${savedList.length}건 (실기 종목 포함) 조회 완료`);
 
