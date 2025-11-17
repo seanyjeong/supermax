@@ -5394,18 +5394,22 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
         }
 
         // 3. 학생이 저장한 대학 목록 + 대학 정보 + 실기 종목(GROUP_CONCAT) 조회
-        //    (학생DB의 student_saved_universities와 정시DB의 정시기본, 정시실기배점 JOIN)
+        //    (학생DB의 student_saved_universities와 정시DB의 정시기본, 정시반영비율, 정시_컷점수, 정시실기배점 JOIN)
         const sql = `
             SELECT
                 su.saved_id, su.U_ID, su.calculated_suneung_score,
                 jb.대학명, jb.학과명, jb.군,
-                jb.수능비율, jb.내신비율, jb.실기비율,
-                jb.지원컷, jb.총점컷,
+                r.수능 AS 수능비율, r.내신 AS 내신비율, r.실기 AS 실기비율,
+                jc.수능컷 AS 지원컷, jc.총점컷,
                 -- ⭐️ 이 대학의 모든 실기 종목을 콤마(,)로 연결해서 가져옴
                 GROUP_CONCAT(DISTINCT je.종목명 ORDER BY je.종목명 SEPARATOR ', ') AS events
             FROM jungsimaxstudent.student_saved_universities su
             JOIN jungsi.정시기본 jb
               ON su.U_ID = jb.U_ID AND su.학년도 = jb.학년도
+            LEFT JOIN jungsi.정시반영비율 r -- 비율 정보
+              ON su.U_ID = r.U_ID AND su.학년도 = r.학년도
+            LEFT JOIN jungsi.정시_컷점수 jc -- 컷 점수 정보 (MAX 지점 기준)
+              ON su.U_ID = jc.U_ID AND su.학년도 = jc.학년도 AND jc.branch_name = 'MAX'
             LEFT JOIN jungsi.정시실기배점 je -- 실기 종목이 없는 대학도 있으므로 LEFT JOIN
               ON su.U_ID = je.U_ID AND su.학년도 = je.학년도
             WHERE su.account_id = ? AND su.학년도 = ?
