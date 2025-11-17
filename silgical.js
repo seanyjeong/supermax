@@ -609,7 +609,7 @@ function calcPracticalSpecial(F, list, log, studentGender) {
     {
       // 0점/null 제외 합산 (cleaned 사용)
       const sumOfScores = cleaned.reduce((sum, item) => sum + (item.score || 0), 0);
-      const totalScore = sumOfScores * 0.5;
+      const totalScore = sumOfScores * 0.5 *0.8;
       
       log.push(`[Special-Case ${uid}] 배점 합(${sumOfScores}) * 0.5`);
       log.push(`[Special-Case ${uid}] 최종 합산 점수: ${totalScore.toFixed(3)}`);
