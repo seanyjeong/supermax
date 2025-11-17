@@ -326,6 +326,23 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
       }
   }
 
+  // ▼▼▼ [신규 추가] 국, 수, 영(환산백) 3개 중 상위 2개 '평균' ▼▼▼
+  const items_pct_kme_for_top2_avg = [
+    Number(ctx.kor_pct || 0),            // 1. 국어
+    Number(ctx.math_pct || 0),          // 2. 수학
+    Number(ctx.eng_pct_est || 0)        // 3. 영어 (추정 백분위)
+  ].map(v => Math.max(0, Math.min(100, v)));
+  
+  items_pct_kme_for_top2_avg.sort((a,b) => b - a); // 3개 점수를 정렬
+  
+  // 3개 중 상위 2개 '합계'
+  const top2_sum = (items_pct_kme_for_top2_avg[0] || 0) + 
+                   (items_pct_kme_for_top2_avg[1] || 0);
+
+  // 상위 2개 '평균' (0~100점)
+  ctx.top2_avg_pct_kme = top2_sum / 2.0;
+// ▲▲▲ [신규 추가] 끝 ▲▲▲
+
   // ▼▼▼ [신규 추가] 국, 수, 영, 탐(평균) 4개 중 상위 3개 '평균' ▼▼▼
   const items_pct_kme_inqAvg_for_top3_avg = [
     Number(ctx.kor_pct || 0),            // 1. 국어
