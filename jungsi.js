@@ -5413,7 +5413,9 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
             LEFT JOIN jungsi.정시실기배점 je -- 실기 종목이 없는 대학도 있으므로 LEFT JOIN
               ON su.U_ID = je.U_ID AND su.학년도 = je.학년도
             WHERE su.account_id = ? AND su.학년도 = ?
-            GROUP BY su.saved_id -- ⭐️ 저장된 항목(saved_id) 기준으로 그룹화
+            GROUP BY su.saved_id, su.U_ID, su.calculated_suneung_score,
+                     jb.대학명, jb.학과명, jb.군,
+                     r.수능, r.내신, r.실기, jc.수능컷, jc.총점컷
             ORDER BY FIELD(jb.군, '가', '나', '다'), jb.대학명;
         `;
         // ⭐️ dbStudent 사용!
