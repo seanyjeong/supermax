@@ -273,7 +273,101 @@ app.use('/jungsi', jungsicalRouter);
 app.use('/silgi', silgicalRouter);
 const { buildPracticalScoreList } = require('./silgical.js');
 
+// =============================================
+// 레벨 시스템 유틸 함수
+// =============================================
 
+/**
+ * 학생에게 경험치를 추가하고 레벨업 처리
+ * @param {number} studentAccountId - 학생 계정 ID
+ * @param {number} expToAdd - 추가할 경험치
+ * @returns {Promise<{leveledUp: boolean, oldLevel: number, newLevel: number, currentExp: number, expForNextLevel: number}>}
+ */
+async function addExpAndCheckLevelUp(studentAccountId, expToAdd = 1) {
+    try {
+        // 1. 학생의 현재 레벨 정보 조회 (없으면 생성)
+        let [studentLevel] = await dbStudent.query(
+            `SELECT * FROM student_levels WHERE student_account_id = ?`,
+            [studentAccountId]
+        );
+
+        // 학생 레벨 데이터가 없으면 초기화
+        if (studentLevel.length === 0) {
+            await dbStudent.query(
+                `INSERT INTO student_levels (student_account_id, current_level, current_exp, total_exp_earned)
+                 VALUES (?, 1, 0, 0)`,
+                [studentAccountId]
+            );
+            [studentLevel] = await dbStudent.query(
+                `SELECT * FROM student_levels WHERE student_account_id = ?`,
+                [studentAccountId]
+            );
+        }
+
+        const currentData = studentLevel[0];
+        const oldLevel = currentData.current_level;
+        let currentExp = currentData.current_exp + expToAdd;
+        let currentLevel = currentData.current_level;
+        const totalExpEarned = currentData.total_exp_earned + expToAdd;
+
+        console.log(`[레벨시스템] 학생(${studentAccountId}) +${expToAdd} EXP | 현재: Lv.${currentLevel} (${currentExp} EXP)`);
+
+        // 2. 레벨 요구사항 조회
+        const [levelRequirements] = await dbStudent.query(
+            `SELECT level, exp_required FROM level_requirements ORDER BY level ASC`
+        );
+
+        // 3. 레벨업 체크 및 처리
+        let leveledUp = false;
+        let newLevel = currentLevel;
+
+        for (const req of levelRequirements) {
+            if (req.level > currentLevel && currentExp >= req.exp_required) {
+                // 레벨업!
+                newLevel = req.level;
+                currentLevel = req.level;
+                leveledUp = true;
+
+                // 레벨업 히스토리 기록
+                await dbStudent.query(
+                    `INSERT INTO student_level_history
+                     (student_account_id, from_level, to_level, exp_at_levelup)
+                     VALUES (?, ?, ?, ?)`,
+                    [studentAccountId, oldLevel, newLevel, currentExp]
+                );
+
+                console.log(`🎉 레벨업! 학생(${studentAccountId}) Lv.${oldLevel} → Lv.${newLevel}`);
+            }
+        }
+
+        // 4. 학생 레벨 정보 업데이트
+        await dbStudent.query(
+            `UPDATE student_levels
+             SET current_level = ?, current_exp = ?, total_exp_earned = ?, updated_at = NOW()
+             WHERE student_account_id = ?`,
+            [currentLevel, currentExp, totalExpEarned, studentAccountId]
+        );
+
+        // 5. 다음 레벨까지 필요한 경험치 계산
+        const nextLevelReq = levelRequirements.find(req => req.level > currentLevel);
+        const expForNextLevel = nextLevelReq ? nextLevelReq.exp_required : null;
+
+        return {
+            leveledUp,
+            oldLevel,
+            newLevel,
+            currentLevel,
+            currentExp,
+            expForNextLevel,
+            totalExpEarned,
+            expAdded: expToAdd
+        };
+
+    } catch (err) {
+        console.error(`❌ 레벨 시스템 처리 오류 (학생: ${studentAccountId}):`, err);
+        throw err;
+    }
+}
 
 
 // --- API 목록 ---
@@ -4827,6 +4921,20 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
     const completedValue = Boolean(is_completed); // 확실하게 boolean으로 변환
 
     try {
+        // ⭐️ 기존 완료 상태 확인 (중복 경험치 방지)
+        const [existingAssignment] = await dbStudent.query(
+            `SELECT is_completed FROM jungsimaxstudent.teacher_daily_assignments
+             WHERE assignment_id = ? AND student_account_id = ?`,
+            [assignment_id, account_id]
+        );
+
+        if (existingAssignment.length === 0) {
+            return res.status(404).json({ success: false, message: '해당 운동 과제를 찾을 수 없습니다.' });
+        }
+
+        const wasCompleted = existingAssignment[0].is_completed;
+
+        // 완료 상태 업데이트
         const sql = `
             UPDATE jungsimaxstudent.teacher_daily_assignments
             SET
@@ -4840,7 +4948,26 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
 
         if (result.affectedRows > 0) {
             console.log(` -> 운동(${assignment_id}) 완료 상태 업데이트 성공`);
-            res.json({ success: true, message: '완료 상태가 업데이트되었습니다.' });
+
+            // ⭐️ 경험치 추가 로직
+            let levelInfo = null;
+
+            // 미완료 → 완료로 변경될 때만 경험치 추가
+            if (!wasCompleted && completedValue) {
+                levelInfo = await addExpAndCheckLevelUp(account_id, 1);
+                console.log(` -> +1 EXP 지급 완료!`, levelInfo);
+            }
+            // 완료 → 미완료로 변경될 때 경험치 차감
+            else if (wasCompleted && !completedValue) {
+                levelInfo = await addExpAndCheckLevelUp(account_id, -1);
+                console.log(` -> -1 EXP 차감 완료`, levelInfo);
+            }
+
+            res.json({
+                success: true,
+                message: '완료 상태가 업데이트되었습니다.',
+                levelInfo: levelInfo // 레벨 정보 포함
+            });
         } else {
             console.warn(` -> 업데이트할 운동 과제 없거나 권한 없음 (ID: ${assignment_id}, 학생: ${account_id})`);
             res.status(404).json({ success: false, message: '해당 운동 과제를 찾을 수 없거나 업데이트 권한이 없습니다.' });
@@ -7362,6 +7489,132 @@ app.get('/jungsi/university-applicants/:U_ID/:year', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// =============================================
+// 학생 레벨 시스템 API
+// =============================================
+
+/**
+ * 학생 레벨 및 경험치 조회
+ * GET /jungsi/student/level
+ */
+app.get('/jungsi/student/level', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+
+    try {
+        // 학생 레벨 정보 조회
+        let [levelData] = await dbStudent.query(
+            `SELECT sl.*, sa.name AS student_name
+             FROM student_levels sl
+             JOIN student_account sa ON sl.student_account_id = sa.account_id
+             WHERE sl.student_account_id = ?`,
+            [account_id]
+        );
+
+        // 레벨 데이터가 없으면 초기화
+        if (levelData.length === 0) {
+            await dbStudent.query(
+                `INSERT INTO student_levels (student_account_id, current_level, current_exp, total_exp_earned)
+                 VALUES (?, 1, 0, 0)`,
+                [account_id]
+            );
+            [levelData] = await dbStudent.query(
+                `SELECT sl.*, sa.name AS student_name
+                 FROM student_levels sl
+                 JOIN student_account sa ON sl.student_account_id = sa.account_id
+                 WHERE sl.student_account_id = ?`,
+                [account_id]
+            );
+        }
+
+        const currentLevel = levelData[0].current_level;
+        const currentExp = levelData[0].current_exp;
+
+        // 현재 레벨 요구사항 및 다음 레벨 요구사항 조회
+        const [levelReqs] = await dbStudent.query(
+            `SELECT * FROM level_requirements WHERE level >= ? ORDER BY level ASC LIMIT 2`,
+            [currentLevel]
+        );
+
+        const currentLevelReq = levelReqs.find(r => r.level === currentLevel);
+        const nextLevelReq = levelReqs.find(r => r.level > currentLevel);
+
+        // 진행률 계산
+        let progress = 0;
+        if (nextLevelReq) {
+            const expNeeded = nextLevelReq.exp_required - (currentLevelReq ? currentLevelReq.exp_required : 0);
+            const expGained = currentExp - (currentLevelReq ? currentLevelReq.exp_required : 0);
+            progress = Math.min(100, Math.max(0, (expGained / expNeeded) * 100));
+        } else {
+            progress = 100; // 만렙
+        }
+
+        res.json({
+            success: true,
+            level: {
+                student_name: levelData[0].student_name,
+                current_level: currentLevel,
+                current_exp: currentExp,
+                total_exp_earned: levelData[0].total_exp_earned,
+                exp_for_current_level: currentLevelReq ? currentLevelReq.exp_required : 0,
+                exp_for_next_level: nextLevelReq ? nextLevelReq.exp_required : null,
+                is_max_level: !nextLevelReq,
+                progress_percentage: Math.round(progress)
+            }
+        });
+
+    } catch (err) {
+        console.error(`❌ 학생 레벨 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '레벨 정보 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 학생 레벨업 히스토리 조회
+ * GET /jungsi/student/level/history
+ */
+app.get('/jungsi/student/level/history', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+
+    try {
+        const [history] = await dbStudent.query(
+            `SELECT * FROM student_level_history
+             WHERE student_account_id = ?
+             ORDER BY leveled_up_at DESC`,
+            [account_id]
+        );
+
+        res.json({
+            success: true,
+            history: history
+        });
+
+    } catch (err) {
+        console.error(`❌ 레벨업 히스토리 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '히스토리 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 모든 레벨 요구사항 조회 (레벨 표 보기용)
+ * GET /jungsi/level-requirements
+ */
+app.get('/jungsi/level-requirements', authStudentOnlyMiddleware, async (req, res) => {
+    try {
+        const [requirements] = await dbStudent.query(
+            `SELECT * FROM level_requirements ORDER BY level ASC`
+        );
+
+        res.json({
+            success: true,
+            requirements: requirements
+        });
+
+    } catch (err) {
+        console.error(`❌ 레벨 요구사항 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '레벨 요구사항 조회 중 오류가 발생했습니다.' });
+    }
 });
 
 app.listen(port, () => {
