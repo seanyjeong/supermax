@@ -5095,68 +5095,129 @@ app.get('/jungsi/teacher/my-students', authMiddleware, async (req, res) => {
     }
 });
 // --- API 3: (선생님용) 데일리 운동 할당 (일괄 저장) ---
+// --- API 3: (선생님용) 데일리 운동 할당 (일괄 저장) ---
 // POST /jungsi/teacher/assign-workout
 app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
     // 1. 로그인한 사용자 정보
     const { userid: teacher_userid, branch: userBranch } = req.user;
 
-    // 2. 요청 본문 데이터
-    const { student_account_id, assignment_date, assignments } = req.body;
+    // 2. 요청 본문 데이터 - 다중 학생 지원
+    const { student_account_id, student_account_ids, assignment_date, assignments } = req.body;
 
-    console.log(`[API /teacher/assign-workout] 사용자(${teacher_userid})가 학생(${student_account_id})에게 ${assignment_date} 운동 할당`);
+    // ⭐️ 다중 학생 또는 단일 학생 처리
+    let studentIds = [];
+    if (student_account_ids && Array.isArray(student_account_ids)) {
+        studentIds = student_account_ids;
+    } else if (student_account_id) {
+        studentIds = [student_account_id];
+    }
 
-    // 3. 유효성 검사 (기존과 동일)
-    if (!student_account_id || !assignment_date || !Array.isArray(assignments)) { /* ... */ }
+    console.log(`[API /teacher/assign-workout] 사용자(${teacher_userid})가 ${studentIds.length}명의 학생에게 ${assignment_date} 운동 할당`);
+
+    // 3. 유효성 검사
+    if (studentIds.length === 0 || !assignment_date || !Array.isArray(assignments)) {
+        return res.status(400).json({ success: false, message: '학생, 날짜, 운동 목록이 필요합니다.' });
+    }
 
     let connection;
     try {
         connection = await dbStudent.getConnection();
         await connection.beginTransaction();
 
-        // ⭐️ 4. 보안 검사: 운동을 할당할 학생이 로그인한 사용자와 *같은 지점* 소속인지 확인
-        const [studentCheck] = await connection.query(
-            'SELECT branch FROM jungsimaxstudent.student_account WHERE account_id = ?',
-            [student_account_id]
-        );
-        if (studentCheck.length === 0 || studentCheck[0].branch !== userBranch) {
-            await connection.rollback();
-            console.warn(` -> 권한 없음: 학생(${student_account_id})이 사용자 지점(${userBranch}) 소속이 아님.`);
-            return res.status(403).json({ success: false, message: '다른 지점 학생에게 운동을 할당할 수 없습니다.' });
-        }
-        console.log(` -> 학생 지점 확인 완료 (${studentCheck[0].branch})`);
+        const results = {
+            success: [],
+            failed: []
+        };
 
-        // 5. 기존 운동 삭제 (본인이 할당한 것만)
-        const deleteSql = `
-            DELETE FROM jungsimaxstudent.teacher_daily_assignments
-            WHERE student_account_id = ? AND assignment_date = ? AND teacher_userid = ?
-        `;
-        await connection.query(deleteSql, [student_account_id, assignment_date, teacher_userid]);
-        console.log(` -> 기존 운동 내역 삭제 완료`);
+        // ⭐️ 각 학생에 대해 반복 처리
+        for (const currentStudentId of studentIds) {
+            try {
+                // 4. 보안 검사: 운동을 할당할 학생이 로그인한 사용자와 *같은 지점* 소속인지 확인
+                const [studentCheck] = await connection.query(
+                    'SELECT account_id, name, branch FROM jungsimaxstudent.student_account WHERE account_id = ?',
+                    [currentStudentId]
+                );
 
-        // 6. 새 운동 목록 INSERT (기존과 동일)
-        if (assignments.length > 0) {
-            const insertSql = `
-                INSERT INTO jungsimaxstudent.teacher_daily_assignments
-                    (teacher_userid, student_account_id, assignment_date, exercise_name, category, sub_category,
-                     target_weight, target_sets, target_reps, target_notes, is_completed, created_at)
-                VALUES ?
-            `;
-            const values = assignments.map(item => [
-                teacher_userid, student_account_id, assignment_date,
-                item.exercise_name, item.category, item.sub_category || null,
-                item.target_weight || null, item.target_sets || null, item.target_reps || null, item.target_notes || null,
-                false, new Date()
-            ]);
-            await connection.query(insertSql, [values]);
-            console.log(` -> ${values.length}개 새 운동 INSERT 완료`);
+                if (studentCheck.length === 0 || studentCheck[0].branch !== userBranch) {
+                    console.warn(` -> 권한 없음: 학생(${currentStudentId})이 사용자 지점(${userBranch}) 소속이 아님.`);
+                    results.failed.push({
+                        student_id: currentStudentId,
+                        reason: '다른 지점 학생이거나 존재하지 않는 학생입니다.'
+                    });
+                    continue;
+                }
+
+                const studentName = studentCheck[0].name;
+                console.log(` -> 학생 ${studentName}(${currentStudentId}) 지점 확인 완료 (${studentCheck[0].branch})`);
+
+                // 5. 기존 운동 삭제 (본인이 할당한 것만)
+                const deleteSql = `
+                    DELETE FROM jungsimaxstudent.teacher_daily_assignments
+                    WHERE student_account_id = ? AND assignment_date = ? AND teacher_userid = ?
+                `;
+                await connection.query(deleteSql, [currentStudentId, assignment_date, teacher_userid]);
+                console.log(` -> 학생 ${studentName}(${currentStudentId}) 기존 운동 내역 삭제 완료`);
+
+                // 6. 새 운동 목록 INSERT
+                if (assignments.length > 0) {
+                    const insertSql = `
+                        INSERT INTO jungsimaxstudent.teacher_daily_assignments
+                            (teacher_userid, student_account_id, assignment_date, exercise_name, category, sub_category,
+                             target_weight, target_sets, target_reps, target_notes, is_completed, created_at)
+                        VALUES ?
+                    `;
+                    const values = assignments.map(item => [
+                        teacher_userid, currentStudentId, assignment_date,
+                        item.exercise_name, item.category, item.sub_category || null,
+                        item.target_weight || null, item.target_sets || null, item.target_reps || null, item.target_notes || null,
+                        false, new Date()
+                    ]);
+                    await connection.query(insertSql, [values]);
+                    console.log(` -> 학생 ${studentName}(${currentStudentId}) ${values.length}개 새 운동 INSERT 완료`);
+                }
+
+                results.success.push({
+                    student_id: currentStudentId,
+                    student_name: studentName,
+                    assignment_count: assignments.length
+                });
+
+            } catch (studentError) {
+                console.error(`❌ 학생(${currentStudentId}) 처리 중 오류:`, studentError);
+                results.failed.push({
+                    student_id: currentStudentId,
+                    reason: studentError.message
+                });
+            }
         }
 
         // 7. 커밋
         await connection.commit();
-        res.status(201).json({ success: true, message: '데일리 운동 할당이 완료되었습니다.' });
+
+        // 8. 결과 반환
+        const totalStudents = studentIds.length;
+        const successCount = results.success.length;
+        const failedCount = results.failed.length;
+
+        let message = '';
+        if (successCount === totalStudents) {
+            message = `✅ ${successCount}명의 학생에게 데일리 운동이 성공적으로 할당되었습니다.`;
+        } else if (successCount > 0) {
+            message = `⚠️ ${successCount}명 성공, ${failedCount}명 실패했습니다.`;
+        } else {
+            message = `❌ 모든 학생에게 할당 실패했습니다.`;
+        }
+
+        res.status(201).json({
+            success: successCount > 0,
+            message: message,
+            results: results,
+            total: totalStudents,
+            success_count: successCount,
+            failed_count: failedCount
+        });
 
     } catch (err) {
-        // ... (기존 에러 처리) ...
         if (connection) await connection.rollback();
         console.error('❌ 데일리 운동 할당 API 오류:', err);
         res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
@@ -5164,6 +5225,7 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
         if (connection) connection.release();
     }
 });
+
 
 // --- API 2: (선생님용) 운동 마스터 목록 조회 ---
 // GET /jungsi/master-exercises
