@@ -6871,7 +6871,7 @@ app.post('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
     if (!hasAdminPermission(req.user)) {
         return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
     }
-    const { exercise_name, category, sub_category, is_active } = req.body;
+    const { exercise_name, category, sub_category, is_active, exp_value } = req.body;
     if (!exercise_name) {
         return res.status(400).json({ success: false, message: '운동명(exercise_name)은 필수입니다.' });
     }
@@ -6879,19 +6879,21 @@ app.post('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
     try {
         const sql = `
             INSERT INTO jungsimaxstudent.master_exercises
-                (exercise_name, category, sub_category, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, NOW(), NOW())
+                (exercise_name, category, sub_category, is_active, exp_value, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, NOW(), NOW())
         `;
-        
+
         // ▼▼▼▼▼ [수정] true/false 대신 1/0 전달 ▼▼▼▼▼
         const isActiveValue = (is_active !== false) ? 1 : 0; // 기본값 1(true)
+        const expValueInt = parseInt(exp_value) || 1; // 기본값 1 EXP
         // ▲▲▲▲▲ [수정] 끝 ▲▲▲▲▲
 
         const [result] = await dbStudent.query(sql, [
             exercise_name,
             category || 'Other',
             sub_category || null,
-            isActiveValue // ⭐️ 수정된 값 사용
+            isActiveValue, // ⭐️ 수정된 값 사용
+            expValueInt // ⭐️ 경험치 값 추가
         ]);
         res.status(201).json({ success: true, message: '새 운동 추가 완료', insertedId: result.insertId });
     } catch (err) {
@@ -6911,7 +6913,7 @@ app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) =
         return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
     }
     const { id } = req.params;
-    const { exercise_name, category, sub_category, is_active } = req.body;
+    const { exercise_name, category, sub_category, is_active, exp_value } = req.body;
     if (!exercise_name) {
         return res.status(400).json({ success: false, message: '운동명(exercise_name)은 필수입니다.' });
     }
@@ -6923,12 +6925,14 @@ app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) =
                 category = ?,
                 sub_category = ?,
                 is_active = ?,
+                exp_value = ?,
                 updated_at = NOW()
             WHERE exercise_id = ?
         `;
 
         // ▼▼▼▼▼ [수정] true/false 대신 1/0 전달 ▼▼▼▼▼
         const isActiveValue = (is_active !== false) ? 1 : 0; // is_active가 true 또는 undefined이면 1, false면 0
+        const expValueInt = parseInt(exp_value) || 1; // 기본값 1 EXP
         // ▲▲▲▲▲ [수정] 끝 ▲▲▲▲▲
 
         const [result] = await dbStudent.query(sql, [
@@ -6936,6 +6940,7 @@ app.put('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res) =
             category || 'Other',
             sub_category || null,
             isActiveValue, // ⭐️ 수정된 값 사용
+            expValueInt, // ⭐️ 경험치 값 추가
             id
         ]);
         
