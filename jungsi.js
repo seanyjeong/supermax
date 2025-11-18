@@ -7676,6 +7676,172 @@ app.get('/jungsi/level/first-achievers', authStudentOnlyMiddleware, async (req, 
     }
 });
 
+/**
+ * 전체 랭킹 조회 (레벨 & 경험치 순)
+ * GET /jungsi/ranking/all
+ */
+app.get('/jungsi/ranking/all', authStudentOnlyMiddleware, async (req, res) => {
+    try {
+        const [rankings] = await dbStudent.query(
+            `SELECT
+                sl.student_account_id,
+                sa.name,
+                sa.branch,
+                sa.grade,
+                sl.current_level,
+                sl.current_exp,
+                sl.total_exp_earned
+             FROM student_levels sl
+             JOIN student_account sa ON sl.student_account_id = sa.account_id
+             WHERE sa.status = '승인'
+             ORDER BY sl.current_level DESC, sl.current_exp DESC, sl.total_exp_earned DESC
+             LIMIT 100`
+        );
+
+        // 순위 추가
+        const rankedList = rankings.map((student, index) => ({
+            rank: index + 1,
+            ...student
+        }));
+
+        res.json({
+            success: true,
+            rankings: rankedList
+        });
+
+    } catch (err) {
+        console.error(`❌ 전체 랭킹 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '랭킹 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 지점별 랭킹 조회
+ * GET /jungsi/ranking/branch?branch=일산
+ */
+app.get('/jungsi/ranking/branch', authStudentOnlyMiddleware, async (req, res) => {
+    const { branch } = req.query;
+
+    if (!branch) {
+        return res.status(400).json({ success: false, message: '지점명이 필요합니다.' });
+    }
+
+    try {
+        const [rankings] = await dbStudent.query(
+            `SELECT
+                sl.student_account_id,
+                sa.name,
+                sa.branch,
+                sa.grade,
+                sl.current_level,
+                sl.current_exp,
+                sl.total_exp_earned
+             FROM student_levels sl
+             JOIN student_account sa ON sl.student_account_id = sa.account_id
+             WHERE sa.status = '승인' AND sa.branch = ?
+             ORDER BY sl.current_level DESC, sl.current_exp DESC, sl.total_exp_earned DESC
+             LIMIT 100`,
+            [branch]
+        );
+
+        // 순위 추가
+        const rankedList = rankings.map((student, index) => ({
+            rank: index + 1,
+            ...student
+        }));
+
+        res.json({
+            success: true,
+            branch: branch,
+            rankings: rankedList
+        });
+
+    } catch (err) {
+        console.error(`❌ 지점별 랭킹 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '랭킹 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 내 랭킹 조회 (전체 & 지점)
+ * GET /jungsi/ranking/my
+ */
+app.get('/jungsi/ranking/my', authStudentOnlyMiddleware, async (req, res) => {
+    const { account_id } = req.user;
+
+    try {
+        // 1. 내 정보 조회
+        const [myInfo] = await dbStudent.query(
+            `SELECT
+                sl.student_account_id,
+                sa.name,
+                sa.branch,
+                sa.grade,
+                sl.current_level,
+                sl.current_exp,
+                sl.total_exp_earned
+             FROM student_levels sl
+             JOIN student_account sa ON sl.student_account_id = sa.account_id
+             WHERE sl.student_account_id = ?`,
+            [account_id]
+        );
+
+        if (myInfo.length === 0) {
+            return res.status(404).json({ success: false, message: '학생 정보를 찾을 수 없습니다.' });
+        }
+
+        const myData = myInfo[0];
+
+        // 2. 전체 순위 계산
+        const [totalRank] = await dbStudent.query(
+            `SELECT COUNT(*) + 1 AS my_rank
+             FROM student_levels sl
+             JOIN student_account sa ON sl.student_account_id = sa.account_id
+             WHERE sa.status = '승인'
+             AND (
+                 sl.current_level > ? OR
+                 (sl.current_level = ? AND sl.current_exp > ?) OR
+                 (sl.current_level = ? AND sl.current_exp = ? AND sl.total_exp_earned > ?)
+             )`,
+            [
+                myData.current_level,
+                myData.current_level, myData.current_exp,
+                myData.current_level, myData.current_exp, myData.total_exp_earned
+            ]
+        );
+
+        // 3. 지점 순위 계산
+        const [branchRank] = await dbStudent.query(
+            `SELECT COUNT(*) + 1 AS my_rank
+             FROM student_levels sl
+             JOIN student_account sa ON sl.student_account_id = sa.account_id
+             WHERE sa.status = '승인' AND sa.branch = ?
+             AND (
+                 sl.current_level > ? OR
+                 (sl.current_level = ? AND sl.current_exp > ?) OR
+                 (sl.current_level = ? AND sl.current_exp = ? AND sl.total_exp_earned > ?)
+             )`,
+            [
+                myData.branch,
+                myData.current_level,
+                myData.current_level, myData.current_exp,
+                myData.current_level, myData.current_exp, myData.total_exp_earned
+            ]
+        );
+
+        res.json({
+            success: true,
+            myInfo: myData,
+            totalRank: totalRank[0].my_rank,
+            branchRank: branchRank[0].my_rank
+        });
+
+    } catch (err) {
+        console.error(`❌ 내 랭킹 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '내 랭킹 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
