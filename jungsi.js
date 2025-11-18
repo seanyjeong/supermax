@@ -317,6 +317,22 @@ async function addExpAndCheckLevelUp(studentAccountId, expToAdd = 1) {
             `SELECT level, exp_required FROM level_requirements ORDER BY level ASC`
         );
 
+        // 2-1. 레벨 다운 체크 (경험치가 음수인 경우)
+        while (currentExp < 0 && currentLevel > 1) {
+            currentLevel--;
+            // 이전 레벨의 요구 경험치를 찾아서 더해줌
+            const prevLevelReq = levelRequirements.find(req => req.level === currentLevel);
+            if (prevLevelReq) {
+                currentExp += prevLevelReq.exp_required;
+                console.log(`📉 레벨다운! Lv.${currentLevel + 1} → Lv.${currentLevel} (${currentExp} EXP)`);
+            }
+        }
+
+        // 레벨 1에서도 음수면 0으로 고정
+        if (currentExp < 0) {
+            currentExp = 0;
+        }
+
         // 3. 레벨업 체크 및 처리
         let leveledUp = false;
         let newLevel = currentLevel;
