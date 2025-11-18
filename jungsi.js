@@ -6831,8 +6831,7 @@ app.get('/jungsi/admin/master-exercises', authMiddleware, async (req, res) => {
     console.log(`[API /admin/master-exercises] 관리자(${req.user.userid}) 전체 운동 목록 조회`);
     try {
         const [exercises] = await dbStudent.query(
-            `SELECT exercise_id, exercise_name, category, sub_category, default_unit, is_active
-             FROM jungsimaxstudent.master_exercises
+            `  SELECT * FROM master_exercises
              ORDER BY category, sub_category, exercise_name`
         );
         res.json({ success: true, exercises: exercises });
