@@ -340,6 +340,39 @@ async function addExpAndCheckLevelUp(studentAccountId, expToAdd = 1) {
             }
         }
 
+        // ⭐️ 최초 레벨 달성자 체크
+        let isFirstAchiever = false;
+        if (leveledUp) {
+            try {
+                // 해당 레벨을 최초로 달성했는지 확인
+                const [existingAchiever] = await dbStudent.query(
+                    `SELECT * FROM level_first_achievers WHERE level = ?`,
+                    [newLevel]
+                );
+
+                if (existingAchiever.length === 0) {
+                    // 최초 달성자!
+                    const [studentInfo] = await dbStudent.query(
+                        `SELECT name, branch FROM student_account WHERE account_id = ?`,
+                        [studentAccountId]
+                    );
+
+                    if (studentInfo.length > 0) {
+                        await dbStudent.query(
+                            `INSERT INTO level_first_achievers (level, student_account_id, student_name, branch)
+                             VALUES (?, ?, ?, ?)`,
+                            [newLevel, studentAccountId, studentInfo[0].name, studentInfo[0].branch]
+                        );
+                        isFirstAchiever = true;
+                        console.log(`🏆🏆🏆 최초 달성! 학생(${studentInfo[0].name}) Lv.${newLevel} 최초 달성자!`);
+                    }
+                }
+            } catch (err) {
+                console.error(`❌ 최초 달성자 체크 오류:`, err);
+                // 에러가 나도 레벨업은 정상 진행
+            }
+        }
+
         // 4. 학생 레벨 정보 업데이트
         await dbStudent.query(
             `UPDATE student_levels
@@ -354,6 +387,7 @@ async function addExpAndCheckLevelUp(studentAccountId, expToAdd = 1) {
 
         return {
             leveledUp,
+            isFirstAchiever,
             oldLevel,
             newLevel,
             currentLevel,
@@ -7614,6 +7648,31 @@ app.get('/jungsi/level-requirements', authStudentOnlyMiddleware, async (req, res
     } catch (err) {
         console.error(`❌ 레벨 요구사항 조회 API 오류:`, err);
         res.status(500).json({ success: false, message: '레벨 요구사항 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+/**
+ * 최초 레벨 달성자 조회 (최근 7일)
+ * GET /jungsi/level/first-achievers
+ */
+app.get('/jungsi/level/first-achievers', authStudentOnlyMiddleware, async (req, res) => {
+    try {
+        const [achievers] = await dbStudent.query(
+            `SELECT level, student_name, branch, achieved_at
+             FROM level_first_achievers
+             WHERE achieved_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+             ORDER BY achieved_at DESC
+             LIMIT 10`
+        );
+
+        res.json({
+            success: true,
+            achievers: achievers
+        });
+
+    } catch (err) {
+        console.error(`❌ 최초 달성자 조회 API 오류:`, err);
+        res.status(500).json({ success: false, message: '최초 달성자 조회 중 오류가 발생했습니다.' });
     }
 });
 
