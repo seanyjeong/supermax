@@ -6987,6 +6987,49 @@ app.delete('/jungsi/admin/master-exercises/:id', authMiddleware, async (req, res
     }
 });
 
+// ⭐️ [신규] GET /jungsi/admin/master-exercises/:id/check-usage - 퀘스트 사용 여부 확인
+app.get('/jungsi/admin/master-exercises/:id/check-usage', authMiddleware, async (req, res) => {
+    if (!hasAdminPermission(req.user)) {
+        return res.status(403).json({ success: false, message: '접근 권한이 없습니다.' });
+    }
+    const { id } = req.params;
+    console.log(`[API /admin/master-exercises/:id/check-usage] 운동(${id}) 사용 여부 확인`);
+    try {
+        // 해당 exercise_id를 사용하는 할당 내역이 있는지 확인
+        const [exercise] = await dbStudent.query(
+            'SELECT exercise_name FROM jungsimaxstudent.master_exercises WHERE exercise_id = ?',
+            [id]
+        );
+
+        if (exercise.length === 0) {
+            return res.status(404).json({ success: false, message: '해당 운동을 찾을 수 없습니다.' });
+        }
+
+        const exerciseName = exercise[0].exercise_name;
+
+        // exercise_name으로 할당 내역 확인
+        const [assignments] = await dbStudent.query(
+            'SELECT COUNT(*) as count FROM jungsimaxstudent.teacher_daily_assignments WHERE exercise_name = ?',
+            [exerciseName]
+        );
+
+        const isInUse = assignments[0].count > 0;
+        const assignmentCount = assignments[0].count;
+
+        res.json({
+            success: true,
+            inUse: isInUse,
+            assignmentCount: assignmentCount,
+            message: isInUse
+                ? `이 퀘스트는 ${assignmentCount}건의 할당 내역에서 사용 중입니다.`
+                : '이 퀘스트는 사용되지 않았습니다.'
+        });
+    } catch (err) {
+        console.error(`❌ /admin/master-exercises/:id/check-usage (${id}) 오류:`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 오류' });
+    }
+});
+
 // ⭐️ [신규] 로고 업로드를 위한 Multer 설정
 // 1. 폴더가 없으면 생성 (univlogos/temp)
 const logosDir = path.join(__dirname, 'univlogos'); // ⭐️ public 빠짐
