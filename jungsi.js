@@ -4927,17 +4927,18 @@ app.get('/jungsi/student/today-assignment', authStudentOnlyMiddleware, async (re
     const { account_id } = req.user;
     console.log(`[API GET /student/today-assignment] 학생(${account_id}) 오늘 운동 조회 요청`);
     try {
-        // ⭐️ SQL 쿼리 수정: 26susi.원장회원 테이블과 JOIN하여 선생님 이름(teacher_name) 가져오기
+        // ⭐️ SQL 쿼리 수정: 선생님 이름 + 경험치 값 가져오기
         const sql = `
             SELECT
                 tda.assignment_id, tda.teacher_userid, tda.assignment_date, tda.exercise_name, tda.category, tda.sub_category,
                 tda.target_weight, tda.target_sets, tda.target_reps, tda.target_notes, tda.is_completed,
-                ow.이름 AS teacher_name -- ⭐️ 선생님 이름 추가
+                ow.이름 AS teacher_name, -- ⭐️ 선생님 이름
+                me.exp_value -- ⭐️ 경험치 값 추가
             FROM jungsimaxstudent.teacher_daily_assignments AS tda
-            LEFT JOIN \`26susi\`.원장회원 AS ow -- ⭐️ 원장회원 테이블 JOIN (LEFT JOIN 사용: 혹시 탈퇴한 선생님이라도 기록은 보이도록)
-              -- ▼▼▼ COLLATE 추가 (Collation 충돌 방지) ▼▼▼
+            LEFT JOIN \`26susi\`.원장회원 AS ow
               ON tda.teacher_userid COLLATE utf8mb4_unicode_ci = ow.아이디 COLLATE utf8mb4_unicode_ci
-              -- ▲▲▲ COLLATE 추가 ▲▲▲
+            LEFT JOIN jungsimaxstudent.master_exercises AS me -- ⭐️ 경험치 값 JOIN
+              ON tda.exercise_name = me.exercise_name
             WHERE tda.student_account_id = ? AND tda.assignment_date = CURDATE()
             ORDER BY tda.created_at ASC
         `;
@@ -4971,10 +4972,12 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
     const completedValue = Boolean(is_completed); // 확실하게 boolean으로 변환
 
     try {
-        // ⭐️ 기존 완료 상태 확인 (중복 경험치 방지)
+        // ⭐️ 기존 완료 상태 및 운동 정보 확인 (중복 경험치 방지 + 경험치 값 조회)
         const [existingAssignment] = await dbStudent.query(
-            `SELECT is_completed FROM jungsimaxstudent.teacher_daily_assignments
-             WHERE assignment_id = ? AND student_account_id = ?`,
+            `SELECT tda.is_completed, tda.exercise_name, me.exp_value
+             FROM jungsimaxstudent.teacher_daily_assignments AS tda
+             LEFT JOIN jungsimaxstudent.master_exercises AS me ON tda.exercise_name = me.exercise_name
+             WHERE tda.assignment_id = ? AND tda.student_account_id = ?`,
             [assignment_id, account_id]
         );
 
@@ -4983,6 +4986,7 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
         }
 
         const wasCompleted = existingAssignment[0].is_completed;
+        const expValue = existingAssignment[0].exp_value || 1; // 경험치 값 (기본값 1)
 
         // 완료 상태 업데이트
         const sql = `
@@ -4999,18 +5003,18 @@ app.post('/jungsi/student/assignment/complete', authStudentOnlyMiddleware, async
         if (result.affectedRows > 0) {
             console.log(` -> 운동(${assignment_id}) 완료 상태 업데이트 성공`);
 
-            // ⭐️ 경험치 추가 로직
+            // ⭐️ 경험치 추가 로직 (운동별 경험치 값 사용)
             let levelInfo = null;
 
             // 미완료 → 완료로 변경될 때만 경험치 추가
             if (!wasCompleted && completedValue) {
-                levelInfo = await addExpAndCheckLevelUp(account_id, 1);
-                console.log(` -> +1 EXP 지급 완료!`, levelInfo);
+                levelInfo = await addExpAndCheckLevelUp(account_id, expValue);
+                console.log(` -> +${expValue} EXP 지급 완료!`, levelInfo);
             }
             // 완료 → 미완료로 변경될 때 경험치 차감
             else if (wasCompleted && !completedValue) {
-                levelInfo = await addExpAndCheckLevelUp(account_id, -1);
-                console.log(` -> -1 EXP 차감 완료`, levelInfo);
+                levelInfo = await addExpAndCheckLevelUp(account_id, -expValue);
+                console.log(` -> -${expValue} EXP 차감 완료`, levelInfo);
             }
 
             res.json({
