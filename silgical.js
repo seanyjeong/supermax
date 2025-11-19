@@ -616,6 +616,19 @@ function calcPracticalSpecial(F, list, log, studentGender) {
       return totalScore;
     } // (case 194, 197 끝)
 
+          // ======================================================
+    // ID 71번 학교 (5종목 단순 합산, 실기만점 사용 안함)
+    // ======================================================
+    case 71:
+    {
+      // 0점/null 포함 합산 (sumOfAllScores 사용)
+      const totalScore = sumOfAllScores;
+
+      log.push(`[Special-Case 71] 5종목 단순 합산: ${sumOfAllScores}점`);
+      log.push(`[Special-Case 71] 최종 합산 점수: ${totalScore.toFixed(3)}`);
+      return totalScore;
+    } // (case 71 끝)
+
       
       
       
