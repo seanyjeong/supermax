@@ -5331,30 +5331,46 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
                 const studentName = studentCheck[0].name;
                 console.log(` -> 학생 ${studentName}(${currentStudentId}) 지점 확인 완료 (${studentCheck[0].branch})`);
 
-                // 5. 기존 운동 삭제 (본인이 할당한 것만)
-                const deleteSql = `
-                    DELETE FROM jungsimaxstudent.teacher_daily_assignments
-                    WHERE student_account_id = ? AND assignment_date = ? AND teacher_userid = ?
-                `;
-                await connection.query(deleteSql, [currentStudentId, assignment_date, teacher_userid]);
-                console.log(` -> 학생 ${studentName}(${currentStudentId}) 기존 운동 내역 삭제 완료`);
-
-                // 6. 새 운동 목록 INSERT
+                // 5. 새 운동 추가/업데이트 (기존 퀘스트 유지, 병합 방식)
                 if (assignments.length > 0) {
-                    const insertSql = `
-                        INSERT INTO jungsimaxstudent.teacher_daily_assignments
-                            (teacher_userid, student_account_id, assignment_date, exercise_name, category, sub_category,
-                             target_weight, target_sets, target_reps, target_notes, is_completed, created_at)
-                        VALUES ?
-                    `;
-                    const values = assignments.map(item => [
-                        teacher_userid, currentStudentId, assignment_date,
-                        item.exercise_name, item.category, item.sub_category || null,
-                        item.target_weight || null, item.target_sets || null, item.target_reps || null, item.target_notes || null,
-                        false, new Date()
-                    ]);
-                    await connection.query(insertSql, [values]);
-                    console.log(` -> 학생 ${studentName}(${currentStudentId}) ${values.length}개 새 운동 INSERT 완료`);
+                    let insertedCount = 0;
+                    let updatedCount = 0;
+
+                    for (const item of assignments) {
+                        // 같은 학생, 같은 날짜, 같은 운동이 이미 있는지 확인
+                        const [existing] = await connection.query(
+                            `SELECT assignment_id FROM jungsimaxstudent.teacher_daily_assignments
+                             WHERE student_account_id = ? AND assignment_date = ? AND exercise_name = ? AND teacher_userid = ?`,
+                            [currentStudentId, assignment_date, item.exercise_name, teacher_userid]
+                        );
+
+                        if (existing.length > 0) {
+                            // 기존 퀘스트 업데이트
+                            await connection.query(
+                                `UPDATE jungsimaxstudent.teacher_daily_assignments
+                                 SET category = ?, sub_category = ?, target_weight = ?, target_sets = ?, target_reps = ?, target_notes = ?
+                                 WHERE assignment_id = ?`,
+                                [item.category, item.sub_category || null, item.target_weight || null,
+                                 item.target_sets || null, item.target_reps || null, item.target_notes || null,
+                                 existing[0].assignment_id]
+                            );
+                            updatedCount++;
+                        } else {
+                            // 새 퀘스트 추가
+                            await connection.query(
+                                `INSERT INTO jungsimaxstudent.teacher_daily_assignments
+                                    (teacher_userid, student_account_id, assignment_date, exercise_name, category, sub_category,
+                                     target_weight, target_sets, target_reps, target_notes, is_completed, created_at)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                [teacher_userid, currentStudentId, assignment_date,
+                                 item.exercise_name, item.category, item.sub_category || null,
+                                 item.target_weight || null, item.target_sets || null, item.target_reps || null, item.target_notes || null,
+                                 false, new Date()]
+                            );
+                            insertedCount++;
+                        }
+                    }
+                    console.log(` -> 학생 ${studentName}(${currentStudentId}) ${insertedCount}개 추가, ${updatedCount}개 업데이트 완료`);
                 }
 
                 results.success.push({
