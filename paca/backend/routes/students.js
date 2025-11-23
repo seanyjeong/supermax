@@ -1,0 +1,6 @@
+const express = require('express');
+const router = express.Router();
+const { verifyToken } = require('../middleware/auth');
+
+// TODO: Implement student management routes
+module.exports = router;
