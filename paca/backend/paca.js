@@ -184,7 +184,7 @@ app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🗄️  Database: ${process.env.DB_NAME}@${process.env.DB_HOST}`);
-    console.log(`🌐 API Base: http://localhost:${PORT}/api`);
+    console.log(`🌐 API Base: http://localhost:${PORT}/paca`);
     console.log('==========================================');
 });
 
@@ -204,3 +204,4 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
+
