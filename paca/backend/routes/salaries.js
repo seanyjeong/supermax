@@ -20,12 +20,12 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
                 i.name as instructor_name,
                 s.\`year_month\`,
                 s.base_amount,
-                s.bonus,
-                s.deduction,
+                s.incentive_amount,
+                s.total_deduction,
                 s.tax_type,
                 s.tax_amount,
-                s.insurance_amount,
-                s.net_amount,
+                s.insurance_details,
+                s.net_salary,
                 s.payment_date,
                 s.payment_status,
                 s.created_at
@@ -117,7 +117,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  */
 router.post('/calculate', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
-        const { instructor_id, year, month, bonus, deduction, work_data } = req.body;
+        const { instructor_id, year, month, incentive_amount, total_deduction, work_data } = req.body;
 
         if (!instructor_id || !year || !month) {
             return res.status(400).json({
@@ -145,8 +145,8 @@ router.post('/calculate', verifyToken, requireRole('owner', 'admin'), async (req
         const salaryData = calculateInstructorSalary(
             instructor,
             work_data || {},
-            bonus || 0,
-            deduction || 0
+            incentive_amount || 0,
+            total_deduction || 0
         );
 
         res.json({
@@ -178,19 +178,18 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             instructor_id,
             year_month,
             base_amount,
-            bonus,
-            deduction,
+            incentive_amount,
+            total_deduction,
             tax_type,
             tax_amount,
-            insurance_amount,
             insurance_details,
-            net_amount
+            net_salary
         } = req.body;
 
-        if (!instructor_id || !year_month || !base_amount || !tax_type || !net_amount) {
+        if (!instructor_id || !year_month || !base_amount || !tax_type || !net_salary) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: instructor_id, year_month, base_amount, tax_type, net_amount'
+                message: 'Required fields: instructor_id, year_month, base_amount, tax_type, net_salary'
             });
         }
 
@@ -226,26 +225,24 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 instructor_id,
                 \`year_month\`,
                 base_amount,
-                bonus,
-                deduction,
+                incentive_amount,
+                total_deduction,
                 tax_type,
                 tax_amount,
-                insurance_amount,
                 insurance_details,
-                net_amount,
+                net_salary,
                 payment_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
             [
                 instructor_id,
                 year_month,
                 base_amount,
-                bonus || 0,
-                deduction || 0,
+                incentive_amount || 0,
+                total_deduction || 0,
                 tax_type,
                 tax_amount || 0,
-                insurance_amount || 0,
                 insurance_details ? JSON.stringify(insurance_details) : null,
-                net_amount
+                net_salary
             ]
         );
 
@@ -329,7 +326,7 @@ router.post('/:id/pay', verifyToken, requireRole('owner'), async (req, res) => {
             ) VALUES (?, 'salary', ?, ?, ?, ?)`,
             [
                 salary.academy_id,
-                salary.net_amount,
+                salary.net_salary,
                 payment_date || new Date().toISOString().split('T')[0],
                 salary.instructor_id,
                 `급여 지급 (${salary.year_month})`
@@ -392,18 +389,18 @@ router.put('/:id', verifyToken, requireRole('owner'), async (req, res) => {
             });
         }
 
-        const { bonus, deduction, payment_status, payment_date } = req.body;
+        const { incentive_amount, total_deduction, payment_status, payment_date } = req.body;
 
         const updates = [];
         const params = [];
 
-        if (bonus !== undefined) {
-            updates.push('bonus = ?');
-            params.push(bonus);
+        if (incentive_amount !== undefined) {
+            updates.push('incentive_amount = ?');
+            params.push(incentive_amount);
         }
-        if (deduction !== undefined) {
-            updates.push('deduction = ?');
-            params.push(deduction);
+        if (total_deduction !== undefined) {
+            updates.push('total_deduction = ?');
+            params.push(total_deduction);
         }
         if (payment_status !== undefined) {
             updates.push('payment_status = ?');
