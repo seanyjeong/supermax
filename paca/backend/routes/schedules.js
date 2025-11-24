@@ -1,6 +1,630 @@
 const express = require('express');
 const router = express.Router();
-const { verifyToken } = require('../middleware/auth');
+const db = require('../config/database');
+const { verifyToken, requireRole } = require('../middleware/auth');
 
-// TODO: Implement schedule management routes
+/**
+ * GET /paca/schedules
+ * Get class schedules (for calendar view)
+ * Access: owner, admin, teacher
+ */
+router.get('/', verifyToken, async (req, res) => {
+    try {
+        const { start_date, end_date, instructor_id, time_slot } = req.query;
+
+        let query = `
+            SELECT
+                cs.id,
+                cs.class_date,
+                cs.time_slot,
+                cs.instructor_id,
+                cs.title,
+                cs.content,
+                cs.attendance_taken,
+                cs.notes,
+                cs.created_at,
+                i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.academy_id = ?
+        `;
+
+        const params = [req.user.academyId];
+
+        // Date range filter
+        if (start_date) {
+            query += ' AND cs.class_date >= ?';
+            params.push(start_date);
+        }
+
+        if (end_date) {
+            query += ' AND cs.class_date <= ?';
+            params.push(end_date);
+        }
+
+        // Instructor filter
+        if (instructor_id) {
+            query += ' AND cs.instructor_id = ?';
+            params.push(parseInt(instructor_id));
+        }
+
+        // Time slot filter
+        if (time_slot && ['morning', 'afternoon', 'evening'].includes(time_slot)) {
+            query += ' AND cs.time_slot = ?';
+            params.push(time_slot);
+        }
+
+        query += ' ORDER BY cs.class_date ASC, cs.time_slot ASC';
+
+        const [schedules] = await db.query(query, params);
+
+        res.json({
+            message: `Found ${schedules.length} schedules`,
+            schedules
+        });
+    } catch (error) {
+        console.error('Error fetching schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch schedules'
+        });
+    }
+});
+
+/**
+ * GET /paca/schedules/instructor/:instructor_id
+ * Get schedules for specific instructor
+ * Access: owner, admin, teacher
+ */
+router.get('/instructor/:instructor_id', verifyToken, async (req, res) => {
+    const instructorId = parseInt(req.params.instructor_id);
+
+    try {
+        const { start_date, end_date } = req.query;
+
+        // Verify instructor belongs to academy
+        const [instructors] = await db.query(
+            'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            [instructorId, req.user.academyId]
+        );
+
+        if (instructors.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Instructor not found'
+            });
+        }
+
+        let query = `
+            SELECT
+                cs.id,
+                cs.class_date,
+                cs.time_slot,
+                cs.title,
+                cs.content,
+                cs.attendance_taken,
+                cs.notes
+            FROM class_schedules cs
+            WHERE cs.academy_id = ?
+            AND cs.instructor_id = ?
+        `;
+
+        const params = [req.user.academyId, instructorId];
+
+        if (start_date) {
+            query += ' AND cs.class_date >= ?';
+            params.push(start_date);
+        }
+
+        if (end_date) {
+            query += ' AND cs.class_date <= ?';
+            params.push(end_date);
+        }
+
+        query += ' ORDER BY cs.class_date ASC, cs.time_slot ASC';
+
+        const [schedules] = await db.query(query, params);
+
+        res.json({
+            message: `Found ${schedules.length} schedules for ${instructors[0].name}`,
+            instructor: instructors[0],
+            schedules
+        });
+    } catch (error) {
+        console.error('Error fetching instructor schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch instructor schedules'
+        });
+    }
+});
+
+/**
+ * GET /paca/schedules/:id
+ * Get schedule details
+ * Access: owner, admin, teacher
+ */
+router.get('/:id', verifyToken, async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+
+    try {
+        const [schedules] = await db.query(
+            `SELECT
+                cs.*,
+                i.name AS instructor_name,
+                i.phone AS instructor_phone
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.id = ?
+            AND cs.academy_id = ?`,
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        res.json({
+            message: 'Schedule found',
+            schedule: schedules[0]
+        });
+    } catch (error) {
+        console.error('Error fetching schedule:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch schedule'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules
+ * Create new class schedule
+ * Access: owner, admin only
+ */
+router.post('/', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+    try {
+        const { class_date, time_slot, instructor_id, title, content, notes } = req.body;
+
+        // Validation
+        if (!class_date || !time_slot || !instructor_id) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'class_date, time_slot, and instructor_id are required'
+            });
+        }
+
+        // Validate time_slot
+        if (!['morning', 'afternoon', 'evening'].includes(time_slot)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'time_slot must be morning, afternoon, or evening'
+            });
+        }
+
+        // Validate date format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(class_date)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'class_date must be in YYYY-MM-DD format'
+            });
+        }
+
+        // Verify instructor exists and belongs to academy
+        const [instructors] = await db.query(
+            'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            [instructor_id, req.user.academyId]
+        );
+
+        if (instructors.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Instructor not found or does not belong to your academy'
+            });
+        }
+
+        // Check for duplicate schedule (same date, time_slot, instructor)
+        const [existing] = await db.query(
+            `SELECT id FROM class_schedules
+            WHERE academy_id = ?
+            AND class_date = ?
+            AND time_slot = ?
+            AND instructor_id = ?`,
+            [req.user.academyId, class_date, time_slot, instructor_id]
+        );
+
+        if (existing.length > 0) {
+            return res.status(409).json({
+                error: 'Conflict',
+                message: 'A schedule already exists for this instructor at this date and time'
+            });
+        }
+
+        // Create schedule
+        const [result] = await db.query(
+            `INSERT INTO class_schedules
+            (academy_id, class_date, time_slot, instructor_id, title, content, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [req.user.academyId, class_date, time_slot, instructor_id, title || null, content || null, notes || null]
+        );
+
+        // Fetch created schedule
+        const [newSchedule] = await db.query(
+            `SELECT cs.*, i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.id = ?`,
+            [result.insertId]
+        );
+
+        res.status(201).json({
+            message: 'Schedule created successfully',
+            schedule: newSchedule[0]
+        });
+    } catch (error) {
+        console.error('Error creating schedule:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to create schedule'
+        });
+    }
+});
+
+/**
+ * PUT /paca/schedules/:id
+ * Update class schedule
+ * Access: owner, admin only
+ */
+router.put('/:id', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+
+    try {
+        const { class_date, time_slot, instructor_id, title, content, notes } = req.body;
+
+        // Check if schedule exists
+        const [schedules] = await db.query(
+            'SELECT id FROM class_schedules WHERE id = ? AND academy_id = ?',
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        // Validate time_slot if provided
+        if (time_slot && !['morning', 'afternoon', 'evening'].includes(time_slot)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'time_slot must be morning, afternoon, or evening'
+            });
+        }
+
+        // Verify instructor if provided
+        if (instructor_id) {
+            const [instructors] = await db.query(
+                'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [instructor_id, req.user.academyId]
+            );
+
+            if (instructors.length === 0) {
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: 'Instructor not found'
+                });
+            }
+        }
+
+        // Build update query dynamically
+        const updates = [];
+        const params = [];
+
+        if (class_date !== undefined) {
+            updates.push('class_date = ?');
+            params.push(class_date);
+        }
+        if (time_slot !== undefined) {
+            updates.push('time_slot = ?');
+            params.push(time_slot);
+        }
+        if (instructor_id !== undefined) {
+            updates.push('instructor_id = ?');
+            params.push(instructor_id);
+        }
+        if (title !== undefined) {
+            updates.push('title = ?');
+            params.push(title);
+        }
+        if (content !== undefined) {
+            updates.push('content = ?');
+            params.push(content);
+        }
+        if (notes !== undefined) {
+            updates.push('notes = ?');
+            params.push(notes);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'No fields to update'
+            });
+        }
+
+        params.push(scheduleId);
+
+        await db.query(
+            `UPDATE class_schedules SET ${updates.join(', ')} WHERE id = ?`,
+            params
+        );
+
+        // Fetch updated schedule
+        const [updated] = await db.query(
+            `SELECT cs.*, i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.id = ?`,
+            [scheduleId]
+        );
+
+        res.json({
+            message: 'Schedule updated successfully',
+            schedule: updated[0]
+        });
+    } catch (error) {
+        console.error('Error updating schedule:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to update schedule'
+        });
+    }
+});
+
+/**
+ * DELETE /paca/schedules/:id
+ * Delete class schedule
+ * Access: owner, admin only
+ */
+router.delete('/:id', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+
+    try {
+        // Check if schedule exists
+        const [schedules] = await db.query(
+            'SELECT id FROM class_schedules WHERE id = ? AND academy_id = ?',
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        // Delete schedule (CASCADE will delete attendance records)
+        await db.query('DELETE FROM class_schedules WHERE id = ?', [scheduleId]);
+
+        res.json({
+            message: 'Schedule deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting schedule:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to delete schedule'
+        });
+    }
+});
+
+/**
+ * GET /paca/schedules/:id/attendance
+ * Get attendance status for a specific class
+ * Access: owner, admin, teacher
+ */
+router.get('/:id/attendance', verifyToken, async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+
+    try {
+        // Get schedule details
+        const [schedules] = await db.query(
+            `SELECT
+                cs.id,
+                cs.class_date,
+                cs.time_slot,
+                cs.title,
+                cs.attendance_taken,
+                i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.id = ?
+            AND cs.academy_id = ?`,
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        const schedule = schedules[0];
+        const classDate = new Date(schedule.class_date);
+        const dayOfWeek = classDate.getDay();
+
+        // Get all active students who have class on this day of week
+        const [students] = await db.query(
+            `SELECT
+                s.id AS student_id,
+                s.name AS student_name,
+                s.student_number,
+                s.class_days,
+                a.attendance_status,
+                a.notes AS attendance_notes
+            FROM students s
+            LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
+            WHERE s.academy_id = ?
+            AND s.status = 'active'
+            AND s.deleted_at IS NULL
+            AND JSON_CONTAINS(s.class_days, ?)
+            ORDER BY s.name ASC`,
+            [scheduleId, req.user.academyId, dayOfWeek.toString()]
+        );
+
+        // Parse class_days JSON
+        const studentsWithInfo = students.map(student => ({
+            student_id: student.student_id,
+            student_name: student.student_name,
+            student_number: student.student_number,
+            attendance_status: student.attendance_status || null,
+            notes: student.attendance_notes || '',
+            is_expected: true
+        }));
+
+        res.json({
+            message: 'Attendance records retrieved',
+            schedule: {
+                id: schedule.id,
+                class_date: schedule.class_date,
+                time_slot: schedule.time_slot,
+                instructor_name: schedule.instructor_name,
+                title: schedule.title,
+                attendance_taken: schedule.attendance_taken
+            },
+            students: studentsWithInfo
+        });
+    } catch (error) {
+        console.error('Error fetching attendance:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch attendance records'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules/:id/attendance
+ * Take attendance for a class
+ * Access: owner, admin, teacher
+ */
+router.post('/:id/attendance', verifyToken, async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+    const connection = await db.getConnection();
+
+    try {
+        const { attendance_records } = req.body;
+
+        // Validation
+        if (!Array.isArray(attendance_records) || attendance_records.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'attendance_records must be a non-empty array'
+            });
+        }
+
+        // Check if schedule exists
+        const [schedules] = await connection.query(
+            'SELECT id, class_date FROM class_schedules WHERE id = ? AND academy_id = ?',
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            connection.release();
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        const schedule = schedules[0];
+
+        // Start transaction
+        await connection.beginTransaction();
+
+        const validStatuses = ['present', 'absent', 'late', 'excused'];
+        const processedRecords = [];
+
+        for (const record of attendance_records) {
+            const { student_id, attendance_status, notes } = record;
+
+            // Validate attendance_status
+            if (!validStatuses.includes(attendance_status)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: `Invalid attendance_status: ${attendance_status}. Must be one of: ${validStatuses.join(', ')}`
+                });
+            }
+
+            // Verify student exists and belongs to academy
+            const [students] = await connection.query(
+                'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [student_id, req.user.academyId]
+            );
+
+            if (students.length === 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: `Student with ID ${student_id} not found`
+                });
+            }
+
+            // UPSERT attendance record
+            await connection.query(
+                `INSERT INTO attendance
+                (class_schedule_id, student_id, attendance_status, notes, recorded_by)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                attendance_status = VALUES(attendance_status),
+                notes = VALUES(notes),
+                recorded_by = VALUES(recorded_by),
+                updated_at = CURRENT_TIMESTAMP`,
+                [scheduleId, student_id, attendance_status, notes || null, req.user.id]
+            );
+
+            processedRecords.push({
+                student_id,
+                student_name: students[0].name,
+                attendance_status,
+                notes: notes || ''
+            });
+        }
+
+        // Mark attendance as taken
+        await connection.query(
+            'UPDATE class_schedules SET attendance_taken = true WHERE id = ?',
+            [scheduleId]
+        );
+
+        // Commit transaction
+        await connection.commit();
+        connection.release();
+
+        res.json({
+            message: `Attendance recorded for ${processedRecords.length} students`,
+            schedule_id: scheduleId,
+            class_date: schedule.class_date,
+            attendance_records: processedRecords
+        });
+    } catch (error) {
+        await connection.rollback();
+        connection.release();
+        console.error('Error recording attendance:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to record attendance'
+        });
+    }
+});
+
 module.exports = router;
