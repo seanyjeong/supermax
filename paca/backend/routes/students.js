@@ -32,7 +32,7 @@ router.get('/', verifyToken, async (req, res) => {
                 s.created_at
             FROM students s
             WHERE s.academy_id = ?
-            AND s.is_deleted = false
+            AND s.deleted_at IS NULL
         `;
 
         const params = [req.user.academyId];
@@ -98,7 +98,7 @@ router.get('/:id', verifyToken, async (req, res) => {
             LEFT JOIN academies a ON s.academy_id = a.id
             WHERE s.id = ?
             AND s.academy_id = ?
-            AND s.is_deleted = false`,
+            AND s.deleted_at IS NULL`,
             [studentId, req.user.academyId]
         );
 
@@ -199,7 +199,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         // Check if student_number already exists
         if (student_number) {
             const [existing] = await db.query(
-                'SELECT id FROM students WHERE student_number = ? AND academy_id = ? AND is_deleted = false',
+                'SELECT id FROM students WHERE student_number = ? AND academy_id = ? AND deleted_at IS NULL',
                 [student_number, req.user.academyId]
             );
 
@@ -302,7 +302,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
     try {
         // Check if student exists
         const [students] = await db.query(
-            'SELECT id FROM students WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [studentId, req.user.academyId]
         );
 
@@ -335,7 +335,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         // Check if new student_number already exists (if changed)
         if (student_number) {
             const [existing] = await db.query(
-                'SELECT id FROM students WHERE student_number = ? AND academy_id = ? AND id != ? AND is_deleted = false',
+                'SELECT id FROM students WHERE student_number = ? AND academy_id = ? AND id != ? AND deleted_at IS NULL',
                 [student_number, req.user.academyId, studentId]
             );
 
@@ -461,7 +461,7 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
     try {
         // Check if student exists
         const [students] = await db.query(
-            'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [studentId, req.user.academyId]
         );
 
@@ -474,7 +474,7 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
 
         // Soft delete
         await db.query(
-            'UPDATE students SET is_deleted = true, updated_at = NOW() WHERE id = ?',
+            'UPDATE students SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?',
             [studentId]
         );
 
@@ -520,7 +520,7 @@ router.get('/search', verifyToken, async (req, res) => {
                 grade_type
             FROM students
             WHERE academy_id = ?
-            AND is_deleted = false
+            AND deleted_at IS NULL
             AND (name LIKE ? OR student_number LIKE ? OR phone LIKE ?)
             ORDER BY name
             LIMIT 20`,
