@@ -78,7 +78,7 @@ router.get('/', verifyToken, async (req, res) => {
  * Update academy settings
  * Access: owner, admin only
  */
-router.put('/', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
         const {
             tuition_due_day,
@@ -246,7 +246,7 @@ router.put('/', verifyToken, requireRole(['owner', 'admin']), async (req, res) =
  * Update academy basic information
  * Access: owner only
  */
-router.put('/academy', verifyToken, requireRole(['owner']), async (req, res) => {
+router.put('/academy', verifyToken, requireRole('owner'), async (req, res) => {
     try {
         const {
             name,
@@ -365,7 +365,7 @@ router.get('/tuition-rates', verifyToken, async (req, res) => {
  * Update weekly tuition rates
  * Access: owner, admin only
  */
-router.put('/tuition-rates', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+router.put('/tuition-rates', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
         const { tuition_rates } = req.body;
 
