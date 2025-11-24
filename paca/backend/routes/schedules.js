@@ -185,7 +185,7 @@ router.get('/:id', verifyToken, async (req, res) => {
  * Create new class schedule
  * Access: owner, admin only
  */
-router.post('/', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
         const { class_date, time_slot, instructor_id, title, content, notes } = req.body;
 
@@ -279,7 +279,7 @@ router.post('/', verifyToken, requireRole(['owner', 'admin']), async (req, res) 
  * Update class schedule
  * Access: owner, admin only
  */
-router.put('/:id', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const scheduleId = parseInt(req.params.id);
 
     try {
@@ -391,7 +391,7 @@ router.put('/:id', verifyToken, requireRole(['owner', 'admin']), async (req, res
  * Delete class schedule
  * Access: owner, admin only
  */
-router.delete('/:id', verifyToken, requireRole(['owner', 'admin']), async (req, res) => {
+router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const scheduleId = parseInt(req.params.id);
 
     try {
