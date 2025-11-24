@@ -183,7 +183,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
 
         // Verify student exists and belongs to this academy
         const [students] = await db.query(
-            'SELECT id FROM students WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [student_id, req.user.academyId]
         );
 
@@ -268,7 +268,7 @@ router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (
             FROM students
             WHERE academy_id = ?
             AND status = 'active'
-            AND is_deleted = false`,
+            AND deleted_at IS NULL`,
             [req.user.academyId]
         );
 
