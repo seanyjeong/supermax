@@ -128,7 +128,7 @@ router.post('/calculate', verifyToken, requireRole('owner', 'admin'), async (req
 
         // Get instructor info
         const [instructors] = await db.query(
-            'SELECT * FROM instructors WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT * FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [instructor_id, req.user.academyId]
         );
 
@@ -196,7 +196,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
 
         // Verify instructor exists
         const [instructors] = await db.query(
-            'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [instructor_id, req.user.academyId]
         );
 
