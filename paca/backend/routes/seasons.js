@@ -711,15 +711,13 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
                     category,
                     amount,
                     expense_date,
-                    student_id,
                     description
-                ) VALUES (?, 'refund', ?, ?, ?, ?)`,
+                ) VALUES (?, 'refund', ?, ?, ?)`,
                 [
                     enrollment.academy_id,
                     refundResult.refundAmount,
                     cancelDate,
-                    enrollment.student_id,
-                    `시즌 중도 해지 환불 (${enrollment.season_name})`
+                    `시즌 중도 해지 환불 - ${enrollment.student_name} (${enrollment.season_name})`
                 ]
             );
         }
