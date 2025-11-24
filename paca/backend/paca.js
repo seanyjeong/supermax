@@ -21,13 +21,16 @@ const PORT = process.env.PORT || 8320;
 
 // CORS Configuration (MUST be before helmet!)
 const corsOptions = {
-    origin: '*',  // 개발 중이므로 모두 허용
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Authorization',
-    credentials: false,  // credentials를 false로!
-    optionsSuccessStatus: 200
+  origin: '*',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+  // allowedHeaders: '*',  // 아예 지워도 cors 패키지가 자동으로 맞춰줌
+  credentials: false,
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
+// 프리플라이트 확실히 처리하고 싶으면 한 줄 더
+app.options('*', cors(corsOptions));
+
 
 // Security Headers (configured to not interfere with CORS)
 app.use(helmet({
