@@ -23,12 +23,13 @@ const PORT = process.env.PORT || 8320;
 app.use(helmet());
 
 // CORS Configuration
-const corsOptions = {
-    origin: process.env.CORS_ORIGIN || '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Authorization',
-    credentials: true
-};
+  const corsOptions = {
+      origin: '*',  // 개발 중이므로 모두 허용
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      allowedHeaders: 'Content-Type,Authorization',
+      credentials: false,  // credentials를 false로!
+      optionsSuccessStatus: 200
+  };
 app.use(cors(corsOptions));
 
 // Body Parser
