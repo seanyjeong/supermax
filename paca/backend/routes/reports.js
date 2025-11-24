@@ -440,14 +440,15 @@ router.get('/attendance', verifyToken, requireRole('owner', 'admin'), async (req
         const [stats] = await db.query(
             `SELECT
                 COUNT(*) as total_records,
-                SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_count,
-                SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_count,
-                SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_count,
-                SUM(CASE WHEN status = 'excused' THEN 1 ELSE 0 END) as excused_count
+                SUM(CASE WHEN a.attendance_status = 'present' THEN 1 ELSE 0 END) as present_count,
+                SUM(CASE WHEN a.attendance_status = 'absent' THEN 1 ELSE 0 END) as absent_count,
+                SUM(CASE WHEN a.attendance_status = 'late' THEN 1 ELSE 0 END) as late_count,
+                SUM(CASE WHEN a.attendance_status = 'excused' THEN 1 ELSE 0 END) as excused_count
             FROM attendance a
+            JOIN class_schedules cs ON a.class_schedule_id = cs.id
             JOIN students s ON a.student_id = s.id
             WHERE s.academy_id = ?
-            AND a.attendance_date BETWEEN ? AND ?`,
+            AND cs.class_date BETWEEN ? AND ?`,
             [academyId, start_date, end_date]
         );
 
@@ -462,12 +463,13 @@ router.get('/attendance', verifyToken, requireRole('owner', 'admin'), async (req
                 s.name as student_name,
                 s.student_number,
                 COUNT(*) as total_days,
-                SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END) as present_days,
-                SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END) as absent_days,
-                SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END) as late_days
+                SUM(CASE WHEN a.attendance_status = 'present' THEN 1 ELSE 0 END) as present_days,
+                SUM(CASE WHEN a.attendance_status = 'absent' THEN 1 ELSE 0 END) as absent_days,
+                SUM(CASE WHEN a.attendance_status = 'late' THEN 1 ELSE 0 END) as late_days
             FROM students s
             LEFT JOIN attendance a ON s.id = a.student_id
-                AND a.attendance_date BETWEEN ? AND ?
+            LEFT JOIN class_schedules cs ON a.class_schedule_id = cs.id
+                AND cs.class_date BETWEEN ? AND ?
             WHERE s.academy_id = ?
             AND s.deleted_at IS NULL
             AND s.status = 'active'
