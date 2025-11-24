@@ -19,18 +19,21 @@ const PORT = process.env.PORT || 8320;
 // Middleware Configuration
 // ==========================================
 
-// Security Headers
-app.use(helmet());
-
-// CORS Configuration
-  const corsOptions = {
-      origin: '*',  // 개발 중이므로 모두 허용
-      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      allowedHeaders: 'Content-Type,Authorization',
-      credentials: false,  // credentials를 false로!
-      optionsSuccessStatus: 200
-  };
+// CORS Configuration (MUST be before helmet!)
+const corsOptions = {
+    origin: '*',  // 개발 중이므로 모두 허용
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type,Authorization',
+    credentials: false,  // credentials를 false로!
+    optionsSuccessStatus: 200
+};
 app.use(cors(corsOptions));
+
+// Security Headers (configured to not interfere with CORS)
+app.use(helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false
+}));
 
 // Body Parser
 app.use(express.json({ limit: '10mb' }));
