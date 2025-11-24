@@ -362,7 +362,7 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
 
         // Verify student exists and belongs to academy
         const [students] = await db.query(
-            'SELECT * FROM students WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT * FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [student_id, req.user.academyId]
         );
 
@@ -502,7 +502,7 @@ router.post('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (r
 
         // Get student info
         const [students] = await db.query(
-            'SELECT * FROM students WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT * FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [student_id, req.user.academyId]
         );
 
