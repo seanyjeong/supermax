@@ -318,18 +318,22 @@ router.post('/:id/pay', verifyToken, requireRole('owner'), async (req, res) => {
         await db.query(
             `INSERT INTO expenses (
                 academy_id,
-                expense_type,
-                amount,
                 expense_date,
+                category,
+                amount,
+                salary_id,
                 instructor_id,
-                description
-            ) VALUES (?, 'salary', ?, ?, ?, ?)`,
+                description,
+                recorded_by
+            ) VALUES (?, ?, 'salary', ?, ?, ?, ?, ?)`,
             [
                 salary.academy_id,
-                salary.net_salary,
                 payment_date || new Date().toISOString().split('T')[0],
+                salary.net_salary,
+                salaryId,
                 salary.instructor_id,
-                `급여 지급 (${salary.year_month})`
+                `급여 지급 (${salary.year_month})`,
+                req.user.userId
             ]
         );
 
