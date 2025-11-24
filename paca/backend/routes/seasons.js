@@ -100,8 +100,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             season_start_date,
             season_end_date,
             non_season_end_date,
-            default_season_fee,
-            description
+            default_season_fee
         } = req.body;
 
         if (!season_name || !season_start_date || !season_end_date || !non_season_end_date) {
@@ -138,17 +137,15 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 season_end_date,
                 non_season_end_date,
                 default_season_fee,
-                description,
                 is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, true)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, true)`,
             [
                 req.user.academyId,
                 season_name,
                 season_start_date,
                 season_end_date,
                 non_season_end_date,
-                default_season_fee || null,
-                description || null
+                default_season_fee || null
             ]
         );
 
@@ -198,7 +195,6 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             season_end_date,
             non_season_end_date,
             default_season_fee,
-            description,
             is_active
         } = req.body;
 
@@ -224,10 +220,6 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         if (default_season_fee !== undefined) {
             updates.push('default_season_fee = ?');
             params.push(default_season_fee);
-        }
-        if (description !== undefined) {
-            updates.push('description = ?');
-            params.push(description);
         }
         if (is_active !== undefined) {
             updates.push('is_active = ?');
@@ -447,7 +439,7 @@ router.get('/:id/students', verifyToken, async (req, res) => {
                 s.name as student_name,
                 s.phone as student_phone,
                 s.parent_phone,
-                s.weekly_schedule
+                s.class_days
             FROM student_seasons ss
             JOIN students s ON ss.student_id = s.id
             WHERE ss.season_id = ?
@@ -594,7 +586,7 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
         await db.query(
             `INSERT INTO revenues (
                 academy_id,
-                revenue_type,
+                category,
                 amount,
                 revenue_date,
                 student_id,
@@ -652,7 +644,7 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
                 ss.*,
                 s.academy_id,
                 s.name as student_name,
-                s.weekly_schedule,
+                s.class_days,
                 se.season_name,
                 se.season_start_date,
                 se.season_end_date
@@ -687,7 +679,7 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
         }
 
         const cancelDate = cancellation_date || new Date().toISOString().split('T')[0];
-        const weeklyDays = parseWeeklyDays(enrollment.weekly_schedule);
+        const weeklyDays = parseWeeklyDays(enrollment.class_days);
 
         // Calculate refund
         const refundResult = calculateSeasonRefund({
@@ -716,7 +708,7 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
             await db.query(
                 `INSERT INTO expenses (
                     academy_id,
-                    expense_type,
+                    category,
                     amount,
                     expense_date,
                     student_id,
