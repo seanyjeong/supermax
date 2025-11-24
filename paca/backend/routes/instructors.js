@@ -26,7 +26,7 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
                 i.created_at
             FROM instructors i
             WHERE i.academy_id = ?
-            AND i.is_deleted = false
+            AND i.deleted_at IS NULL
         `;
 
         const params = [req.user.academyId];
@@ -82,7 +82,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             LEFT JOIN academies a ON i.academy_id = a.id
             WHERE i.id = ?
             AND i.academy_id = ?
-            AND i.is_deleted = false`,
+            AND i.deleted_at IS NULL`,
             [instructorId, req.user.academyId]
         );
 
@@ -177,18 +177,18 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         }
 
         // Validate salary_type
-        if (!['hourly', 'per_class', 'monthly'].includes(salary_type)) {
+        if (!['hourly', 'per_class', 'monthly', 'mixed'].includes(salary_type)) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'salary_type must be one of: hourly, per_class, monthly'
+                message: 'salary_type must be one of: hourly, per_class, monthly, mixed'
             });
         }
 
         // Validate tax_type
-        if (!['tax_3_3', 'insurance', 'none'].includes(tax_type)) {
+        if (!['3.3%', 'insurance', 'none'].includes(tax_type)) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'tax_type must be one of: tax_3_3, insurance, none'
+                message: 'tax_type must be one of: 3.3%, insurance, none'
             });
         }
 
@@ -272,7 +272,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
     try {
         // Check if instructor exists
         const [instructors] = await db.query(
-            'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [instructorId, req.user.academyId]
         );
 
@@ -302,7 +302,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         // Check if new email already exists (if changed)
         if (email) {
             const [existing] = await db.query(
-                'SELECT id FROM instructors WHERE email = ? AND academy_id = ? AND id != ? AND is_deleted = false',
+                'SELECT id FROM instructors WHERE email = ? AND academy_id = ? AND id != ? AND deleted_at IS NULL',
                 [email, req.user.academyId, instructorId]
             );
 
@@ -416,7 +416,7 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
     try {
         // Check if instructor exists
         const [instructors] = await db.query(
-            'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [instructorId, req.user.academyId]
         );
 
@@ -429,7 +429,7 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
 
         // Soft delete
         await db.query(
-            'UPDATE instructors SET is_deleted = true, updated_at = NOW() WHERE id = ?',
+            'UPDATE instructors SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?',
             [instructorId]
         );
 
@@ -460,7 +460,7 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
     try {
         // Check if instructor exists
         const [instructors] = await db.query(
-            'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND is_deleted = false',
+            'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [instructorId, req.user.academyId]
         );
 
