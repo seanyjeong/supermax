@@ -17,7 +17,6 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
                 i.id,
                 i.name,
                 i.phone,
-                i.email,
                 i.hire_date,
                 i.salary_type,
                 i.hourly_rate,
@@ -43,9 +42,9 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
         }
 
         if (search) {
-            query += ' AND (i.name LIKE ? OR i.phone LIKE ? OR i.email LIKE ?)';
+            query += ' AND (i.name LIKE ? OR i.phone LIKE ?)';
             const searchTerm = `%${search}%`;
-            params.push(searchTerm, searchTerm, searchTerm);
+            params.push(searchTerm, searchTerm);
         }
 
         query += ' ORDER BY i.hire_date DESC';
@@ -157,16 +156,14 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         const {
             name,
             phone,
-            email,
             hire_date,
             salary_type,
             hourly_rate,
-            monthly_salary,
+            base_salary,
             tax_type,
             bank_name,
-            bank_account,
+            account_number,
             address,
-            emergency_contact,
             notes
         } = req.body;
 
@@ -195,10 +192,10 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         }
 
         // Validate salary amounts
-        if (salary_type === 'monthly' && !monthly_salary) {
+        if (salary_type === 'monthly' && !base_salary) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'monthly_salary is required when salary_type is monthly'
+                message: 'base_salary is required when salary_type is monthly'
             });
         }
 
@@ -207,21 +204,6 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 error: 'Validation Error',
                 message: 'hourly_rate is required when salary_type is hourly or per_class'
             });
-        }
-
-        // Check if email already exists
-        if (email) {
-            const [existing] = await db.query(
-                'SELECT id FROM instructors WHERE email = ? AND academy_id = ? AND is_deleted = false',
-                [email, req.user.academyId]
-            );
-
-            if (existing.length > 0) {
-                return res.status(400).json({
-                    error: 'Validation Error',
-                    message: 'Email already exists'
-                });
-            }
         }
 
         // Insert instructor
@@ -234,15 +216,14 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 hire_date,
                 salary_type,
                 hourly_rate,
-                monthly_salary,
+                base_salary,
                 tax_type,
                 bank_name,
-                bank_account,
+                account_number,
                 address,
-                emergency_contact,
                 notes,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 req.user.academyId,
                 name,
@@ -251,12 +232,11 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 hire_date || new Date().toISOString().split('T')[0],
                 salary_type,
                 hourly_rate || 0,
-                monthly_salary || 0,
+                base_salary || 0,
                 tax_type,
                 bank_name || null,
-                bank_account || null,
+                account_number || null,
                 address || null,
-                emergency_contact || null,
                 notes || null
             ]
         );
@@ -309,12 +289,11 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             hire_date,
             salary_type,
             hourly_rate,
-            monthly_salary,
+            base_salary,
             tax_type,
             bank_name,
-            bank_account,
+            account_number,
             address,
-            emergency_contact,
             notes,
             status
         } = req.body;
@@ -362,9 +341,9 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             updates.push('hourly_rate = ?');
             params.push(hourly_rate);
         }
-        if (monthly_salary !== undefined) {
-            updates.push('monthly_salary = ?');
-            params.push(monthly_salary);
+        if (base_salary !== undefined) {
+            updates.push('base_salary = ?');
+            params.push(base_salary);
         }
         if (tax_type !== undefined) {
             updates.push('tax_type = ?');
@@ -374,17 +353,13 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             updates.push('bank_name = ?');
             params.push(bank_name);
         }
-        if (bank_account !== undefined) {
-            updates.push('bank_account = ?');
-            params.push(bank_account);
+        if (account_number !== undefined) {
+            updates.push('account_number = ?');
+            params.push(account_number);
         }
         if (address !== undefined) {
             updates.push('address = ?');
             params.push(address);
-        }
-        if (emergency_contact !== undefined) {
-            updates.push('emergency_contact = ?');
-            params.push(emergency_contact);
         }
         if (notes !== undefined) {
             updates.push('notes = ?');
