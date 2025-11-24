@@ -18,19 +18,22 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
                 p.student_id,
                 s.name as student_name,
                 s.student_number,
+                p.year_month,
                 p.payment_type,
-                p.amount,
-                p.paid_amount,
+                p.base_amount,
                 p.discount_amount,
-                p.payment_date,
+                p.additional_amount,
+                p.final_amount,
+                p.paid_date,
                 p.due_date,
                 p.payment_status,
                 p.payment_method,
+                p.description,
                 p.notes,
                 p.created_at
             FROM student_payments p
             JOIN students s ON p.student_id = s.id
-            WHERE s.academy_id = ?
+            WHERE p.academy_id = ?
         `;
 
         const params = [req.user.academyId];
@@ -87,16 +90,18 @@ router.get('/unpaid', verifyToken, requireRole('owner', 'admin'), async (req, re
                 s.student_number,
                 s.phone,
                 s.parent_phone,
+                p.year_month,
                 p.payment_type,
-                p.amount,
-                p.paid_amount,
+                p.base_amount,
                 p.discount_amount,
+                p.additional_amount,
+                p.final_amount,
                 p.due_date,
                 p.payment_status,
                 DATEDIFF(CURDATE(), p.due_date) as days_overdue
             FROM student_payments p
             JOIN students s ON p.student_id = s.id
-            WHERE s.academy_id = ?
+            WHERE p.academy_id = ?
             AND p.payment_status IN ('pending', 'partial')
             ORDER BY p.due_date ASC`,
             [req.user.academyId]
@@ -167,23 +172,26 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         const {
             student_id,
             payment_type,
-            amount,
+            base_amount,
             discount_amount,
+            additional_amount,
             due_date,
-            notes
+            year_month,
+            notes,
+            description
         } = req.body;
 
         // Validation
-        if (!student_id || !payment_type || !amount || !due_date) {
+        if (!student_id || !payment_type || !base_amount || !due_date || !year_month) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: student_id, payment_type, amount, due_date'
+                message: 'Required fields: student_id, payment_type, base_amount, due_date, year_month'
             });
         }
 
         // Verify student exists and belongs to this academy
         const [students] = await db.query(
-            'SELECT id FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            'SELECT id, academy_id FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [student_id, req.user.academyId]
         );
 
@@ -194,25 +202,39 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             });
         }
 
+        // Calculate final_amount
+        const finalAmount = parseFloat(base_amount) - parseFloat(discount_amount || 0) + parseFloat(additional_amount || 0);
+
         // Insert payment record
         const [result] = await db.query(
             `INSERT INTO student_payments (
                 student_id,
+                academy_id,
+                year_month,
                 payment_type,
-                amount,
-                paid_amount,
+                base_amount,
                 discount_amount,
+                additional_amount,
+                final_amount,
                 due_date,
                 payment_status,
-                notes
-            ) VALUES (?, ?, ?, 0, ?, ?, 'pending', ?)`,
+                description,
+                notes,
+                recorded_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
             [
                 student_id,
+                students[0].academy_id,
+                year_month,
                 payment_type,
-                amount,
+                base_amount,
                 discount_amount || 0,
+                additional_amount || 0,
+                finalAmount,
                 due_date,
-                notes || null
+                description || null,
+                notes || null,
+                req.user.userId
             ]
         );
 
@@ -299,27 +321,40 @@ router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (
 
         // Create payment records for all students
         let created = 0;
+        const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
         for (const student of students) {
-            const amount = student.monthly_tuition;
-            const discount = amount * (student.discount_rate / 100);
+            const baseAmount = student.monthly_tuition;
+            const discount = baseAmount * (student.discount_rate / 100);
+            const finalAmount = baseAmount - discount;
 
             await db.query(
                 `INSERT INTO student_payments (
                     student_id,
+                    academy_id,
+                    year_month,
                     payment_type,
-                    amount,
-                    paid_amount,
+                    base_amount,
                     discount_amount,
+                    additional_amount,
+                    final_amount,
                     due_date,
                     payment_status,
-                    notes
-                ) VALUES (?, 'monthly', ?, 0, ?, ?, 'pending', ?)`,
+                    description,
+                    notes,
+                    recorded_by
+                ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, 'pending', ?, ?, ?)`,
                 [
                     student.id,
-                    amount,
+                    req.user.academyId,
+                    yearMonth,
+                    baseAmount,
                     discount,
+                    finalAmount,
                     due_date,
-                    `${year}년 ${month}월 수강료`
+                    `${year}년 ${month}월 수강료`,
+                    null,
+                    req.user.userId
                 ]
             );
             created++;
@@ -361,11 +396,10 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
 
         // Get payment record
         const [payments] = await db.query(
-            `SELECT p.*, s.academy_id
+            `SELECT p.*
             FROM student_payments p
-            JOIN students s ON p.student_id = s.id
-            WHERE p.id = ?`,
-            [paymentId]
+            WHERE p.id = ? AND p.academy_id = ?`,
+            [paymentId, req.user.academyId]
         );
 
         if (payments.length === 0) {
@@ -377,41 +411,41 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
 
         const payment = payments[0];
 
-        // Verify academy
-        if (payment.academy_id !== req.user.academyId) {
-            return res.status(403).json({
-                error: 'Forbidden',
-                message: 'Access denied'
+        // Check if payment already completed
+        if (payment.payment_status === 'paid') {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Payment already completed'
             });
         }
 
-        // Calculate new paid amount
-        const newPaidAmount = parseFloat(payment.paid_amount) + parseFloat(paid_amount);
-        const totalDue = parseFloat(payment.amount) - parseFloat(payment.discount_amount);
+        // Calculate total due amount
+        const totalDue = parseFloat(payment.final_amount);
 
-        // Determine payment status
+        // Determine payment status based on paid_amount
         let paymentStatus;
-        if (newPaidAmount >= totalDue) {
+        if (parseFloat(paid_amount) >= totalDue) {
             paymentStatus = 'paid';
-        } else if (newPaidAmount > 0) {
+        } else if (parseFloat(paid_amount) > 0) {
             paymentStatus = 'partial';
         } else {
-            paymentStatus = 'pending';
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'paid_amount must be greater than 0'
+            });
         }
 
         // Update payment record
         await db.query(
             `UPDATE student_payments
             SET
-                paid_amount = ?,
                 payment_status = ?,
                 payment_method = ?,
-                payment_date = ?,
+                paid_date = ?,
                 notes = CONCAT(IFNULL(notes, ''), '\n', ?),
                 updated_at = NOW()
             WHERE id = ?`,
             [
-                newPaidAmount,
                 paymentStatus,
                 payment_method,
                 payment_date || new Date().toISOString().split('T')[0],
@@ -500,10 +534,12 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
 
         const {
             payment_type,
-            amount,
+            base_amount,
             discount_amount,
+            additional_amount,
             due_date,
             payment_status,
+            description,
             notes
         } = req.body;
 
@@ -515,14 +551,33 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             updates.push('payment_type = ?');
             params.push(payment_type);
         }
-        if (amount !== undefined) {
-            updates.push('amount = ?');
-            params.push(amount);
+        if (base_amount !== undefined) {
+            updates.push('base_amount = ?');
+            params.push(base_amount);
         }
         if (discount_amount !== undefined) {
             updates.push('discount_amount = ?');
             params.push(discount_amount);
         }
+        if (additional_amount !== undefined) {
+            updates.push('additional_amount = ?');
+            params.push(additional_amount);
+        }
+
+        // Recalculate final_amount if any amount fields changed
+        if (base_amount !== undefined || discount_amount !== undefined || additional_amount !== undefined) {
+            const [current] = await db.query('SELECT base_amount, discount_amount, additional_amount FROM student_payments WHERE id = ?', [paymentId]);
+            const currentData = current[0];
+
+            const newBase = base_amount !== undefined ? base_amount : currentData.base_amount;
+            const newDiscount = discount_amount !== undefined ? discount_amount : currentData.discount_amount;
+            const newAdditional = additional_amount !== undefined ? additional_amount : currentData.additional_amount;
+
+            const finalAmount = parseFloat(newBase) - parseFloat(newDiscount) + parseFloat(newAdditional);
+            updates.push('final_amount = ?');
+            params.push(finalAmount);
+        }
+
         if (due_date !== undefined) {
             updates.push('due_date = ?');
             params.push(due_date);
@@ -530,6 +585,10 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         if (payment_status !== undefined) {
             updates.push('payment_status = ?');
             params.push(payment_status);
+        }
+        if (description !== undefined) {
+            updates.push('description = ?');
+            params.push(description);
         }
         if (notes !== undefined) {
             updates.push('notes = ?');
@@ -587,24 +646,17 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
     try {
         // Verify payment exists and belongs to this academy
         const [payments] = await db.query(
-            `SELECT p.id, p.student_id, s.academy_id, s.name as student_name
+            `SELECT p.id, p.student_id, s.name as student_name
             FROM student_payments p
             JOIN students s ON p.student_id = s.id
-            WHERE p.id = ?`,
-            [paymentId]
+            WHERE p.id = ? AND p.academy_id = ?`,
+            [paymentId, req.user.academyId]
         );
 
         if (payments.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
                 message: 'Payment record not found'
-            });
-        }
-
-        if (payments[0].academy_id !== req.user.academyId) {
-            return res.status(403).json({
-                error: 'Forbidden',
-                message: 'Access denied'
             });
         }
 
@@ -651,12 +703,11 @@ router.get('/stats/summary', verifyToken, requireRole('owner', 'admin'), async (
                 SUM(CASE WHEN p.payment_status = 'paid' THEN 1 ELSE 0 END) as paid_count,
                 SUM(CASE WHEN p.payment_status = 'partial' THEN 1 ELSE 0 END) as partial_count,
                 SUM(CASE WHEN p.payment_status = 'pending' THEN 1 ELSE 0 END) as unpaid_count,
-                SUM(p.amount - p.discount_amount) as total_expected,
-                SUM(p.paid_amount) as total_collected,
-                SUM(CASE WHEN p.payment_status != 'paid' THEN (p.amount - p.discount_amount - p.paid_amount) ELSE 0 END) as total_outstanding
+                SUM(p.final_amount) as total_expected,
+                SUM(CASE WHEN p.payment_status = 'paid' THEN p.final_amount ELSE 0 END) as total_collected,
+                SUM(CASE WHEN p.payment_status IN ('pending', 'partial') THEN p.final_amount ELSE 0 END) as total_outstanding
             FROM student_payments p
-            JOIN students s ON p.student_id = s.id
-            WHERE s.academy_id = ?${dateFilter}`,
+            WHERE p.academy_id = ?${dateFilter}`,
             params
         );
 
