@@ -97,7 +97,8 @@ app.get('/paca', (req, res) => {
             seasons: '/paca/seasons',
             schedules: '/paca/schedules',
             settings: '/paca/settings',
-            performance: '/paca/performance'
+            performance: '/paca/performance',
+            expenses: '/paca/expenses'
         }
     });
 });
@@ -113,6 +114,7 @@ const seasonRoutes = require('./routes/seasons');
 const scheduleRoutes = require('./routes/schedules');
 const settingRoutes = require('./routes/settings');
 const performanceRoutes = require('./routes/performance');
+const expenseRoutes = require('./routes/expenses');
 
 // Register Routes
 app.use('/paca/auth', authRoutes);
@@ -125,6 +127,7 @@ app.use('/paca/seasons', seasonRoutes);
 app.use('/paca/schedules', scheduleRoutes);
 app.use('/paca/settings', settingRoutes);
 app.use('/paca/performance', performanceRoutes);
+app.use('/paca/expenses', expenseRoutes);
 
 // ==========================================
 // Error Handling
