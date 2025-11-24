@@ -20,7 +20,7 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
                 i.hire_date,
                 i.salary_type,
                 i.hourly_rate,
-                i.monthly_salary,
+                i.base_salary,
                 i.tax_type,
                 i.status,
                 i.created_at
@@ -156,6 +156,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         const {
             name,
             phone,
+            email,
             hire_date,
             salary_type,
             hourly_rate,
