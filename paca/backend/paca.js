@@ -15,6 +15,9 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const PORT = process.env.PORT || 8320;
 
+// Trust proxy - nginx 리버스 프록시 뒤에서 실행될 때 필요
+app.set('trust proxy', 1);
+
 // ==========================================
 // Middleware Configuration
 // ==========================================
@@ -55,7 +58,14 @@ if (process.env.NODE_ENV === 'development') {
 // Rate Limiting
 const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100 // limit each IP
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    // nginx 프록시 뒤에서 X-Forwarded-For 검증 에러 방지
+    validate: {
+        trustProxy: false,
+        xForwardedForHeader: false
+    }
 });
 app.use('/paca', limiter);
 
