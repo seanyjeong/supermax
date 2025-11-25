@@ -99,7 +99,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         const [attendances] = await db.query(
             `SELECT
                 id,
-                attendance_date,
+                work_date,
                 time_slot,
                 check_in_time,
                 check_out_time,
@@ -108,7 +108,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
                 created_at
             FROM instructor_attendance
             WHERE instructor_id = ?
-            ORDER BY attendance_date DESC
+            ORDER BY work_date DESC
             LIMIT 30`,
             [instructorId]
         );
@@ -471,19 +471,19 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
             });
         }
 
-        const { attendance_date, time_slot, check_in_time, check_out_time, attendance_status, notes } = req.body;
+        const { work_date, time_slot, check_in_time, check_out_time, attendance_status, notes } = req.body;
 
-        if (!attendance_date || !time_slot) {
+        if (!work_date || !time_slot) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'attendance_date and time_slot are required'
+                message: 'work_date and time_slot are required'
             });
         }
 
         // Check if attendance record already exists for this date and time_slot
         const [existing] = await db.query(
-            'SELECT id FROM instructor_attendance WHERE instructor_id = ? AND attendance_date = ? AND time_slot = ?',
-            [instructorId, attendance_date, time_slot]
+            'SELECT id FROM instructor_attendance WHERE instructor_id = ? AND work_date = ? AND time_slot = ?',
+            [instructorId, work_date, time_slot]
         );
 
         if (existing.length > 0) {
@@ -509,14 +509,14 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
             const [result] = await db.query(
                 `INSERT INTO instructor_attendance (
                     instructor_id,
-                    attendance_date,
+                    work_date,
                     time_slot,
                     check_in_time,
                     check_out_time,
                     attendance_status,
                     notes
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [instructorId, attendance_date, time_slot, check_in_time || null, check_out_time || null, attendance_status || 'present', notes || null]
+                [instructorId, work_date, time_slot, check_in_time || null, check_out_time || null, attendance_status || 'present', notes || null]
             );
 
             const [created] = await db.query(
@@ -551,7 +551,7 @@ router.get('/:id/attendance', verifyToken, requireRole('owner', 'admin'), async 
         let query = `
             SELECT
                 id,
-                attendance_date,
+                work_date,
                 time_slot,
                 check_in_time,
                 check_out_time,
@@ -565,11 +565,11 @@ router.get('/:id/attendance', verifyToken, requireRole('owner', 'admin'), async 
         const params = [instructorId];
 
         if (year && month) {
-            query += ` AND DATE_FORMAT(attendance_date, '%Y-%m') = ?`;
+            query += ` AND DATE_FORMAT(work_date, '%Y-%m') = ?`;
             params.push(`${year}-${String(month).padStart(2, '0')}`);
         }
 
-        query += ' ORDER BY attendance_date DESC';
+        query += ' ORDER BY work_date DESC';
 
         const [attendances] = await db.query(query, params);
 
