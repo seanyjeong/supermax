@@ -83,7 +83,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
                 i.name as instructor_name,
                 i.salary_type,
                 i.hourly_rate,
-                i.monthly_salary
+                i.base_salary
             FROM salary_records s
             JOIN instructors i ON s.instructor_id = i.id
             WHERE s.id = ?
