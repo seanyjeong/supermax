@@ -188,11 +188,12 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             notes
         } = req.body;
 
-        // Validation
-        if (!name || !phone || !parent_phone || !grade || !grade_type || !admission_type) {
+        // Validation - DB 스키마에 맞게 필수 필드만 검증
+        // grade, parent_phone은 DB에서 nullable이므로 제외
+        if (!name || !phone || !grade_type || !admission_type) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: name, phone, parent_phone, grade, grade_type, admission_type'
+                message: 'Required fields: name, phone, grade_type, admission_type'
             });
         }
 
