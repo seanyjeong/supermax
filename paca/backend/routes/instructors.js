@@ -471,36 +471,28 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
             });
         }
 
-        const { attendance_date, check_in, check_out, notes } = req.body;
+        const { attendance_date, time_slot, check_in_time, check_out_time, attendance_status, notes } = req.body;
 
-        if (!attendance_date) {
+        if (!attendance_date || !time_slot) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'attendance_date is required'
+                message: 'attendance_date and time_slot are required'
             });
         }
 
-        // Calculate work hours if both check_in and check_out are provided
-        let work_hours = null;
-        if (check_in && check_out) {
-            const checkInTime = new Date(`2000-01-01 ${check_in}`);
-            const checkOutTime = new Date(`2000-01-01 ${check_out}`);
-            work_hours = (checkOutTime - checkInTime) / (1000 * 60 * 60); // hours
-        }
-
-        // Check if attendance record already exists for this date
+        // Check if attendance record already exists for this date and time_slot
         const [existing] = await db.query(
-            'SELECT id FROM instructor_attendance WHERE instructor_id = ? AND attendance_date = ?',
-            [instructorId, attendance_date]
+            'SELECT id FROM instructor_attendance WHERE instructor_id = ? AND attendance_date = ? AND time_slot = ?',
+            [instructorId, attendance_date, time_slot]
         );
 
         if (existing.length > 0) {
             // Update existing record
             await db.query(
                 `UPDATE instructor_attendance
-                SET check_in = ?, check_out = ?, work_hours = ?, notes = ?, updated_at = NOW()
+                SET check_in_time = ?, check_out_time = ?, attendance_status = ?, notes = ?, updated_at = NOW()
                 WHERE id = ?`,
-                [check_in, check_out, work_hours, notes || null, existing[0].id]
+                [check_in_time || null, check_out_time || null, attendance_status || 'present', notes || null, existing[0].id]
             );
 
             const [updated] = await db.query(
@@ -518,12 +510,13 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                 `INSERT INTO instructor_attendance (
                     instructor_id,
                     attendance_date,
-                    check_in,
-                    check_out,
-                    work_hours,
+                    time_slot,
+                    check_in_time,
+                    check_out_time,
+                    attendance_status,
                     notes
-                ) VALUES (?, ?, ?, ?, ?, ?)`,
-                [instructorId, attendance_date, check_in, check_out, work_hours, notes || null]
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [instructorId, attendance_date, time_slot, check_in_time || null, check_out_time || null, attendance_status || 'present', notes || null]
             );
 
             const [created] = await db.query(
@@ -559,9 +552,10 @@ router.get('/:id/attendance', verifyToken, requireRole('owner', 'admin'), async 
             SELECT
                 id,
                 attendance_date,
-                check_in,
-                check_out,
-                work_hours,
+                time_slot,
+                check_in_time,
+                check_out_time,
+                attendance_status,
                 notes,
                 created_at
             FROM instructor_attendance
