@@ -100,9 +100,10 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             `SELECT
                 id,
                 attendance_date,
-                check_in,
-                check_out,
-                work_hours,
+                time_slot,
+                check_in_time,
+                check_out_time,
+                attendance_status,
                 notes,
                 created_at
             FROM instructor_attendance
@@ -118,11 +119,10 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
                 id,
                 \`year_month\`,
                 base_amount,
-                bonus,
-                deduction,
+                incentive_amount,
+                total_deduction,
                 tax_amount,
-                insurance_amount,
-                net_amount,
+                net_salary,
                 payment_date,
                 payment_status
             FROM salary_records
