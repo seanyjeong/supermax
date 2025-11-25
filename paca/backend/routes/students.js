@@ -132,9 +132,9 @@ router.get('/:id', verifyToken, async (req, res) => {
             `SELECT
                 id,
                 payment_type,
-                amount,
-                paid_amount,
-                payment_date,
+                base_amount,
+                final_amount,
+                paid_date,
                 due_date,
                 payment_status,
                 payment_method
