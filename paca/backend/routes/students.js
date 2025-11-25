@@ -117,11 +117,7 @@ router.get('/:id', verifyToken, async (req, res) => {
                 id,
                 record_date,
                 record_type,
-                subject,
-                score,
-                max_score,
-                grade_rank,
-                school_rank,
+                performance_data,
                 notes,
                 created_at
             FROM student_performance
