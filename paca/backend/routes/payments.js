@@ -458,7 +458,7 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
         await db.query(
             `INSERT INTO revenues (
                 academy_id,
-                revenue_type,
+                category,
                 amount,
                 revenue_date,
                 payment_method,
