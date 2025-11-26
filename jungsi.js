@@ -5331,7 +5331,33 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
                 const studentName = studentCheck[0].name;
                 console.log(` -> 학생 ${studentName}(${currentStudentId}) 지점 확인 완료 (${studentCheck[0].branch})`);
 
-                // 5. 새 운동 추가/업데이트 (기존 퀘스트 유지, 병합 방식)
+                // ⭐️ 5-1. 삭제 처리: 전송받은 목록에 없는 기존 퀘스트 삭제 (완료되지 않은 것만)
+                const assignedExerciseNames = assignments.map(a => a.exercise_name);
+                if (assignedExerciseNames.length > 0) {
+                    // 전송받은 운동명 목록에 없는 미완료 퀘스트 삭제
+                    const [deleteResult] = await connection.query(
+                        `DELETE FROM jungsimaxstudent.teacher_daily_assignments
+                         WHERE student_account_id = ? AND assignment_date = ? AND teacher_userid = ?
+                         AND is_completed = 0 AND exercise_name NOT IN (?)`,
+                        [currentStudentId, assignment_date, teacher_userid, assignedExerciseNames]
+                    );
+                    if (deleteResult.affectedRows > 0) {
+                        console.log(` -> 학생 ${studentName}(${currentStudentId}) ${deleteResult.affectedRows}개 퀘스트 삭제됨`);
+                    }
+                } else {
+                    // 전송받은 운동이 없으면, 해당 날짜의 미완료 퀘스트 모두 삭제
+                    const [deleteResult] = await connection.query(
+                        `DELETE FROM jungsimaxstudent.teacher_daily_assignments
+                         WHERE student_account_id = ? AND assignment_date = ? AND teacher_userid = ?
+                         AND is_completed = 0`,
+                        [currentStudentId, assignment_date, teacher_userid]
+                    );
+                    if (deleteResult.affectedRows > 0) {
+                        console.log(` -> 학생 ${studentName}(${currentStudentId}) ${deleteResult.affectedRows}개 퀘스트 삭제됨 (전체)`);
+                    }
+                }
+
+                // 5-2. 새 운동 추가/업데이트
                 if (assignments.length > 0) {
                     let insertedCount = 0;
                     let updatedCount = 0;
@@ -5340,8 +5366,8 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
                         // 같은 학생, 같은 날짜, 같은 운동이 이미 있는지 확인
                         const [existing] = await connection.query(
                             `SELECT assignment_id FROM jungsimaxstudent.teacher_daily_assignments
-                             WHERE student_account_id = ? AND assignment_date = ? AND exercise_name = ? AND teacher_userid = ?`,
-                            [currentStudentId, assignment_date, item.exercise_name, teacher_userid]
+                             WHERE student_account_id = ? AND assignment_date = ? AND exercise_name = ?`,
+                            [currentStudentId, assignment_date, item.exercise_name]
                         );
 
                         if (existing.length > 0) {
@@ -5422,7 +5448,6 @@ app.post('/jungsi/teacher/assign-workout', authMiddleware, async (req, res) => {
         if (connection) connection.release();
     }
 });
-
 
 // --- API 2: (선생님용) 운동 마스터 목록 조회 ---
 // GET /jungsi/master-exercises
