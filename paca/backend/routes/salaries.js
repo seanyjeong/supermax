@@ -127,6 +127,10 @@ router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('o
         let eveningClasses = 0;
         let totalHours = 0;
 
+        // Group by date for daily breakdown
+        const dailyBreakdown = {};
+        const timeSlotLabels = { morning: '오전', afternoon: '오후', evening: '저녁' };
+
         for (const att of attendances) {
             // Count classes by time slot
             if (att.time_slot === 'morning') morningClasses++;
@@ -143,6 +147,16 @@ router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('o
                 // Default hours per time slot if no check times
                 totalHours += 3; // Assume 3 hours per class slot
             }
+
+            // Build daily breakdown
+            const dateStr = att.work_date instanceof Date
+                ? att.work_date.toISOString().split('T')[0]
+                : att.work_date;
+
+            if (!dailyBreakdown[dateStr]) {
+                dailyBreakdown[dateStr] = [];
+            }
+            dailyBreakdown[dateStr].push(timeSlotLabels[att.time_slot] || att.time_slot);
         }
 
         const totalClasses = morningClasses + afternoonClasses + eveningClasses;
@@ -167,7 +181,8 @@ router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('o
                 evening_classes: eveningClasses,
                 total_classes: totalClasses,
                 total_hours: Math.round(totalHours * 100) / 100,
-                attendance_days: attendances.length
+                attendance_days: Object.keys(dailyBreakdown).length,
+                daily_breakdown: dailyBreakdown
             }
         });
     } catch (error) {
