@@ -5721,13 +5721,13 @@ app.get('/jungsi/teacher/student-saved-list/:student_account_id/:year', authMidd
     }
 });
 
-// GET /jungsi/teacher/student-score-history/:student_account_id/:year
 app.get('/jungsi/teacher/student-score-history/:student_account_id/:year', authMiddleware, async (req, res) => {
     // 1. URL 파라미터 및 로그인한 선생님 정보
     const { student_account_id, year } = req.params;
+    const { u_id } = req.query; // ⭐️ 특정 대학만 필터링 (선택적)
     const { branch, userid: teacher_userid } = req.user;
 
-    console.log(`[API /teacher/student-score-history] 선생님(${teacher_userid})이 학생(${student_account_id}, ${year}년도) 점수 기록 조회`);
+    console.log(`[API /teacher/student-score-history] 선생님(${teacher_userid})이 학생(${student_account_id}, ${year}년도) 점수 기록 조회 (U_ID: ${u_id || '전체'})`);
 
     if (!student_account_id || !year) {
         return res.status(400).json({ success: false, message: '학생 ID와 학년도가 필요합니다.' });
@@ -5744,19 +5744,39 @@ app.get('/jungsi/teacher/student-score-history/:student_account_id/:year', authM
             return res.status(403).json({ success: false, message: '조회 권한이 없는 학생입니다.' });
         }
 
-        // 3. 학생의 점수 기록 조회 (최신순)
-        const sql = `
-            SELECT
-                history_id, account_id, U_ID, 학년도,
-                record_date, suneung_score, naeshin_score,
-                silgi_records_json, silgi_score, total_score
-            FROM jungsimaxstudent.student_score_history
-            WHERE account_id = ? AND 학년도 = ?
-            ORDER BY record_date DESC
-        `;
-        const [history] = await dbStudent.query(sql, [student_account_id, year]);
+        // 3. 학생의 점수 기록 조회 (최신순) - ⭐️ U_ID 필터링 추가
+        let sql;
+        let params;
 
-        console.log(` -> 학생(${student_account_id})의 점수 기록 ${history.length}건 조회 완료`);
+        if (u_id) {
+            // 특정 대학(U_ID)만 필터링
+            sql = `
+                SELECT
+                    history_id, account_id, U_ID, 학년도,
+                    record_date, suneung_score, naeshin_score,
+                    silgi_records_json, silgi_score, total_score
+                FROM jungsimaxstudent.student_score_history
+                WHERE account_id = ? AND 학년도 = ? AND U_ID = ?
+                ORDER BY record_date DESC
+            `;
+            params = [student_account_id, year, u_id];
+        } else {
+            // 전체 대학 조회 (기존 동작)
+            sql = `
+                SELECT
+                    history_id, account_id, U_ID, 학년도,
+                    record_date, suneung_score, naeshin_score,
+                    silgi_records_json, silgi_score, total_score
+                FROM jungsimaxstudent.student_score_history
+                WHERE account_id = ? AND 학년도 = ?
+                ORDER BY record_date DESC
+            `;
+            params = [student_account_id, year];
+        }
+
+        const [history] = await dbStudent.query(sql, params);
+
+        console.log(` -> 학생(${student_account_id})의 점수 기록 ${history.length}건 조회 완료 (U_ID: ${u_id || '전체'})`);
 
         res.json({ success: true, history });
 
@@ -5765,6 +5785,7 @@ app.get('/jungsi/teacher/student-score-history/:student_account_id/:year', authM
         res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
     }
 });
+
 
 // GET /jungsi/teacher/record-view/students?year=YYYY&view=my|all
 app.get('/jungsi/teacher/record-view/students', authMiddleware, async (req, res) => {
