@@ -242,79 +242,240 @@ router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
 });
 
 /**
- * PUT /paca/settings/academy
- * Update academy basic information
- * Access: owner only
+ * GET /paca/settings/academy
+ * Get academy settings (학원 기본정보 + 학원비 설정)
+ * Access: owner, admin, teacher
  */
-router.put('/academy', verifyToken, requireRole('owner'), async (req, res) => {
+router.get('/academy', verifyToken, async (req, res) => {
     try {
-        const {
-            name,
-            business_number,
-            address,
-            phone,
-            email,
-            operating_hours
-        } = req.body;
-
-        // Build update query dynamically
-        const updates = [];
-        const params = [];
-
-        if (name !== undefined) {
-            updates.push('name = ?');
-            params.push(name);
-        }
-        if (business_number !== undefined) {
-            updates.push('business_number = ?');
-            params.push(business_number);
-        }
-        if (address !== undefined) {
-            updates.push('address = ?');
-            params.push(address);
-        }
-        if (phone !== undefined) {
-            updates.push('phone = ?');
-            params.push(phone);
-        }
-        if (email !== undefined) {
-            updates.push('email = ?');
-            params.push(email);
-        }
-        if (operating_hours !== undefined) {
-            updates.push('operating_hours = ?');
-            params.push(JSON.stringify(operating_hours));
-        }
-
-        if (updates.length === 0) {
-            return res.status(400).json({
-                error: 'Validation Error',
-                message: 'No fields to update'
-            });
-        }
-
-        params.push(req.user.academyId);
-
-        await db.query(
-            `UPDATE academies SET ${updates.join(', ')} WHERE id = ?`,
-            params
-        );
-
-        // Fetch updated academy info
-        const [updated] = await db.query(
+        // 학원 기본 정보
+        const [academyRows] = await db.query(
             'SELECT * FROM academies WHERE id = ?',
             [req.user.academyId]
         );
 
+        if (academyRows.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Academy not found'
+            });
+        }
+
+        const academy = academyRows[0];
+
+        // 학원 설정 (학원비 등)
+        const [settingsRows] = await db.query(
+            'SELECT * FROM academy_settings WHERE academy_id = ?',
+            [req.user.academyId]
+        );
+
+        // 기본값
+        const defaultTuition = {
+            weekly_1: 0,
+            weekly_2: 0,
+            weekly_3: 0,
+            weekly_4: 0,
+            weekly_5: 0,
+            weekly_6: 0,
+            weekly_7: 0,
+        };
+
+        const defaultSeasonFees = {
+            exam_early: 0,
+            exam_regular: 0,
+            civil_service: 0,
+        };
+
+        let settings = {
+            academy_name: academy.name || '',
+            phone: academy.phone || '',
+            address: academy.address || '',
+            business_number: academy.business_number || '',
+            exam_tuition: { ...defaultTuition },
+            adult_tuition: { ...defaultTuition },
+            season_fees: { ...defaultSeasonFees },
+        };
+
+        // 기존 설정이 있으면 병합
+        if (settingsRows.length > 0) {
+            const dbSettings = settingsRows[0];
+
+            // JSON 필드 파싱
+            let tuitionSettings = null;
+            if (dbSettings.settings) {
+                try {
+                    tuitionSettings = typeof dbSettings.settings === 'string'
+                        ? JSON.parse(dbSettings.settings)
+                        : dbSettings.settings;
+                } catch (e) {
+                    console.error('Failed to parse settings JSON:', e);
+                }
+            }
+
+            if (tuitionSettings) {
+                settings = {
+                    ...settings,
+                    exam_tuition: tuitionSettings.exam_tuition || { ...defaultTuition },
+                    adult_tuition: tuitionSettings.adult_tuition || { ...defaultTuition },
+                    season_fees: tuitionSettings.season_fees || { ...defaultSeasonFees },
+                };
+            }
+        }
+
         res.json({
-            message: 'Academy information updated successfully',
-            academy: updated[0]
+            message: 'Academy settings retrieved successfully',
+            settings
         });
     } catch (error) {
-        console.error('Error updating academy info:', error);
+        console.error('Error fetching academy settings:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to update academy information'
+            message: 'Failed to fetch academy settings'
+        });
+    }
+});
+
+/**
+ * PUT /paca/settings/academy
+ * Update academy settings (학원 기본정보 + 학원비 설정)
+ * Access: owner, admin only
+ */
+router.put('/academy', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const {
+            academy_name,
+            phone,
+            address,
+            business_number,
+            exam_tuition,
+            adult_tuition,
+            season_fees
+        } = req.body;
+
+        // 1. 학원 기본 정보 업데이트
+        const academyUpdates = [];
+        const academyParams = [];
+
+        if (academy_name !== undefined) {
+            academyUpdates.push('name = ?');
+            academyParams.push(academy_name);
+        }
+        if (phone !== undefined) {
+            academyUpdates.push('phone = ?');
+            academyParams.push(phone);
+        }
+        if (address !== undefined) {
+            academyUpdates.push('address = ?');
+            academyParams.push(address);
+        }
+        if (business_number !== undefined) {
+            academyUpdates.push('business_number = ?');
+            academyParams.push(business_number);
+        }
+
+        if (academyUpdates.length > 0) {
+            academyParams.push(req.user.academyId);
+            await db.query(
+                `UPDATE academies SET ${academyUpdates.join(', ')} WHERE id = ?`,
+                academyParams
+            );
+        }
+
+        // 2. 학원비 설정 업데이트 (academy_settings.settings JSON 필드)
+        const tuitionSettings = {
+            exam_tuition: exam_tuition || null,
+            adult_tuition: adult_tuition || null,
+            season_fees: season_fees || null,
+        };
+
+        // 기존 설정 확인
+        const [existing] = await db.query(
+            'SELECT id, settings FROM academy_settings WHERE academy_id = ?',
+            [req.user.academyId]
+        );
+
+        if (existing.length === 0) {
+            // 새로 생성
+            await db.query(
+                `INSERT INTO academy_settings (academy_id, settings) VALUES (?, ?)`,
+                [req.user.academyId, JSON.stringify(tuitionSettings)]
+            );
+        } else {
+            // 기존 settings와 병합
+            let existingSettings = {};
+            if (existing[0].settings) {
+                try {
+                    existingSettings = typeof existing[0].settings === 'string'
+                        ? JSON.parse(existing[0].settings)
+                        : existing[0].settings;
+                } catch (e) {
+                    existingSettings = {};
+                }
+            }
+
+            const mergedSettings = {
+                ...existingSettings,
+                ...tuitionSettings,
+            };
+
+            // null이 아닌 값만 병합
+            if (exam_tuition) mergedSettings.exam_tuition = exam_tuition;
+            if (adult_tuition) mergedSettings.adult_tuition = adult_tuition;
+            if (season_fees) mergedSettings.season_fees = season_fees;
+
+            await db.query(
+                'UPDATE academy_settings SET settings = ? WHERE academy_id = ?',
+                [JSON.stringify(mergedSettings), req.user.academyId]
+            );
+        }
+
+        // 업데이트된 설정 반환
+        const [academyRows] = await db.query(
+            'SELECT * FROM academies WHERE id = ?',
+            [req.user.academyId]
+        );
+
+        const [settingsRows] = await db.query(
+            'SELECT * FROM academy_settings WHERE academy_id = ?',
+            [req.user.academyId]
+        );
+
+        const academy = academyRows[0];
+        let finalSettings = {
+            academy_name: academy.name || '',
+            phone: academy.phone || '',
+            address: academy.address || '',
+            business_number: academy.business_number || '',
+            exam_tuition: exam_tuition || { weekly_1: 0, weekly_2: 0, weekly_3: 0, weekly_4: 0, weekly_5: 0, weekly_6: 0, weekly_7: 0 },
+            adult_tuition: adult_tuition || { weekly_1: 0, weekly_2: 0, weekly_3: 0, weekly_4: 0, weekly_5: 0, weekly_6: 0, weekly_7: 0 },
+            season_fees: season_fees || { exam_early: 0, exam_regular: 0, civil_service: 0 },
+        };
+
+        if (settingsRows.length > 0 && settingsRows[0].settings) {
+            try {
+                const parsed = typeof settingsRows[0].settings === 'string'
+                    ? JSON.parse(settingsRows[0].settings)
+                    : settingsRows[0].settings;
+                finalSettings = {
+                    ...finalSettings,
+                    exam_tuition: parsed.exam_tuition || finalSettings.exam_tuition,
+                    adult_tuition: parsed.adult_tuition || finalSettings.adult_tuition,
+                    season_fees: parsed.season_fees || finalSettings.season_fees,
+                };
+            } catch (e) {
+                console.error('Failed to parse saved settings:', e);
+            }
+        }
+
+        res.json({
+            message: 'Academy settings saved successfully',
+            settings: finalSettings
+        });
+    } catch (error) {
+        console.error('Error updating academy settings:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to update academy settings'
         });
     }
 });
