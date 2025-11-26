@@ -28,6 +28,7 @@ router.get('/', verifyToken, async (req, res) => {
                 s.weekly_count,
                 s.monthly_tuition,
                 s.discount_rate,
+                s.discount_reason,
                 s.enrollment_date,
                 s.status,
                 s.created_at
@@ -181,6 +182,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             weekly_count,
             monthly_tuition,
             discount_rate,
+            discount_reason,
             enrollment_date,
             address,
             notes
@@ -273,11 +275,12 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 weekly_count,
                 monthly_tuition,
                 discount_rate,
+                discount_reason,
                 enrollment_date,
                 address,
                 notes,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 req.user.academyId,
                 finalStudentNumber,
@@ -293,6 +296,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 weekly_count || 0,
                 monthly_tuition || 0,
                 discount_rate || 0,
+                discount_reason || null,
                 enrollment_date || new Date().toISOString().split('T')[0],
                 address || null,
                 notes || null
@@ -354,6 +358,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             weekly_count,
             monthly_tuition,
             discount_rate,
+            discount_reason,
             enrollment_date,
             address,
             notes,
@@ -455,6 +460,10 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         if (discount_rate !== undefined) {
             updates.push('discount_rate = ?');
             params.push(discount_rate);
+        }
+        if (discount_reason !== undefined) {
+            updates.push('discount_reason = ?');
+            params.push(discount_reason);
         }
         if (enrollment_date !== undefined) {
             updates.push('enrollment_date = ?');
