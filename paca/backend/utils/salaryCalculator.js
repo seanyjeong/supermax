@@ -9,7 +9,7 @@
  * - monthly: 고정급 (월급)
  *
  * 세금 형태:
- * - tax_3_3: 3.3% 세금 (프리랜서)
+ * - 3.3%: 3.3% 세금 (프리랜서)
  * - insurance: 4대보험 (정규직)
  * - none: 세금 없음
  */
@@ -132,7 +132,7 @@ function calculate4Insurance(grossAmount) {
  * 시급제 급여 계산
  * @param {number} hourlyRate - 시급
  * @param {number} totalHours - 총 근무 시간
- * @param {string} taxType - 세금 형태 (tax_3_3, insurance, none)
+ * @param {string} taxType - 세금 형태 (3.3%, insurance, none)
  * @param {number} bonus - 상여금 (선택)
  * @param {number} deduction - 공제액 (선택)
  * @returns {object} 급여 상세 내역
@@ -146,7 +146,7 @@ function calculateHourlySalary(hourlyRate, totalHours, taxType, bonus = 0, deduc
     let netAmount = grossAmount;
     let insuranceDetails = null;
 
-    if (taxType === 'tax_3_3') {
+    if (taxType === '3.3%') {
         const result = calculateTax33(grossAmount);
         taxAmount = result.tax;
         netAmount = result.netAmount;
@@ -193,7 +193,7 @@ function calculatePerClassSalary(perClassRate, totalClasses, taxType, bonus = 0,
     let netAmount = grossAmount;
     let insuranceDetails = null;
 
-    if (taxType === 'tax_3_3') {
+    if (taxType === '3.3%') {
         const result = calculateTax33(grossAmount);
         taxAmount = result.tax;
         netAmount = result.netAmount;
@@ -239,7 +239,7 @@ function calculateMonthlySalary(monthlySalary, taxType, bonus = 0, deduction = 0
     let netAmount = grossAmount;
     let insuranceDetails = null;
 
-    if (taxType === 'tax_3_3') {
+    if (taxType === '3.3%') {
         const result = calculateTax33(grossAmount);
         taxAmount = result.tax;
         netAmount = result.netAmount;
@@ -276,12 +276,12 @@ function calculateMonthlySalary(monthlySalary, taxType, bonus = 0, deduction = 0
  * @returns {object} 급여 상세 내역
  */
 function calculateInstructorSalary(instructor, workData, bonus = 0, deduction = 0) {
-    const { salary_type, hourly_rate, monthly_salary, tax_type } = instructor;
+    const { salary_type, hourly_rate, base_salary, tax_type } = instructor;
 
     switch (salary_type) {
         case 'hourly':
             return calculateHourlySalary(
-                hourly_rate,
+                hourly_rate || 0,
                 workData.totalHours || 0,
                 tax_type,
                 bonus,
@@ -290,7 +290,7 @@ function calculateInstructorSalary(instructor, workData, bonus = 0, deduction = 
 
         case 'per_class':
             return calculatePerClassSalary(
-                hourly_rate,  // per_class도 hourly_rate 필드 사용
+                hourly_rate || 0,  // per_class도 hourly_rate 필드 사용
                 workData.totalClasses || 0,
                 tax_type,
                 bonus,
@@ -299,7 +299,7 @@ function calculateInstructorSalary(instructor, workData, bonus = 0, deduction = 
 
         case 'monthly':
             return calculateMonthlySalary(
-                monthly_salary,
+                base_salary || 0,
                 tax_type,
                 bonus,
                 deduction
