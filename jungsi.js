@@ -7925,6 +7925,386 @@ app.get('/jungsi/ranking/my', authStudentOnlyMiddleware, async (req, res) => {
     }
 });
 
+// =============================================
+// ⭐️ [신규] 자동 운동 분배 관련 API
+// =============================================
+
+// GET /jungsi/practical-events - 실기 종목 목록 조회
+app.get('/jungsi/practical-events', authMiddleware, async (req, res) => {
+    console.log(`[API GET /practical-events] 실기 종목 목록 조회 요청`);
+    try {
+        const [events] = await dbStudent.query(
+            `SELECT event_id, event_name, event_description, is_active
+             FROM jungsimaxstudent.practical_events
+             WHERE is_active = 1
+             ORDER BY event_id ASC`
+        );
+        res.json({ success: true, events: events });
+    } catch (err) {
+        console.error('❌ 실기 종목 목록 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// GET /jungsi/practical-events/:event_id/exercises - 특정 종목에 매핑된 운동 목록 조회
+app.get('/jungsi/practical-events/:event_id/exercises', authMiddleware, async (req, res) => {
+    const { event_id } = req.params;
+    console.log(`[API GET /practical-events/${event_id}/exercises] 종목별 운동 매핑 조회`);
+    try {
+        const [exercises] = await dbStudent.query(
+            `SELECT pee.mapping_id, pee.priority, me.exercise_id, me.exercise_name,
+                    me.category, me.sub_category, me.exp_value
+             FROM jungsimaxstudent.practical_event_exercises pee
+             JOIN jungsimaxstudent.master_exercises me ON pee.exercise_id = me.exercise_id
+             WHERE pee.event_id = ? AND pee.is_active = 1 AND me.is_active = 1
+             ORDER BY pee.priority DESC, me.exercise_name ASC`,
+            [event_id]
+        );
+        res.json({ success: true, exercises: exercises });
+    } catch (err) {
+        console.error(`❌ 종목별 운동 매핑 조회 오류 (event_id: ${event_id}):`, err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// POST /jungsi/auto-assign-workout - 자동 운동 분배 API
+app.post('/jungsi/auto-assign-workout', authMiddleware, async (req, res) => {
+    const { userid: teacher_userid, branch: userBranch } = req.user;
+    const { student_account_ids, assignment_date, event_ids, exercise_count } = req.body;
+
+    // 기본값: 운동 개수 2-3개
+    const minCount = exercise_count?.min || 2;
+    const maxCount = exercise_count?.max || 3;
+
+    console.log(`[API /auto-assign-workout] 사용자(${teacher_userid})가 ${student_account_ids?.length || 0}명에게 자동 운동 분배 요청`);
+    console.log(` -> 종목 ID: ${event_ids}, 운동 개수: ${minCount}-${maxCount}개`);
+
+    // 유효성 검사
+    if (!student_account_ids || !Array.isArray(student_account_ids) || student_account_ids.length === 0) {
+        return res.status(400).json({ success: false, message: '학생을 선택해주세요.' });
+    }
+    if (!assignment_date) {
+        return res.status(400).json({ success: false, message: '할당 날짜를 선택해주세요.' });
+    }
+    if (!event_ids || !Array.isArray(event_ids) || event_ids.length === 0) {
+        return res.status(400).json({ success: false, message: '종목을 선택해주세요.' });
+    }
+
+    let connection;
+    try {
+        connection = await dbStudent.getConnection();
+        await connection.beginTransaction();
+
+        // 1. 선택된 종목들에 매핑된 운동 목록 조회
+        const [allExercises] = await connection.query(
+            `SELECT DISTINCT pee.exercise_id, me.exercise_name, me.category, me.sub_category,
+                    pee.priority, pee.event_id
+             FROM jungsimaxstudent.practical_event_exercises pee
+             JOIN jungsimaxstudent.master_exercises me ON pee.exercise_id = me.exercise_id
+             WHERE pee.event_id IN (?) AND pee.is_active = 1 AND me.is_active = 1
+             ORDER BY pee.priority DESC`,
+            [event_ids]
+        );
+
+        if (allExercises.length === 0) {
+            await connection.rollback();
+            return res.status(400).json({ success: false, message: '선택한 종목에 매핑된 운동이 없습니다.' });
+        }
+
+        // 2. 종목별로 운동 그룹화
+        const exercisesByEvent = {};
+        event_ids.forEach(eventId => {
+            exercisesByEvent[eventId] = allExercises.filter(ex => ex.event_id == eventId);
+        });
+
+        const results = { success: [], failed: [] };
+
+        // 3. 각 학생에 대해 반복
+        for (const studentId of student_account_ids) {
+            try {
+                // 3-1. 학생 지점 확인
+                const [studentCheck] = await connection.query(
+                    'SELECT account_id, name, branch FROM jungsimaxstudent.student_account WHERE account_id = ?',
+                    [studentId]
+                );
+
+                if (studentCheck.length === 0 || studentCheck[0].branch !== userBranch) {
+                    results.failed.push({
+                        student_id: studentId,
+                        reason: '다른 지점 학생이거나 존재하지 않는 학생입니다.'
+                    });
+                    continue;
+                }
+
+                const studentName = studentCheck[0].name;
+
+                // 3-2. 각 종목에서 랜덤으로 운동 선택 (priority 가중치 적용)
+                const selectedExercises = [];
+                const usedExerciseIds = new Set();
+
+                for (const eventId of event_ids) {
+                    const eventExercises = exercisesByEvent[eventId] || [];
+                    if (eventExercises.length === 0) continue;
+
+                    // 가중치 기반 랜덤 선택을 위한 풀 생성
+                    const weightedPool = [];
+                    eventExercises.forEach(ex => {
+                        // 이미 선택된 운동은 제외
+                        if (usedExerciseIds.has(ex.exercise_id)) return;
+                        // priority 값만큼 풀에 추가 (높을수록 선택 확률 높음)
+                        for (let i = 0; i < (ex.priority || 1); i++) {
+                            weightedPool.push(ex);
+                        }
+                    });
+
+                    if (weightedPool.length === 0) continue;
+
+                    // 랜덤으로 운동 개수 결정 (min ~ max)
+                    const countToSelect = Math.floor(Math.random() * (maxCount - minCount + 1)) + minCount;
+
+                    // 선택할 개수만큼 반복
+                    for (let i = 0; i < countToSelect && weightedPool.length > 0; i++) {
+                        const randomIndex = Math.floor(Math.random() * weightedPool.length);
+                        const selected = weightedPool[randomIndex];
+
+                        if (!usedExerciseIds.has(selected.exercise_id)) {
+                            selectedExercises.push(selected);
+                            usedExerciseIds.add(selected.exercise_id);
+                            // 풀에서 해당 운동 모두 제거
+                            for (let j = weightedPool.length - 1; j >= 0; j--) {
+                                if (weightedPool[j].exercise_id === selected.exercise_id) {
+                                    weightedPool.splice(j, 1);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (selectedExercises.length === 0) {
+                    results.failed.push({
+                        student_id: studentId,
+                        student_name: studentName,
+                        reason: '할당할 운동이 없습니다.'
+                    });
+                    continue;
+                }
+
+                // 3-3. 선택된 운동들을 teacher_daily_assignments에 삽입
+                let insertedCount = 0;
+                for (const exercise of selectedExercises) {
+                    // 중복 체크 (같은 날짜, 같은 학생, 같은 운동)
+                    const [existing] = await connection.query(
+                        `SELECT assignment_id FROM jungsimaxstudent.teacher_daily_assignments
+                         WHERE student_account_id = ? AND assignment_date = ? AND exercise_name = ?`,
+                        [studentId, assignment_date, exercise.exercise_name]
+                    );
+
+                    if (existing.length === 0) {
+                        await connection.query(
+                            `INSERT INTO jungsimaxstudent.teacher_daily_assignments
+                                (teacher_userid, student_account_id, assignment_date, exercise_name,
+                                 category, sub_category, is_completed, created_at)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                            [teacher_userid, studentId, assignment_date, exercise.exercise_name,
+                             exercise.category, exercise.sub_category || null, false, new Date()]
+                        );
+                        insertedCount++;
+                    }
+                }
+
+                results.success.push({
+                    student_id: studentId,
+                    student_name: studentName,
+                    assigned_exercises: selectedExercises.map(e => e.exercise_name),
+                    assignment_count: insertedCount
+                });
+
+                console.log(` -> 학생 ${studentName}(${studentId})에게 ${insertedCount}개 운동 자동 할당 완료`);
+
+            } catch (studentError) {
+                console.error(`❌ 학생(${studentId}) 처리 중 오류:`, studentError);
+                results.failed.push({
+                    student_id: studentId,
+                    reason: studentError.message
+                });
+            }
+        }
+
+        await connection.commit();
+
+        const successCount = results.success.length;
+        const failedCount = results.failed.length;
+
+        let message = '';
+        if (successCount === student_account_ids.length) {
+            message = `✅ ${successCount}명의 학생에게 자동 운동이 할당되었습니다.`;
+        } else if (successCount > 0) {
+            message = `⚠️ ${successCount}명 성공, ${failedCount}명 실패했습니다.`;
+        } else {
+            message = `❌ 모든 학생에게 할당 실패했습니다.`;
+        }
+
+        res.status(201).json({
+            success: successCount > 0,
+            message: message,
+            results: results,
+            total: student_account_ids.length,
+            success_count: successCount,
+            failed_count: failedCount
+        });
+
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 자동 운동 분배 API 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생', error: err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// =============================================
+// ⭐️ [신규] 종목-운동 매핑 관리 API (관리자용)
+// =============================================
+
+// GET /jungsi/admin/practical-events - 모든 종목 목록 (관리자용)
+app.get('/jungsi/admin/practical-events', authMiddleware, async (req, res) => {
+    const { position, role } = req.user;
+    const isMgmt = ['원장', '부원장', '팀장'].includes(position) || role === 'admin';
+    if (!isMgmt) {
+        return res.status(403).json({ success: false, message: '관리 권한이 없습니다.' });
+    }
+
+    try {
+        const [events] = await dbStudent.query(
+            `SELECT pe.event_id, pe.event_name, pe.event_description, pe.is_active,
+                    (SELECT COUNT(*) FROM jungsimaxstudent.practical_event_exercises pee
+                     WHERE pee.event_id = pe.event_id AND pee.is_active = 1) AS exercise_count
+             FROM jungsimaxstudent.practical_events pe
+             ORDER BY pe.event_id ASC`
+        );
+        res.json({ success: true, events: events });
+    } catch (err) {
+        console.error('❌ 관리자 종목 목록 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// POST /jungsi/admin/practical-event-exercises - 운동-종목 매핑 추가
+app.post('/jungsi/admin/practical-event-exercises', authMiddleware, async (req, res) => {
+    const { position, role } = req.user;
+    const isMgmt = ['원장', '부원장', '팀장'].includes(position) || role === 'admin';
+    if (!isMgmt) {
+        return res.status(403).json({ success: false, message: '관리 권한이 없습니다.' });
+    }
+
+    const { event_id, exercise_id, priority } = req.body;
+    if (!event_id || !exercise_id) {
+        return res.status(400).json({ success: false, message: '종목 ID와 운동 ID가 필요합니다.' });
+    }
+
+    try {
+        await dbStudent.query(
+            `INSERT INTO jungsimaxstudent.practical_event_exercises
+             (event_id, exercise_id, priority, is_active, created_at)
+             VALUES (?, ?, ?, 1, NOW())
+             ON DUPLICATE KEY UPDATE priority = VALUES(priority), is_active = 1`,
+            [event_id, exercise_id, priority || 1]
+        );
+        res.json({ success: true, message: '운동-종목 매핑이 추가되었습니다.' });
+    } catch (err) {
+        console.error('❌ 운동-종목 매핑 추가 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생' });
+    }
+});
+
+// DELETE /jungsi/admin/practical-event-exercises/:mapping_id - 운동-종목 매핑 삭제
+app.delete('/jungsi/admin/practical-event-exercises/:mapping_id', authMiddleware, async (req, res) => {
+    const { position, role } = req.user;
+    const isMgmt = ['원장', '부원장', '팀장'].includes(position) || role === 'admin';
+    if (!isMgmt) {
+        return res.status(403).json({ success: false, message: '관리 권한이 없습니다.' });
+    }
+
+    const { mapping_id } = req.params;
+    try {
+        await dbStudent.query(
+            'DELETE FROM jungsimaxstudent.practical_event_exercises WHERE mapping_id = ?',
+            [mapping_id]
+        );
+        res.json({ success: true, message: '매핑이 삭제되었습니다.' });
+    } catch (err) {
+        console.error('❌ 운동-종목 매핑 삭제 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생' });
+    }
+});
+
+// GET /jungsi/admin/exercise-event-mappings/:exercise_id - 특정 운동의 종목 매핑 조회
+app.get('/jungsi/admin/exercise-event-mappings/:exercise_id', authMiddleware, async (req, res) => {
+    const { exercise_id } = req.params;
+    try {
+        const [mappings] = await dbStudent.query(
+            `SELECT pee.mapping_id, pee.event_id, pee.priority, pe.event_name
+             FROM jungsimaxstudent.practical_event_exercises pee
+             JOIN jungsimaxstudent.practical_events pe ON pee.event_id = pe.event_id
+             WHERE pee.exercise_id = ? AND pee.is_active = 1`,
+            [exercise_id]
+        );
+        res.json({ success: true, mappings: mappings });
+    } catch (err) {
+        console.error('❌ 운동별 종목 매핑 조회 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 조회 중 오류 발생' });
+    }
+});
+
+// PUT /jungsi/admin/exercise-event-mappings/:exercise_id - 특정 운동의 종목 매핑 일괄 업데이트
+app.put('/jungsi/admin/exercise-event-mappings/:exercise_id', authMiddleware, async (req, res) => {
+    const { position, role } = req.user;
+    const isMgmt = ['원장', '부원장', '팀장'].includes(position) || role === 'admin';
+    if (!isMgmt) {
+        return res.status(403).json({ success: false, message: '관리 권한이 없습니다.' });
+    }
+
+    const { exercise_id } = req.params;
+    const { event_mappings } = req.body; // [{ event_id, priority }]
+
+    if (!Array.isArray(event_mappings)) {
+        return res.status(400).json({ success: false, message: 'event_mappings 배열이 필요합니다.' });
+    }
+
+    let connection;
+    try {
+        connection = await dbStudent.getConnection();
+        await connection.beginTransaction();
+
+        // 기존 매핑 삭제
+        await connection.query(
+            'DELETE FROM jungsimaxstudent.practical_event_exercises WHERE exercise_id = ?',
+            [exercise_id]
+        );
+
+        // 새 매핑 추가
+        for (const mapping of event_mappings) {
+            if (mapping.event_id) {
+                await connection.query(
+                    `INSERT INTO jungsimaxstudent.practical_event_exercises
+                     (event_id, exercise_id, priority, is_active, created_at)
+                     VALUES (?, ?, ?, 1, NOW())`,
+                    [mapping.event_id, exercise_id, mapping.priority || 1]
+                );
+            }
+        }
+
+        await connection.commit();
+        res.json({ success: true, message: '종목 매핑이 업데이트되었습니다.' });
+    } catch (err) {
+        if (connection) await connection.rollback();
+        console.error('❌ 종목 매핑 업데이트 오류:', err);
+        res.status(500).json({ success: false, message: 'DB 처리 중 오류 발생' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.listen(port, () => {
     console.log(`정시 계산(jungsi) 서버가 ${port} 포트에서 실행되었습니다.`);
     console.log(`규칙 설정 페이지: http://supermax.kr:${port}/setting`);
