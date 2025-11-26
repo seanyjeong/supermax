@@ -630,6 +630,8 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
 /**
  * GET /paca/schedules/:id/attendance
  * Get attendance status for a specific class
+ * 시즌 학생(입시생): 활성 시즌의 operating_days에 따라 출석 대상
+ * 일반 학생(공무원/성인): 개인 class_days에 따라 출석 대상
  * Access: owner, admin, teacher
  */
 router.get('/:id/attendance', verifyToken, async (req, res) => {
@@ -660,39 +662,128 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
         }
 
         const schedule = schedules[0];
-        const classDate = new Date(schedule.class_date);
-        const dayOfWeek = classDate.getDay();
-
-        // Get all active students who have class on this day of week
-        const [students] = await db.query(
-            `SELECT
-                s.id AS student_id,
-                s.name AS student_name,
-                s.student_number,
-                s.class_days,
-                a.attendance_status,
-                a.makeup_date,
-                a.notes AS attendance_notes
-            FROM students s
-            LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
-            WHERE s.academy_id = ?
-            AND s.status = 'active'
-            AND s.deleted_at IS NULL
-            AND JSON_CONTAINS(s.class_days, ?)
-            ORDER BY s.name ASC`,
-            [scheduleId, req.user.academyId, dayOfWeek.toString()]
-        );
-
-        // Get students who have makeup scheduled for this date (from other schedules)
         const classDateStr = typeof schedule.class_date === 'string'
             ? schedule.class_date
             : schedule.class_date.toISOString().split('T')[0];
+        const classDate = new Date(classDateStr + 'T00:00:00');
+        const dayOfWeek = classDate.getDay();
 
+        // 1. Check for active season on this date
+        const [activeSeasons] = await db.query(
+            `SELECT id, season_name, season_type, start_date, end_date, operating_days
+            FROM seasons
+            WHERE academy_id = ?
+            AND status = 'active'
+            AND start_date <= ?
+            AND end_date >= ?`,
+            [req.user.academyId, classDateStr, classDateStr]
+        );
+
+        let seasonInfo = null;
+        let seasonOperatingDays = [];
+
+        if (activeSeasons.length > 0) {
+            seasonInfo = activeSeasons[0];
+            // Parse operating_days
+            try {
+                seasonOperatingDays = typeof seasonInfo.operating_days === 'string'
+                    ? JSON.parse(seasonInfo.operating_days)
+                    : (seasonInfo.operating_days || []);
+            } catch {
+                seasonOperatingDays = [];
+            }
+        }
+
+        const isSeasonDay = seasonOperatingDays.includes(dayOfWeek);
+
+        // 2. Get students based on conditions:
+        // - 시즌 등록 학생 (입시생): 시즌 운영요일에 출석
+        // - 일반 학생 (공무원/성인): 개인 class_days에 따라 출석
+
+        let students = [];
+
+        if (isSeasonDay && seasonInfo) {
+            // 시즌 운영일: 시즌 등록 학생 + 개인 class_days 학생
+            const [seasonStudents] = await db.query(
+                `SELECT
+                    s.id AS student_id,
+                    s.name AS student_name,
+                    s.student_number,
+                    s.student_type,
+                    s.class_days,
+                    ss.id AS season_registration_id,
+                    a.attendance_status,
+                    a.makeup_date,
+                    a.notes AS attendance_notes
+                FROM students s
+                INNER JOIN student_seasons ss ON ss.student_id = s.id AND ss.season_id = ?
+                LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
+                WHERE s.academy_id = ?
+                AND s.status = 'active'
+                AND s.deleted_at IS NULL
+                AND ss.status IN ('registered', 'active')
+                ORDER BY s.name ASC`,
+                [seasonInfo.id, scheduleId, req.user.academyId]
+            );
+
+            // 시즌 미등록 학생 중 해당 요일에 수업 있는 학생 (공무원/성인)
+            const [regularStudents] = await db.query(
+                `SELECT
+                    s.id AS student_id,
+                    s.name AS student_name,
+                    s.student_number,
+                    s.student_type,
+                    s.class_days,
+                    NULL AS season_registration_id,
+                    a.attendance_status,
+                    a.makeup_date,
+                    a.notes AS attendance_notes
+                FROM students s
+                LEFT JOIN student_seasons ss ON ss.student_id = s.id AND ss.season_id = ? AND ss.status IN ('registered', 'active')
+                LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
+                WHERE s.academy_id = ?
+                AND s.status = 'active'
+                AND s.deleted_at IS NULL
+                AND ss.id IS NULL
+                AND JSON_CONTAINS(s.class_days, ?)
+                ORDER BY s.name ASC`,
+                [seasonInfo.id, scheduleId, req.user.academyId, dayOfWeek.toString()]
+            );
+
+            students = [...seasonStudents, ...regularStudents];
+        } else {
+            // 비시즌 운영일 또는 시즌 없음: 개인 class_days 기준
+            const [regularStudents] = await db.query(
+                `SELECT
+                    s.id AS student_id,
+                    s.name AS student_name,
+                    s.student_number,
+                    s.student_type,
+                    s.class_days,
+                    NULL AS season_registration_id,
+                    a.attendance_status,
+                    a.makeup_date,
+                    a.notes AS attendance_notes
+                FROM students s
+                LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
+                WHERE s.academy_id = ?
+                AND s.status = 'active'
+                AND s.deleted_at IS NULL
+                AND JSON_CONTAINS(s.class_days, ?)
+                ORDER BY s.name ASC`,
+                [scheduleId, req.user.academyId, dayOfWeek.toString()]
+            );
+
+            students = regularStudents;
+        }
+
+        // 3. Get students who have makeup scheduled for this date
         const [makeupStudents] = await db.query(
             `SELECT
                 s.id AS student_id,
                 s.name AS student_name,
                 s.student_number,
+                s.student_type,
                 a.attendance_status AS original_status,
                 cs.class_date AS original_date,
                 a.notes AS attendance_notes
@@ -708,19 +799,21 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
             [classDateStr, req.user.academyId]
         );
 
-        // Parse class_days JSON and create student list
+        // 4. Create student list with attendance info
         const studentsWithInfo = students.map(student => ({
             student_id: student.student_id,
             student_name: student.student_name,
             student_number: student.student_number,
+            student_type: student.student_type,
             attendance_status: student.attendance_status || null,
             makeup_date: student.makeup_date || null,
             notes: student.attendance_notes || '',
             is_expected: true,
-            is_makeup: false
+            is_makeup: false,
+            is_season_student: !!student.season_registration_id
         }));
 
-        // Add makeup students (avoid duplicates)
+        // 5. Add makeup students (avoid duplicates)
         const existingStudentIds = new Set(studentsWithInfo.map(s => s.student_id));
         for (const makeup of makeupStudents) {
             if (!existingStudentIds.has(makeup.student_id)) {
@@ -731,12 +824,14 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
                     student_id: makeup.student_id,
                     student_name: makeup.student_name,
                     student_number: makeup.student_number,
+                    student_type: makeup.student_type,
                     attendance_status: 'present', // 보충으로 온 학생은 기본적으로 출석 처리 제안
                     makeup_date: null,
                     notes: makeup.attendance_notes || '',
                     is_expected: false,
                     is_makeup: true,
-                    original_date: originalDateStr
+                    original_date: originalDateStr,
+                    is_season_student: false
                 });
             }
         }
@@ -751,6 +846,12 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
                 title: schedule.title,
                 attendance_taken: schedule.attendance_taken
             },
+            season: seasonInfo ? {
+                id: seasonInfo.id,
+                season_name: seasonInfo.season_name,
+                season_type: seasonInfo.season_type,
+                is_operating_day: isSeasonDay
+            } : null,
             students: studentsWithInfo
         });
     } catch (error) {
