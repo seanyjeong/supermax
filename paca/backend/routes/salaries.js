@@ -69,6 +69,117 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
 });
 
 /**
+ * GET /paca/salaries/work-summary/:instructorId/:yearMonth
+ * Get monthly work summary for salary calculation
+ * Access: owner, admin
+ */
+router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const instructorId = parseInt(req.params.instructorId);
+    const yearMonth = req.params.yearMonth; // YYYY-MM format
+
+    try {
+        // Validate yearMonth format
+        const dateRegex = /^\d{4}-\d{2}$/;
+        if (!dateRegex.test(yearMonth)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'yearMonth must be in YYYY-MM format'
+            });
+        }
+
+        // Verify instructor exists and belongs to academy
+        const [instructors] = await db.query(
+            `SELECT id, name, salary_type, hourly_rate, base_salary, tax_type,
+                    morning_class_rate, afternoon_class_rate, evening_class_rate
+             FROM instructors
+             WHERE id = ? AND academy_id = ? AND deleted_at IS NULL`,
+            [instructorId, req.user.academyId]
+        );
+
+        if (instructors.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Instructor not found'
+            });
+        }
+
+        const instructor = instructors[0];
+
+        // Get attendance records for the month
+        const [attendances] = await db.query(
+            `SELECT
+                ia.time_slot,
+                ia.attendance_status,
+                ia.check_in_time,
+                ia.check_out_time,
+                ia.work_date
+             FROM instructor_attendance ia
+             WHERE ia.instructor_id = ?
+               AND DATE_FORMAT(ia.work_date, '%Y-%m') = ?
+               AND ia.attendance_status IN ('present', 'late')
+             ORDER BY ia.work_date, ia.time_slot`,
+            [instructorId, yearMonth]
+        );
+
+        // Calculate work summary
+        let morningClasses = 0;
+        let afternoonClasses = 0;
+        let eveningClasses = 0;
+        let totalHours = 0;
+
+        for (const att of attendances) {
+            // Count classes by time slot
+            if (att.time_slot === 'morning') morningClasses++;
+            else if (att.time_slot === 'afternoon') afternoonClasses++;
+            else if (att.time_slot === 'evening') eveningClasses++;
+
+            // Calculate hours if check times are available
+            if (att.check_in_time && att.check_out_time) {
+                const checkIn = new Date(`2000-01-01 ${att.check_in_time}`);
+                const checkOut = new Date(`2000-01-01 ${att.check_out_time}`);
+                const hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                if (hours > 0) totalHours += hours;
+            } else {
+                // Default hours per time slot if no check times
+                totalHours += 3; // Assume 3 hours per class slot
+            }
+        }
+
+        const totalClasses = morningClasses + afternoonClasses + eveningClasses;
+
+        res.json({
+            message: 'Work summary retrieved',
+            instructor: {
+                id: instructor.id,
+                name: instructor.name,
+                salary_type: instructor.salary_type,
+                hourly_rate: instructor.hourly_rate,
+                base_salary: instructor.base_salary,
+                tax_type: instructor.tax_type,
+                morning_class_rate: instructor.morning_class_rate,
+                afternoon_class_rate: instructor.afternoon_class_rate,
+                evening_class_rate: instructor.evening_class_rate
+            },
+            work_summary: {
+                year_month: yearMonth,
+                morning_classes: morningClasses,
+                afternoon_classes: afternoonClasses,
+                evening_classes: eveningClasses,
+                total_classes: totalClasses,
+                total_hours: Math.round(totalHours * 100) / 100,
+                attendance_days: attendances.length
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching work summary:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch work summary'
+        });
+    }
+});
+
+/**
  * GET /paca/salaries/:id
  * Get salary record by ID
  * Access: owner, admin
