@@ -547,29 +547,23 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
             });
         }
 
-        // Check if class has schedules
-        const [schedules] = await db.query(
-            'SELECT COUNT(*) as count FROM class_schedules WHERE class_id = ?',
+        // Delete related schedules first (CASCADE DELETE)
+        const [deleteResult] = await db.query(
+            'DELETE FROM class_schedules WHERE class_id = ?',
             [classId]
         );
-
-        if (schedules[0].count > 0) {
-            // Set class_id to NULL in related schedules instead of preventing deletion
-            await db.query(
-                'UPDATE class_schedules SET class_id = NULL WHERE class_id = ?',
-                [classId]
-            );
-        }
+        const deletedScheduleCount = deleteResult.affectedRows;
 
         // Delete class
         await db.query('DELETE FROM classes WHERE id = ?', [classId]);
 
         res.json({
-            message: 'Class deleted successfully',
+            message: `Class deleted successfully (${deletedScheduleCount} schedules also deleted)`,
             class: {
                 id: classId,
                 class_name: classes[0].class_name
-            }
+            },
+            deleted_schedules: deletedScheduleCount
         });
     } catch (error) {
         console.error('Error deleting class:', error);
