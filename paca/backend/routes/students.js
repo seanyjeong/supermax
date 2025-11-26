@@ -10,18 +10,19 @@ const { verifyToken, requireRole } = require('../middleware/auth');
  */
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { grade, grade_type, admission_type, status, search } = req.query;
+        const { grade, student_type, admission_type, status, search } = req.query;
 
         let query = `
             SELECT
                 s.id,
                 s.student_number,
                 s.name,
+                s.student_type,
                 s.phone,
                 s.parent_phone,
                 s.school,
                 s.grade,
-                s.grade_type,
+                s.age,
                 s.admission_type,
                 s.class_days,
                 s.weekly_count,
@@ -39,12 +40,12 @@ router.get('/', verifyToken, async (req, res) => {
 
         if (grade) {
             query += ' AND s.grade = ?';
-            params.push(parseInt(grade));
+            params.push(grade);
         }
 
-        if (grade_type) {
-            query += ' AND s.grade_type = ?';
-            params.push(grade_type);
+        if (student_type) {
+            query += ' AND s.student_type = ?';
+            params.push(student_type);
         }
 
         if (admission_type) {
@@ -169,11 +170,12 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         const {
             student_number,
             name,
+            student_type,
             phone,
             parent_phone,
             school,
             grade,
-            grade_type,
+            age,
             admission_type,
             class_days,
             weekly_count,
@@ -184,12 +186,38 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             notes
         } = req.body;
 
-        // Validation - DB 스키마에 맞게 필수 필드만 검증
-        // grade, parent_phone은 DB에서 nullable이므로 제외
-        if (!name || !phone || !grade_type || !admission_type) {
+        // Validation
+        if (!name || !phone) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: name, phone, grade_type, admission_type'
+                message: 'Required fields: name, phone'
+            });
+        }
+
+        // Validate student_type
+        const validStudentTypes = ['exam', 'adult'];
+        if (student_type && !validStudentTypes.includes(student_type)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'student_type must be exam or adult'
+            });
+        }
+
+        // Validate grade (for exam students)
+        const validGrades = ['고1', '고2', '고3', 'N수'];
+        if (grade && !validGrades.includes(grade)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'grade must be one of: 고1, 고2, 고3, N수'
+            });
+        }
+
+        // Validate admission_type
+        const validAdmissionTypes = ['regular', 'early', 'civil_service'];
+        if (admission_type && !validAdmissionTypes.includes(admission_type)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'admission_type must be regular, early, or civil_service'
             });
         }
 
@@ -234,11 +262,12 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 academy_id,
                 student_number,
                 name,
+                student_type,
                 phone,
                 parent_phone,
                 school,
                 grade,
-                grade_type,
+                age,
                 admission_type,
                 class_days,
                 weekly_count,
@@ -248,17 +277,18 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 address,
                 notes,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 req.user.academyId,
                 finalStudentNumber,
                 name,
+                student_type || 'exam',
                 phone,
                 parent_phone,
                 school || null,
-                grade,
-                grade_type,
-                admission_type,
+                grade || null,
+                age || null,
+                admission_type || 'regular',
                 JSON.stringify(class_days || []),
                 weekly_count || 0,
                 monthly_tuition || 0,
@@ -313,11 +343,12 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         const {
             student_number,
             name,
+            student_type,
             phone,
             parent_phone,
             school,
             grade,
-            grade_type,
+            age,
             admission_type,
             class_days,
             weekly_count,
@@ -328,6 +359,31 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             notes,
             status
         } = req.body;
+
+        // Validate student_type
+        if (student_type && !['exam', 'adult'].includes(student_type)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'student_type must be exam or adult'
+            });
+        }
+
+        // Validate grade
+        const validGrades = ['고1', '고2', '고3', 'N수'];
+        if (grade && !validGrades.includes(grade)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'grade must be one of: 고1, 고2, 고3, N수'
+            });
+        }
+
+        // Validate admission_type
+        if (admission_type && !['regular', 'early', 'civil_service'].includes(admission_type)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'admission_type must be regular, early, or civil_service'
+            });
+        }
 
         // Check if new student_number already exists (if changed)
         if (student_number) {
@@ -356,6 +412,10 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             updates.push('name = ?');
             params.push(name);
         }
+        if (student_type !== undefined) {
+            updates.push('student_type = ?');
+            params.push(student_type);
+        }
         if (phone !== undefined) {
             updates.push('phone = ?');
             params.push(phone);
@@ -372,9 +432,9 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             updates.push('grade = ?');
             params.push(grade);
         }
-        if (grade_type !== undefined) {
-            updates.push('grade_type = ?');
-            params.push(grade_type);
+        if (age !== undefined) {
+            updates.push('age = ?');
+            params.push(age);
         }
         if (admission_type !== undefined) {
             updates.push('admission_type = ?');
