@@ -671,6 +671,7 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
                 s.student_number,
                 s.class_days,
                 a.attendance_status,
+                a.makeup_date,
                 a.notes AS attendance_notes
             FROM students s
             LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
@@ -682,15 +683,63 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
             [scheduleId, req.user.academyId, dayOfWeek.toString()]
         );
 
-        // Parse class_days JSON
+        // Get students who have makeup scheduled for this date (from other schedules)
+        const classDateStr = typeof schedule.class_date === 'string'
+            ? schedule.class_date
+            : schedule.class_date.toISOString().split('T')[0];
+
+        const [makeupStudents] = await db.query(
+            `SELECT
+                s.id AS student_id,
+                s.name AS student_name,
+                s.student_number,
+                a.attendance_status AS original_status,
+                cs.class_date AS original_date,
+                a.notes AS attendance_notes
+            FROM attendance a
+            INNER JOIN students s ON a.student_id = s.id
+            INNER JOIN class_schedules cs ON a.class_schedule_id = cs.id
+            WHERE a.makeup_date = ?
+            AND a.attendance_status = 'makeup'
+            AND s.academy_id = ?
+            AND s.status = 'active'
+            AND s.deleted_at IS NULL
+            ORDER BY s.name ASC`,
+            [classDateStr, req.user.academyId]
+        );
+
+        // Parse class_days JSON and create student list
         const studentsWithInfo = students.map(student => ({
             student_id: student.student_id,
             student_name: student.student_name,
             student_number: student.student_number,
             attendance_status: student.attendance_status || null,
+            makeup_date: student.makeup_date || null,
             notes: student.attendance_notes || '',
-            is_expected: true
+            is_expected: true,
+            is_makeup: false
         }));
+
+        // Add makeup students (avoid duplicates)
+        const existingStudentIds = new Set(studentsWithInfo.map(s => s.student_id));
+        for (const makeup of makeupStudents) {
+            if (!existingStudentIds.has(makeup.student_id)) {
+                const originalDateStr = typeof makeup.original_date === 'string'
+                    ? makeup.original_date
+                    : makeup.original_date?.toISOString().split('T')[0];
+                studentsWithInfo.push({
+                    student_id: makeup.student_id,
+                    student_name: makeup.student_name,
+                    student_number: makeup.student_number,
+                    attendance_status: 'present', // 보충으로 온 학생은 기본적으로 출석 처리 제안
+                    makeup_date: null,
+                    notes: makeup.attendance_notes || '',
+                    is_expected: false,
+                    is_makeup: true,
+                    original_date: originalDateStr
+                });
+            }
+        }
 
         res.json({
             message: 'Attendance records retrieved',
@@ -752,11 +801,11 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
         // Start transaction
         await connection.beginTransaction();
 
-        const validStatuses = ['present', 'absent', 'late', 'excused'];
+        const validStatuses = ['present', 'absent', 'late', 'excused', 'makeup'];
         const processedRecords = [];
 
         for (const record of attendance_records) {
-            const { student_id, attendance_status, notes } = record;
+            const { student_id, attendance_status, makeup_date, notes } = record;
 
             // Validate attendance_status
             if (!validStatuses.includes(attendance_status)) {
@@ -766,6 +815,28 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                     error: 'Validation Error',
                     message: `Invalid attendance_status: ${attendance_status}. Must be one of: ${validStatuses.join(', ')}`
                 });
+            }
+
+            // Validate makeup_date if status is makeup
+            if (attendance_status === 'makeup') {
+                if (!makeup_date) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.status(400).json({
+                        error: 'Validation Error',
+                        message: 'makeup_date is required when attendance_status is makeup'
+                    });
+                }
+                // Validate date format
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (!dateRegex.test(makeup_date)) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.status(400).json({
+                        error: 'Validation Error',
+                        message: 'makeup_date must be in YYYY-MM-DD format'
+                    });
+                }
             }
 
             // Verify student exists and belongs to academy
@@ -783,23 +854,25 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                 });
             }
 
-            // UPSERT attendance record
+            // UPSERT attendance record with makeup_date
             await connection.query(
                 `INSERT INTO attendance
-                (class_schedule_id, student_id, attendance_status, notes, recorded_by)
-                VALUES (?, ?, ?, ?, ?)
+                (class_schedule_id, student_id, attendance_status, makeup_date, notes, recorded_by)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                 attendance_status = VALUES(attendance_status),
+                makeup_date = VALUES(makeup_date),
                 notes = VALUES(notes),
                 recorded_by = VALUES(recorded_by),
                 updated_at = CURRENT_TIMESTAMP`,
-                [scheduleId, student_id, attendance_status, notes || null, req.user.id]
+                [scheduleId, student_id, attendance_status, attendance_status === 'makeup' ? makeup_date : null, notes || null, req.user.id]
             );
 
             processedRecords.push({
                 student_id,
                 student_name: students[0].name,
                 attendance_status,
+                makeup_date: attendance_status === 'makeup' ? makeup_date : null,
                 notes: notes || ''
             });
         }
