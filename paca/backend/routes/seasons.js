@@ -16,17 +16,22 @@ const {
  */
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { is_active } = req.query;
+        const { status, season_type } = req.query;
 
         let query = `
-            SELECT * FROM season_settings
+            SELECT * FROM seasons
             WHERE academy_id = ?
         `;
         const params = [req.user.academyId];
 
-        if (is_active !== undefined) {
-            query += ' AND is_active = ?';
-            params.push(is_active === 'true' ? 1 : 0);
+        if (status) {
+            query += ' AND status = ?';
+            params.push(status);
+        }
+
+        if (season_type) {
+            query += ' AND season_type = ?';
+            params.push(season_type);
         }
 
         query += ' ORDER BY season_start_date DESC';
@@ -56,7 +61,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
     try {
         const [seasons] = await db.query(
-            `SELECT * FROM season_settings
+            `SELECT * FROM seasons
             WHERE id = ? AND academy_id = ?`,
             [seasonId, req.user.academyId]
         );
@@ -97,16 +102,30 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
     try {
         const {
             season_name,
+            season_type,
             season_start_date,
             season_end_date,
             non_season_end_date,
-            default_season_fee
+            operating_days,
+            default_season_fee,
+            allows_continuous,
+            continuous_to_season_type,
+            continuous_discount_type,
+            continuous_discount_rate
         } = req.body;
 
-        if (!season_name || !season_start_date || !season_end_date || !non_season_end_date) {
+        if (!season_name || !season_type || !season_start_date || !season_end_date || !non_season_end_date || !operating_days) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: season_name, season_start_date, season_end_date, non_season_end_date'
+                message: 'Required fields: season_name, season_type, season_start_date, season_end_date, non_season_end_date, operating_days'
+            });
+        }
+
+        // Validate season_type
+        if (!['early', 'regular'].includes(season_type)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'season_type must be early or regular'
             });
         }
 
@@ -130,27 +149,39 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         }
 
         const [result] = await db.query(
-            `INSERT INTO season_settings (
+            `INSERT INTO seasons (
                 academy_id,
                 season_name,
+                season_type,
                 season_start_date,
                 season_end_date,
                 non_season_end_date,
+                operating_days,
                 default_season_fee,
-                is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, true)`,
+                allows_continuous,
+                continuous_to_season_type,
+                continuous_discount_type,
+                continuous_discount_rate,
+                status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')`,
             [
                 req.user.academyId,
                 season_name,
+                season_type,
                 season_start_date,
                 season_end_date,
                 non_season_end_date,
-                default_season_fee || null
+                JSON.stringify(operating_days),
+                default_season_fee || 0,
+                allows_continuous || false,
+                continuous_to_season_type || null,
+                continuous_discount_type || 'none',
+                continuous_discount_rate || 0
             ]
         );
 
         const [created] = await db.query(
-            'SELECT * FROM season_settings WHERE id = ?',
+            'SELECT * FROM seasons WHERE id = ?',
             [result.insertId]
         );
 
@@ -178,7 +209,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
     try {
         // Verify exists and belongs to academy
         const [seasons] = await db.query(
-            'SELECT * FROM season_settings WHERE id = ? AND academy_id = ?',
+            'SELECT * FROM seasons WHERE id = ? AND academy_id = ?',
             [seasonId, req.user.academyId]
         );
 
@@ -191,11 +222,17 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
 
         const {
             season_name,
+            season_type,
             season_start_date,
             season_end_date,
             non_season_end_date,
+            operating_days,
             default_season_fee,
-            is_active
+            allows_continuous,
+            continuous_to_season_type,
+            continuous_discount_type,
+            continuous_discount_rate,
+            status
         } = req.body;
 
         const updates = [];
@@ -204,6 +241,10 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         if (season_name !== undefined) {
             updates.push('season_name = ?');
             params.push(season_name);
+        }
+        if (season_type !== undefined) {
+            updates.push('season_type = ?');
+            params.push(season_type);
         }
         if (season_start_date !== undefined) {
             updates.push('season_start_date = ?');
@@ -217,13 +258,33 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             updates.push('non_season_end_date = ?');
             params.push(non_season_end_date);
         }
+        if (operating_days !== undefined) {
+            updates.push('operating_days = ?');
+            params.push(JSON.stringify(operating_days));
+        }
         if (default_season_fee !== undefined) {
             updates.push('default_season_fee = ?');
             params.push(default_season_fee);
         }
-        if (is_active !== undefined) {
-            updates.push('is_active = ?');
-            params.push(is_active);
+        if (allows_continuous !== undefined) {
+            updates.push('allows_continuous = ?');
+            params.push(allows_continuous);
+        }
+        if (continuous_to_season_type !== undefined) {
+            updates.push('continuous_to_season_type = ?');
+            params.push(continuous_to_season_type);
+        }
+        if (continuous_discount_type !== undefined) {
+            updates.push('continuous_discount_type = ?');
+            params.push(continuous_discount_type);
+        }
+        if (continuous_discount_rate !== undefined) {
+            updates.push('continuous_discount_rate = ?');
+            params.push(continuous_discount_rate);
+        }
+        if (status !== undefined) {
+            updates.push('status = ?');
+            params.push(status);
         }
 
         if (updates.length === 0) {
@@ -237,12 +298,12 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         params.push(seasonId);
 
         await db.query(
-            `UPDATE season_settings SET ${updates.join(', ')} WHERE id = ?`,
+            `UPDATE seasons SET ${updates.join(', ')} WHERE id = ?`,
             params
         );
 
         const [updated] = await db.query(
-            'SELECT * FROM season_settings WHERE id = ?',
+            'SELECT * FROM seasons WHERE id = ?',
             [seasonId]
         );
 
@@ -261,7 +322,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
 
 /**
  * DELETE /paca/seasons/:id
- * Delete season (soft delete by setting is_active to false)
+ * Delete season (soft delete by setting status to 'ended')
  * Access: owner
  */
 router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
@@ -269,7 +330,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
 
     try {
         const [seasons] = await db.query(
-            'SELECT * FROM season_settings WHERE id = ? AND academy_id = ?',
+            'SELECT * FROM seasons WHERE id = ? AND academy_id = ?',
             [seasonId, req.user.academyId]
         );
 
@@ -294,9 +355,9 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
             });
         }
 
-        // Soft delete
+        // Soft delete by setting status to 'ended'
         await db.query(
-            'UPDATE season_settings SET is_active = false, updated_at = NOW() WHERE id = ?',
+            `UPDATE seasons SET status = 'ended', updated_at = NOW() WHERE id = ?`,
             [seasonId]
         );
 
@@ -318,7 +379,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
 
 /**
  * POST /paca/seasons/:id/enroll
- * Enroll student to season
+ * Enroll student to season with prorated fee calculation
  * Access: owner, admin
  */
 router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
@@ -329,7 +390,9 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             student_id,
             season_fee,
             registration_date,
-            after_season_action
+            after_season_action,
+            is_continuous,
+            previous_season_id
         } = req.body;
 
         if (!student_id || !season_fee) {
@@ -341,16 +404,18 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
 
         // Verify season exists and belongs to academy
         const [seasons] = await db.query(
-            'SELECT * FROM season_settings WHERE id = ? AND academy_id = ? AND is_active = true',
+            `SELECT * FROM seasons WHERE id = ? AND academy_id = ? AND status != 'ended'`,
             [seasonId, req.user.academyId]
         );
 
         if (seasons.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Season not found or inactive'
+                message: 'Season not found or ended'
             });
         }
+
+        const season = seasons[0];
 
         // Verify student exists and belongs to academy
         const [students] = await db.query(
@@ -364,6 +429,8 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 message: 'Student not found'
             });
         }
+
+        const student = students[0];
 
         // Check if already enrolled
         const [existing] = await db.query(
@@ -379,6 +446,34 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             });
         }
 
+        // Calculate prorated fee
+        const weeklyDays = parseWeeklyDays(student.class_days);
+        const nonSeasonEnd = new Date(season.non_season_end_date);
+        const proRatedMonth = `${nonSeasonEnd.getFullYear()}-${String(nonSeasonEnd.getMonth() + 1).padStart(2, '0')}`;
+
+        const proRated = calculateProRatedFee({
+            monthlyFee: parseFloat(student.monthly_tuition) || 0,
+            weeklyDays,
+            nonSeasonEndDate: nonSeasonEnd,
+            discountRate: parseFloat(student.discount_rate) || 0
+        });
+
+        // Calculate discount for continuous enrollment
+        let discountType = 'none';
+        let discountAmount = 0;
+        let finalSeasonFee = parseFloat(season_fee);
+
+        if (is_continuous && previous_season_id && season.continuous_discount_type !== 'none') {
+            discountType = season.continuous_discount_type;
+            if (discountType === 'free') {
+                discountAmount = finalSeasonFee;
+                finalSeasonFee = 0;
+            } else if (discountType === 'rate' && season.continuous_discount_rate > 0) {
+                discountAmount = Math.floor(finalSeasonFee * (season.continuous_discount_rate / 100));
+                finalSeasonFee -= discountAmount;
+            }
+        }
+
         // Enroll student
         const [result] = await db.query(
             `INSERT INTO student_seasons (
@@ -387,15 +482,35 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 season_fee,
                 registration_date,
                 after_season_action,
+                prorated_month,
+                prorated_amount,
+                prorated_details,
+                is_continuous,
+                previous_season_id,
+                discount_type,
+                discount_amount,
                 payment_status
-            ) VALUES (?, ?, ?, ?, ?, 'pending')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
             [
                 student_id,
                 seasonId,
-                season_fee,
+                finalSeasonFee,
                 registration_date || new Date().toISOString().split('T')[0],
-                after_season_action || 'regular'
+                after_season_action || 'regular',
+                proRatedMonth,
+                proRated.proRatedFee,
+                JSON.stringify(proRated),
+                is_continuous || false,
+                previous_season_id || null,
+                discountType,
+                discountAmount
             ]
+        );
+
+        // Update student's season registration status
+        await db.query(
+            `UPDATE students SET is_season_registered = true, current_season_id = ? WHERE id = ?`,
+            [seasonId, student_id]
         );
 
         // Get enrollment details
@@ -403,17 +518,19 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             `SELECT
                 ss.*,
                 s.name as student_name,
-                se.season_name
+                se.season_name,
+                se.season_type
             FROM student_seasons ss
             JOIN students s ON ss.student_id = s.id
-            JOIN season_settings se ON ss.season_id = se.id
+            JOIN seasons se ON ss.season_id = se.id
             WHERE ss.id = ?`,
             [result.insertId]
         );
 
         res.status(201).json({
             message: 'Student enrolled in season successfully',
-            enrollment: enrollment[0]
+            enrollment: enrollment[0],
+            proRatedCalculation: proRated
         });
     } catch (error) {
         console.error('Error enrolling student:', error);
@@ -481,7 +598,7 @@ router.post('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (r
 
         // Get season info
         const [seasons] = await db.query(
-            'SELECT * FROM season_settings WHERE id = ? AND academy_id = ?',
+            'SELECT * FROM seasons WHERE id = ? AND academy_id = ?',
             [seasonId, req.user.academyId]
         );
 
@@ -508,8 +625,68 @@ router.post('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (r
         const season = seasons[0];
         const student = students[0];
 
-        // Calculate preview
-        const preview = previewSeasonTransition(student, season);
+        // Calculate prorated fee
+        const weeklyDays = parseWeeklyDays(student.class_days);
+        const nonSeasonEnd = new Date(season.non_season_end_date);
+        const seasonStart = new Date(season.season_start_date);
+
+        const proRated = calculateProRatedFee({
+            monthlyFee: parseFloat(student.monthly_tuition) || 0,
+            weeklyDays,
+            nonSeasonEndDate: nonSeasonEnd,
+            discountRate: parseFloat(student.discount_rate) || 0
+        });
+
+        // Calculate gap period
+        const gapStart = new Date(nonSeasonEnd);
+        gapStart.setDate(gapStart.getDate() + 1);
+        const gapEnd = new Date(seasonStart);
+        gapEnd.setDate(gapEnd.getDate() - 1);
+        const hasGap = gapStart <= gapEnd;
+
+        // Check for continuous enrollment discount
+        let continuousDiscount = null;
+        if (season.allows_continuous && season.continuous_discount_type !== 'none') {
+            continuousDiscount = {
+                type: season.continuous_discount_type,
+                rate: season.continuous_discount_rate,
+                description: season.continuous_discount_type === 'free'
+                    ? '연속등록 시 무료'
+                    : `연속등록 시 ${season.continuous_discount_rate}% 할인`
+            };
+        }
+
+        const preview = {
+            student: {
+                id: student.id,
+                name: student.name,
+                monthlyTuition: parseFloat(student.monthly_tuition),
+                discountRate: parseFloat(student.discount_rate) || 0,
+                classDays: weeklyDays
+            },
+            season: {
+                id: season.id,
+                name: season.season_name,
+                type: season.season_type,
+                nonSeasonEndDate: season.non_season_end_date,
+                seasonStartDate: season.season_start_date,
+                seasonEndDate: season.season_end_date,
+                defaultSeasonFee: parseFloat(season.default_season_fee)
+            },
+            proRatedCalculation: proRated,
+            gapPeriod: hasGap ? {
+                start: gapStart.toISOString().split('T')[0],
+                end: gapEnd.toISOString().split('T')[0],
+                days: Math.ceil((gapEnd - gapStart) / (1000 * 60 * 60 * 24)) + 1
+            } : null,
+            continuousDiscount,
+            summary: {
+                proRatedMonth: `${nonSeasonEnd.getFullYear()}-${String(nonSeasonEnd.getMonth() + 1).padStart(2, '0')}`,
+                proRatedAmount: proRated.proRatedFee,
+                seasonFee: parseFloat(season.default_season_fee),
+                totalDue: proRated.proRatedFee + parseFloat(season.default_season_fee)
+            }
+        };
 
         res.json({
             message: 'Season transition preview calculated',
@@ -533,7 +710,7 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
     const enrollmentId = parseInt(req.params.enrollment_id);
 
     try {
-        const { paid_date } = req.body;
+        const { paid_date, paid_amount, payment_method } = req.body;
 
         // Get enrollment
         const [enrollments] = await db.query(
@@ -544,7 +721,7 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
                 se.season_name
             FROM student_seasons ss
             JOIN students s ON ss.student_id = s.id
-            JOIN season_settings se ON ss.season_id = se.id
+            JOIN seasons se ON ss.season_id = se.id
             WHERE ss.id = ?`,
             [enrollmentId]
         );
@@ -574,12 +751,13 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
 
         // Update payment status
         const paymentDate = paid_date || new Date().toISOString().split('T')[0];
+        const paymentAmount = paid_amount || enrollment.season_fee;
 
         await db.query(
             `UPDATE student_seasons
-            SET payment_status = 'paid', paid_date = ?, updated_at = NOW()
+            SET payment_status = 'paid', paid_date = ?, paid_amount = ?, payment_method = ?, updated_at = NOW()
             WHERE id = ?`,
-            [paymentDate, enrollmentId]
+            [paymentDate, paymentAmount, payment_method || null, enrollmentId]
         );
 
         // Record in revenues table
@@ -594,7 +772,7 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
             ) VALUES (?, 'season', ?, ?, ?, ?)`,
             [
                 enrollment.academy_id,
-                enrollment.season_fee,
+                paymentAmount,
                 paymentDate,
                 enrollment.student_id,
                 `시즌비 납부 (${enrollment.season_name})`
@@ -609,7 +787,7 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
                 se.season_name
             FROM student_seasons ss
             JOIN students s ON ss.student_id = s.id
-            JOIN season_settings se ON ss.season_id = se.id
+            JOIN seasons se ON ss.season_id = se.id
             WHERE ss.id = ?`,
             [enrollmentId]
         );
@@ -650,7 +828,7 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
                 se.season_end_date
             FROM student_seasons ss
             JOIN students s ON ss.student_id = s.id
-            JOIN season_settings se ON ss.season_id = se.id
+            JOIN seasons se ON ss.season_id = se.id
             WHERE ss.id = ?`,
             [enrollmentId]
         );
@@ -683,7 +861,7 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
 
         // Calculate refund
         const refundResult = calculateSeasonRefund({
-            seasonFee: enrollment.season_fee,
+            seasonFee: parseFloat(enrollment.season_fee),
             seasonStartDate: new Date(enrollment.season_start_date),
             seasonEndDate: new Date(enrollment.season_end_date),
             cancellationDate: new Date(cancelDate),
@@ -696,11 +874,19 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
             `UPDATE student_seasons
             SET
                 payment_status = 'cancelled',
+                is_cancelled = true,
                 cancellation_date = ?,
                 refund_amount = ?,
+                refund_calculation = ?,
                 updated_at = NOW()
             WHERE id = ?`,
-            [cancelDate, refundResult.refundAmount, enrollmentId]
+            [cancelDate, refundResult.refundAmount, JSON.stringify(refundResult), enrollmentId]
+        );
+
+        // Update student's season registration status
+        await db.query(
+            `UPDATE students SET is_season_registered = false, current_season_id = NULL WHERE id = ?`,
+            [enrollment.student_id]
         );
 
         // Record refund expense if amount > 0
@@ -730,7 +916,7 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
                 se.season_name
             FROM student_seasons ss
             JOIN students s ON ss.student_id = s.id
-            JOIN season_settings se ON ss.season_id = se.id
+            JOIN seasons se ON ss.season_id = se.id
             WHERE ss.id = ?`,
             [enrollmentId]
         );
@@ -745,6 +931,38 @@ router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owne
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to cancel enrollment'
+        });
+    }
+});
+
+/**
+ * GET /paca/seasons/active
+ * Get currently active season(s)
+ * Access: owner, admin, teacher
+ */
+router.get('/active', verifyToken, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const [seasons] = await db.query(
+            `SELECT * FROM seasons
+            WHERE academy_id = ?
+            AND status = 'active'
+            AND season_start_date <= ?
+            AND season_end_date >= ?
+            ORDER BY season_type`,
+            [req.user.academyId, today, today]
+        );
+
+        res.json({
+            message: `Found ${seasons.length} active season(s)`,
+            seasons
+        });
+    } catch (error) {
+        console.error('Error fetching active seasons:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch active seasons'
         });
     }
 });
