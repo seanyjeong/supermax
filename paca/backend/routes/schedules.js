@@ -181,6 +181,122 @@ router.get('/:id', verifyToken, async (req, res) => {
 });
 
 /**
+ * POST /paca/schedules/bulk
+ * Create multiple schedules at once (일괄 스케줄 생성)
+ * Access: owner, admin only
+ */
+router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        const { class_id, year, month, weekdays, excluded_dates, time_slot } = req.body;
+
+        // Validation
+        if (!class_id || !year || !month || !Array.isArray(weekdays) || weekdays.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'class_id, year, month, and weekdays are required'
+            });
+        }
+
+        // Validate class exists and belongs to academy
+        const [classes] = await connection.query(
+            'SELECT id, class_name, default_time_slot FROM classes WHERE id = ? AND academy_id = ?',
+            [class_id, req.user.academyId]
+        );
+
+        if (classes.length === 0) {
+            connection.release();
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Class not found'
+            });
+        }
+
+        const classInfo = classes[0];
+        const useTimeSlot = time_slot || classInfo.default_time_slot || 'afternoon';
+
+        // Calculate dates for the given month and weekdays
+        const targetDates = [];
+        const firstDay = new Date(year, month - 1, 1);
+        const lastDay = new Date(year, month, 0);
+        const excludedSet = new Set(excluded_dates || []);
+
+        for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+            const dayOfWeek = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+            if (weekdays.includes(dayOfWeek)) {
+                const dateStr = d.toISOString().split('T')[0];
+                if (!excludedSet.has(dateStr)) {
+                    targetDates.push(dateStr);
+                }
+            }
+        }
+
+        if (targetDates.length === 0) {
+            connection.release();
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'No valid dates found for the given criteria'
+            });
+        }
+
+        // Start transaction
+        await connection.beginTransaction();
+
+        const createdSchedules = [];
+        const skippedDates = [];
+
+        for (const dateStr of targetDates) {
+            // Check for existing schedule on this date for this class
+            const [existing] = await connection.query(
+                'SELECT id FROM class_schedules WHERE academy_id = ? AND class_id = ? AND class_date = ? AND time_slot = ?',
+                [req.user.academyId, class_id, dateStr, useTimeSlot]
+            );
+
+            if (existing.length > 0) {
+                skippedDates.push(dateStr);
+                continue;
+            }
+
+            // Create schedule without instructor (will be assigned later)
+            const [result] = await connection.query(
+                `INSERT INTO class_schedules
+                (academy_id, class_id, class_date, time_slot, instructor_id, title)
+                VALUES (?, ?, ?, ?, NULL, ?)`,
+                [req.user.academyId, class_id, dateStr, useTimeSlot, classInfo.class_name]
+            );
+
+            createdSchedules.push({
+                id: result.insertId,
+                class_date: dateStr,
+                time_slot: useTimeSlot
+            });
+        }
+
+        await connection.commit();
+        connection.release();
+
+        res.status(201).json({
+            message: `Created ${createdSchedules.length} schedules`,
+            class_id,
+            class_name: classInfo.class_name,
+            created_count: createdSchedules.length,
+            skipped_count: skippedDates.length,
+            skipped_dates: skippedDates,
+            schedules: createdSchedules
+        });
+    } catch (error) {
+        await connection.rollback();
+        connection.release();
+        console.error('Error creating bulk schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to create schedules'
+        });
+    }
+});
+
+/**
  * POST /paca/schedules
  * Create new class schedule
  * Access: owner, admin only
@@ -270,6 +386,94 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to create schedule'
+        });
+    }
+});
+
+/**
+ * PUT /paca/schedules/:id/assign-instructor
+ * Assign instructor to a schedule (강사 배정)
+ * Access: owner, admin only
+ */
+router.put('/:id/assign-instructor', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+
+    try {
+        const { instructor_id, time_slots } = req.body;
+
+        // Check if schedule exists
+        const [schedules] = await db.query(
+            'SELECT id, class_date, time_slot FROM class_schedules WHERE id = ? AND academy_id = ?',
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        // Validate instructor if provided
+        if (instructor_id) {
+            const [instructors] = await db.query(
+                'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [instructor_id, req.user.academyId]
+            );
+
+            if (instructors.length === 0) {
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: 'Instructor not found'
+                });
+            }
+        }
+
+        // Update schedule with instructor
+        await db.query(
+            'UPDATE class_schedules SET instructor_id = ? WHERE id = ?',
+            [instructor_id || null, scheduleId]
+        );
+
+        // If time_slots array provided, create/update instructor attendance records
+        if (Array.isArray(time_slots) && time_slots.length > 0 && instructor_id) {
+            const schedule = schedules[0];
+
+            for (const slot of time_slots) {
+                if (!['morning', 'afternoon', 'evening'].includes(slot)) continue;
+
+                // UPSERT instructor attendance
+                await db.query(
+                    `INSERT INTO instructor_attendance
+                    (instructor_id, class_schedule_id, work_date, time_slot, attendance_status)
+                    VALUES (?, ?, ?, ?, 'present')
+                    ON DUPLICATE KEY UPDATE
+                    class_schedule_id = VALUES(class_schedule_id),
+                    attendance_status = 'present',
+                    updated_at = CURRENT_TIMESTAMP`,
+                    [instructor_id, scheduleId, schedule.class_date, slot]
+                );
+            }
+        }
+
+        // Fetch updated schedule
+        const [updated] = await db.query(
+            `SELECT cs.*, i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.id = ?`,
+            [scheduleId]
+        );
+
+        res.json({
+            message: 'Instructor assigned successfully',
+            schedule: updated[0]
+        });
+    } catch (error) {
+        console.error('Error assigning instructor:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to assign instructor'
         });
     }
 });
