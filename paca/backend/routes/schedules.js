@@ -831,4 +831,366 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
     }
 });
 
+/**
+ * GET /paca/schedules/:id/instructor-attendance
+ * Get instructor attendance for a specific schedule
+ * Access: owner, admin, teacher
+ */
+router.get('/:id/instructor-attendance', verifyToken, async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+
+    try {
+        // Get schedule details
+        const [schedules] = await db.query(
+            `SELECT
+                cs.id,
+                cs.class_date,
+                cs.time_slot,
+                cs.instructor_id,
+                i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.id = ?
+            AND cs.academy_id = ?`,
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        const schedule = schedules[0];
+
+        // Get instructor attendance records for this date
+        const [attendances] = await db.query(
+            `SELECT
+                ia.id,
+                ia.instructor_id,
+                i.name AS instructor_name,
+                ia.time_slot,
+                ia.attendance_status,
+                ia.check_in_time,
+                ia.check_out_time,
+                ia.notes
+            FROM instructor_attendance ia
+            JOIN instructors i ON ia.instructor_id = i.id
+            WHERE ia.work_date = ?
+            AND i.academy_id = ?
+            ORDER BY ia.time_slot, i.name`,
+            [schedule.class_date, req.user.academyId]
+        );
+
+        res.json({
+            message: 'Instructor attendance retrieved',
+            schedule: {
+                id: schedule.id,
+                class_date: schedule.class_date,
+                time_slot: schedule.time_slot,
+                instructor_id: schedule.instructor_id,
+                instructor_name: schedule.instructor_name
+            },
+            attendances
+        });
+    } catch (error) {
+        console.error('Error fetching instructor attendance:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch instructor attendance'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules/:id/instructor-attendance
+ * Record instructor attendance for a schedule
+ * Access: owner, admin
+ */
+router.post('/:id/instructor-attendance', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const scheduleId = parseInt(req.params.id);
+    const connection = await db.getConnection();
+
+    try {
+        const { attendances } = req.body;
+
+        // Validation
+        if (!Array.isArray(attendances) || attendances.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'attendances must be a non-empty array'
+            });
+        }
+
+        // Check if schedule exists
+        const [schedules] = await connection.query(
+            'SELECT id, class_date, time_slot FROM class_schedules WHERE id = ? AND academy_id = ?',
+            [scheduleId, req.user.academyId]
+        );
+
+        if (schedules.length === 0) {
+            connection.release();
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Schedule not found'
+            });
+        }
+
+        const schedule = schedules[0];
+
+        await connection.beginTransaction();
+
+        const validStatuses = ['present', 'absent', 'late', 'half_day'];
+        const processedRecords = [];
+
+        for (const record of attendances) {
+            const { instructor_id, time_slot, attendance_status, check_in_time, check_out_time, notes } = record;
+
+            // Validate attendance_status
+            if (!validStatuses.includes(attendance_status)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: `Invalid attendance_status: ${attendance_status}. Must be one of: ${validStatuses.join(', ')}`
+                });
+            }
+
+            // Validate time_slot
+            const useTimeSlot = time_slot || schedule.time_slot;
+            if (!['morning', 'afternoon', 'evening'].includes(useTimeSlot)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: 'Invalid time_slot'
+                });
+            }
+
+            // Verify instructor exists
+            const [instructors] = await connection.query(
+                'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [instructor_id, req.user.academyId]
+            );
+
+            if (instructors.length === 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: `Instructor with ID ${instructor_id} not found`
+                });
+            }
+
+            // UPSERT instructor attendance record
+            await connection.query(
+                `INSERT INTO instructor_attendance
+                (instructor_id, work_date, time_slot, attendance_status, check_in_time, check_out_time, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                attendance_status = VALUES(attendance_status),
+                check_in_time = VALUES(check_in_time),
+                check_out_time = VALUES(check_out_time),
+                notes = VALUES(notes),
+                updated_at = CURRENT_TIMESTAMP`,
+                [instructor_id, schedule.class_date, useTimeSlot, attendance_status, check_in_time || null, check_out_time || null, notes || null]
+            );
+
+            processedRecords.push({
+                instructor_id,
+                instructor_name: instructors[0].name,
+                time_slot: useTimeSlot,
+                attendance_status,
+                check_in_time,
+                check_out_time
+            });
+        }
+
+        await connection.commit();
+        connection.release();
+
+        res.json({
+            message: `Instructor attendance recorded for ${processedRecords.length} records`,
+            schedule_id: scheduleId,
+            class_date: schedule.class_date,
+            attendance_records: processedRecords
+        });
+    } catch (error) {
+        await connection.rollback();
+        connection.release();
+        console.error('Error recording instructor attendance:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to record instructor attendance'
+        });
+    }
+});
+
+/**
+ * GET /paca/schedules/date/:date/instructor-attendance
+ * Get all instructor attendance for a specific date
+ * Access: owner, admin, teacher
+ */
+router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) => {
+    const workDate = req.params.date;
+
+    try {
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(workDate)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Date must be in YYYY-MM-DD format'
+            });
+        }
+
+        // Get all instructor attendance for this date
+        const [attendances] = await db.query(
+            `SELECT
+                ia.id,
+                ia.instructor_id,
+                i.name AS instructor_name,
+                ia.time_slot,
+                ia.attendance_status,
+                ia.check_in_time,
+                ia.check_out_time,
+                ia.notes
+            FROM instructor_attendance ia
+            JOIN instructors i ON ia.instructor_id = i.id
+            WHERE ia.work_date = ?
+            AND i.academy_id = ?
+            ORDER BY ia.time_slot, i.name`,
+            [workDate, req.user.academyId]
+        );
+
+        // Get all active instructors for comparison
+        const [instructors] = await db.query(
+            `SELECT id, name FROM instructors WHERE academy_id = ? AND status = 'active' AND deleted_at IS NULL ORDER BY name`,
+            [req.user.academyId]
+        );
+
+        res.json({
+            message: 'Instructor attendance retrieved',
+            date: workDate,
+            attendances,
+            instructors
+        });
+    } catch (error) {
+        console.error('Error fetching instructor attendance by date:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch instructor attendance'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules/date/:date/instructor-attendance
+ * Record instructor attendance for a specific date (without schedule)
+ * Access: owner, admin
+ */
+router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const workDate = req.params.date;
+    const connection = await db.getConnection();
+
+    try {
+        const { attendances } = req.body;
+
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(workDate)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Date must be in YYYY-MM-DD format'
+            });
+        }
+
+        if (!Array.isArray(attendances) || attendances.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'attendances must be a non-empty array'
+            });
+        }
+
+        await connection.beginTransaction();
+
+        const validStatuses = ['present', 'absent', 'late', 'half_day'];
+        const processedRecords = [];
+
+        for (const record of attendances) {
+            const { instructor_id, time_slot, attendance_status, check_in_time, check_out_time, notes } = record;
+
+            if (!validStatuses.includes(attendance_status)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: `Invalid attendance_status: ${attendance_status}`
+                });
+            }
+
+            if (!['morning', 'afternoon', 'evening'].includes(time_slot)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: 'Invalid time_slot'
+                });
+            }
+
+            const [instructors] = await connection.query(
+                'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [instructor_id, req.user.academyId]
+            );
+
+            if (instructors.length === 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: `Instructor with ID ${instructor_id} not found`
+                });
+            }
+
+            await connection.query(
+                `INSERT INTO instructor_attendance
+                (instructor_id, work_date, time_slot, attendance_status, check_in_time, check_out_time, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                attendance_status = VALUES(attendance_status),
+                check_in_time = VALUES(check_in_time),
+                check_out_time = VALUES(check_out_time),
+                notes = VALUES(notes),
+                updated_at = CURRENT_TIMESTAMP`,
+                [instructor_id, workDate, time_slot, attendance_status, check_in_time || null, check_out_time || null, notes || null]
+            );
+
+            processedRecords.push({
+                instructor_id,
+                instructor_name: instructors[0].name,
+                time_slot,
+                attendance_status
+            });
+        }
+
+        await connection.commit();
+        connection.release();
+
+        res.json({
+            message: `Instructor attendance recorded for ${processedRecords.length} records`,
+            date: workDate,
+            attendance_records: processedRecords
+        });
+    } catch (error) {
+        await connection.rollback();
+        connection.release();
+        console.error('Error recording instructor attendance:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to record instructor attendance'
+        });
+    }
+});
+
 module.exports = router;
