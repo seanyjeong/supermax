@@ -675,6 +675,130 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
 });
 
 /**
+ * POST /paca/students/grade-upgrade
+ * Bulk upgrade student grades (year-end transition)
+ * Access: owner, admin
+ *
+ * Body: {
+ *   upgrades: [
+ *     { student_id: 1, new_grade: '고2', new_status: 'active' },
+ *     { student_id: 2, new_grade: 'N수', new_status: 'active' },
+ *     { student_id: 3, new_grade: null, new_status: 'graduated' }
+ *   ]
+ * }
+ */
+router.post('/grade-upgrade', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const { upgrades } = req.body;
+
+        if (!Array.isArray(upgrades) || upgrades.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'upgrades must be a non-empty array'
+            });
+        }
+
+        const validGrades = ['고1', '고2', '고3', 'N수', null];
+        const validStatuses = ['active', 'inactive', 'graduated'];
+
+        // Validate all upgrades first
+        for (const upgrade of upgrades) {
+            if (!upgrade.student_id) {
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: 'Each upgrade must have student_id'
+                });
+            }
+
+            if (upgrade.new_grade !== null && upgrade.new_grade !== undefined && !validGrades.includes(upgrade.new_grade)) {
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: `Invalid grade: ${upgrade.new_grade}. Must be one of: 고1, 고2, 고3, N수`
+                });
+            }
+
+            if (upgrade.new_status && !validStatuses.includes(upgrade.new_status)) {
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: `Invalid status: ${upgrade.new_status}. Must be one of: active, inactive, graduated`
+                });
+            }
+        }
+
+        // Verify all students belong to this academy
+        const studentIds = upgrades.map(u => u.student_id);
+        const [existingStudents] = await db.query(
+            `SELECT id FROM students
+             WHERE id IN (?)
+             AND academy_id = ?
+             AND deleted_at IS NULL`,
+            [studentIds, req.user.academyId]
+        );
+
+        if (existingStudents.length !== studentIds.length) {
+            const foundIds = existingStudents.map(s => s.id);
+            const missingIds = studentIds.filter(id => !foundIds.includes(id));
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: `Students not found: ${missingIds.join(', ')}`
+            });
+        }
+
+        // Perform updates in transaction
+        const connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            let updatedCount = 0;
+
+            for (const upgrade of upgrades) {
+                const updates = [];
+                const params = [];
+
+                if (upgrade.new_grade !== undefined) {
+                    updates.push('grade = ?');
+                    params.push(upgrade.new_grade);
+                }
+
+                if (upgrade.new_status) {
+                    updates.push('status = ?');
+                    params.push(upgrade.new_status);
+                }
+
+                if (updates.length > 0) {
+                    updates.push('updated_at = NOW()');
+                    params.push(upgrade.student_id);
+
+                    await connection.query(
+                        `UPDATE students SET ${updates.join(', ')} WHERE id = ?`,
+                        params
+                    );
+                    updatedCount++;
+                }
+            }
+
+            await connection.commit();
+
+            res.json({
+                message: `Successfully upgraded ${updatedCount} students`,
+                updated_count: updatedCount
+            });
+        } catch (error) {
+            await connection.rollback();
+            throw error;
+        } finally {
+            connection.release();
+        }
+    } catch (error) {
+        console.error('Error upgrading student grades:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to upgrade student grades'
+        });
+    }
+});
+
+/**
  * GET /paca/students/search
  * Search students (for autocomplete, etc)
  * Access: owner, admin, teacher
