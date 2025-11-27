@@ -107,6 +107,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             season_end_date,
             non_season_end_date,
             operating_days,
+            grade_time_slots,  // NEW: 학년별 시간대 {"고3": "evening", "N수": "morning"}
             default_season_fee,
             allows_continuous,
             continuous_to_season_type,
@@ -157,13 +158,14 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 season_end_date,
                 non_season_end_date,
                 operating_days,
+                grade_time_slots,
                 default_season_fee,
                 allows_continuous,
                 continuous_to_season_type,
                 continuous_discount_type,
                 continuous_discount_rate,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'upcoming')`,
             [
                 req.user.academyId,
                 season_name,
@@ -172,6 +174,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 season_end_date,
                 non_season_end_date,
                 JSON.stringify(operating_days),
+                grade_time_slots ? JSON.stringify(grade_time_slots) : null,
                 default_season_fee || 0,
                 allows_continuous || false,
                 continuous_to_season_type || null,
@@ -227,6 +230,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             season_end_date,
             non_season_end_date,
             operating_days,
+            grade_time_slots,  // NEW: 학년별 시간대
             default_season_fee,
             allows_continuous,
             continuous_to_season_type,
@@ -261,6 +265,10 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         if (operating_days !== undefined) {
             updates.push('operating_days = ?');
             params.push(JSON.stringify(operating_days));
+        }
+        if (grade_time_slots !== undefined) {
+            updates.push('grade_time_slots = ?');
+            params.push(grade_time_slots ? JSON.stringify(grade_time_slots) : null);
         }
         if (default_season_fee !== undefined) {
             updates.push('default_season_fee = ?');
