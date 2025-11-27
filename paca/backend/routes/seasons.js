@@ -392,6 +392,8 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
  */
 router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
+    console.log('[ENROLL] Request body:', JSON.stringify(req.body));
+    console.log('[ENROLL] seasonId:', seasonId, 'academyId:', req.user?.academyId);
 
     try {
         const {
@@ -403,7 +405,10 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             previous_season_id
         } = req.body;
 
+        console.log('[ENROLL] Extracted - student_id:', student_id, 'season_fee:', season_fee, 'type:', typeof season_fee);
+
         if (!student_id || season_fee === undefined || season_fee === null) {
+            console.log('[ENROLL] Validation failed - student_id:', student_id, 'season_fee:', season_fee);
             return res.status(400).json({
                 error: 'Validation Error',
                 message: 'Required fields: student_id, season_fee'
@@ -415,8 +420,10 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             `SELECT * FROM seasons WHERE id = ? AND academy_id = ? AND status != 'ended'`,
             [seasonId, req.user.academyId]
         );
+        console.log('[ENROLL] Found seasons:', seasons.length, 'for seasonId:', seasonId, 'academyId:', req.user.academyId);
 
         if (seasons.length === 0) {
+            console.log('[ENROLL] Season not found - returning 404');
             return res.status(404).json({
                 error: 'Not Found',
                 message: 'Season not found or ended'
@@ -424,14 +431,17 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         }
 
         const season = seasons[0];
+        console.log('[ENROLL] Season found:', season.season_name, 'status:', season.status);
 
         // Verify student exists and belongs to academy
         const [students] = await db.query(
             'SELECT * FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [student_id, req.user.academyId]
         );
+        console.log('[ENROLL] Found students:', students.length, 'for student_id:', student_id);
 
         if (students.length === 0) {
+            console.log('[ENROLL] Student not found - returning 404');
             return res.status(404).json({
                 error: 'Not Found',
                 message: 'Student not found'
@@ -439,6 +449,7 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         }
 
         const student = students[0];
+        console.log('[ENROLL] Student found:', student.name);
 
         // Check if already enrolled
         const [existing] = await db.query(
@@ -446,13 +457,16 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             WHERE student_id = ? AND season_id = ? AND payment_status != 'cancelled'`,
             [student_id, seasonId]
         );
+        console.log('[ENROLL] Existing enrollments:', existing.length);
 
         if (existing.length > 0) {
+            console.log('[ENROLL] Already enrolled - returning 400');
             return res.status(400).json({
                 error: 'Validation Error',
                 message: 'Student already enrolled in this season'
             });
         }
+        console.log('[ENROLL] Proceeding with enrollment...');
 
         // Calculate prorated fee
         const weeklyDays = parseWeeklyDays(student.class_days);
