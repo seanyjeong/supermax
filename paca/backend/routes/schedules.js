@@ -183,24 +183,25 @@ router.get('/:id', verifyToken, async (req, res) => {
 /**
  * POST /paca/schedules/bulk
  * Create multiple schedules at once (일괄 스케줄 생성)
- * 반 기반 또는 시즌 기반으로 생성 가능
+ * 시즌 기반, 반 기반, 또는 학생 수업요일 기반으로 생성 가능
  * Access: owner, admin only
  */
 router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const connection = await db.getConnection();
 
     try {
-        const { class_id, season_id, target_grade, year, month, weekdays, excluded_dates, time_slot, title } = req.body;
+        const { class_id, season_id, target_grade, year, month, weekdays, excluded_dates, time_slot, title, mode } = req.body;
 
-        // 시즌 기반 생성인지 반 기반 생성인지 확인
-        const isSeasonBased = !!season_id;
-        const isClassBased = !!class_id;
+        // 모드 확인: 'season', 'class', 'student' (학생 수업요일 기반)
+        const isSeasonBased = mode === 'season' || (!!season_id && !mode);
+        const isClassBased = mode === 'class' || (!!class_id && !season_id && !mode);
+        const isStudentBased = mode === 'student';
 
-        // 둘 다 없거나, 시즌 기반인데 필요한 정보가 없는 경우
-        if (!isSeasonBased && !isClassBased) {
+        // 어느 모드도 아닌 경우
+        if (!isSeasonBased && !isClassBased && !isStudentBased) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'class_id 또는 season_id가 필요합니다'
+                message: 'mode, class_id, 또는 season_id가 필요합니다'
             });
         }
 
@@ -286,31 +287,108 @@ router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res
                     }
                 }
             }
+        } else if (isStudentBased) {
+            // 학생 수업요일 기반 생성 (새로운 모드)
+            if (!year || !month) {
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: 'year, month가 필요합니다'
+                });
+            }
+
+            // 해당 학원의 활성 학생들의 수업요일 조회
+            const [students] = await connection.query(
+                `SELECT DISTINCT s.class_days
+                FROM students s
+                WHERE s.academy_id = ?
+                AND s.status = 'active'
+                AND s.deleted_at IS NULL
+                AND s.class_days IS NOT NULL`,
+                [req.user.academyId]
+            );
+
+            if (students.length === 0) {
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: '활성 학생이 없거나 수업요일이 설정되지 않았습니다'
+                });
+            }
+
+            // 모든 학생의 수업요일을 합집합으로
+            const allWeekdays = new Set();
+            for (const student of students) {
+                try {
+                    const days = typeof student.class_days === 'string'
+                        ? JSON.parse(student.class_days)
+                        : (student.class_days || []);
+                    if (Array.isArray(days)) {
+                        days.forEach(d => allWeekdays.add(d));
+                    }
+                } catch {
+                    // 파싱 실패 무시
+                }
+            }
+
+            if (allWeekdays.size === 0) {
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: '학생들의 수업요일이 설정되지 않았습니다'
+                });
+            }
+
+            scheduleTitle = title || `${month}월 수업`;
+            useTimeSlot = time_slot || 'afternoon';
+
+            // 해당 월의 수업요일에 맞는 날짜들 계산
+            const firstDay = new Date(year, month - 1, 1);
+            const lastDay = new Date(year, month, 0);
+            const excludedSet = new Set(excluded_dates || []);
+
+            for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+                const dayOfWeek = d.getDay();
+                if (allWeekdays.has(dayOfWeek)) {
+                    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    if (!excludedSet.has(dateStr)) {
+                        targetDates.push(dateStr);
+                    }
+                }
+            }
         } else {
             // 반 기반 생성 (기존 로직)
             if (!year || !month || !Array.isArray(weekdays) || weekdays.length === 0) {
+                connection.release();
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: 'class_id, year, month, weekdays가 필요합니다'
+                    message: 'year, month, weekdays가 필요합니다'
                 });
             }
 
-            const [classes] = await connection.query(
-                'SELECT id, class_name, default_time_slot FROM classes WHERE id = ? AND academy_id = ?',
-                [class_id, req.user.academyId]
-            );
+            // class_id가 있으면 반 정보 조회
+            if (class_id) {
+                const [classes] = await connection.query(
+                    'SELECT id, class_name, default_time_slot FROM classes WHERE id = ? AND academy_id = ?',
+                    [class_id, req.user.academyId]
+                );
 
-            if (classes.length === 0) {
-                connection.release();
-                return res.status(404).json({
-                    error: 'Not Found',
-                    message: '반을 찾을 수 없습니다'
-                });
+                if (classes.length === 0) {
+                    connection.release();
+                    return res.status(404).json({
+                        error: 'Not Found',
+                        message: '반을 찾을 수 없습니다'
+                    });
+                }
+
+                const classInfo = classes[0];
+                scheduleTitle = title || classInfo.class_name;
+                useTimeSlot = time_slot || classInfo.default_time_slot || 'afternoon';
+            } else {
+                // 반 없이 요일 기반으로 생성
+                scheduleTitle = title || `${month}월 수업`;
+                useTimeSlot = time_slot || 'afternoon';
             }
-
-            const classInfo = classes[0];
-            scheduleTitle = title || classInfo.class_name;
-            useTimeSlot = time_slot || classInfo.default_time_slot || 'afternoon';
 
             // 해당 월의 요일에 맞는 날짜들 계산
             const firstDay = new Date(year, month - 1, 1);
@@ -396,17 +474,18 @@ router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res
 /**
  * POST /paca/schedules
  * Create new class schedule
+ * instructor_id는 선택사항 (나중에 배정 가능)
  * Access: owner, admin only
  */
 router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
         const { class_date, time_slot, instructor_id, title, content, notes } = req.body;
 
-        // Validation
-        if (!class_date || !time_slot || !instructor_id) {
+        // Validation - instructor_id는 선택사항
+        if (!class_date || !time_slot) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'class_date, time_slot, and instructor_id are required'
+                message: 'class_date and time_slot are required'
             });
         }
 
@@ -427,42 +506,43 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             });
         }
 
-        // Verify instructor exists and belongs to academy
-        const [instructors] = await db.query(
-            'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
-            [instructor_id, req.user.academyId]
-        );
+        // Verify instructor exists if provided
+        if (instructor_id) {
+            const [instructors] = await db.query(
+                'SELECT id FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [instructor_id, req.user.academyId]
+            );
 
-        if (instructors.length === 0) {
-            return res.status(404).json({
-                error: 'Not Found',
-                message: 'Instructor not found or does not belong to your academy'
-            });
+            if (instructors.length === 0) {
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: 'Instructor not found or does not belong to your academy'
+                });
+            }
         }
 
-        // Check for duplicate schedule (same date, time_slot, instructor)
+        // Check for duplicate schedule (same date, time_slot)
         const [existing] = await db.query(
             `SELECT id FROM class_schedules
             WHERE academy_id = ?
             AND class_date = ?
-            AND time_slot = ?
-            AND instructor_id = ?`,
-            [req.user.academyId, class_date, time_slot, instructor_id]
+            AND time_slot = ?`,
+            [req.user.academyId, class_date, time_slot]
         );
 
         if (existing.length > 0) {
             return res.status(409).json({
                 error: 'Conflict',
-                message: 'A schedule already exists for this instructor at this date and time'
+                message: 'A schedule already exists at this date and time'
             });
         }
 
-        // Create schedule
+        // Create schedule (instructor_id can be null)
         const [result] = await db.query(
             `INSERT INTO class_schedules
             (academy_id, class_date, time_slot, instructor_id, title, content, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [req.user.academyId, class_date, time_slot, instructor_id, title || null, content || null, notes || null]
+            [req.user.academyId, class_date, time_slot, instructor_id || null, title || null, content || null, notes || null]
         );
 
         // Fetch created schedule
@@ -728,9 +808,10 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
  * GET /paca/schedules/:id/attendance
  * Get attendance status for a specific class
  *
- * 새로운 로직:
- * - 시즌 스케줄 (season_id + target_grade 있음): 해당 시즌에 등록된 해당 학년 학생만
- * - 일반 스케줄 (season_id 없음): 해당 요일에 class_days 매칭되는 학생 (시즌 미등록자)
+ * 동적 조회 방식:
+ * 1. 스케줄 날짜 기준으로 활성 시즌 확인
+ * 2. 시즌이 있으면 → 해당 시즌에 등록된 학생 중 시간대에 맞는 학년 학생 조회
+ * 3. 시즌이 없으면 → class_days 매칭 학생 조회 (고1, 고2, 공무원/성인)
  *
  * Access: owner, admin, teacher
  */
@@ -738,7 +819,7 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
     const scheduleId = parseInt(req.params.id);
 
     try {
-        // Get schedule details including season_id and target_grade
+        // Get schedule details
         const [schedules] = await db.query(
             `SELECT
                 cs.id,
@@ -746,14 +827,9 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
                 cs.time_slot,
                 cs.title,
                 cs.attendance_taken,
-                cs.season_id,
-                cs.target_grade,
-                i.name AS instructor_name,
-                s.season_name,
-                s.season_type
+                i.name AS instructor_name
             FROM class_schedules cs
             LEFT JOIN instructors i ON cs.instructor_id = i.id
-            LEFT JOIN seasons s ON cs.season_id = s.id
             WHERE cs.id = ?
             AND cs.academy_id = ?`,
             [scheduleId, req.user.academyId]
@@ -776,16 +852,47 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
         let students = [];
         let seasonInfo = null;
 
-        // Case 1: 시즌 스케줄 (season_id + target_grade 있음)
-        if (schedule.season_id && schedule.target_grade) {
+        // 1. 스케줄 날짜에 활성화된 시즌 찾기
+        const [activeSeasons] = await db.query(
+            `SELECT id, season_name, season_type, grade_time_slots, operating_days
+            FROM seasons
+            WHERE academy_id = ?
+            AND status = 'active'
+            AND season_start_date <= ?
+            AND season_end_date >= ?`,
+            [req.user.academyId, classDateStr, classDateStr]
+        );
+
+        if (activeSeasons.length > 0) {
+            // 시즌 기간 내 - 시즌 등록 학생 조회
+            const season = activeSeasons[0];
+            const gradeTimeSlots = typeof season.grade_time_slots === 'string'
+                ? JSON.parse(season.grade_time_slots)
+                : season.grade_time_slots;
+
+            // 현재 시간대에 맞는 학년 찾기
+            let targetGrades = [];
+            if (gradeTimeSlots) {
+                for (const [grade, timeSlot] of Object.entries(gradeTimeSlots)) {
+                    if (timeSlot === schedule.time_slot) {
+                        targetGrades.push(grade);
+                    }
+                }
+            }
+
+            // 해당 시간대에 배정된 학년이 없으면 모든 시즌 등록 학생
+            if (targetGrades.length === 0) {
+                targetGrades = ['고3', 'N수'];
+            }
+
             seasonInfo = {
-                id: schedule.season_id,
-                season_name: schedule.season_name,
-                season_type: schedule.season_type,
-                target_grade: schedule.target_grade
+                id: season.id,
+                season_name: season.season_name,
+                season_type: season.season_type,
+                target_grades: targetGrades
             };
 
-            // 해당 시즌에 등록된 + 해당 학년 학생만 조회
+            // 시즌에 등록된 학생 중 해당 학년 학생 조회
             const [seasonStudents] = await db.query(
                 `SELECT
                     s.id AS student_id,
@@ -805,46 +912,53 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
                 AND s.status = 'active'
                 AND s.deleted_at IS NULL
                 AND ss.payment_status != 'cancelled'
-                AND s.grade = ?
+                AND s.grade IN (?)
                 ORDER BY s.name ASC`,
-                [schedule.season_id, scheduleId, req.user.academyId, schedule.target_grade]
+                [season.id, scheduleId, req.user.academyId, targetGrades]
             );
 
             students = seasonStudents;
         }
-        // Case 2: 일반 스케줄 (season_id 없음) - 해당 요일 class_days 매칭 학생
-        else {
-            // 시즌에 등록되지 않은 학생 중 해당 요일에 수업 있는 학생
-            const [regularStudents] = await db.query(
-                `SELECT
-                    s.id AS student_id,
-                    s.name AS student_name,
-                    s.student_number,
-                    s.student_type,
-                    s.grade,
-                    s.class_days,
-                    NULL AS season_registration_id,
-                    a.attendance_status,
-                    a.makeup_date,
-                    a.notes AS attendance_notes
-                FROM students s
-                LEFT JOIN student_seasons ss ON ss.student_id = s.id
-                    AND ss.payment_status != 'cancelled'
-                    AND ss.season_id IN (
-                        SELECT id FROM seasons
-                        WHERE academy_id = ? AND status = 'active'
-                    )
-                LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
-                WHERE s.academy_id = ?
-                AND s.status = 'active'
-                AND s.deleted_at IS NULL
-                AND ss.id IS NULL
-                AND JSON_CONTAINS(s.class_days, ?)
-                ORDER BY s.name ASC`,
-                [req.user.academyId, scheduleId, req.user.academyId, JSON.stringify(dayOfWeek)]
-            );
 
-            students = regularStudents;
+        // 2. 비시즌 또는 시즌 학생 외에 class_days 매칭 학생도 조회 (고1, 고2, 공무원/성인)
+        // 시즌에 등록되지 않은 학생 중 해당 요일에 수업 있는 학생
+        const [regularStudents] = await db.query(
+            `SELECT
+                s.id AS student_id,
+                s.name AS student_name,
+                s.student_number,
+                s.student_type,
+                s.grade,
+                s.class_days,
+                NULL AS season_registration_id,
+                a.attendance_status,
+                a.makeup_date,
+                a.notes AS attendance_notes
+            FROM students s
+            LEFT JOIN student_seasons ss ON ss.student_id = s.id
+                AND ss.payment_status != 'cancelled'
+                AND ss.season_id IN (
+                    SELECT id FROM seasons
+                    WHERE academy_id = ? AND status = 'active'
+                    AND season_start_date <= ? AND season_end_date >= ?
+                )
+            LEFT JOIN attendance a ON a.student_id = s.id AND a.class_schedule_id = ?
+            WHERE s.academy_id = ?
+            AND s.status = 'active'
+            AND s.deleted_at IS NULL
+            AND ss.id IS NULL
+            AND JSON_CONTAINS(s.class_days, ?)
+            ORDER BY s.name ASC`,
+            [req.user.academyId, classDateStr, classDateStr, scheduleId, req.user.academyId, JSON.stringify(dayOfWeek)]
+        );
+
+        // 기존 학생 ID Set 생성
+        const existingIds = new Set(students.map(s => s.student_id));
+        // 중복 제거하며 추가
+        for (const student of regularStudents) {
+            if (!existingIds.has(student.student_id)) {
+                students.push(student);
+            }
         }
 
         // 3. Get students who have makeup scheduled for this date
@@ -914,15 +1028,13 @@ router.get('/:id/attendance', verifyToken, async (req, res) => {
                 time_slot: schedule.time_slot,
                 instructor_name: schedule.instructor_name,
                 title: schedule.title,
-                attendance_taken: schedule.attendance_taken,
-                season_id: schedule.season_id,
-                target_grade: schedule.target_grade
+                attendance_taken: schedule.attendance_taken
             },
             season: seasonInfo ? {
                 id: seasonInfo.id,
                 season_name: seasonInfo.season_name,
                 season_type: seasonInfo.season_type,
-                target_grade: seasonInfo.target_grade
+                target_grades: seasonInfo.target_grades
             } : null,
             students: studentsWithInfo
         });
