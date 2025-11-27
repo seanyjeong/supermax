@@ -313,9 +313,112 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             [result.insertId]
         );
 
+        const createdStudent = students[0];
+
+        // 첫 달 학원비 자동 생성 (일할계산)
+        let firstPayment = null;
+        if (monthly_tuition && monthly_tuition > 0) {
+            const enrollDate = new Date(enrollment_date || new Date().toISOString().split('T')[0]);
+            const year = enrollDate.getFullYear();
+            const month = enrollDate.getMonth() + 1;
+
+            // 학원 납부일 조회 (기본값 5일)
+            const [academySettings] = await db.query(
+                'SELECT tuition_due_day FROM academy_settings WHERE academy_id = ?',
+                [req.user.academyId]
+            );
+            const academyDueDay = academySettings.length > 0 ? academySettings[0].tuition_due_day : 5;
+            const studentDueDay = payment_due_day || academyDueDay;
+
+            // 일할계산: 등록일부터 말일까지
+            const lastDayOfMonth = new Date(year, month, 0).getDate();
+            const enrollDay = enrollDate.getDate();
+            const remainingDays = lastDayOfMonth - enrollDay + 1;
+
+            // 수업 요일 계산 (등록일부터 말일까지 수업일수)
+            let classDaysCount = 0;
+            const parsedClassDays = class_days || [];
+            for (let d = enrollDay; d <= lastDayOfMonth; d++) {
+                const checkDate = new Date(year, month - 1, d);
+                const dayOfWeek = checkDate.getDay();
+                if (parsedClassDays.includes(dayOfWeek)) {
+                    classDaysCount++;
+                }
+            }
+
+            // 전체 월 수업일수 계산
+            let totalClassDaysInMonth = 0;
+            for (let d = 1; d <= lastDayOfMonth; d++) {
+                const checkDate = new Date(year, month - 1, d);
+                const dayOfWeek = checkDate.getDay();
+                if (parsedClassDays.includes(dayOfWeek)) {
+                    totalClassDaysInMonth++;
+                }
+            }
+
+            // 일할계산 금액
+            const baseAmount = parseFloat(monthly_tuition);
+            const discountRateNum = parseFloat(discount_rate) || 0;
+            let proRatedAmount;
+
+            if (totalClassDaysInMonth > 0 && classDaysCount > 0) {
+                const dailyRate = baseAmount / totalClassDaysInMonth;
+                proRatedAmount = Math.round(dailyRate * classDaysCount);
+            } else {
+                // 수업요일 설정 없으면 일수 기준
+                proRatedAmount = Math.round(baseAmount * remainingDays / lastDayOfMonth);
+            }
+
+            // 할인 적용
+            const discountAmount = Math.round(proRatedAmount * discountRateNum / 100);
+            const finalAmount = proRatedAmount - discountAmount;
+
+            // 납부일 계산
+            const dueDate = new Date(year, month - 1, Math.min(studentDueDay, lastDayOfMonth));
+            if (dueDate < enrollDate) {
+                // 납부일이 등록일보다 이전이면 다음 달 납부일로
+                dueDate.setMonth(dueDate.getMonth() + 1);
+            }
+
+            // 학원비 레코드 생성
+            const [paymentResult] = await db.query(
+                `INSERT INTO student_payments (
+                    student_id,
+                    payment_type,
+                    target_year,
+                    target_month,
+                    base_amount,
+                    discount_rate,
+                    discount_amount,
+                    final_amount,
+                    due_date,
+                    payment_status,
+                    notes
+                ) VALUES (?, 'tuition', ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+                [
+                    result.insertId,
+                    year,
+                    month,
+                    proRatedAmount,
+                    discountRateNum,
+                    discountAmount,
+                    finalAmount,
+                    dueDate.toISOString().split('T')[0],
+                    `${month}월 학원비 (${enrollDay}일 등록, 일할계산)`
+                ]
+            );
+
+            const [payments] = await db.query(
+                'SELECT * FROM student_payments WHERE id = ?',
+                [paymentResult.insertId]
+            );
+            firstPayment = payments[0];
+        }
+
         res.status(201).json({
             message: 'Student created successfully',
-            student: students[0]
+            student: createdStudent,
+            firstPayment
         });
     } catch (error) {
         console.error('Error creating student:', error);
