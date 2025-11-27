@@ -521,6 +521,44 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             [seasonId, student_id]
         );
 
+        // 시즌비 청구 자동 생성 (student_payments 테이블)
+        const regDate = new Date(registration_date || new Date());
+        const yearMonth = `${regDate.getFullYear()}-${String(regDate.getMonth() + 1).padStart(2, '0')}`;
+
+        // 납부일 계산 (등록일 + 7일 또는 시즌 시작일 중 빠른 날)
+        const dueDate = new Date(regDate);
+        dueDate.setDate(dueDate.getDate() + 7);
+        const seasonStart = new Date(season.season_start_date);
+        const actualDueDate = dueDate < seasonStart ? dueDate : seasonStart;
+
+        await db.query(
+            `INSERT INTO student_payments (
+                student_id,
+                academy_id,
+                \`year_month\`,
+                payment_type,
+                base_amount,
+                discount_amount,
+                additional_amount,
+                final_amount,
+                due_date,
+                payment_status,
+                description,
+                recorded_by
+            ) VALUES (?, ?, ?, 'season', ?, ?, 0, ?, ?, 'pending', ?, ?)`,
+            [
+                student_id,
+                req.user.academyId,
+                yearMonth,
+                parseFloat(season_fee),
+                discountAmount,
+                finalSeasonFee,
+                actualDueDate.toISOString().split('T')[0],
+                `${season.season_name} 시즌비`,
+                req.user.userId
+            ]
+        );
+
         // Get enrollment details
         const [enrollment] = await db.query(
             `SELECT
