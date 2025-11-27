@@ -381,30 +381,32 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             }
 
             // 학원비 레코드 생성
+            const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
             const [paymentResult] = await db.query(
                 `INSERT INTO student_payments (
                     student_id,
+                    academy_id,
+                    year_month,
                     payment_type,
-                    target_year,
-                    target_month,
                     base_amount,
-                    discount_rate,
                     discount_amount,
+                    additional_amount,
                     final_amount,
                     due_date,
                     payment_status,
-                    notes
-                ) VALUES (?, 'tuition', ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+                    description,
+                    recorded_by
+                ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, 'pending', ?, ?)`,
                 [
                     result.insertId,
-                    year,
-                    month,
+                    req.user.academyId,
+                    yearMonth,
                     proRatedAmount,
-                    discountRateNum,
                     discountAmount,
                     finalAmount,
                     dueDate.toISOString().split('T')[0],
-                    `${month}월 학원비 (${enrollDay}일 등록, 일할계산)`
+                    `${month}월 학원비 (${enrollDay}일 등록, 일할계산)`,
+                    req.user.userId
                 ]
             );
 
