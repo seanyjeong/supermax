@@ -291,6 +291,7 @@ router.get('/academy', verifyToken, async (req, res) => {
             phone: academy.phone || '',
             address: academy.address || '',
             business_number: academy.business_number || '',
+            tuition_due_day: 5,  // 기본값
             exam_tuition: { ...defaultTuition },
             adult_tuition: { ...defaultTuition },
             season_fees: { ...defaultSeasonFees },
@@ -299,6 +300,11 @@ router.get('/academy', verifyToken, async (req, res) => {
         // 기존 설정이 있으면 병합
         if (settingsRows.length > 0) {
             const dbSettings = settingsRows[0];
+
+            // tuition_due_day
+            if (dbSettings.tuition_due_day) {
+                settings.tuition_due_day = dbSettings.tuition_due_day;
+            }
 
             // JSON 필드 파싱
             let tuitionSettings = null;
@@ -347,6 +353,7 @@ router.put('/academy', verifyToken, requireRole('owner', 'admin'), async (req, r
             phone,
             address,
             business_number,
+            tuition_due_day,
             exam_tuition,
             adult_tuition,
             season_fees
@@ -397,10 +404,17 @@ router.put('/academy', verifyToken, requireRole('owner', 'admin'), async (req, r
         if (existing.length === 0) {
             // 새로 생성
             await db.query(
-                `INSERT INTO academy_settings (academy_id, settings) VALUES (?, ?)`,
-                [req.user.academyId, JSON.stringify(tuitionSettings)]
+                `INSERT INTO academy_settings (academy_id, tuition_due_day, settings) VALUES (?, ?, ?)`,
+                [req.user.academyId, tuition_due_day || 5, JSON.stringify(tuitionSettings)]
             );
         } else {
+            // tuition_due_day 업데이트
+            if (tuition_due_day !== undefined) {
+                await db.query(
+                    'UPDATE academy_settings SET tuition_due_day = ? WHERE academy_id = ?',
+                    [tuition_due_day, req.user.academyId]
+                );
+            }
             // 기존 settings와 병합
             let existingSettings = {};
             if (existing[0].settings) {
@@ -446,6 +460,7 @@ router.put('/academy', verifyToken, requireRole('owner', 'admin'), async (req, r
             phone: academy.phone || '',
             address: academy.address || '',
             business_number: academy.business_number || '',
+            tuition_due_day: settingsRows.length > 0 ? settingsRows[0].tuition_due_day : 5,
             exam_tuition: exam_tuition || { weekly_1: 0, weekly_2: 0, weekly_3: 0, weekly_4: 0, weekly_5: 0, weekly_6: 0, weekly_7: 0 },
             adult_tuition: adult_tuition || { weekly_1: 0, weekly_2: 0, weekly_3: 0, weekly_4: 0, weekly_5: 0, weekly_6: 0, weekly_7: 0 },
             season_fees: season_fees || { exam_early: 0, exam_regular: 0, civil_service: 0 },
