@@ -403,7 +403,7 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             previous_season_id
         } = req.body;
 
-        if (!student_id || !season_fee) {
+        if (!student_id || season_fee === undefined || season_fee === null) {
             return res.status(400).json({
                 error: 'Validation Error',
                 message: 'Required fields: student_id, season_fee'
