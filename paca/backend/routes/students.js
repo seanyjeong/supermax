@@ -29,6 +29,7 @@ router.get('/', verifyToken, async (req, res) => {
                 s.monthly_tuition,
                 s.discount_rate,
                 s.discount_reason,
+                s.payment_due_day,
                 s.enrollment_date,
                 s.status,
                 s.created_at
@@ -183,6 +184,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             monthly_tuition,
             discount_rate,
             discount_reason,
+            payment_due_day,
             enrollment_date,
             address,
             notes
@@ -276,11 +278,12 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 monthly_tuition,
                 discount_rate,
                 discount_reason,
+                payment_due_day,
                 enrollment_date,
                 address,
                 notes,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 req.user.academyId,
                 finalStudentNumber,
@@ -297,6 +300,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 monthly_tuition || 0,
                 discount_rate || 0,
                 discount_reason || null,
+                payment_due_day || null,
                 enrollment_date || new Date().toISOString().split('T')[0],
                 address || null,
                 notes || null
@@ -359,6 +363,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             monthly_tuition,
             discount_rate,
             discount_reason,
+            payment_due_day,
             enrollment_date,
             address,
             notes,
@@ -464,6 +469,10 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         if (discount_reason !== undefined) {
             updates.push('discount_reason = ?');
             params.push(discount_reason);
+        }
+        if (payment_due_day !== undefined) {
+            updates.push('payment_due_day = ?');
+            params.push(payment_due_day);
         }
         if (enrollment_date !== undefined) {
             updates.push('enrollment_date = ?');
