@@ -392,8 +392,6 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
  */
 router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
-    console.log('[ENROLL] Request body:', JSON.stringify(req.body));
-    console.log('[ENROLL] seasonId:', seasonId, 'academyId:', req.user?.academyId);
 
     try {
         const {
@@ -405,10 +403,7 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             previous_season_id
         } = req.body;
 
-        console.log('[ENROLL] Extracted - student_id:', student_id, 'season_fee:', season_fee, 'type:', typeof season_fee);
-
         if (!student_id || season_fee === undefined || season_fee === null) {
-            console.log('[ENROLL] Validation failed - student_id:', student_id, 'season_fee:', season_fee);
             return res.status(400).json({
                 error: 'Validation Error',
                 message: 'Required fields: student_id, season_fee'
@@ -420,10 +415,8 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             `SELECT * FROM seasons WHERE id = ? AND academy_id = ? AND status != 'ended'`,
             [seasonId, req.user.academyId]
         );
-        console.log('[ENROLL] Found seasons:', seasons.length, 'for seasonId:', seasonId, 'academyId:', req.user.academyId);
 
         if (seasons.length === 0) {
-            console.log('[ENROLL] Season not found - returning 404');
             return res.status(404).json({
                 error: 'Not Found',
                 message: 'Season not found or ended'
@@ -431,17 +424,14 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         }
 
         const season = seasons[0];
-        console.log('[ENROLL] Season found:', season.season_name, 'status:', season.status);
 
         // Verify student exists and belongs to academy
         const [students] = await db.query(
             'SELECT * FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [student_id, req.user.academyId]
         );
-        console.log('[ENROLL] Found students:', students.length, 'for student_id:', student_id);
 
         if (students.length === 0) {
-            console.log('[ENROLL] Student not found - returning 404');
             return res.status(404).json({
                 error: 'Not Found',
                 message: 'Student not found'
@@ -449,7 +439,6 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         }
 
         const student = students[0];
-        console.log('[ENROLL] Student found:', student.name);
 
         // Check if already enrolled
         const [existing] = await db.query(
@@ -457,16 +446,13 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             WHERE student_id = ? AND season_id = ? AND payment_status != 'cancelled'`,
             [student_id, seasonId]
         );
-        console.log('[ENROLL] Existing enrollments:', existing.length);
 
         if (existing.length > 0) {
-            console.log('[ENROLL] Already enrolled - returning 400');
             return res.status(400).json({
                 error: 'Validation Error',
                 message: 'Student already enrolled in this season'
             });
         }
-        console.log('[ENROLL] Proceeding with enrollment...');
 
         // Calculate prorated fee
         const weeklyDays = parseWeeklyDays(student.class_days);
@@ -576,6 +562,7 @@ router.get('/:id/students', verifyToken, async (req, res) => {
             `SELECT
                 ss.*,
                 s.name as student_name,
+                s.student_number,
                 s.phone as student_phone,
                 s.parent_phone,
                 s.class_days
@@ -589,13 +576,128 @@ router.get('/:id/students', verifyToken, async (req, res) => {
 
         res.json({
             message: `Found ${enrollments.length} enrolled students`,
-            enrollments
+            enrolled_students: enrollments  // 프론트엔드 기대 필드명
         });
     } catch (error) {
         console.error('Error fetching enrolled students:', error);
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to fetch enrolled students'
+        });
+    }
+});
+
+/**
+ * DELETE /paca/seasons/:id/students/:student_id
+ * Cancel student enrollment from season
+ * Access: owner, admin
+ */
+router.delete('/:id/students/:student_id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const seasonId = parseInt(req.params.id);
+    const studentId = parseInt(req.params.student_id);
+
+    try {
+        // Get enrollment
+        const [enrollments] = await db.query(
+            `SELECT
+                ss.*,
+                s.academy_id,
+                s.name as student_name,
+                s.class_days,
+                se.season_name,
+                se.season_start_date,
+                se.season_end_date
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.season_id = ? AND ss.student_id = ?`,
+            [seasonId, studentId]
+        );
+
+        if (enrollments.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Enrollment not found'
+            });
+        }
+
+        const enrollment = enrollments[0];
+
+        if (enrollment.academy_id !== req.user.academyId) {
+            return res.status(403).json({
+                error: 'Forbidden',
+                message: 'Access denied'
+            });
+        }
+
+        if (enrollment.payment_status === 'cancelled') {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Enrollment already cancelled'
+            });
+        }
+
+        const cancelDate = new Date().toISOString().split('T')[0];
+        const weeklyDays = parseWeeklyDays(enrollment.class_days);
+
+        // Calculate refund
+        const refundResult = calculateSeasonRefund({
+            seasonFee: parseFloat(enrollment.season_fee),
+            seasonStartDate: new Date(enrollment.season_start_date),
+            seasonEndDate: new Date(enrollment.season_end_date),
+            cancellationDate: new Date(cancelDate),
+            weeklyDays,
+            refundPolicy: 'legal'
+        });
+
+        // Update enrollment
+        await db.query(
+            `UPDATE student_seasons
+            SET
+                payment_status = 'cancelled',
+                is_cancelled = true,
+                cancellation_date = ?,
+                refund_amount = ?,
+                refund_calculation = ?,
+                updated_at = NOW()
+            WHERE id = ?`,
+            [cancelDate, refundResult.refundAmount, JSON.stringify(refundResult), enrollment.id]
+        );
+
+        // Update student's season registration status
+        await db.query(
+            `UPDATE students SET is_season_registered = false, current_season_id = NULL WHERE id = ?`,
+            [studentId]
+        );
+
+        // Record refund expense if amount > 0
+        if (refundResult.refundAmount > 0 && enrollment.payment_status === 'paid') {
+            await db.query(
+                `INSERT INTO expenses (
+                    academy_id,
+                    category,
+                    amount,
+                    expense_date,
+                    description
+                ) VALUES (?, 'refund', ?, ?, ?)`,
+                [
+                    enrollment.academy_id,
+                    refundResult.refundAmount,
+                    cancelDate,
+                    `시즌 중도 해지 환불 - ${enrollment.student_name} (${enrollment.season_name})`
+                ]
+            );
+        }
+
+        res.json({
+            message: 'Season enrollment cancelled successfully',
+            refundCalculation: refundResult
+        });
+    } catch (error) {
+        console.error('Error cancelling enrollment:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to cancel enrollment'
         });
     }
 });
