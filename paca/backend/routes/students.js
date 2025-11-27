@@ -386,7 +386,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
                 `INSERT INTO student_payments (
                     student_id,
                     academy_id,
-                    year_month,
+                    \`year_month\`,
                     payment_type,
                     base_amount,
                     discount_amount,
