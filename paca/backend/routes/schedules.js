@@ -1387,7 +1387,8 @@ router.post('/:id/instructor-attendance', verifyToken, requireRole('owner', 'adm
 
 /**
  * GET /paca/schedules/date/:date/instructor-attendance
- * Get instructor attendance for a specific date (only instructors assigned to each time slot)
+ * Get instructor attendance for a specific date
+ * 모든 활성 강사를 반환하여 어떤 시간대든 출근 체크 가능
  * Access: owner, admin, teacher
  */
 router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) => {
@@ -1403,34 +1404,23 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             });
         }
 
-        // Get instructors by time slot (only those assigned to each specific slot)
-        const [schedulesBySlot] = await db.query(
-            `SELECT cs.time_slot, i.id, i.name
-            FROM class_schedules cs
-            INNER JOIN instructors i ON cs.instructor_id = i.id
-            WHERE cs.class_date = ?
-            AND cs.academy_id = ?
-            AND i.deleted_at IS NULL
-            ORDER BY cs.time_slot, i.name`,
-            [workDate, req.user.academyId]
+        // Get ALL active instructors for this academy
+        const [allActiveInstructors] = await db.query(
+            `SELECT id, name, salary_type
+            FROM instructors
+            WHERE academy_id = ?
+            AND status = 'active'
+            AND deleted_at IS NULL
+            ORDER BY name`,
+            [req.user.academyId]
         );
 
-        // Group instructors by time slot
+        // All active instructors can be assigned to any time slot
         const instructorsBySlot = {
-            morning: [],
-            afternoon: [],
-            evening: []
+            morning: allActiveInstructors.map(i => ({ id: i.id, name: i.name })),
+            afternoon: allActiveInstructors.map(i => ({ id: i.id, name: i.name })),
+            evening: allActiveInstructors.map(i => ({ id: i.id, name: i.name }))
         };
-
-        for (const row of schedulesBySlot) {
-            if (instructorsBySlot[row.time_slot]) {
-                // Avoid duplicates
-                const exists = instructorsBySlot[row.time_slot].some(i => i.id === row.id);
-                if (!exists) {
-                    instructorsBySlot[row.time_slot].push({ id: row.id, name: row.name });
-                }
-            }
-        }
 
         // Get existing attendance records for this date
         const [attendances] = await db.query(
@@ -1451,16 +1441,11 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             [workDate, req.user.academyId]
         );
 
-        // Also return all instructors for backwards compatibility
-        const allInstructors = [...new Map(
-            schedulesBySlot.map(item => [item.id, { id: item.id, name: item.name }])
-        ).values()];
-
         res.json({
             message: 'Instructor attendance retrieved',
             date: workDate,
             attendances,
-            instructors: allInstructors,
+            instructors: allActiveInstructors,
             instructors_by_slot: instructorsBySlot
         });
     } catch (error) {
