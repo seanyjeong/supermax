@@ -724,4 +724,287 @@ router.get('/stats/summary', verifyToken, requireRole('owner', 'admin'), async (
     }
 });
 
+/**
+ * POST /paca/payments/generate-prorated
+ * Generate prorated payment for a student based on enrollment date
+ * Access: owner, admin
+ *
+ * 등록일 기준 일할계산:
+ * - 11/25 등록, 납부일 1일 → 11월: 25~30일 일할, 12월부터: 정상
+ */
+router.post('/generate-prorated', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const { student_id, enrollment_date } = req.body;
+
+        if (!student_id) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Required field: student_id'
+            });
+        }
+
+        // Get student with payment_due_day
+        const [students] = await db.query(
+            `SELECT
+                s.id, s.name, s.monthly_tuition, s.discount_rate,
+                s.payment_due_day, s.enrollment_date, s.class_days,
+                a.tuition_due_day
+            FROM students s
+            JOIN academies ac ON s.academy_id = ac.id
+            LEFT JOIN academy_settings a ON ac.id = a.academy_id
+            WHERE s.id = ? AND s.academy_id = ? AND s.deleted_at IS NULL`,
+            [student_id, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        const student = students[0];
+        const regDate = new Date(enrollment_date || student.enrollment_date || new Date());
+
+        // 납부일 결정: 학생 개별 납부일 > 학원 납부일 > 기본 5일
+        const dueDay = student.payment_due_day || student.tuition_due_day || 5;
+
+        // 등록월의 마지막 날
+        const lastDayOfMonth = new Date(regDate.getFullYear(), regDate.getMonth() + 1, 0).getDate();
+        const regDay = regDate.getDate();
+
+        // 수업 요일 파싱
+        let classDays = [];
+        try {
+            classDays = typeof student.class_days === 'string'
+                ? JSON.parse(student.class_days)
+                : (student.class_days || []);
+        } catch (e) {
+            classDays = [];
+        }
+
+        // 해당 월의 총 수업일수 계산
+        const dayNameToNum = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 0 };
+        const classDayNums = classDays.map(d => dayNameToNum[d]).filter(d => d !== undefined);
+
+        let totalClassDays = 0;
+        let remainingClassDays = 0;
+
+        for (let day = 1; day <= lastDayOfMonth; day++) {
+            const date = new Date(regDate.getFullYear(), regDate.getMonth(), day);
+            const dayOfWeek = date.getDay();
+            if (classDayNums.includes(dayOfWeek)) {
+                totalClassDays++;
+                if (day >= regDay) {
+                    remainingClassDays++;
+                }
+            }
+        }
+
+        // 일할계산 금액
+        const baseAmount = parseFloat(student.monthly_tuition) || 0;
+        const discountRate = parseFloat(student.discount_rate) || 0;
+        const discountAmount = baseAmount * (discountRate / 100);
+
+        let proRatedAmount = baseAmount;
+        let isProrated = false;
+
+        // 등록일이 1일이 아니면 일할계산
+        if (regDay > 1 && totalClassDays > 0) {
+            proRatedAmount = Math.round(baseAmount * (remainingClassDays / totalClassDays));
+            isProrated = true;
+        }
+
+        const finalAmount = proRatedAmount - (proRatedAmount * (discountRate / 100));
+
+        // 납부기한 계산 (등록월의 납부일 또는 등록일 + 7일)
+        let dueDate;
+        if (regDay <= dueDay) {
+            // 등록일이 납부일 전이면 이번 달 납부일
+            dueDate = new Date(regDate.getFullYear(), regDate.getMonth(), dueDay);
+        } else {
+            // 등록일이 납부일 후면 등록일 + 7일 (또는 다음달 납부일)
+            dueDate = new Date(regDate);
+            dueDate.setDate(regDate.getDate() + 7);
+        }
+
+        const yearMonth = `${regDate.getFullYear()}-${String(regDate.getMonth() + 1).padStart(2, '0')}`;
+
+        // 이미 해당 월 납부건이 있는지 확인
+        const [existing] = await db.query(
+            `SELECT id FROM student_payments
+            WHERE student_id = ? AND year_month = ? AND payment_type = 'monthly'`,
+            [student_id, yearMonth]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: `${yearMonth} 월 납부건이 이미 존재합니다.`
+            });
+        }
+
+        // 납부 레코드 생성
+        const prorationDetails = {
+            enrollment_date: regDate.toISOString().split('T')[0],
+            registration_day: regDay,
+            total_class_days: totalClassDays,
+            remaining_class_days: remainingClassDays,
+            class_days: classDays,
+            base_amount: baseAmount,
+            prorated_amount: proRatedAmount,
+            calculation: isProrated
+                ? `${baseAmount}원 × (${remainingClassDays}/${totalClassDays}일) = ${proRatedAmount}원`
+                : '일할계산 없음 (월초 등록)'
+        };
+
+        const [result] = await db.query(
+            `INSERT INTO student_payments (
+                student_id, academy_id, year_month, payment_type,
+                base_amount, discount_amount, additional_amount, final_amount,
+                is_prorated, proration_details,
+                due_date, payment_status, description, recorded_by
+            ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, ?, ?, 'pending', ?, ?)`,
+            [
+                student_id,
+                req.user.academyId,
+                yearMonth,
+                proRatedAmount,
+                proRatedAmount * (discountRate / 100),
+                finalAmount,
+                isProrated ? 1 : 0,
+                JSON.stringify(prorationDetails),
+                dueDate.toISOString().split('T')[0],
+                isProrated
+                    ? `${regDate.getMonth() + 1}월 학원비 (일할: ${regDay}일~)`
+                    : `${regDate.getMonth() + 1}월 학원비`,
+                req.user.userId
+            ]
+        );
+
+        // 생성된 납부건 조회
+        const [created] = await db.query(
+            `SELECT p.*, s.name as student_name
+            FROM student_payments p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = ?`,
+            [result.insertId]
+        );
+
+        res.status(201).json({
+            message: 'Prorated payment generated successfully',
+            payment: created[0],
+            proration: prorationDetails
+        });
+    } catch (error) {
+        console.error('Error generating prorated payment:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to generate prorated payment'
+        });
+    }
+});
+
+/**
+ * POST /paca/payments/generate-monthly-for-student
+ * Generate next month's payment for a specific student
+ * Access: owner, admin
+ */
+router.post('/generate-monthly-for-student', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const { student_id, year, month } = req.body;
+
+        if (!student_id || !year || !month) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Required fields: student_id, year, month'
+            });
+        }
+
+        // Get student info
+        const [students] = await db.query(
+            `SELECT
+                s.id, s.name, s.monthly_tuition, s.discount_rate,
+                s.payment_due_day,
+                a.tuition_due_day
+            FROM students s
+            JOIN academies ac ON s.academy_id = ac.id
+            LEFT JOIN academy_settings a ON ac.id = a.academy_id
+            WHERE s.id = ? AND s.academy_id = ? AND s.deleted_at IS NULL`,
+            [student_id, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        const student = students[0];
+        const dueDay = student.payment_due_day || student.tuition_due_day || 5;
+        const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+        // Check existing
+        const [existing] = await db.query(
+            `SELECT id FROM student_payments
+            WHERE student_id = ? AND year_month = ? AND payment_type = 'monthly'`,
+            [student_id, yearMonth]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: `${yearMonth} 월 납부건이 이미 존재합니다.`
+            });
+        }
+
+        const baseAmount = parseFloat(student.monthly_tuition) || 0;
+        const discountRate = parseFloat(student.discount_rate) || 0;
+        const discountAmount = baseAmount * (discountRate / 100);
+        const finalAmount = baseAmount - discountAmount;
+
+        // Due date
+        const dueDate = new Date(year, month - 1, dueDay);
+
+        const [result] = await db.query(
+            `INSERT INTO student_payments (
+                student_id, academy_id, year_month, payment_type,
+                base_amount, discount_amount, additional_amount, final_amount,
+                due_date, payment_status, description, recorded_by
+            ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, 'pending', ?, ?)`,
+            [
+                student_id,
+                req.user.academyId,
+                yearMonth,
+                baseAmount,
+                discountAmount,
+                finalAmount,
+                dueDate.toISOString().split('T')[0],
+                `${year}년 ${month}월 학원비`,
+                req.user.userId
+            ]
+        );
+
+        const [created] = await db.query(
+            `SELECT p.*, s.name as student_name
+            FROM student_payments p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = ?`,
+            [result.insertId]
+        );
+
+        res.status(201).json({
+            message: 'Monthly payment generated successfully',
+            payment: created[0]
+        });
+    } catch (error) {
+        console.error('Error generating monthly payment:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to generate monthly payment'
+        });
+    }
+});
+
 module.exports = router;
