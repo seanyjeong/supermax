@@ -204,6 +204,11 @@ app.use((err, req, res, next) => {
 });
 
 // ==========================================
+// Scheduler
+// ==========================================
+const { initScheduler } = require('./scheduler/paymentScheduler');
+
+// ==========================================
 // Start Server
 // ==========================================
 app.listen(PORT, () => {
@@ -215,6 +220,9 @@ app.listen(PORT, () => {
     console.log(`🗄️  Database: ${process.env.DB_NAME}@${process.env.DB_HOST}`);
     console.log(`🌐 API Base: http://localhost:${PORT}/paca`);
     console.log('==========================================');
+
+    // 스케줄러 초기화
+    initScheduler();
 });
 
 // Graceful Shutdown
