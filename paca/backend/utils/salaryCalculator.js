@@ -452,7 +452,7 @@ async function updateSalaryFromAttendance(db, instructorId, academyId, workDate,
 
         // salary_records 업데이트 또는 생성
         const [existingSalary] = await db.query(
-            'SELECT id FROM salary_records WHERE instructor_id = ? AND year_month = ?',
+            'SELECT id FROM salary_records WHERE instructor_id = ? AND `year_month` = ?',
             [instructorId, yearMonth]
         );
 
@@ -473,7 +473,7 @@ async function updateSalaryFromAttendance(db, instructorId, academyId, workDate,
             // 새 레코드 생성
             await db.query(
                 `INSERT INTO salary_records
-                 (instructor_id, year_month, base_amount, incentive_amount, total_deduction,
+                 (instructor_id, \`year_month\`, base_amount, incentive_amount, total_deduction,
                   tax_type, tax_amount, insurance_details, net_salary, total_hours,
                   morning_classes, afternoon_classes, evening_classes, payment_status)
                  VALUES (?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
