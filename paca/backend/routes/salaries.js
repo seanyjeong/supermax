@@ -196,7 +196,7 @@ router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('o
 
 /**
  * GET /paca/salaries/:id
- * Get salary record by ID
+ * Get salary record by ID with attendance details
  * Access: owner, admin
  */
 router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
@@ -209,7 +209,11 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
                 i.name as instructor_name,
                 i.salary_type,
                 i.hourly_rate,
-                i.base_salary
+                i.base_salary,
+                i.tax_type as instructor_tax_type,
+                i.morning_class_rate,
+                i.afternoon_class_rate,
+                i.evening_class_rate
             FROM salary_records s
             JOIN instructors i ON s.instructor_id = i.id
             WHERE s.id = ?
@@ -224,8 +228,111 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             });
         }
 
+        const salary = salaries[0];
+
+        // 설정에서 급여월 타입 가져오기 (당월/익월)
+        const [settingsRows] = await db.query(
+            'SELECT salary_month_type FROM academy_settings WHERE academy_id = ?',
+            [req.user.academyId]
+        );
+        const salaryMonthType = settingsRows.length > 0 && settingsRows[0].salary_month_type
+            ? settingsRows[0].salary_month_type
+            : 'next';
+
+        // 출근 기록 조회할 년월 계산
+        const [salaryYear, salaryMonth] = salary.year_month.split('-').map(Number);
+        let attendanceYear, attendanceMonth;
+
+        if (salaryMonthType === 'next') {
+            // 익월 정산: 급여월의 전월 출근 기록
+            attendanceMonth = salaryMonth - 1;
+            attendanceYear = salaryYear;
+            if (attendanceMonth < 1) {
+                attendanceMonth = 12;
+                attendanceYear -= 1;
+            }
+        } else {
+            // 당월 정산: 급여월 = 출근 기록 월
+            attendanceYear = salaryYear;
+            attendanceMonth = salaryMonth;
+        }
+
+        const attendanceYearMonth = `${attendanceYear}-${String(attendanceMonth).padStart(2, '0')}`;
+
+        // 해당 월의 출근 기록 조회
+        const [attendances] = await db.query(
+            `SELECT
+                work_date,
+                time_slot,
+                check_in_time,
+                check_out_time,
+                attendance_status,
+                notes
+            FROM instructor_attendance
+            WHERE instructor_id = ?
+            AND DATE_FORMAT(work_date, '%Y-%m') = ?
+            AND attendance_status IN ('present', 'late', 'half_day')
+            ORDER BY work_date, time_slot`,
+            [salary.instructor_id, attendanceYearMonth]
+        );
+
+        // 일별로 그룹화
+        const dailyBreakdown = {};
+        const timeSlotLabels = { morning: '오전', afternoon: '오후', evening: '저녁' };
+
+        for (const att of attendances) {
+            const dateStr = att.work_date instanceof Date
+                ? att.work_date.toISOString().split('T')[0]
+                : att.work_date;
+
+            if (!dailyBreakdown[dateStr]) {
+                dailyBreakdown[dateStr] = {
+                    slots: [],
+                    details: []
+                };
+            }
+
+            dailyBreakdown[dateStr].slots.push(timeSlotLabels[att.time_slot] || att.time_slot);
+            dailyBreakdown[dateStr].details.push({
+                time_slot: att.time_slot,
+                time_slot_label: timeSlotLabels[att.time_slot] || att.time_slot,
+                check_in_time: att.check_in_time,
+                check_out_time: att.check_out_time,
+                attendance_status: att.attendance_status
+            });
+        }
+
+        // 요약 정보 계산
+        let morningClasses = 0, afternoonClasses = 0, eveningClasses = 0, totalMinutes = 0;
+        for (const att of attendances) {
+            if (att.time_slot === 'morning') morningClasses++;
+            else if (att.time_slot === 'afternoon') afternoonClasses++;
+            else if (att.time_slot === 'evening') eveningClasses++;
+
+            if (att.check_in_time && att.check_out_time) {
+                const [inH, inM] = att.check_in_time.split(':').map(Number);
+                const [outH, outM] = att.check_out_time.split(':').map(Number);
+                const inMins = inH * 60 + inM;
+                const outMins = outH * 60 + outM;
+                if (outMins > inMins) {
+                    totalMinutes += (outMins - inMins);
+                }
+            }
+        }
+
         res.json({
-            salary: salaries[0]
+            salary: salary,
+            attendance_summary: {
+                attendance_year_month: attendanceYearMonth,
+                salary_month_type: salaryMonthType,
+                attendance_days: Object.keys(dailyBreakdown).length,
+                total_classes: morningClasses + afternoonClasses + eveningClasses,
+                morning_classes: morningClasses,
+                afternoon_classes: afternoonClasses,
+                evening_classes: eveningClasses,
+                total_hours: Math.round((totalMinutes / 60) * 100) / 100,
+                daily_breakdown: dailyBreakdown
+            }
         });
     } catch (error) {
         console.error('Error fetching salary:', error);
