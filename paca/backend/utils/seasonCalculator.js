@@ -18,6 +18,78 @@ function truncateToThousands(amount) {
 }
 
 /**
+ * 시즌 중간 합류 시 시즌비 일할계산
+ * @param {object} params - 계산 파라미터
+ * @param {number} params.seasonFee - 기본 시즌비
+ * @param {Date} params.seasonStartDate - 시즌 시작일
+ * @param {Date} params.seasonEndDate - 시즌 종료일
+ * @param {Date} params.joinDate - 합류일 (등록일)
+ * @param {Array<number>} params.weeklyDays - 수업 요일
+ * @returns {object} 일할 계산 결과
+ */
+function calculateMidSeasonFee(params) {
+    const { seasonFee, seasonStartDate, seasonEndDate, joinDate, weeklyDays } = params;
+
+    // 합류일이 시즌 시작일보다 이전이면 전액
+    if (joinDate <= seasonStartDate) {
+        return {
+            originalFee: seasonFee,
+            proRatedFee: seasonFee,
+            discount: 0,
+            totalDays: 0,
+            remainingDays: 0,
+            isProRated: false,
+            details: '시즌 시작 전 등록 - 일할계산 없음'
+        };
+    }
+
+    // 합류일이 시즌 종료일 이후면 0
+    if (joinDate > seasonEndDate) {
+        return {
+            originalFee: seasonFee,
+            proRatedFee: 0,
+            discount: seasonFee,
+            totalDays: 0,
+            remainingDays: 0,
+            isProRated: true,
+            details: '시즌 종료 후 등록 - 시즌비 없음'
+        };
+    }
+
+    // 전체 시즌 수업일수 계산
+    const totalClassDays = countClassDays(seasonStartDate, seasonEndDate, weeklyDays);
+
+    // 합류일부터 시즌 종료일까지 남은 수업일수 계산
+    const remainingClassDays = countClassDays(joinDate, seasonEndDate, weeklyDays);
+
+    if (totalClassDays === 0) {
+        return {
+            originalFee: seasonFee,
+            proRatedFee: seasonFee,
+            discount: 0,
+            totalDays: 0,
+            remainingDays: 0,
+            isProRated: false,
+            details: '수업일이 없음'
+        };
+    }
+
+    // 일할계산: 시즌비 × (남은 수업일 / 전체 수업일), 천원 단위 절삭
+    const proRatedFee = truncateToThousands(seasonFee * (remainingClassDays / totalClassDays));
+    const discount = seasonFee - proRatedFee;
+
+    return {
+        originalFee: seasonFee,
+        proRatedFee,
+        discount,
+        totalDays: totalClassDays,
+        remainingDays: remainingClassDays,
+        isProRated: true,
+        details: `${seasonFee.toLocaleString()}원 × (${remainingClassDays}/${totalClassDays}일) = ${proRatedFee.toLocaleString()}원`
+    };
+}
+
+/**
  * 특정 기간 동안의 수업 횟수 계산
  * @param {Date} startDate - 시작일
  * @param {Date} endDate - 종료일
@@ -280,6 +352,7 @@ function previewSeasonTransition(student, season) {
 
 module.exports = {
     truncateToThousands,
+    calculateMidSeasonFee,
     calculateProRatedFee,
     calculateSeasonRefund,
     countClassDays,
