@@ -9,6 +9,146 @@ const {
     previewSeasonTransition
 } = require('../utils/seasonCalculator');
 
+// ============================================================
+// 시즌 스케줄 자동 배치 함수들
+// ============================================================
+
+/**
+ * 학생을 시즌 스케줄에 자동 배정
+ * @param {number} studentId - 학생 ID
+ * @param {number} academyId - 학원 ID
+ * @param {object} season - 시즌 정보
+ * @param {string} studentGrade - 학생 학년 (예: "고3", "중2", "N수")
+ * @param {string} studentType - 학생 유형 (early/regular)
+ */
+async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, studentGrade, studentType) {
+    try {
+        const operatingDays = typeof season.operating_days === 'string'
+            ? JSON.parse(season.operating_days)
+            : season.operating_days;
+
+        const gradeTimeSlots = season.grade_time_slots
+            ? (typeof season.grade_time_slots === 'string'
+                ? JSON.parse(season.grade_time_slots)
+                : season.grade_time_slots)
+            : null;
+
+        // 학년별 시간대 결정 (grade_time_slots에 설정이 있으면 사용, 없으면 evening)
+        let timeSlot = 'evening';
+        if (gradeTimeSlots) {
+            if (gradeTimeSlots[studentGrade]) {
+                timeSlot = gradeTimeSlots[studentGrade];
+            } else if (gradeTimeSlots[studentType]) {
+                timeSlot = gradeTimeSlots[studentType];
+            }
+        }
+
+        // 요일 변환 (문자열 -> 숫자)
+        const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+        const numericDays = operatingDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
+
+        if (numericDays.length === 0) {
+            console.log('No operating days specified for season, skipping auto-assignment');
+            return { assigned: 0, created: 0 };
+        }
+
+        const startDate = new Date(season.season_start_date + 'T00:00:00');
+        const endDate = new Date(season.season_end_date + 'T00:00:00');
+
+        let assignedCount = 0;
+        let createdCount = 0;
+
+        // 시즌 시작일부터 종료일까지 운영 요일에 배정
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            const dayOfWeek = currentDate.getDay();
+
+            if (numericDays.includes(dayOfWeek)) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+
+                // 해당 날짜+시간대의 스케줄 조회 또는 생성
+                let [schedules] = await db.query(
+                    `SELECT id FROM class_schedules
+                     WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+                    [academyId, dateStr, timeSlot]
+                );
+
+                let scheduleId;
+                if (schedules.length === 0) {
+                    // 스케줄 생성
+                    const [result] = await db.query(
+                        `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                         VALUES (?, ?, ?, false)`,
+                        [academyId, dateStr, timeSlot]
+                    );
+                    scheduleId = result.insertId;
+                    createdCount++;
+                } else {
+                    scheduleId = schedules[0].id;
+                }
+
+                // 이미 배정되어 있는지 확인
+                const [existing] = await db.query(
+                    `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
+                    [scheduleId, studentId]
+                );
+
+                if (existing.length === 0) {
+                    // 출석 기록 생성 (배정)
+                    await db.query(
+                        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                         VALUES (?, ?, NULL)`,
+                        [scheduleId, studentId]
+                    );
+                    assignedCount++;
+                }
+            }
+
+            // 다음 날로 이동
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        console.log(`Season auto-assigned student ${studentId}: ${assignedCount} schedules (${createdCount} new), timeSlot: ${timeSlot}`);
+        return { assigned: assignedCount, created: createdCount, timeSlot };
+    } catch (error) {
+        console.error('Error in autoAssignStudentToSeasonSchedules:', error);
+        throw error;
+    }
+}
+
+/**
+ * 기존 정규 스케줄에서 학생 제거 (시즌 기간 동안만)
+ * @param {number} studentId - 학생 ID
+ * @param {number} academyId - 학원 ID
+ * @param {string} seasonStartDate - 시즌 시작일 (YYYY-MM-DD)
+ * @param {string} seasonEndDate - 시즌 종료일 (YYYY-MM-DD)
+ */
+async function removeStudentFromRegularSchedules(studentId, academyId, seasonStartDate, seasonEndDate) {
+    try {
+        // 시즌 기간 동안의 기존 출석 기록 삭제 (아직 출석 처리 안된 것만)
+        const [result] = await db.query(
+            `DELETE a FROM attendance a
+             JOIN class_schedules cs ON a.class_schedule_id = cs.id
+             WHERE a.student_id = ?
+             AND cs.academy_id = ?
+             AND cs.class_date >= ?
+             AND cs.class_date <= ?
+             AND a.attendance_status IS NULL`,
+            [studentId, academyId, seasonStartDate, seasonEndDate]
+        );
+
+        console.log(`Removed ${result.affectedRows} regular schedule assignments for student ${studentId} during season period`);
+        return { removed: result.affectedRows };
+    } catch (error) {
+        console.error('Error in removeStudentFromRegularSchedules:', error);
+        throw error;
+    }
+}
+
+// ============================================================
+// API 라우트
+// ============================================================
+
 /**
  * GET /paca/seasons
  * Get all seasons for academy
@@ -47,6 +187,275 @@ router.get('/', verifyToken, async (req, res) => {
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to fetch seasons'
+        });
+    }
+});
+
+/**
+ * GET /paca/seasons/active
+ * Get currently active season(s)
+ * Access: owner, admin, teacher
+ * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
+ */
+router.get('/active', verifyToken, async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const [seasons] = await db.query(
+            `SELECT * FROM seasons
+            WHERE academy_id = ?
+            AND status = 'active'
+            AND season_start_date <= ?
+            AND season_end_date >= ?
+            ORDER BY season_type`,
+            [req.user.academyId, today, today]
+        );
+
+        res.json({
+            message: `Found ${seasons.length} active season(s)`,
+            seasons
+        });
+    } catch (error) {
+        console.error('Error fetching active seasons:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch active seasons'
+        });
+    }
+});
+
+/**
+ * POST /paca/seasons/enrollments/:enrollment_id/pay
+ * Record season fee payment
+ * Access: owner, admin
+ * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
+ */
+router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const enrollmentId = parseInt(req.params.enrollment_id);
+
+    try {
+        const { paid_date, paid_amount, payment_method } = req.body;
+
+        // Get enrollment
+        const [enrollments] = await db.query(
+            `SELECT
+                ss.*,
+                s.academy_id,
+                s.name as student_name,
+                se.season_name
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.id = ?`,
+            [enrollmentId]
+        );
+
+        if (enrollments.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Enrollment not found'
+            });
+        }
+
+        const enrollment = enrollments[0];
+
+        if (enrollment.academy_id !== req.user.academyId) {
+            return res.status(403).json({
+                error: 'Forbidden',
+                message: 'Access denied'
+            });
+        }
+
+        if (enrollment.payment_status === 'paid') {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Season fee already paid'
+            });
+        }
+
+        // Update payment status
+        const paymentDate = paid_date || new Date().toISOString().split('T')[0];
+        const paymentAmount = paid_amount || enrollment.season_fee;
+
+        await db.query(
+            `UPDATE student_seasons
+            SET payment_status = 'paid', paid_date = ?, paid_amount = ?, payment_method = ?, updated_at = NOW()
+            WHERE id = ?`,
+            [paymentDate, paymentAmount, payment_method || null, enrollmentId]
+        );
+
+        // Record in revenues table
+        await db.query(
+            `INSERT INTO revenues (
+                academy_id,
+                category,
+                amount,
+                revenue_date,
+                student_id,
+                description
+            ) VALUES (?, 'season', ?, ?, ?, ?)`,
+            [
+                enrollment.academy_id,
+                paymentAmount,
+                paymentDate,
+                enrollment.student_id,
+                `시즌비 납부 (${enrollment.season_name})`
+            ]
+        );
+
+        // Get updated record
+        const [updated] = await db.query(
+            `SELECT
+                ss.*,
+                s.name as student_name,
+                se.season_name
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.id = ?`,
+            [enrollmentId]
+        );
+
+        res.json({
+            message: 'Season fee payment recorded successfully',
+            enrollment: updated[0]
+        });
+    } catch (error) {
+        console.error('Error recording payment:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to record payment'
+        });
+    }
+});
+
+/**
+ * POST /paca/seasons/enrollments/:enrollment_id/cancel
+ * Cancel season enrollment (refund calculation)
+ * Access: owner, admin
+ * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
+ */
+router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const enrollmentId = parseInt(req.params.enrollment_id);
+
+    try {
+        const { cancellation_date, refund_policy } = req.body;
+
+        // Get enrollment
+        const [enrollments] = await db.query(
+            `SELECT
+                ss.*,
+                s.academy_id,
+                s.name as student_name,
+                s.class_days,
+                se.season_name,
+                se.season_start_date,
+                se.season_end_date
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.id = ?`,
+            [enrollmentId]
+        );
+
+        if (enrollments.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Enrollment not found'
+            });
+        }
+
+        const enrollment = enrollments[0];
+
+        if (enrollment.academy_id !== req.user.academyId) {
+            return res.status(403).json({
+                error: 'Forbidden',
+                message: 'Access denied'
+            });
+        }
+
+        if (enrollment.payment_status === 'cancelled') {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Enrollment already cancelled'
+            });
+        }
+
+        const cancelDate = cancellation_date || new Date().toISOString().split('T')[0];
+        const weeklyDays = parseWeeklyDays(enrollment.class_days);
+
+        // Calculate refund
+        const refundResult = calculateSeasonRefund({
+            seasonFee: parseFloat(enrollment.season_fee),
+            seasonStartDate: new Date(enrollment.season_start_date),
+            seasonEndDate: new Date(enrollment.season_end_date),
+            cancellationDate: new Date(cancelDate),
+            weeklyDays,
+            refundPolicy: refund_policy || 'legal'
+        });
+
+        // Update enrollment
+        await db.query(
+            `UPDATE student_seasons
+            SET
+                payment_status = 'cancelled',
+                is_cancelled = true,
+                cancellation_date = ?,
+                refund_amount = ?,
+                refund_calculation = ?,
+                updated_at = NOW()
+            WHERE id = ?`,
+            [cancelDate, refundResult.refundAmount, JSON.stringify(refundResult), enrollmentId]
+        );
+
+        // Update student's season registration status
+        await db.query(
+            `UPDATE students SET is_season_registered = false, current_season_id = NULL WHERE id = ?`,
+            [enrollment.student_id]
+        );
+
+        // Record refund expense if amount > 0
+        if (refundResult.refundAmount > 0 && enrollment.payment_status === 'paid') {
+            await db.query(
+                `INSERT INTO expenses (
+                    academy_id,
+                    category,
+                    amount,
+                    expense_date,
+                    description
+                ) VALUES (?, 'refund', ?, ?, ?)`,
+                [
+                    enrollment.academy_id,
+                    refundResult.refundAmount,
+                    cancelDate,
+                    `시즌 중도 해지 환불 - ${enrollment.student_name} (${enrollment.season_name})`
+                ]
+            );
+        }
+
+        // Get updated record
+        const [updated] = await db.query(
+            `SELECT
+                ss.*,
+                s.name as student_name,
+                se.season_name
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.id = ?`,
+            [enrollmentId]
+        );
+
+        res.json({
+            message: 'Season enrollment cancelled successfully',
+            enrollment: updated[0],
+            refundCalculation: refundResult
+        });
+    } catch (error) {
+        console.error('Error cancelling enrollment:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to cancel enrollment'
         });
     }
 });
@@ -107,7 +516,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             season_end_date,
             non_season_end_date,
             operating_days,
-            grade_time_slots,  // NEW: 학년별 시간대 {"고3": "evening", "N수": "morning"}
+            grade_time_slots,
             default_season_fee,
             allows_continuous,
             continuous_to_season_type,
@@ -230,7 +639,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             season_end_date,
             non_season_end_date,
             operating_days,
-            grade_time_slots,  // NEW: 학년별 시간대
+            grade_time_slots,
             default_season_fee,
             allows_continuous,
             continuous_to_season_type,
@@ -559,6 +968,44 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             ]
         );
 
+        // ============================================================
+        // 시즌 스케줄 자동 배치
+        // ============================================================
+
+        // 1. 기존 정규 스케줄에서 시즌 기간 동안 제거
+        let removeResult = null;
+        try {
+            removeResult = await removeStudentFromRegularSchedules(
+                student_id,
+                req.user.academyId,
+                season.season_start_date,
+                season.season_end_date
+            );
+        } catch (removeError) {
+            console.error('Remove from regular schedules failed:', removeError);
+        }
+
+        // 2. 시즌 스케줄에 자동 배정
+        let seasonAssignResult = null;
+        try {
+            // 학년 문자열 생성 (예: "고3", "중2", "N수")
+            const studentGrade = student.grade_type === 'high'
+                ? `고${student.grade}`
+                : student.grade_type === 'middle'
+                    ? `중${student.grade}`
+                    : student.student_type === 'n_soo' ? 'N수' : `${student.grade}학년`;
+
+            seasonAssignResult = await autoAssignStudentToSeasonSchedules(
+                student_id,
+                req.user.academyId,
+                season,
+                studentGrade,
+                student.student_type
+            );
+        } catch (assignError) {
+            console.error('Season auto-assign failed:', assignError);
+        }
+
         // Get enrollment details
         const [enrollment] = await db.query(
             `SELECT
@@ -576,7 +1023,11 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         res.status(201).json({
             message: 'Student enrolled in season successfully',
             enrollment: enrollment[0],
-            proRatedCalculation: proRated
+            proRatedCalculation: proRated,
+            schedule_assignment: {
+                removed_from_regular: removeResult,
+                assigned_to_season: seasonAssignResult
+            }
         });
     } catch (error) {
         console.error('Error enrolling student:', error);
@@ -614,7 +1065,7 @@ router.get('/:id/students', verifyToken, async (req, res) => {
 
         res.json({
             message: `Found ${enrollments.length} enrolled students`,
-            enrolled_students: enrollments  // 프론트엔드 기대 필드명
+            enrolled_students: enrollments
         });
     } catch (error) {
         console.error('Error fetching enrolled students:', error);
@@ -859,272 +1310,6 @@ router.post('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (r
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to calculate preview'
-        });
-    }
-});
-
-/**
- * POST /paca/seasons/enrollments/:enrollment_id/pay
- * Record season fee payment
- * Access: owner, admin
- */
-router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
-    const enrollmentId = parseInt(req.params.enrollment_id);
-
-    try {
-        const { paid_date, paid_amount, payment_method } = req.body;
-
-        // Get enrollment
-        const [enrollments] = await db.query(
-            `SELECT
-                ss.*,
-                s.academy_id,
-                s.name as student_name,
-                se.season_name
-            FROM student_seasons ss
-            JOIN students s ON ss.student_id = s.id
-            JOIN seasons se ON ss.season_id = se.id
-            WHERE ss.id = ?`,
-            [enrollmentId]
-        );
-
-        if (enrollments.length === 0) {
-            return res.status(404).json({
-                error: 'Not Found',
-                message: 'Enrollment not found'
-            });
-        }
-
-        const enrollment = enrollments[0];
-
-        if (enrollment.academy_id !== req.user.academyId) {
-            return res.status(403).json({
-                error: 'Forbidden',
-                message: 'Access denied'
-            });
-        }
-
-        if (enrollment.payment_status === 'paid') {
-            return res.status(400).json({
-                error: 'Validation Error',
-                message: 'Season fee already paid'
-            });
-        }
-
-        // Update payment status
-        const paymentDate = paid_date || new Date().toISOString().split('T')[0];
-        const paymentAmount = paid_amount || enrollment.season_fee;
-
-        await db.query(
-            `UPDATE student_seasons
-            SET payment_status = 'paid', paid_date = ?, paid_amount = ?, payment_method = ?, updated_at = NOW()
-            WHERE id = ?`,
-            [paymentDate, paymentAmount, payment_method || null, enrollmentId]
-        );
-
-        // Record in revenues table
-        await db.query(
-            `INSERT INTO revenues (
-                academy_id,
-                category,
-                amount,
-                revenue_date,
-                student_id,
-                description
-            ) VALUES (?, 'season', ?, ?, ?, ?)`,
-            [
-                enrollment.academy_id,
-                paymentAmount,
-                paymentDate,
-                enrollment.student_id,
-                `시즌비 납부 (${enrollment.season_name})`
-            ]
-        );
-
-        // Get updated record
-        const [updated] = await db.query(
-            `SELECT
-                ss.*,
-                s.name as student_name,
-                se.season_name
-            FROM student_seasons ss
-            JOIN students s ON ss.student_id = s.id
-            JOIN seasons se ON ss.season_id = se.id
-            WHERE ss.id = ?`,
-            [enrollmentId]
-        );
-
-        res.json({
-            message: 'Season fee payment recorded successfully',
-            enrollment: updated[0]
-        });
-    } catch (error) {
-        console.error('Error recording payment:', error);
-        res.status(500).json({
-            error: 'Server Error',
-            message: 'Failed to record payment'
-        });
-    }
-});
-
-/**
- * POST /paca/seasons/enrollments/:enrollment_id/cancel
- * Cancel season enrollment (refund calculation)
- * Access: owner, admin
- */
-router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
-    const enrollmentId = parseInt(req.params.enrollment_id);
-
-    try {
-        const { cancellation_date, refund_policy } = req.body;
-
-        // Get enrollment
-        const [enrollments] = await db.query(
-            `SELECT
-                ss.*,
-                s.academy_id,
-                s.name as student_name,
-                s.class_days,
-                se.season_name,
-                se.season_start_date,
-                se.season_end_date
-            FROM student_seasons ss
-            JOIN students s ON ss.student_id = s.id
-            JOIN seasons se ON ss.season_id = se.id
-            WHERE ss.id = ?`,
-            [enrollmentId]
-        );
-
-        if (enrollments.length === 0) {
-            return res.status(404).json({
-                error: 'Not Found',
-                message: 'Enrollment not found'
-            });
-        }
-
-        const enrollment = enrollments[0];
-
-        if (enrollment.academy_id !== req.user.academyId) {
-            return res.status(403).json({
-                error: 'Forbidden',
-                message: 'Access denied'
-            });
-        }
-
-        if (enrollment.payment_status === 'cancelled') {
-            return res.status(400).json({
-                error: 'Validation Error',
-                message: 'Enrollment already cancelled'
-            });
-        }
-
-        const cancelDate = cancellation_date || new Date().toISOString().split('T')[0];
-        const weeklyDays = parseWeeklyDays(enrollment.class_days);
-
-        // Calculate refund
-        const refundResult = calculateSeasonRefund({
-            seasonFee: parseFloat(enrollment.season_fee),
-            seasonStartDate: new Date(enrollment.season_start_date),
-            seasonEndDate: new Date(enrollment.season_end_date),
-            cancellationDate: new Date(cancelDate),
-            weeklyDays,
-            refundPolicy: refund_policy || 'legal'
-        });
-
-        // Update enrollment
-        await db.query(
-            `UPDATE student_seasons
-            SET
-                payment_status = 'cancelled',
-                is_cancelled = true,
-                cancellation_date = ?,
-                refund_amount = ?,
-                refund_calculation = ?,
-                updated_at = NOW()
-            WHERE id = ?`,
-            [cancelDate, refundResult.refundAmount, JSON.stringify(refundResult), enrollmentId]
-        );
-
-        // Update student's season registration status
-        await db.query(
-            `UPDATE students SET is_season_registered = false, current_season_id = NULL WHERE id = ?`,
-            [enrollment.student_id]
-        );
-
-        // Record refund expense if amount > 0
-        if (refundResult.refundAmount > 0 && enrollment.payment_status === 'paid') {
-            await db.query(
-                `INSERT INTO expenses (
-                    academy_id,
-                    category,
-                    amount,
-                    expense_date,
-                    description
-                ) VALUES (?, 'refund', ?, ?, ?)`,
-                [
-                    enrollment.academy_id,
-                    refundResult.refundAmount,
-                    cancelDate,
-                    `시즌 중도 해지 환불 - ${enrollment.student_name} (${enrollment.season_name})`
-                ]
-            );
-        }
-
-        // Get updated record
-        const [updated] = await db.query(
-            `SELECT
-                ss.*,
-                s.name as student_name,
-                se.season_name
-            FROM student_seasons ss
-            JOIN students s ON ss.student_id = s.id
-            JOIN seasons se ON ss.season_id = se.id
-            WHERE ss.id = ?`,
-            [enrollmentId]
-        );
-
-        res.json({
-            message: 'Season enrollment cancelled successfully',
-            enrollment: updated[0],
-            refundCalculation: refundResult
-        });
-    } catch (error) {
-        console.error('Error cancelling enrollment:', error);
-        res.status(500).json({
-            error: 'Server Error',
-            message: 'Failed to cancel enrollment'
-        });
-    }
-});
-
-/**
- * GET /paca/seasons/active
- * Get currently active season(s)
- * Access: owner, admin, teacher
- */
-router.get('/active', verifyToken, async (req, res) => {
-    try {
-        const today = new Date().toISOString().split('T')[0];
-
-        const [seasons] = await db.query(
-            `SELECT * FROM seasons
-            WHERE academy_id = ?
-            AND status = 'active'
-            AND season_start_date <= ?
-            AND season_end_date >= ?
-            ORDER BY season_type`,
-            [req.user.academyId, today, today]
-        );
-
-        res.json({
-            message: `Found ${seasons.length} active season(s)`,
-            seasons
-        });
-    } catch (error) {
-        console.error('Error fetching active seasons:', error);
-        res.status(500).json({
-            error: 'Server Error',
-            message: 'Failed to fetch active seasons'
         });
     }
 });
