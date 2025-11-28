@@ -84,6 +84,90 @@ async function autoAssignStudentToSchedules(dbConn, studentId, academyId, classD
 }
 
 /**
+ * 학생 요일 변경 시 스케줄 재배정
+ * - 기존 미출석 기록 삭제 (오늘 이후)
+ * - 새 요일로 재배정 (오늘 이후 ~ 월말)
+ */
+async function reassignStudentSchedules(dbConn, studentId, academyId, oldClassDays, newClassDays, defaultTimeSlot = 'evening') {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        const lastDay = new Date(year, month + 1, 0).getDate();
+
+        // 1. 오늘 이후 미출석 기록 삭제 (출석 처리 안된 것만)
+        const [deleteResult] = await dbConn.query(
+            `DELETE a FROM attendance a
+             JOIN class_schedules cs ON a.class_schedule_id = cs.id
+             WHERE a.student_id = ?
+             AND cs.academy_id = ?
+             AND cs.class_date >= ?
+             AND a.attendance_status IS NULL`,
+            [studentId, academyId, todayStr]
+        );
+
+        console.log(`Removed ${deleteResult.affectedRows} future attendance records for student ${studentId}`);
+
+        // 2. 새 요일로 재배정 (오늘부터 월말까지)
+        let assignedCount = 0;
+        let createdCount = 0;
+
+        for (let day = today.getDate(); day <= lastDay; day++) {
+            const currentDate = new Date(year, month, day);
+            const dayOfWeek = currentDate.getDay();
+
+            if (newClassDays.includes(dayOfWeek)) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                // 해당 날짜+시간대의 스케줄 조회 또는 생성
+                let [schedules] = await dbConn.query(
+                    `SELECT id FROM class_schedules
+                     WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+                    [academyId, dateStr, defaultTimeSlot]
+                );
+
+                let scheduleId;
+                if (schedules.length === 0) {
+                    const [result] = await dbConn.query(
+                        `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                         VALUES (?, ?, ?, false)`,
+                        [academyId, dateStr, defaultTimeSlot]
+                    );
+                    scheduleId = result.insertId;
+                    createdCount++;
+                } else {
+                    scheduleId = schedules[0].id;
+                }
+
+                // 이미 배정되어 있는지 확인
+                const [existing] = await dbConn.query(
+                    `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
+                    [scheduleId, studentId]
+                );
+
+                if (existing.length === 0) {
+                    await dbConn.query(
+                        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                         VALUES (?, ?, NULL)`,
+                        [scheduleId, studentId]
+                    );
+                    assignedCount++;
+                }
+            }
+        }
+
+        console.log(`Reassigned student ${studentId}: ${assignedCount} schedules (${createdCount} new)`);
+        return { removed: deleteResult.affectedRows, assigned: assignedCount, created: createdCount };
+    } catch (error) {
+        console.error('Error in reassignStudentSchedules:', error);
+        throw error;
+    }
+}
+
+/**
  * GET /paca/students
  * Get all students with optional filters
  * Access: owner, admin, teacher
@@ -540,9 +624,9 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
     const studentId = parseInt(req.params.id);
 
     try {
-        // Check if student exists
+        // Check if student exists and get current class_days
         const [students] = await db.query(
-            'SELECT id FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            'SELECT id, class_days FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [studentId, req.user.academyId]
         );
 
@@ -552,6 +636,13 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
                 message: 'Student not found'
             });
         }
+
+        // 기존 class_days 파싱
+        const oldClassDays = students[0].class_days
+            ? (typeof students[0].class_days === 'string'
+                ? JSON.parse(students[0].class_days)
+                : students[0].class_days)
+            : [];
 
         const {
             student_number,
@@ -717,9 +808,38 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             [studentId]
         );
 
+        // class_days가 변경되었으면 스케줄 재배정
+        let reassignResult = null;
+        if (class_days !== undefined) {
+            const newClassDays = class_days || [];
+            // 요일이 실제로 변경되었는지 확인
+            const oldSet = new Set(oldClassDays);
+            const newSet = new Set(newClassDays);
+            const isChanged = oldClassDays.length !== newClassDays.length ||
+                              oldClassDays.some(d => !newSet.has(d)) ||
+                              newClassDays.some(d => !oldSet.has(d));
+
+            if (isChanged && newClassDays.length > 0) {
+                try {
+                    reassignResult = await reassignStudentSchedules(
+                        db,
+                        studentId,
+                        req.user.academyId,
+                        oldClassDays,
+                        newClassDays,
+                        'evening'
+                    );
+                } catch (reassignError) {
+                    console.error('Reassign failed:', reassignError);
+                    // 재배정 실패해도 업데이트는 성공으로 처리
+                }
+            }
+        }
+
         res.json({
             message: 'Student updated successfully',
-            student: updatedStudents[0]
+            student: updatedStudents[0],
+            scheduleReassigned: reassignResult
         });
     } catch (error) {
         console.error('Error updating student:', error);
