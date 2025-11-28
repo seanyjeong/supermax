@@ -1676,7 +1676,7 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             [req.user.academyId]
         );
 
-        // 해당 날짜에 배정된 강사만 조회 (instructor_schedules 테이블)
+        // 해당 날짜에 배정된 강사 조회 (instructor_schedules 테이블)
         const [scheduledInstructors] = await db.query(
             `SELECT
                 isched.instructor_id,
@@ -1684,7 +1684,8 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
                 isched.scheduled_start_time,
                 isched.scheduled_end_time,
                 i.name,
-                i.salary_type
+                i.salary_type,
+                'scheduled' as source
             FROM instructor_schedules isched
             JOIN instructors i ON isched.instructor_id = i.id
             WHERE isched.academy_id = ?
@@ -1694,21 +1695,61 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             [req.user.academyId, workDate]
         );
 
-        // 타임슬롯별로 배정된 강사만 그룹화
+        // 승인된 미배정 출근 강사 조회 (overtime_approvals 테이블)
+        const [approvedExtraDays] = await db.query(
+            `SELECT
+                oa.instructor_id,
+                oa.time_slot,
+                oa.original_end_time as scheduled_start_time,
+                oa.actual_end_time as scheduled_end_time,
+                i.name,
+                i.salary_type,
+                'approved' as source
+            FROM overtime_approvals oa
+            JOIN instructors i ON oa.instructor_id = i.id
+            WHERE oa.academy_id = ?
+            AND oa.work_date = ?
+            AND oa.request_type = 'extra_day'
+            AND oa.status = 'approved'
+            AND i.deleted_at IS NULL
+            ORDER BY oa.time_slot, i.name`,
+            [req.user.academyId, workDate]
+        );
+
+        // 타임슬롯별로 강사 그룹화 (배정 + 승인된 강사)
         const instructorsBySlot = {
             morning: [],
             afternoon: [],
             evening: []
         };
 
+        // 배정된 강사 추가
         scheduledInstructors.forEach(s => {
             instructorsBySlot[s.time_slot].push({
                 id: s.instructor_id,
                 name: s.name,
                 salary_type: s.salary_type,
                 scheduled_start_time: s.scheduled_start_time,
-                scheduled_end_time: s.scheduled_end_time
+                scheduled_end_time: s.scheduled_end_time,
+                source: 'scheduled'
             });
+        });
+
+        // 승인된 미배정 출근 강사 추가 (중복 체크)
+        approvedExtraDays.forEach(s => {
+            if (s.time_slot) {
+                const existing = instructorsBySlot[s.time_slot].find(i => i.id === s.instructor_id);
+                if (!existing) {
+                    instructorsBySlot[s.time_slot].push({
+                        id: s.instructor_id,
+                        name: s.name,
+                        salary_type: s.salary_type,
+                        scheduled_start_time: s.scheduled_start_time,
+                        scheduled_end_time: s.scheduled_end_time,
+                        source: 'approved'  // 승인된 미배정 출근
+                    });
+                }
+            }
         });
 
         // Get existing attendance records for this date
@@ -2056,6 +2097,7 @@ router.post('/date/:date/instructor-schedules', verifyToken, requireRole('owner'
  * GET /paca/schedules/instructor-schedules/month
  * 특정 월의 모든 강사 일정 조회 (캘린더용)
  * Query: year, month
+ * Returns: 날짜별 슬롯별 배정 인원 + 출근 인원 (1/5 형식으로 표시 가능)
  * Access: owner, admin
  */
 router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
@@ -2071,11 +2113,12 @@ router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'adm
 
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
-        const [schedules] = await db.query(
+        // 배정된 강사 수 조회 (instructor_schedules)
+        const [scheduledCounts] = await db.query(
             `SELECT
                 isched.work_date,
                 isched.time_slot,
-                COUNT(DISTINCT isched.instructor_id) as instructor_count
+                COUNT(DISTINCT isched.instructor_id) as scheduled_count
              FROM instructor_schedules isched
              WHERE isched.academy_id = ?
              AND DATE_FORMAT(isched.work_date, '%Y-%m') = ?
@@ -2084,14 +2127,49 @@ router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'adm
             [req.user.academyId, yearMonth]
         );
 
-        // 날짜별 → 슬롯별 강사 수 매핑
+        // 출근한 강사 수 조회 (instructor_attendance에서 check_in_time이 있는 경우)
+        const [attendedCounts] = await db.query(
+            `SELECT
+                ia.work_date,
+                ia.time_slot,
+                COUNT(DISTINCT ia.instructor_id) as attended_count
+             FROM instructor_attendance ia
+             JOIN instructors i ON ia.instructor_id = i.id
+             WHERE i.academy_id = ?
+             AND DATE_FORMAT(ia.work_date, '%Y-%m') = ?
+             AND ia.check_in_time IS NOT NULL
+             GROUP BY ia.work_date, ia.time_slot
+             ORDER BY ia.work_date, ia.time_slot`,
+            [req.user.academyId, yearMonth]
+        );
+
+        // 날짜별 → 슬롯별 데이터 매핑
         const scheduleMap = {};
-        schedules.forEach(s => {
+
+        // 배정 인원 매핑
+        scheduledCounts.forEach(s => {
             const dateStr = s.work_date.toISOString().split('T')[0];
             if (!scheduleMap[dateStr]) {
-                scheduleMap[dateStr] = { morning: 0, afternoon: 0, evening: 0 };
+                scheduleMap[dateStr] = {
+                    morning: { scheduled: 0, attended: 0 },
+                    afternoon: { scheduled: 0, attended: 0 },
+                    evening: { scheduled: 0, attended: 0 }
+                };
             }
-            scheduleMap[dateStr][s.time_slot] = s.instructor_count;
+            scheduleMap[dateStr][s.time_slot].scheduled = s.scheduled_count;
+        });
+
+        // 출근 인원 매핑
+        attendedCounts.forEach(a => {
+            const dateStr = a.work_date.toISOString().split('T')[0];
+            if (!scheduleMap[dateStr]) {
+                scheduleMap[dateStr] = {
+                    morning: { scheduled: 0, attended: 0 },
+                    afternoon: { scheduled: 0, attended: 0 },
+                    evening: { scheduled: 0, attended: 0 }
+                };
+            }
+            scheduleMap[dateStr][a.time_slot].attended = a.attended_count;
         });
 
         res.json({
