@@ -4,27 +4,17 @@ const db = require('../config/database');
 const { verifyToken, requireRole } = require('../middleware/auth');
 
 /**
- * GET /paca/students
- * Get all students with optional filters
- * Access: owner, admin, teacher
- */
-
-/**
  * 학생을 해당 월의 스케줄에 자동 배정
- * @param {object} db - 데이터베이스 연결
+ * @param {object} dbConn - 데이터베이스 연결
  * @param {number} studentId - 학생 ID
  * @param {number} academyId - 학원 ID
- * @param {array} classDays - 수업 요일 (예: ["월", "수", "금"] 또는 [1, 3, 5])
+ * @param {array} classDays - 수업 요일 (예: [1, 3, 5] - 숫자 배열)
  * @param {string} enrollmentDate - 등록일 (YYYY-MM-DD)
  * @param {string} defaultTimeSlot - 기본 시간대 ('morning' | 'afternoon' | 'evening')
  */
-async function autoAssignStudentToSchedules(db, studentId, academyId, classDays, enrollmentDate, defaultTimeSlot = 'evening') {
+async function autoAssignStudentToSchedules(dbConn, studentId, academyId, classDays, enrollmentDate, defaultTimeSlot = 'evening') {
     try {
-        // 요일 변환 (문자열 -> 숫자)
-        const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
-        const numericDays = classDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
-
-        if (numericDays.length === 0) {
+        if (!classDays || classDays.length === 0) {
             console.log('No class days specified, skipping auto-assignment');
             return { assigned: 0, created: 0 };
         }
@@ -43,11 +33,11 @@ async function autoAssignStudentToSchedules(db, studentId, academyId, classDays,
             const currentDate = new Date(year, month, day);
             const dayOfWeek = currentDate.getDay();
 
-            if (numericDays.includes(dayOfWeek)) {
+            if (classDays.includes(dayOfWeek)) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
                 // 해당 날짜+시간대의 스케줄 조회 또는 생성
-                let [schedules] = await db.query(
+                let [schedules] = await dbConn.query(
                     `SELECT id FROM class_schedules
                      WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
                     [academyId, dateStr, defaultTimeSlot]
@@ -56,7 +46,7 @@ async function autoAssignStudentToSchedules(db, studentId, academyId, classDays,
                 let scheduleId;
                 if (schedules.length === 0) {
                     // 스케줄 생성
-                    const [result] = await db.query(
+                    const [result] = await dbConn.query(
                         `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
                          VALUES (?, ?, ?, false)`,
                         [academyId, dateStr, defaultTimeSlot]
@@ -68,14 +58,14 @@ async function autoAssignStudentToSchedules(db, studentId, academyId, classDays,
                 }
 
                 // 이미 배정되어 있는지 확인
-                const [existing] = await db.query(
+                const [existing] = await dbConn.query(
                     `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
                     [scheduleId, studentId]
                 );
 
                 if (existing.length === 0) {
                     // 출석 기록 생성 (배정)
-                    await db.query(
+                    await dbConn.query(
                         `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
                          VALUES (?, ?, NULL)`,
                         [scheduleId, studentId]
@@ -93,6 +83,11 @@ async function autoAssignStudentToSchedules(db, studentId, academyId, classDays,
     }
 }
 
+/**
+ * GET /paca/students
+ * Get all students with optional filters
+ * Access: owner, admin, teacher
+ */
 router.get('/', verifyToken, async (req, res) => {
     try {
         const { grade, student_type, admission_type, status, search } = req.query;
@@ -502,10 +497,30 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             firstPayment = payments[0];
         }
 
+        // 자동 스케줄 배정 (등록일 이후 해당 월의 수업에 배정)
+        let autoAssignResult = null;
+        const parsedClassDays = class_days || [];
+        if (parsedClassDays.length > 0) {
+            try {
+                autoAssignResult = await autoAssignStudentToSchedules(
+                    db,
+                    result.insertId,
+                    req.user.academyId,
+                    parsedClassDays,
+                    enrollment_date || new Date().toISOString().split('T')[0],
+                    'evening'  // 기본 시간대: 저녁
+                );
+            } catch (assignError) {
+                console.error('Auto-assign failed:', assignError);
+                // 배정 실패해도 학생 생성은 성공으로 처리
+            }
+        }
+
         res.status(201).json({
             message: 'Student created successfully',
             student: createdStudent,
-            firstPayment
+            firstPayment,
+            autoAssigned: autoAssignResult
         });
     } catch (error) {
         console.error('Error creating student:', error);
@@ -761,16 +776,8 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
 
 /**
  * POST /paca/students/grade-upgrade
- * Bulk upgrade student grades (year-end transition)
+ * Bulk upgrade student grades (진급 처리)
  * Access: owner, admin
- *
- * Body: {
- *   upgrades: [
- *     { student_id: 1, new_grade: '고2', new_status: 'active' },
- *     { student_id: 2, new_grade: 'N수', new_status: 'active' },
- *     { student_id: 3, new_grade: null, new_status: 'graduated' }
- *   ]
- * }
  */
 router.post('/grade-upgrade', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
@@ -930,4 +937,3 @@ router.get('/search', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
-
