@@ -13,21 +13,20 @@ router.get('/', verifyToken, async (req, res) => {
         const { start_date, end_date, instructor_id, time_slot } = req.query;
 
         let query = `
-  SELECT
-      cs.id,
-      cs.class_date,
-      cs.time_slot,
-      cs.instructor_id,
-      cs.title,
-      cs.content,
-      cs.attendance_taken,
-      cs.notes,
-      cs.created_at,
-      i.name AS instructor_name,
-      (SELECT COUNT(*) FROM attendance WHERE class_schedule_id = cs.id) AS student_count
-  FROM class_schedules cs
-  LEFT JOIN instructors i ON cs.instructor_id = i.id
-  WHERE cs.academy_id = ?
+            SELECT
+                cs.id,
+                cs.class_date,
+                cs.time_slot,
+                cs.instructor_id,
+                cs.title,
+                cs.content,
+                cs.attendance_taken,
+                cs.notes,
+                cs.created_at,
+                i.name AS instructor_name
+            FROM class_schedules cs
+            LEFT JOIN instructors i ON cs.instructor_id = i.id
+            WHERE cs.academy_id = ?
         `;
 
         const params = [req.user.academyId];
@@ -141,7 +140,7 @@ router.get('/instructor/:instructor_id', verifyToken, async (req, res) => {
 });
 
 // ==========================================
-// 타임슬롯 관련 API
+// 타임슬롯 관련 API (/:id 보다 먼저 정의해야 함)
 // ==========================================
 
 /**
@@ -186,15 +185,15 @@ router.get('/slot', verifyToken, async (req, res) => {
         }
 
         // 해당 요일에 수업이 있는 학생 중 아직 배정되지 않은 학생 조회
+        // class_days는 숫자 배열로 저장됨 (0=일, 1=월, 2=화, ...)
         const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-        const dayName = dayNames[dayOfWeek];
 
         const [availableStudents] = await db.query(
             `SELECT s.id, s.name, s.grade, s.student_type, s.class_days
              FROM students s
              WHERE s.academy_id = ?
              AND s.status = 'active'
+             AND s.deleted_at IS NULL
              AND JSON_CONTAINS(s.class_days, ?)
              AND s.id NOT IN (
                 SELECT a.student_id FROM attendance a
@@ -202,7 +201,7 @@ router.get('/slot', verifyToken, async (req, res) => {
                 WHERE cs.class_date = ? AND cs.academy_id = ?
              )
              ORDER BY s.name`,
-            [req.user.academyId, JSON.stringify(dayName), date, req.user.academyId]
+            [req.user.academyId, JSON.stringify(dayOfWeek), date, req.user.academyId]
         );
 
         res.json({
@@ -396,7 +395,6 @@ router.post('/slot/move', verifyToken, requireRole('owner', 'admin'), async (req
         });
     }
 });
-
 
 /**
  * GET /paca/schedules/:id
@@ -1824,8 +1822,4 @@ router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner
     }
 });
 
-
 module.exports = router;
-
-
-
