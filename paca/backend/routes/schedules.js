@@ -2148,7 +2148,10 @@ router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'adm
 
         // 배정 인원 매핑
         scheduledCounts.forEach(s => {
-            const dateStr = s.work_date.toISOString().split('T')[0];
+            // dateStrings: true 설정으로 이미 문자열일 수 있음
+            const dateStr = typeof s.work_date === 'string'
+                ? s.work_date.split('T')[0]
+                : s.work_date.toISOString().split('T')[0];
             if (!scheduleMap[dateStr]) {
                 scheduleMap[dateStr] = {
                     morning: { scheduled: 0, attended: 0 },
@@ -2161,7 +2164,9 @@ router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'adm
 
         // 출근 인원 매핑
         attendedCounts.forEach(a => {
-            const dateStr = a.work_date.toISOString().split('T')[0];
+            const dateStr = typeof a.work_date === 'string'
+                ? a.work_date.split('T')[0]
+                : a.work_date.toISOString().split('T')[0];
             if (!scheduleMap[dateStr]) {
                 scheduleMap[dateStr] = {
                     morning: { scheduled: 0, attended: 0 },
