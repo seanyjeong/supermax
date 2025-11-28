@@ -1321,31 +1321,38 @@ router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (re
             student: {
                 id: student.id,
                 name: student.name,
-                monthlyTuition: parseFloat(student.monthly_tuition),
-                discountRate: parseFloat(student.discount_rate) || 0,
-                classDays: weeklyDays
+                student_number: student.student_number || '',
+                class_days: weeklyDays,
+                monthly_tuition: student.monthly_tuition,
+                discount_rate: student.discount_rate || '0'
             },
             season: {
                 id: season.id,
-                name: season.season_name,
-                type: season.season_type,
-                nonSeasonEndDate: season.non_season_end_date,
-                seasonStartDate: season.season_start_date,
-                seasonEndDate: season.season_end_date,
-                defaultSeasonFee: parseFloat(season.default_season_fee)
+                season_name: season.season_name,
+                start_date: season.season_start_date,
+                end_date: season.season_end_date,
+                non_season_end_date: season.non_season_end_date,
+                season_fee: season.default_season_fee
             },
-            proRatedCalculation: proRated,
-            gapPeriod: hasGap ? {
-                start: gapStart.toISOString().split('T')[0],
-                end: gapEnd.toISOString().split('T')[0],
-                days: Math.ceil((gapEnd - gapStart) / (1000 * 60 * 60 * 24)) + 1
+            prorated: {
+                total_days: proRated.totalMonthlyClasses || 30,
+                pro_rated_days: proRated.classCountUntilEnd || 0,
+                daily_rate: proRated.perClassFee || 0,
+                original_monthly: parseFloat(student.monthly_tuition) || 0,
+                discount_rate: parseFloat(student.discount_rate) || 0,
+                final_amount: proRated.proRatedFee || 0
+            },
+            continuous_discount: continuousDiscount ? {
+                is_continuous: true,
+                discount_type: continuousDiscount.type,
+                discount_rate: continuousDiscount.rate || 0,
+                discount_amount: 0
             } : null,
-            continuousDiscount,
-            summary: {
-                proRatedMonth: `${nonSeasonEnd.getFullYear()}-${String(nonSeasonEnd.getMonth() + 1).padStart(2, '0')}`,
-                proRatedAmount: proRated.proRatedFee,
-                seasonFee: parseFloat(season.default_season_fee),
-                totalDue: proRated.proRatedFee + parseFloat(season.default_season_fee)
+            final_calculation: {
+                season_fee: parseFloat(season.default_season_fee) || 0,
+                prorated_fee: proRated.proRatedFee || 0,
+                discount_amount: 0,
+                total_due: (proRated.proRatedFee || 0) + (parseFloat(season.default_season_fee) || 0)
             }
         };
 
