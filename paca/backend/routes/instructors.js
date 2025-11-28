@@ -736,9 +736,10 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
     const instructorId = parseInt(req.params.id);
 
     try {
-        // Check if instructor exists
+        // Check if instructor exists and get salary info
         const [instructors] = await db.query(
-            'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            `SELECT id, name, salary_type, instructor_type, hourly_rate, base_salary, tax_type
+             FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL`,
             [instructorId, req.user.academyId]
         );
 
@@ -749,6 +750,7 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
             });
         }
 
+        const instructor = instructors[0];
         const { work_date, time_slot, check_in_time, check_out_time, attendance_status, notes } = req.body;
 
         if (!work_date || !time_slot) {
@@ -764,6 +766,7 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
             [instructorId, work_date, time_slot]
         );
 
+        let attendanceResult;
         if (existing.length > 0) {
             // Update existing record
             await db.query(
@@ -778,10 +781,7 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                 [existing[0].id]
             );
 
-            return res.json({
-                message: 'Attendance updated successfully',
-                attendance: updated[0]
-            });
+            attendanceResult = updated[0];
         } else {
             // Insert new record
             const [result] = await db.query(
@@ -802,11 +802,130 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                 [result.insertId]
             );
 
-            return res.status(201).json({
-                message: 'Attendance recorded successfully',
-                attendance: created[0]
-            });
+            attendanceResult = created[0];
         }
+
+        // ============================================
+        // 시급제 강사: 급여 레코드 자동 생성/업데이트
+        // ============================================
+        if (instructor.salary_type === 'hourly' && attendance_status !== 'absent') {
+            try {
+                // 설정에서 급여월 타입 가져오기 (당월/익월)
+                const [settingsRows] = await db.query(
+                    'SELECT salary_month_type FROM academy_settings WHERE academy_id = ?',
+                    [req.user.academyId]
+                );
+                const salaryMonthType = settingsRows.length > 0 && settingsRows[0].salary_month_type
+                    ? settingsRows[0].salary_month_type
+                    : 'next';
+
+                // work_date에서 년월 계산
+                const workDateObj = new Date(work_date);
+                let salaryYear = workDateObj.getFullYear();
+                let salaryMonth = workDateObj.getMonth() + 1;  // 0-indexed -> 1-indexed
+
+                // 익월 정산인 경우: 10월 출근 -> 11월 급여
+                if (salaryMonthType === 'next') {
+                    salaryMonth += 1;
+                    if (salaryMonth > 12) {
+                        salaryMonth = 1;
+                        salaryYear += 1;
+                    }
+                }
+
+                const yearMonth = `${salaryYear}-${String(salaryMonth).padStart(2, '0')}`;
+
+                // 해당 월의 모든 출근 기록에서 근무 시간 계산
+                // 익월 정산: 11월 급여 = 10월 출근 기록
+                // 당월 정산: 11월 급여 = 11월 출근 기록
+                let attendanceYear, attendanceMonth;
+                if (salaryMonthType === 'next') {
+                    // yearMonth가 급여월이면, 출근 기록은 전월
+                    attendanceMonth = salaryMonth - 1;
+                    attendanceYear = salaryYear;
+                    if (attendanceMonth < 1) {
+                        attendanceMonth = 12;
+                        attendanceYear -= 1;
+                    }
+                } else {
+                    // 당월 정산: 급여월 = 출근 기록 월
+                    attendanceYear = salaryYear;
+                    attendanceMonth = salaryMonth;
+                }
+
+                const attendanceYearMonth = `${attendanceYear}-${String(attendanceMonth).padStart(2, '0')}`;
+
+                const [monthlyAttendances] = await db.query(
+                    `SELECT check_in_time, check_out_time, attendance_status
+                     FROM instructor_attendance
+                     WHERE instructor_id = ?
+                     AND DATE_FORMAT(work_date, '%Y-%m') = ?
+                     AND attendance_status IN ('present', 'late', 'half_day')`,
+                    [instructorId, attendanceYearMonth]
+                );
+
+                // 총 근무 시간 계산 (분 단위)
+                let totalMinutes = 0;
+                for (const att of monthlyAttendances) {
+                    if (att.check_in_time && att.check_out_time) {
+                        const [inH, inM] = att.check_in_time.split(':').map(Number);
+                        const [outH, outM] = att.check_out_time.split(':').map(Number);
+                        const inMinutes = inH * 60 + inM;
+                        const outMinutes = outH * 60 + outM;
+                        if (outMinutes > inMinutes) {
+                            totalMinutes += (outMinutes - inMinutes);
+                        }
+                    }
+                }
+
+                // 시간 단위로 변환 (소수점)
+                const totalHours = totalMinutes / 60;
+                const hourlyRate = parseFloat(instructor.hourly_rate) || 0;
+                const baseAmount = Math.round(totalHours * hourlyRate);
+
+                // 세금 계산
+                let taxAmount = 0;
+                if (instructor.tax_type === '3.3%') {
+                    taxAmount = Math.round(baseAmount * 0.033);
+                }
+
+                const netSalary = baseAmount - taxAmount;
+
+                // salary_records 업데이트 또는 생성
+                const [existingSalary] = await db.query(
+                    'SELECT id FROM salary_records WHERE instructor_id = ? AND year_month = ?',
+                    [instructorId, yearMonth]
+                );
+
+                if (existingSalary.length > 0) {
+                    // 기존 레코드 업데이트
+                    await db.query(
+                        `UPDATE salary_records
+                         SET base_amount = ?, tax_amount = ?, net_salary = ?,
+                             total_hours = ?, updated_at = NOW()
+                         WHERE id = ?`,
+                        [baseAmount, taxAmount, netSalary, totalHours, existingSalary[0].id]
+                    );
+                } else {
+                    // 새 레코드 생성
+                    await db.query(
+                        `INSERT INTO salary_records
+                         (instructor_id, year_month, base_amount, incentive_amount, total_deduction,
+                          tax_amount, net_salary, total_hours, payment_status)
+                         VALUES (?, ?, ?, 0, 0, ?, ?, ?, 'pending')`,
+                        [instructorId, yearMonth, baseAmount, taxAmount, netSalary, totalHours]
+                    );
+                }
+            } catch (salaryError) {
+                console.error('Error updating salary record:', salaryError);
+                // 급여 업데이트 실패해도 출퇴근 기록은 성공으로 처리
+            }
+        }
+
+        return res.status(existing.length > 0 ? 200 : 201).json({
+            message: existing.length > 0 ? 'Attendance updated successfully' : 'Attendance recorded successfully',
+            attendance: attendanceResult
+        });
     } catch (error) {
         console.error('Error recording attendance:', error);
         res.status(500).json({
