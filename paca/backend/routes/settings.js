@@ -51,6 +51,7 @@ router.get('/', verifyToken, async (req, res) => {
                     operating_hours: academy[0].operating_hours,
                     tuition_due_day: 5,
                     salary_payment_day: 10,
+                    salary_month_type: 'next',  // 'current': 당월, 'next': 익월
                     morning_class_time: '09:30-12:00',
                     afternoon_class_time: '14:00-18:00',
                     evening_class_time: '18:30-21:00',
@@ -83,6 +84,7 @@ router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
         const {
             tuition_due_day,
             salary_payment_day,
+            salary_month_type,
             morning_class_time,
             afternoon_class_time,
             evening_class_time,
@@ -109,6 +111,14 @@ router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
                     message: 'salary_payment_day must be between 1 and 31'
                 });
             }
+        }
+
+        // salary_month_type validation
+        if (salary_month_type !== undefined && !['current', 'next'].includes(salary_month_type)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'salary_month_type must be either "current" or "next"'
+            });
         }
 
         // Time format validation (HH:MM-HH:MM)
@@ -142,14 +152,15 @@ router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
             // Create new settings
             const [result] = await db.query(
                 `INSERT INTO academy_settings
-                (academy_id, tuition_due_day, salary_payment_day,
+                (academy_id, tuition_due_day, salary_payment_day, salary_month_type,
                  morning_class_time, afternoon_class_time, evening_class_time,
                  weekly_tuition_rates, settings)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     tuition_due_day || 5,
                     salary_payment_day || 10,
+                    salary_month_type || 'next',
                     morning_class_time || '09:30-12:00',
                     afternoon_class_time || '14:00-18:00',
                     evening_class_time || '18:30-21:00',
@@ -183,6 +194,10 @@ router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
         if (salary_payment_day !== undefined) {
             updates.push('salary_payment_day = ?');
             params.push(salary_payment_day);
+        }
+        if (salary_month_type !== undefined) {
+            updates.push('salary_month_type = ?');
+            params.push(salary_month_type);
         }
         if (morning_class_time !== undefined) {
             updates.push('morning_class_time = ?');
