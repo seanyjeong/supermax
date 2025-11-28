@@ -171,16 +171,23 @@ router.get('/slot', verifyToken, async (req, res) => {
 
         const schedule = schedules[0] || null;
 
-        // 스케줄이 있으면 배정된 학생 조회
+        // 스케줄이 있으면 배정된 학생 조회 (시즌 정보 포함)
         let students = [];
         if (schedule) {
             const [attendanceRecords] = await db.query(
-                `SELECT a.student_id, s.name as student_name, a.attendance_status
+                `SELECT a.student_id, s.name as student_name, a.attendance_status,
+                        se.season_type, se.season_name
                  FROM attendance a
                  JOIN students s ON a.student_id = s.id
+                 LEFT JOIN student_seasons ss ON ss.student_id = s.id
+                     AND ss.is_cancelled = 0
+                     AND ss.payment_status != 'cancelled'
+                 LEFT JOIN seasons se ON ss.season_id = se.id
+                     AND se.status = 'active'
+                     AND ? BETWEEN se.season_start_date AND se.non_season_end_date
                  WHERE a.class_schedule_id = ?
-                 ORDER BY s.name`,
-                [schedule.id]
+                 ORDER BY se.season_type IS NOT NULL DESC, se.season_type, s.name`,
+                [date, schedule.id]
             );
             students = attendanceRecords;
         }
@@ -448,7 +455,7 @@ router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res
     const connection = await db.getConnection();
 
     try {
-        const { class_id, season_id, target_grade, year, month, weekdays, excluded_dates, time_slot, title, mode } = req.body;
+        const { class_id, season_id, target_grade, year, month, weekdays, excluded_dates, time_slot, time_slots, title, mode } = req.body;
 
         // 모드 확인: 'season', 'class', 'student' (학생 수업요일 기반)
         const isSeasonBased = mode === 'season' || (!!season_id && !mode);
@@ -672,6 +679,11 @@ router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res
             });
         }
 
+        // 시즌 모드에서 복수 시간대 지원
+        const timeSlotsToCreate = (isSeasonBased && Array.isArray(time_slots) && time_slots.length > 0)
+            ? time_slots
+            : [useTimeSlot];
+
         // Start transaction
         await connection.beginTransaction();
 
@@ -679,30 +691,32 @@ router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res
         const skippedDates = [];
 
         for (const dateStr of targetDates) {
-            // Check for existing schedule on this date
-            const [existing] = await connection.query(
-                'SELECT id FROM class_schedules WHERE academy_id = ? AND class_date = ? AND time_slot = ?',
-                [req.user.academyId, dateStr, useTimeSlot]
-            );
+            for (const slotToCreate of timeSlotsToCreate) {
+                // Check for existing schedule on this date and time slot
+                const [existing] = await connection.query(
+                    'SELECT id FROM class_schedules WHERE academy_id = ? AND class_date = ? AND time_slot = ?',
+                    [req.user.academyId, dateStr, slotToCreate]
+                );
 
-            if (existing.length > 0) {
-                skippedDates.push(dateStr);
-                continue;
+                if (existing.length > 0) {
+                    skippedDates.push(`${dateStr}_${slotToCreate}`);
+                    continue;
+                }
+
+                // Create schedule with season_id and target_grade
+                const [result] = await connection.query(
+                    `INSERT INTO class_schedules
+                    (academy_id, class_id, season_id, target_grade, class_date, time_slot, instructor_id, title)
+                    VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
+                    [req.user.academyId, useClassId, useSeasonId, useTargetGrade, dateStr, slotToCreate, scheduleTitle]
+                );
+
+                createdSchedules.push({
+                    id: result.insertId,
+                    class_date: dateStr,
+                    time_slot: slotToCreate
+                });
             }
-
-            // Create schedule with season_id and target_grade
-            const [result] = await connection.query(
-                `INSERT INTO class_schedules
-                (academy_id, class_id, season_id, target_grade, class_date, time_slot, instructor_id, title)
-                VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`,
-                [req.user.academyId, useClassId, useSeasonId, useTargetGrade, dateStr, useTimeSlot, scheduleTitle]
-            );
-
-            createdSchedules.push({
-                id: result.insertId,
-                class_date: dateStr,
-                time_slot: useTimeSlot
-            });
         }
 
         await connection.commit();
