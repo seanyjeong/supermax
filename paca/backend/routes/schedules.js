@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { updateSalaryFromAttendance } = require('../utils/salaryCalculator');
 
 /**
  * GET /paca/schedules
@@ -1620,6 +1621,9 @@ router.post('/:id/instructor-attendance', verifyToken, requireRole('owner', 'adm
                 check_in_time,
                 check_out_time
             });
+
+            // 급여 자동 계산/업데이트
+            await updateSalaryFromAttendance(connection, instructor_id, req.user.academyId, schedule.class_date, attendance_status);
         }
 
         await connection.commit();
@@ -1801,6 +1805,9 @@ router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner
                 time_slot,
                 attendance_status
             });
+
+            // 급여 자동 계산/업데이트
+            await updateSalaryFromAttendance(connection, instructor_id, req.user.academyId, workDate, attendance_status);
         }
 
         await connection.commit();
