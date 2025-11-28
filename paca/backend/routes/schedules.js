@@ -1649,7 +1649,7 @@ router.post('/:id/instructor-attendance', verifyToken, requireRole('owner', 'adm
 /**
  * GET /paca/schedules/date/:date/instructor-attendance
  * Get instructor attendance for a specific date
- * 모든 활성 강사를 반환하여 어떤 시간대든 출근 체크 가능
+ * 배정된 강사만 해당 타임슬롯에 표시
  * Access: owner, admin, teacher
  */
 router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) => {
@@ -1665,7 +1665,7 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             });
         }
 
-        // Get ALL active instructors for this academy
+        // Get ALL active instructors for this academy (참고용)
         const [allActiveInstructors] = await db.query(
             `SELECT id, name, salary_type
             FROM instructors
@@ -1676,12 +1676,40 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             [req.user.academyId]
         );
 
-        // All active instructors can be assigned to any time slot
+        // 해당 날짜에 배정된 강사만 조회 (instructor_schedules 테이블)
+        const [scheduledInstructors] = await db.query(
+            `SELECT
+                isched.instructor_id,
+                isched.time_slot,
+                isched.scheduled_start_time,
+                isched.scheduled_end_time,
+                i.name,
+                i.salary_type
+            FROM instructor_schedules isched
+            JOIN instructors i ON isched.instructor_id = i.id
+            WHERE isched.academy_id = ?
+            AND isched.work_date = ?
+            AND i.deleted_at IS NULL
+            ORDER BY isched.time_slot, i.name`,
+            [req.user.academyId, workDate]
+        );
+
+        // 타임슬롯별로 배정된 강사만 그룹화
         const instructorsBySlot = {
-            morning: allActiveInstructors.map(i => ({ id: i.id, name: i.name })),
-            afternoon: allActiveInstructors.map(i => ({ id: i.id, name: i.name })),
-            evening: allActiveInstructors.map(i => ({ id: i.id, name: i.name }))
+            morning: [],
+            afternoon: [],
+            evening: []
         };
+
+        scheduledInstructors.forEach(s => {
+            instructorsBySlot[s.time_slot].push({
+                id: s.instructor_id,
+                name: s.name,
+                salary_type: s.salary_type,
+                scheduled_start_time: s.scheduled_start_time,
+                scheduled_end_time: s.scheduled_end_time
+            });
+        });
 
         // Get existing attendance records for this date
         const [attendances] = await db.query(
@@ -1706,8 +1734,8 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
             message: 'Instructor attendance retrieved',
             date: workDate,
             attendances,
-            instructors: allActiveInstructors,
-            instructors_by_slot: instructorsBySlot
+            instructors: allActiveInstructors,  // 전체 강사 목록 (참고용)
+            instructors_by_slot: instructorsBySlot  // 배정된 강사만
         });
     } catch (error) {
         console.error('Error fetching instructor attendance by date:', error);
