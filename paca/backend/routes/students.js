@@ -1011,6 +1011,81 @@ router.post('/grade-upgrade', verifyToken, requireRole('owner', 'admin'), async 
 });
 
 /**
+ * GET /paca/students/:id/seasons
+ * Get student's season enrollment history
+ * Access: owner, admin, teacher
+ */
+router.get('/:id/seasons', verifyToken, async (req, res) => {
+    const studentId = parseInt(req.params.id);
+
+    try {
+        // Verify student exists and belongs to academy
+        const [students] = await db.query(
+            'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            [studentId, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        // Get season enrollment history
+        const [seasons] = await db.query(
+            `SELECT
+                ss.id as enrollment_id,
+                ss.season_id,
+                ss.season_fee,
+                ss.registration_date,
+                ss.after_season_action,
+                ss.prorated_month,
+                ss.prorated_amount,
+                ss.prorated_details,
+                ss.is_continuous,
+                ss.previous_season_id,
+                ss.discount_type,
+                ss.discount_amount,
+                ss.payment_status,
+                ss.paid_date,
+                ss.paid_amount,
+                ss.payment_method,
+                ss.is_cancelled,
+                ss.cancellation_date,
+                ss.refund_amount,
+                ss.time_slots,
+                ss.created_at,
+                s.season_name,
+                s.season_type,
+                s.season_start_date,
+                s.season_end_date,
+                s.non_season_end_date,
+                s.status as season_status,
+                s.operating_days,
+                s.grade_time_slots
+            FROM student_seasons ss
+            JOIN seasons s ON ss.season_id = s.id
+            WHERE ss.student_id = ?
+            ORDER BY ss.registration_date DESC`,
+            [studentId]
+        );
+
+        res.json({
+            message: `Found ${seasons.length} season enrollments`,
+            student: students[0],
+            seasons
+        });
+    } catch (error) {
+        console.error('Error fetching student seasons:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch student seasons'
+        });
+    }
+});
+
+/**
  * GET /paca/students/search
  * Search students (for autocomplete, etc)
  * Access: owner, admin, teacher
