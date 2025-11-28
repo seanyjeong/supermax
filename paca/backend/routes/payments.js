@@ -2,7 +2,101 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { truncateToThousands } = require('../utils/seasonCalculator');
+const { truncateToThousands, calculateProRatedFee, parseWeeklyDays } = require('../utils/seasonCalculator');
+
+/**
+ * 비시즌 종강 일할 계산 (다음 달 비시즌 종강일까지의 수업료)
+ * @param {object} params - 파라미터
+ * @param {number} params.studentId - 학생 ID
+ * @param {number} params.academyId - 학원 ID
+ * @param {number} params.year - 청구 연도
+ * @param {number} params.month - 청구 월
+ * @returns {object|null} 비시즌 종강 일할 정보 또는 null
+ */
+async function calculateNonSeasonEndProrated(params) {
+    const { studentId, academyId, year, month } = params;
+
+    // 다음 달 계산
+    let nextYear = year;
+    let nextMonth = month + 1;
+    if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear = year + 1;
+    }
+
+    // 다음 달에 시작하는 시즌 조회 (해당 학생이 등록된)
+    const [seasonEnrollments] = await db.query(
+        `SELECT
+            se.id as enrollment_id,
+            se.student_id,
+            s.id as season_id,
+            s.name as season_name,
+            s.start_date,
+            s.end_date,
+            s.non_season_end_date,
+            st.monthly_tuition,
+            st.discount_rate,
+            st.weekly_schedule
+        FROM student_seasons se
+        JOIN seasons s ON se.season_id = s.id
+        JOIN students st ON se.student_id = st.id
+        WHERE se.student_id = ?
+        AND se.status = 'active'
+        AND s.academy_id = ?
+        AND YEAR(s.start_date) = ?
+        AND MONTH(s.start_date) = ?
+        AND s.non_season_end_date IS NOT NULL
+        AND s.non_season_end_date >= ?`,
+        [studentId, academyId, nextYear, nextMonth, `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`]
+    );
+
+    if (seasonEnrollments.length === 0) {
+        return null;
+    }
+
+    const enrollment = seasonEnrollments[0];
+    const nonSeasonEndDate = new Date(enrollment.non_season_end_date);
+
+    // 비시즌 종강일이 다음 달 1일 이후인지 확인
+    const nextMonthStart = new Date(nextYear, nextMonth - 1, 1);
+    if (nonSeasonEndDate < nextMonthStart) {
+        return null; // 비시즌 종강일이 다음 달 전이면 일할 계산 필요 없음
+    }
+
+    // 비시즌 종강일이 시즌 시작일 이후이면 일할 계산 필요 없음
+    const seasonStartDate = new Date(enrollment.start_date);
+    if (nonSeasonEndDate >= seasonStartDate) {
+        return null;
+    }
+
+    // 수업 요일 파싱
+    const weeklyDays = parseWeeklyDays(enrollment.weekly_schedule);
+    if (weeklyDays.length === 0) {
+        return null;
+    }
+
+    // 비시즌 종강 일할 계산
+    const proRatedResult = calculateProRatedFee({
+        monthlyFee: parseFloat(enrollment.monthly_tuition) || 0,
+        weeklyDays,
+        nonSeasonEndDate,
+        discountRate: parseFloat(enrollment.discount_rate) || 0
+    });
+
+    if (proRatedResult.proRatedFee <= 0) {
+        return null;
+    }
+
+    return {
+        amount: proRatedResult.proRatedFee,
+        seasonName: enrollment.season_name,
+        nonSeasonEndDate: enrollment.non_season_end_date,
+        classCount: proRatedResult.classCountUntilEnd,
+        totalMonthlyClasses: proRatedResult.totalMonthlyClasses,
+        description: `비시즌 종강 일할 (${nextMonth}월 1일~${nonSeasonEndDate.getDate()}일, ${proRatedResult.classCountUntilEnd}회)`,
+        details: proRatedResult.calculationDetails
+    };
+}
 
 /**
  * GET /paca/payments
@@ -324,12 +418,38 @@ router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (
 
         // Create payment records for all students
         let created = 0;
+        let withNonSeasonProrated = 0;
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
         for (const student of students) {
-            const baseAmount = student.monthly_tuition;
-            const discount = baseAmount * (student.discount_rate / 100);
-            const finalAmount = baseAmount - discount;
+            const baseAmount = parseFloat(student.monthly_tuition) || 0;
+            const discountRate = parseFloat(student.discount_rate) || 0;
+            const discount = truncateToThousands(baseAmount * (discountRate / 100));
+
+            // 비시즌 종강 일할 계산 (다음 달 비시즌 종강일까지)
+            let additionalAmount = 0;
+            let notes = null;
+            let description = `${year}년 ${month}월 수강료`;
+
+            try {
+                const nonSeasonProrated = await calculateNonSeasonEndProrated({
+                    studentId: student.id,
+                    academyId: req.user.academyId,
+                    year,
+                    month
+                });
+
+                if (nonSeasonProrated) {
+                    additionalAmount = nonSeasonProrated.amount;
+                    notes = `[비시즌 종강 일할] ${nonSeasonProrated.description}\n${nonSeasonProrated.details.formula}`;
+                    description = `${year}년 ${month}월 수강료 + 비시즌 종강 일할`;
+                    withNonSeasonProrated++;
+                }
+            } catch (err) {
+                console.error(`Failed to calculate non-season prorated for student ${student.id}:`, err);
+            }
+
+            const finalAmount = truncateToThousands(baseAmount - discount + additionalAmount);
 
             await db.query(
                 `INSERT INTO student_payments (
@@ -346,17 +466,18 @@ router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (
                     description,
                     notes,
                     recorded_by
-                ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, 'pending', ?, ?, ?)`,
+                ) VALUES (?, ?, ?, 'monthly', ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
                 [
                     student.id,
                     req.user.academyId,
                     yearMonth,
                     baseAmount,
                     discount,
+                    additionalAmount,
                     finalAmount,
                     due_date,
-                    `${year}년 ${month}월 수강료`,
-                    null,
+                    description,
+                    notes,
                     req.user.userId
                 ]
             );
@@ -364,8 +485,10 @@ router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (
         }
 
         res.json({
-            message: `Successfully created ${created} monthly payment charges`,
+            message: `Successfully created ${created} monthly payment charges` +
+                (withNonSeasonProrated > 0 ? ` (비시즌 종강 일할 포함: ${withNonSeasonProrated}명)` : ''),
             created,
+            withNonSeasonProrated,
             year,
             month,
             due_date
@@ -967,7 +1090,32 @@ router.post('/generate-monthly-for-student', verifyToken, requireRole('owner', '
         const baseAmount = parseFloat(student.monthly_tuition) || 0;
         const discountRate = parseFloat(student.discount_rate) || 0;
         const discountAmount = truncateToThousands(baseAmount * (discountRate / 100));
-        const finalAmount = truncateToThousands(baseAmount - discountAmount);
+
+        // 비시즌 종강 일할 계산
+        let additionalAmount = 0;
+        let notes = null;
+        let description = `${year}년 ${month}월 학원비`;
+        let nonSeasonProratedInfo = null;
+
+        try {
+            const nonSeasonProrated = await calculateNonSeasonEndProrated({
+                studentId: student_id,
+                academyId: req.user.academyId,
+                year,
+                month
+            });
+
+            if (nonSeasonProrated) {
+                additionalAmount = nonSeasonProrated.amount;
+                notes = `[비시즌 종강 일할] ${nonSeasonProrated.description}\n${nonSeasonProrated.details.formula}`;
+                description = `${year}년 ${month}월 학원비 + 비시즌 종강 일할`;
+                nonSeasonProratedInfo = nonSeasonProrated;
+            }
+        } catch (err) {
+            console.error(`Failed to calculate non-season prorated for student ${student_id}:`, err);
+        }
+
+        const finalAmount = truncateToThousands(baseAmount - discountAmount + additionalAmount);
 
         // Due date
         const dueDate = new Date(year, month - 1, dueDay);
@@ -976,17 +1124,19 @@ router.post('/generate-monthly-for-student', verifyToken, requireRole('owner', '
             `INSERT INTO student_payments (
                 student_id, academy_id, year_month, payment_type,
                 base_amount, discount_amount, additional_amount, final_amount,
-                due_date, payment_status, description, recorded_by
-            ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, 'pending', ?, ?)`,
+                due_date, payment_status, description, notes, recorded_by
+            ) VALUES (?, ?, ?, 'monthly', ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
             [
                 student_id,
                 req.user.academyId,
                 yearMonth,
                 baseAmount,
                 discountAmount,
+                additionalAmount,
                 finalAmount,
                 dueDate.toISOString().split('T')[0],
-                `${year}년 ${month}월 학원비`,
+                description,
+                notes,
                 req.user.userId
             ]
         );
@@ -1000,8 +1150,11 @@ router.post('/generate-monthly-for-student', verifyToken, requireRole('owner', '
         );
 
         res.status(201).json({
-            message: 'Monthly payment generated successfully',
-            payment: created[0]
+            message: nonSeasonProratedInfo
+                ? 'Monthly payment generated successfully (비시즌 종강 일할 포함)'
+                : 'Monthly payment generated successfully',
+            payment: created[0],
+            nonSeasonProrated: nonSeasonProratedInfo
         });
     } catch (error) {
         console.error('Error generating monthly payment:', error);
