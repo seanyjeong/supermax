@@ -8,6 +8,91 @@ const { verifyToken, requireRole } = require('../middleware/auth');
  * Get all students with optional filters
  * Access: owner, admin, teacher
  */
+
+/**
+ * 학생을 해당 월의 스케줄에 자동 배정
+ * @param {object} db - 데이터베이스 연결
+ * @param {number} studentId - 학생 ID
+ * @param {number} academyId - 학원 ID
+ * @param {array} classDays - 수업 요일 (예: ["월", "수", "금"] 또는 [1, 3, 5])
+ * @param {string} enrollmentDate - 등록일 (YYYY-MM-DD)
+ * @param {string} defaultTimeSlot - 기본 시간대 ('morning' | 'afternoon' | 'evening')
+ */
+async function autoAssignStudentToSchedules(db, studentId, academyId, classDays, enrollmentDate, defaultTimeSlot = 'evening') {
+    try {
+        // 요일 변환 (문자열 -> 숫자)
+        const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+        const numericDays = classDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
+
+        if (numericDays.length === 0) {
+            console.log('No class days specified, skipping auto-assignment');
+            return { assigned: 0, created: 0 };
+        }
+
+        const enrollDate = new Date(enrollmentDate + 'T00:00:00');
+        const year = enrollDate.getFullYear();
+        const month = enrollDate.getMonth();
+        const enrollDay = enrollDate.getDate();
+        const lastDay = new Date(year, month + 1, 0).getDate();
+
+        let assignedCount = 0;
+        let createdCount = 0;
+
+        // 등록일부터 해당 월 말일까지 수업일 찾기
+        for (let day = enrollDay; day <= lastDay; day++) {
+            const currentDate = new Date(year, month, day);
+            const dayOfWeek = currentDate.getDay();
+
+            if (numericDays.includes(dayOfWeek)) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                // 해당 날짜+시간대의 스케줄 조회 또는 생성
+                let [schedules] = await db.query(
+                    `SELECT id FROM class_schedules
+                     WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+                    [academyId, dateStr, defaultTimeSlot]
+                );
+
+                let scheduleId;
+                if (schedules.length === 0) {
+                    // 스케줄 생성
+                    const [result] = await db.query(
+                        `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                         VALUES (?, ?, ?, false)`,
+                        [academyId, dateStr, defaultTimeSlot]
+                    );
+                    scheduleId = result.insertId;
+                    createdCount++;
+                } else {
+                    scheduleId = schedules[0].id;
+                }
+
+                // 이미 배정되어 있는지 확인
+                const [existing] = await db.query(
+                    `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
+                    [scheduleId, studentId]
+                );
+
+                if (existing.length === 0) {
+                    // 출석 기록 생성 (배정)
+                    await db.query(
+                        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                         VALUES (?, ?, NULL)`,
+                        [scheduleId, studentId]
+                    );
+                    assignedCount++;
+                }
+            }
+        }
+
+        console.log(`Auto-assigned student ${studentId}: ${assignedCount} schedules (${createdCount} new)`);
+        return { assigned: assignedCount, created: createdCount };
+    } catch (error) {
+        console.error('Error in autoAssignStudentToSchedules:', error);
+        throw error;
+    }
+}
+
 router.get('/', verifyToken, async (req, res) => {
     try {
         const { grade, student_type, admission_type, status, search } = req.query;
@@ -845,3 +930,4 @@ router.get('/search', verifyToken, async (req, res) => {
 });
 
 module.exports = router;
+
