@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { verifyToken, requireRole } = require('../middleware/auth');
+const { truncateToThousands } = require('../utils/seasonCalculator');
 
 /**
  * GET /paca/payments
@@ -202,8 +203,10 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
             });
         }
 
-        // Calculate final_amount
-        const finalAmount = parseFloat(base_amount) - parseFloat(discount_amount || 0) + parseFloat(additional_amount || 0);
+        // Calculate final_amount (백원 단위 절삭)
+        const finalAmount = truncateToThousands(
+            parseFloat(base_amount) - parseFloat(discount_amount || 0) + parseFloat(additional_amount || 0)
+        );
 
         // Insert payment record
         const [result] = await db.query(
@@ -573,7 +576,9 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
             const newDiscount = discount_amount !== undefined ? discount_amount : currentData.discount_amount;
             const newAdditional = additional_amount !== undefined ? additional_amount : currentData.additional_amount;
 
-            const finalAmount = parseFloat(newBase) - parseFloat(newDiscount) + parseFloat(newAdditional);
+            const finalAmount = truncateToThousands(
+                parseFloat(newBase) - parseFloat(newDiscount) + parseFloat(newAdditional)
+            );
             updates.push('final_amount = ?');
             params.push(finalAmount);
         }
@@ -811,11 +816,11 @@ router.post('/generate-prorated', verifyToken, requireRole('owner', 'admin'), as
 
         // 등록일이 1일이 아니면 일할계산
         if (regDay > 1 && totalClassDays > 0) {
-            proRatedAmount = Math.round(baseAmount * (remainingClassDays / totalClassDays));
+            proRatedAmount = truncateToThousands(baseAmount * (remainingClassDays / totalClassDays));
             isProrated = true;
         }
 
-        const finalAmount = proRatedAmount - (proRatedAmount * (discountRate / 100));
+        const finalAmount = truncateToThousands(proRatedAmount - (proRatedAmount * (discountRate / 100)));
 
         // 납부기한 계산 (등록월의 납부일 또는 등록일 + 7일)
         let dueDate;
@@ -961,8 +966,8 @@ router.post('/generate-monthly-for-student', verifyToken, requireRole('owner', '
 
         const baseAmount = parseFloat(student.monthly_tuition) || 0;
         const discountRate = parseFloat(student.discount_rate) || 0;
-        const discountAmount = baseAmount * (discountRate / 100);
-        const finalAmount = baseAmount - discountAmount;
+        const discountAmount = truncateToThousands(baseAmount * (discountRate / 100));
+        const finalAmount = truncateToThousands(baseAmount - discountAmount);
 
         // Due date
         const dueDate = new Date(year, month - 1, dueDay);
