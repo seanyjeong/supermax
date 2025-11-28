@@ -1565,4 +1565,262 @@ router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner
     }
 });
 
+// ==========================================
+// 타임슬롯 관련 API
+// ==========================================
+
+/**
+ * GET /paca/schedules/slot
+ * 특정 날짜/타임슬롯의 정보 조회
+ * Query: date, time_slot
+ */
+router.get('/slot', verifyToken, async (req, res) => {
+    try {
+        const { date, time_slot } = req.query;
+
+        if (!date || !time_slot) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: 'date and time_slot are required'
+            });
+        }
+
+        // 해당 슬롯의 스케줄 조회
+        const [schedules] = await db.query(
+            `SELECT cs.*, i.name as instructor_name
+             FROM class_schedules cs
+             LEFT JOIN instructors i ON cs.instructor_id = i.id
+             WHERE cs.academy_id = ? AND cs.class_date = ? AND cs.time_slot = ?`,
+            [req.user.academyId, date, time_slot]
+        );
+
+        const schedule = schedules[0] || null;
+
+        // 스케줄이 있으면 배정된 학생 조회
+        let students = [];
+        if (schedule) {
+            const [attendanceRecords] = await db.query(
+                `SELECT a.student_id, s.name as student_name, a.attendance_status
+                 FROM attendance a
+                 JOIN students s ON a.student_id = s.id
+                 WHERE a.class_schedule_id = ?
+                 ORDER BY s.name`,
+                [schedule.id]
+            );
+            students = attendanceRecords;
+        }
+
+        // 해당 요일에 수업이 있는 학생 중 아직 배정되지 않은 학생 조회
+        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+        const dayName = dayNames[dayOfWeek];
+
+        const [availableStudents] = await db.query(
+            `SELECT s.id, s.name, s.grade, s.student_type, s.class_days
+             FROM students s
+             WHERE s.academy_id = ?
+             AND s.status = 'active'
+             AND JSON_CONTAINS(s.class_days, ?)
+             AND s.id NOT IN (
+                SELECT a.student_id FROM attendance a
+                JOIN class_schedules cs ON a.class_schedule_id = cs.id
+                WHERE cs.class_date = ? AND cs.academy_id = ?
+             )
+             ORDER BY s.name`,
+            [req.user.academyId, JSON.stringify(dayName), date, req.user.academyId]
+        );
+
+        res.json({
+            schedule: schedule ? { ...schedule, students } : null,
+            available_students: availableStudents
+        });
+    } catch (error) {
+        console.error('Error fetching slot data:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch slot data'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules/slot/student
+ * 학생을 특정 슬롯에 추가
+ */
+router.post('/slot/student', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const { date, time_slot, student_id } = req.body;
+
+        if (!date || !time_slot || !student_id) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: 'date, time_slot, and student_id are required'
+            });
+        }
+
+        // 해당 슬롯의 스케줄 조회 또는 생성
+        let [schedules] = await db.query(
+            `SELECT id FROM class_schedules
+             WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+            [req.user.academyId, date, time_slot]
+        );
+
+        let scheduleId;
+        if (schedules.length === 0) {
+            // 스케줄이 없으면 생성
+            const [result] = await db.query(
+                `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                 VALUES (?, ?, ?, false)`,
+                [req.user.academyId, date, time_slot]
+            );
+            scheduleId = result.insertId;
+        } else {
+            scheduleId = schedules[0].id;
+        }
+
+        // 이미 배정되어 있는지 확인
+        const [existing] = await db.query(
+            `SELECT id FROM attendance
+             WHERE class_schedule_id = ? AND student_id = ?`,
+            [scheduleId, student_id]
+        );
+
+        if (existing.length > 0) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: '이미 해당 수업에 배정된 학생입니다.'
+            });
+        }
+
+        // 출석 기록 생성
+        await db.query(
+            `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+             VALUES (?, ?, NULL)`,
+            [scheduleId, student_id]
+        );
+
+        res.json({ message: '학생이 배정되었습니다.' });
+    } catch (error) {
+        console.error('Error adding student to slot:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to add student to slot'
+        });
+    }
+});
+
+/**
+ * DELETE /paca/schedules/slot/student
+ * 학생을 특정 슬롯에서 제거
+ */
+router.delete('/slot/student', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const { date, time_slot, student_id } = req.query;
+
+        if (!date || !time_slot || !student_id) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: 'date, time_slot, and student_id are required'
+            });
+        }
+
+        // 해당 슬롯의 스케줄 조회
+        const [schedules] = await db.query(
+            `SELECT id FROM class_schedules
+             WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+            [req.user.academyId, date, time_slot]
+        );
+
+        if (schedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: '해당 수업을 찾을 수 없습니다.'
+            });
+        }
+
+        // 출석 기록 삭제
+        await db.query(
+            `DELETE FROM attendance
+             WHERE class_schedule_id = ? AND student_id = ?`,
+            [schedules[0].id, student_id]
+        );
+
+        res.json({ message: '학생이 제거되었습니다.' });
+    } catch (error) {
+        console.error('Error removing student from slot:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to remove student from slot'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules/slot/move
+ * 학생을 다른 슬롯으로 이동
+ */
+router.post('/slot/move', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    try {
+        const { date, from_slot, to_slot, student_id } = req.body;
+
+        if (!date || !from_slot || !to_slot || !student_id) {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: 'date, from_slot, to_slot, and student_id are required'
+            });
+        }
+
+        // 출발 슬롯 스케줄 조회
+        const [fromSchedules] = await db.query(
+            `SELECT id FROM class_schedules
+             WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+            [req.user.academyId, date, from_slot]
+        );
+
+        if (fromSchedules.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: '출발 수업을 찾을 수 없습니다.'
+            });
+        }
+
+        // 도착 슬롯 스케줄 조회 또는 생성
+        let [toSchedules] = await db.query(
+            `SELECT id FROM class_schedules
+             WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+            [req.user.academyId, date, to_slot]
+        );
+
+        let toScheduleId;
+        if (toSchedules.length === 0) {
+            // 스케줄 생성
+            const [result] = await db.query(
+                `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                 VALUES (?, ?, ?, false)`,
+                [req.user.academyId, date, to_slot]
+            );
+            toScheduleId = result.insertId;
+        } else {
+            toScheduleId = toSchedules[0].id;
+        }
+
+        // 출석 기록 이동 (class_schedule_id 변경)
+        await db.query(
+            `UPDATE attendance
+             SET class_schedule_id = ?
+             WHERE class_schedule_id = ? AND student_id = ?`,
+            [toScheduleId, fromSchedules[0].id, student_id]
+        );
+
+        res.json({ message: '학생이 이동되었습니다.' });
+    } catch (error) {
+        console.error('Error moving student:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to move student'
+        });
+    }
+});
+
 module.exports = router;
+
