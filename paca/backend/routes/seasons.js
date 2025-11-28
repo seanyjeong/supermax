@@ -20,8 +20,9 @@ const {
  * @param {object} season - 시즌 정보
  * @param {string} studentGrade - 학생 학년 (예: "고3", "중2", "N수")
  * @param {string} studentType - 학생 유형 (early/regular)
+ * @param {string[]} customTimeSlots - 사용자 지정 시간대 배열 (선택사항, 고3/N수용)
  */
-async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, studentGrade, studentType) {
+async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, studentGrade, studentType, customTimeSlots = null) {
     try {
         const operatingDays = typeof season.operating_days === 'string'
             ? JSON.parse(season.operating_days)
@@ -33,14 +34,25 @@ async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, 
                 : season.grade_time_slots)
             : null;
 
-        // 학년별 시간대 결정 (grade_time_slots에 설정이 있으면 사용, 없으면 evening)
-        let timeSlot = 'evening';
-        if (gradeTimeSlots) {
+        // 시간대 결정: customTimeSlots가 있으면 사용, 없으면 기본 로직
+        let timeSlots = [];
+
+        if (customTimeSlots && Array.isArray(customTimeSlots) && customTimeSlots.length > 0) {
+            // 사용자가 지정한 시간대 사용 (고3/N수 여러 시간대 지원)
+            timeSlots = customTimeSlots;
+        } else if (gradeTimeSlots) {
+            // grade_time_slots 설정에서 시간대 결정
             if (gradeTimeSlots[studentGrade]) {
-                timeSlot = gradeTimeSlots[studentGrade];
+                const slot = gradeTimeSlots[studentGrade];
+                timeSlots = Array.isArray(slot) ? slot : [slot];
             } else if (gradeTimeSlots[studentType]) {
-                timeSlot = gradeTimeSlots[studentType];
+                const slot = gradeTimeSlots[studentType];
+                timeSlots = Array.isArray(slot) ? slot : [slot];
+            } else {
+                timeSlots = ['evening'];
             }
+        } else {
+            timeSlots = ['evening'];
         }
 
         // 요일 변환 (문자열 -> 숫자)
@@ -49,7 +61,7 @@ async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, 
 
         if (numericDays.length === 0) {
             console.log('No operating days specified for season, skipping auto-assignment');
-            return { assigned: 0, created: 0 };
+            return { assigned: 0, created: 0, timeSlots: [] };
         }
 
         const startDate = new Date(season.season_start_date + 'T00:00:00');
@@ -66,41 +78,44 @@ async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, 
             if (numericDays.includes(dayOfWeek)) {
                 const dateStr = currentDate.toISOString().split('T')[0];
 
-                // 해당 날짜+시간대의 스케줄 조회 또는 생성
-                let [schedules] = await db.query(
-                    `SELECT id FROM class_schedules
-                     WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
-                    [academyId, dateStr, timeSlot]
-                );
-
-                let scheduleId;
-                if (schedules.length === 0) {
-                    // 스케줄 생성
-                    const [result] = await db.query(
-                        `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
-                         VALUES (?, ?, ?, false)`,
+                // 각 시간대에 대해 스케줄 배정
+                for (const timeSlot of timeSlots) {
+                    // 해당 날짜+시간대의 스케줄 조회 또는 생성
+                    let [schedules] = await db.query(
+                        `SELECT id FROM class_schedules
+                         WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
                         [academyId, dateStr, timeSlot]
                     );
-                    scheduleId = result.insertId;
-                    createdCount++;
-                } else {
-                    scheduleId = schedules[0].id;
-                }
 
-                // 이미 배정되어 있는지 확인
-                const [existing] = await db.query(
-                    `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
-                    [scheduleId, studentId]
-                );
+                    let scheduleId;
+                    if (schedules.length === 0) {
+                        // 스케줄 생성
+                        const [result] = await db.query(
+                            `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                             VALUES (?, ?, ?, false)`,
+                            [academyId, dateStr, timeSlot]
+                        );
+                        scheduleId = result.insertId;
+                        createdCount++;
+                    } else {
+                        scheduleId = schedules[0].id;
+                    }
 
-                if (existing.length === 0) {
-                    // 출석 기록 생성 (배정)
-                    await db.query(
-                        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
-                         VALUES (?, ?, NULL)`,
+                    // 이미 배정되어 있는지 확인
+                    const [existing] = await db.query(
+                        `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
                         [scheduleId, studentId]
                     );
-                    assignedCount++;
+
+                    if (existing.length === 0) {
+                        // 출석 기록 생성 (배정)
+                        await db.query(
+                            `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                             VALUES (?, ?, NULL)`,
+                            [scheduleId, studentId]
+                        );
+                        assignedCount++;
+                    }
                 }
             }
 
@@ -108,8 +123,8 @@ async function autoAssignStudentToSeasonSchedules(studentId, academyId, season, 
             currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        console.log(`Season auto-assigned student ${studentId}: ${assignedCount} schedules (${createdCount} new), timeSlot: ${timeSlot}`);
-        return { assigned: assignedCount, created: createdCount, timeSlot };
+        console.log(`Season auto-assigned student ${studentId}: ${assignedCount} schedules (${createdCount} new), timeSlots: ${timeSlots.join(', ')}`);
+        return { assigned: assignedCount, created: createdCount, timeSlots };
     } catch (error) {
         console.error('Error in autoAssignStudentToSeasonSchedules:', error);
         throw error;
@@ -809,7 +824,8 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             registration_date,
             after_season_action,
             is_continuous,
-            previous_season_id
+            previous_season_id,
+            time_slots  // 고3/N수용 여러 시간대 배열: ['morning', 'afternoon', 'evening']
         } = req.body;
 
         if (!student_id || season_fee === undefined || season_fee === null) {
@@ -891,6 +907,20 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             }
         }
 
+        // Validate time_slots if provided
+        const validTimeSlots = ['morning', 'afternoon', 'evening'];
+        let parsedTimeSlots = null;
+        if (time_slots && Array.isArray(time_slots) && time_slots.length > 0) {
+            // 유효한 시간대만 필터링
+            parsedTimeSlots = time_slots.filter(ts => validTimeSlots.includes(ts));
+            if (parsedTimeSlots.length === 0) {
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: 'Invalid time_slots. Must be array of: morning, afternoon, evening'
+                });
+            }
+        }
+
         // Enroll student
         const [result] = await db.query(
             `INSERT INTO student_seasons (
@@ -906,8 +936,9 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 previous_season_id,
                 discount_type,
                 discount_amount,
+                time_slots,
                 payment_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
             [
                 student_id,
                 seasonId,
@@ -920,7 +951,8 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 is_continuous || false,
                 previous_season_id || null,
                 discountType,
-                discountAmount
+                discountAmount,
+                parsedTimeSlots ? JSON.stringify(parsedTimeSlots) : null
             ]
         );
 
@@ -988,19 +1020,18 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         // 2. 시즌 스케줄에 자동 배정
         let seasonAssignResult = null;
         try {
-            // 학년 문자열 생성 (예: "고3", "중2", "N수")
-            const studentGrade = student.grade_type === 'high'
-                ? `고${student.grade}`
-                : student.grade_type === 'middle'
-                    ? `중${student.grade}`
-                    : student.student_type === 'n_soo' ? 'N수' : `${student.grade}학년`;
+            // 학년 문자열 생성 (예: "고3", "N수" 등)
+            const studentGrade = student.grade || '';
 
+            // 고3/N수는 여러 시간대 지원
+            // parsedTimeSlots가 있으면 사용, 없으면 기본 로직 적용
             seasonAssignResult = await autoAssignStudentToSeasonSchedules(
                 student_id,
                 req.user.academyId,
                 season,
                 studentGrade,
-                student.student_type
+                student.student_type,
+                parsedTimeSlots  // 사용자 지정 시간대 배열
             );
         } catch (assignError) {
             console.error('Season auto-assign failed:', assignError);
