@@ -1223,15 +1223,15 @@ router.delete('/:id/students/:student_id', verifyToken, requireRole('owner', 'ad
 });
 
 /**
- * POST /paca/seasons/:id/preview
+ * GET /paca/seasons/:id/preview
  * Preview prorated fee calculation for student
  * Access: owner, admin
  */
-router.post('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
 
     try {
-        const { student_id } = req.body;
+        const { student_id } = req.query;
 
         if (!student_id) {
             return res.status(400).json({
@@ -1250,6 +1250,23 @@ router.post('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (r
             return res.status(404).json({
                 error: 'Not Found',
                 message: 'Season not found'
+            });
+        }
+
+        // Check if student is already enrolled in this season
+        const [existingEnrollment] = await db.query(
+            `SELECT ss.id, s.season_name
+             FROM student_seasons ss
+             JOIN seasons s ON ss.season_id = s.id
+             WHERE ss.student_id = ? AND ss.season_id = ? AND ss.is_cancelled = 0`,
+            [student_id, seasonId]
+        );
+
+        if (existingEnrollment.length > 0) {
+            return res.status(409).json({
+                error: 'Already Enrolled',
+                message: `이미 ${existingEnrollment[0].season_name}에 등록되어 있습니다.`,
+                enrolled: true
             });
         }
 
