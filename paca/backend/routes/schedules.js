@@ -1829,4 +1829,255 @@ router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner
     }
 });
 
+// ==========================================
+// 강사 근무 일정 배정 API
+// ==========================================
+
+/**
+ * GET /paca/schedules/date/:date/instructor-schedules
+ * 특정 날짜의 강사 근무 일정 조회
+ * Access: owner, admin
+ */
+router.get('/date/:date/instructor-schedules', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const workDate = req.params.date;
+
+    try {
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(workDate)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Date must be in YYYY-MM-DD format'
+            });
+        }
+
+        // 모든 활성 강사 조회
+        const [instructors] = await db.query(
+            `SELECT id, name, salary_type, hourly_rate
+             FROM instructors
+             WHERE academy_id = ? AND status = 'active' AND deleted_at IS NULL
+             ORDER BY name`,
+            [req.user.academyId]
+        );
+
+        // 해당 날짜의 배정된 일정 조회
+        const [schedules] = await db.query(
+            `SELECT
+                isched.id,
+                isched.instructor_id,
+                isched.time_slot,
+                isched.scheduled_start_time,
+                isched.scheduled_end_time,
+                i.name as instructor_name,
+                i.salary_type
+             FROM instructor_schedules isched
+             JOIN instructors i ON isched.instructor_id = i.id
+             WHERE isched.academy_id = ?
+             AND isched.work_date = ?
+             ORDER BY isched.time_slot, i.name`,
+            [req.user.academyId, workDate]
+        );
+
+        // 타임슬롯별로 그룹화
+        const schedulesBySlot = {
+            morning: [],
+            afternoon: [],
+            evening: []
+        };
+
+        schedules.forEach(s => {
+            schedulesBySlot[s.time_slot].push({
+                id: s.id,
+                instructor_id: s.instructor_id,
+                instructor_name: s.instructor_name,
+                salary_type: s.salary_type,
+                scheduled_start_time: s.scheduled_start_time,
+                scheduled_end_time: s.scheduled_end_time
+            });
+        });
+
+        res.json({
+            message: 'Instructor schedules retrieved',
+            date: workDate,
+            instructors,
+            schedules: schedulesBySlot
+        });
+    } catch (error) {
+        console.error('Error fetching instructor schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch instructor schedules'
+        });
+    }
+});
+
+/**
+ * POST /paca/schedules/date/:date/instructor-schedules
+ * 특정 날짜의 강사 근무 일정 저장 (전체 교체 방식)
+ * Body: { schedules: [{ instructor_id, time_slot, scheduled_start_time?, scheduled_end_time? }] }
+ * Access: owner, admin
+ */
+router.post('/date/:date/instructor-schedules', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const workDate = req.params.date;
+    const connection = await db.getConnection();
+
+    try {
+        const { schedules } = req.body;
+
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(workDate)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'Date must be in YYYY-MM-DD format'
+            });
+        }
+
+        if (!Array.isArray(schedules)) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'schedules must be an array'
+            });
+        }
+
+        await connection.beginTransaction();
+
+        // 해당 날짜의 기존 일정 삭제
+        await connection.query(
+            'DELETE FROM instructor_schedules WHERE academy_id = ? AND work_date = ?',
+            [req.user.academyId, workDate]
+        );
+
+        // 새 일정 추가
+        const validSlots = ['morning', 'afternoon', 'evening'];
+        const insertedSchedules = [];
+
+        for (const schedule of schedules) {
+            const { instructor_id, time_slot, scheduled_start_time, scheduled_end_time } = schedule;
+
+            if (!instructor_id || !time_slot) continue;
+
+            if (!validSlots.includes(time_slot)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: `Invalid time_slot: ${time_slot}`
+                });
+            }
+
+            // 강사 확인
+            const [instructors] = await connection.query(
+                'SELECT id, name FROM instructors WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                [instructor_id, req.user.academyId]
+            );
+
+            if (instructors.length === 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(404).json({
+                    error: 'Not Found',
+                    message: `Instructor with ID ${instructor_id} not found`
+                });
+            }
+
+            await connection.query(
+                `INSERT INTO instructor_schedules
+                (academy_id, instructor_id, work_date, time_slot, scheduled_start_time, scheduled_end_time, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    req.user.academyId,
+                    instructor_id,
+                    workDate,
+                    time_slot,
+                    scheduled_start_time || null,
+                    scheduled_end_time || null,
+                    req.user.id
+                ]
+            );
+
+            insertedSchedules.push({
+                instructor_id,
+                instructor_name: instructors[0].name,
+                time_slot,
+                scheduled_start_time,
+                scheduled_end_time
+            });
+        }
+
+        await connection.commit();
+        connection.release();
+
+        res.json({
+            message: `Instructor schedules saved for ${workDate}`,
+            date: workDate,
+            schedules: insertedSchedules
+        });
+    } catch (error) {
+        await connection.rollback();
+        connection.release();
+        console.error('Error saving instructor schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to save instructor schedules'
+        });
+    }
+});
+
+/**
+ * GET /paca/schedules/instructor-schedules/month
+ * 특정 월의 모든 강사 일정 조회 (캘린더용)
+ * Query: year, month
+ * Access: owner, admin
+ */
+router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const { year, month } = req.query;
+
+    try {
+        if (!year || !month) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'year and month are required'
+            });
+        }
+
+        const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+        const [schedules] = await db.query(
+            `SELECT
+                isched.work_date,
+                isched.time_slot,
+                COUNT(DISTINCT isched.instructor_id) as instructor_count
+             FROM instructor_schedules isched
+             WHERE isched.academy_id = ?
+             AND DATE_FORMAT(isched.work_date, '%Y-%m') = ?
+             GROUP BY isched.work_date, isched.time_slot
+             ORDER BY isched.work_date, isched.time_slot`,
+            [req.user.academyId, yearMonth]
+        );
+
+        // 날짜별 → 슬롯별 강사 수 매핑
+        const scheduleMap = {};
+        schedules.forEach(s => {
+            const dateStr = s.work_date.toISOString().split('T')[0];
+            if (!scheduleMap[dateStr]) {
+                scheduleMap[dateStr] = { morning: 0, afternoon: 0, evening: 0 };
+            }
+            scheduleMap[dateStr][s.time_slot] = s.instructor_count;
+        });
+
+        res.json({
+            message: 'Monthly instructor schedules retrieved',
+            year_month: yearMonth,
+            schedules: scheduleMap
+        });
+    } catch (error) {
+        console.error('Error fetching monthly instructor schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch monthly instructor schedules'
+        });
+    }
+});
+
 module.exports = router;
