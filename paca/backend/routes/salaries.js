@@ -230,34 +230,8 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
 
         const salary = salaries[0];
 
-        // 설정에서 급여월 타입 가져오기 (당월/익월)
-        const [settingsRows] = await db.query(
-            'SELECT salary_month_type FROM academy_settings WHERE academy_id = ?',
-            [req.user.academyId]
-        );
-        const salaryMonthType = settingsRows.length > 0 && settingsRows[0].salary_month_type
-            ? settingsRows[0].salary_month_type
-            : 'next';
-
-        // 출근 기록 조회할 년월 계산
-        const [salaryYear, salaryMonth] = salary.year_month.split('-').map(Number);
-        let attendanceYear, attendanceMonth;
-
-        if (salaryMonthType === 'next') {
-            // 익월 정산: 급여월의 전월 출근 기록
-            attendanceMonth = salaryMonth - 1;
-            attendanceYear = salaryYear;
-            if (attendanceMonth < 1) {
-                attendanceMonth = 12;
-                attendanceYear -= 1;
-            }
-        } else {
-            // 당월 정산: 급여월 = 출근 기록 월
-            attendanceYear = salaryYear;
-            attendanceMonth = salaryMonth;
-        }
-
-        const attendanceYearMonth = `${attendanceYear}-${String(attendanceMonth).padStart(2, '0')}`;
+        // year_month = 근무월이므로 출근 기록 조회도 같은 월
+        const attendanceYearMonth = salary.year_month;
 
         // 해당 월의 출근 기록 조회
         const [attendances] = await db.query(
@@ -323,8 +297,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
         res.json({
             salary: salary,
             attendance_summary: {
-                attendance_year_month: attendanceYearMonth,
-                salary_month_type: salaryMonthType,
+                work_year_month: attendanceYearMonth,
                 attendance_days: Object.keys(dailyBreakdown).length,
                 total_classes: morningClasses + afternoonClasses + eveningClasses,
                 morning_classes: morningClasses,
