@@ -1426,10 +1426,17 @@ router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (re
                 season_fee: finalSeasonFee,
                 original_season_fee: parseFloat(season.default_season_fee) || 0,
                 mid_season_discount: midSeasonProRated ? midSeasonProRated.discount : 0,
-                prorated_fee: proRated.proRatedFee || 0,
+                // 비시즌 일할은 시즌 전달 학원비에서 별도 처리 (시즌 등록에 포함 X)
+                prorated_fee: 0,
                 discount_amount: 0,
-                total_due: (proRated.proRatedFee || 0) + finalSeasonFee
-            }
+                total_due: finalSeasonFee  // 시즌비만
+            },
+            // 비시즌 일할 정보 (참고용 - 시즌 전달 학원비에서 청구됨)
+            non_season_prorated_info: proRated.proRatedFee > 0 ? {
+                amount: proRated.proRatedFee,
+                days: proRated.proRatedDays || 0,
+                message: '비시즌 일할은 시즌 전달 학원비에서 별도 청구됩니다.'
+            } : null
         };
 
         res.json({
