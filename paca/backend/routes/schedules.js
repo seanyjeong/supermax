@@ -13,20 +13,21 @@ router.get('/', verifyToken, async (req, res) => {
         const { start_date, end_date, instructor_id, time_slot } = req.query;
 
         let query = `
-            SELECT
-                cs.id,
-                cs.class_date,
-                cs.time_slot,
-                cs.instructor_id,
-                cs.title,
-                cs.content,
-                cs.attendance_taken,
-                cs.notes,
-                cs.created_at,
-                i.name AS instructor_name
-            FROM class_schedules cs
-            LEFT JOIN instructors i ON cs.instructor_id = i.id
-            WHERE cs.academy_id = ?
+  SELECT
+      cs.id,
+      cs.class_date,
+      cs.time_slot,
+      cs.instructor_id,
+      cs.title,
+      cs.content,
+      cs.attendance_taken,
+      cs.notes,
+      cs.created_at,
+      i.name AS instructor_name,
+      (SELECT COUNT(*) FROM attendance WHERE class_schedule_id = cs.id) AS student_count
+  FROM class_schedules cs
+  LEFT JOIN instructors i ON cs.instructor_id = i.id
+  WHERE cs.academy_id = ?
         `;
 
         const params = [req.user.academyId];
@@ -1823,4 +1824,5 @@ router.post('/slot/move', verifyToken, requireRole('owner', 'admin'), async (req
 });
 
 module.exports = router;
+
 
