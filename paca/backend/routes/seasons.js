@@ -5,8 +5,10 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const {
     calculateProRatedFee,
     calculateSeasonRefund,
+    calculateMidSeasonFee,
     parseWeeklyDays,
-    previewSeasonTransition
+    previewSeasonTransition,
+    truncateToThousands
 } = require('../utils/seasonCalculator');
 
 // ============================================================
@@ -891,10 +893,40 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             discountRate: parseFloat(student.discount_rate) || 0
         });
 
+        // 시즌 중간 합류 시 일할계산
+        const regDate = new Date(registration_date || new Date());
+        const seasonStartDate = new Date(season.season_start_date);
+        const seasonEndDate = new Date(season.season_end_date);
+
+        let baseSeasonFee = parseFloat(season_fee);
+        let midSeasonProRated = null;
+
+        // 등록일이 시즌 시작일 이후이면 일할계산
+        if (regDate > seasonStartDate) {
+            const operatingDays = typeof season.operating_days === 'string'
+                ? JSON.parse(season.operating_days)
+                : season.operating_days;
+
+            // 운영 요일을 숫자 배열로 변환
+            const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+            const weeklyDaysForSeason = operatingDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
+
+            midSeasonProRated = calculateMidSeasonFee({
+                seasonFee: baseSeasonFee,
+                seasonStartDate: seasonStartDate,
+                seasonEndDate: seasonEndDate,
+                joinDate: regDate,
+                weeklyDays: weeklyDaysForSeason
+            });
+
+            // 일할계산된 시즌비로 대체
+            baseSeasonFee = midSeasonProRated.proRatedFee;
+        }
+
         // Calculate discount for continuous enrollment
         let discountType = 'none';
         let discountAmount = 0;
-        let finalSeasonFee = parseFloat(season_fee);
+        let finalSeasonFee = baseSeasonFee;
 
         if (is_continuous && previous_season_id && season.continuous_discount_type !== 'none') {
             discountType = season.continuous_discount_type;
@@ -902,7 +934,7 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 discountAmount = finalSeasonFee;
                 finalSeasonFee = 0;
             } else if (discountType === 'rate' && season.continuous_discount_rate > 0) {
-                discountAmount = Math.floor(finalSeasonFee * (season.continuous_discount_rate / 100));
+                discountAmount = truncateToThousands(finalSeasonFee * (season.continuous_discount_rate / 100));
                 finalSeasonFee -= discountAmount;
             }
         }
@@ -963,14 +995,18 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         );
 
         // 시즌비 청구 자동 생성 (student_payments 테이블)
-        const regDate = new Date(registration_date || new Date());
         const yearMonth = `${regDate.getFullYear()}-${String(regDate.getMonth() + 1).padStart(2, '0')}`;
 
         // 납부일 계산 (등록일 + 7일 또는 시즌 시작일 중 빠른 날)
         const dueDate = new Date(regDate);
         dueDate.setDate(dueDate.getDate() + 7);
-        const seasonStart = new Date(season.season_start_date);
-        const actualDueDate = dueDate < seasonStart ? dueDate : seasonStart;
+        const actualDueDate = dueDate < seasonStartDate ? dueDate : seasonStartDate;
+
+        // 시즌비 설명 (일할계산 여부 포함)
+        let seasonFeeDescription = `${season.season_name} 시즌비`;
+        if (midSeasonProRated && midSeasonProRated.isProRated) {
+            seasonFeeDescription += ` (중간합류 일할: ${midSeasonProRated.details})`;
+        }
 
         await db.query(
             `INSERT INTO student_payments (
@@ -991,11 +1027,11 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 student_id,
                 req.user.academyId,
                 yearMonth,
-                parseFloat(season_fee),
-                discountAmount,
-                finalSeasonFee,
+                parseFloat(season_fee),  // 원래 시즌비 (일할 전)
+                discountAmount + (midSeasonProRated ? midSeasonProRated.discount : 0),  // 총 할인액 (연속등록 + 일할)
+                finalSeasonFee,  // 최종 금액
                 actualDueDate.toISOString().split('T')[0],
-                `${season.season_name} 시즌비`,
+                seasonFeeDescription,
                 req.user.userId
             ]
         );
@@ -1055,6 +1091,7 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             message: 'Student enrolled in season successfully',
             enrollment: enrollment[0],
             proRatedCalculation: proRated,
+            midSeasonProRated: midSeasonProRated,  // 시즌 중간 합류 일할계산 정보
             schedule_assignment: {
                 removed_from_regular: removeResult,
                 assigned_to_season: seasonAssignResult
@@ -1290,6 +1327,7 @@ router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (re
         const weeklyDays = parseWeeklyDays(student.class_days);
         const nonSeasonEnd = new Date(season.non_season_end_date);
         const seasonStart = new Date(season.season_start_date);
+        const seasonEnd = new Date(season.season_end_date);
 
         const proRated = calculateProRatedFee({
             monthlyFee: parseFloat(student.monthly_tuition) || 0,
@@ -1297,6 +1335,33 @@ router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (re
             nonSeasonEndDate: nonSeasonEnd,
             discountRate: parseFloat(student.discount_rate) || 0
         });
+
+        // 시즌 중간 합류 일할계산 (registration_date가 시즌 시작일 이후인 경우)
+        const { registration_date } = req.query;
+        let midSeasonProRated = null;
+        let finalSeasonFee = parseFloat(season.default_season_fee) || 0;
+
+        if (registration_date) {
+            const regDate = new Date(registration_date);
+            if (regDate > seasonStart) {
+                const operatingDays = typeof season.operating_days === 'string'
+                    ? JSON.parse(season.operating_days)
+                    : season.operating_days;
+
+                const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+                const weeklyDaysForSeason = operatingDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
+
+                midSeasonProRated = calculateMidSeasonFee({
+                    seasonFee: finalSeasonFee,
+                    seasonStartDate: seasonStart,
+                    seasonEndDate: seasonEnd,
+                    joinDate: regDate,
+                    weeklyDays: weeklyDaysForSeason
+                });
+
+                finalSeasonFee = midSeasonProRated.proRatedFee;
+            }
+        }
 
         // Calculate gap period
         const gapStart = new Date(nonSeasonEnd);
@@ -1342,6 +1407,15 @@ router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (re
                 discount_rate: parseFloat(student.discount_rate) || 0,
                 final_amount: proRated.proRatedFee || 0
             },
+            mid_season_prorated: midSeasonProRated ? {
+                is_mid_season: true,
+                original_fee: midSeasonProRated.originalFee,
+                prorated_fee: midSeasonProRated.proRatedFee,
+                discount: midSeasonProRated.discount,
+                total_days: midSeasonProRated.totalDays,
+                remaining_days: midSeasonProRated.remainingDays,
+                details: midSeasonProRated.details
+            } : null,
             continuous_discount: continuousDiscount ? {
                 is_continuous: true,
                 discount_type: continuousDiscount.type,
@@ -1349,10 +1423,12 @@ router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (re
                 discount_amount: 0
             } : null,
             final_calculation: {
-                season_fee: parseFloat(season.default_season_fee) || 0,
+                season_fee: finalSeasonFee,
+                original_season_fee: parseFloat(season.default_season_fee) || 0,
+                mid_season_discount: midSeasonProRated ? midSeasonProRated.discount : 0,
                 prorated_fee: proRated.proRatedFee || 0,
                 discount_amount: 0,
-                total_due: (proRated.proRatedFee || 0) + (parseFloat(season.default_season_fee) || 0)
+                total_due: (proRated.proRatedFee || 0) + finalSeasonFee
             }
         };
 
