@@ -9,6 +9,15 @@
  */
 
 /**
+ * 금액을 천원 단위로 절삭 (백원 단위 버림)
+ * @param {number} amount - 금액
+ * @returns {number} 천원 단위로 절삭된 금액
+ */
+function truncateToThousands(amount) {
+    return Math.floor(amount / 1000) * 1000;
+}
+
+/**
  * 특정 기간 동안의 수업 횟수 계산
  * @param {Date} startDate - 시작일
  * @param {Date} endDate - 종료일
@@ -69,7 +78,7 @@ function calculateProRatedFee(params) {
 
     // Step 7: 할인 적용
     const discountAmount = Math.floor(proRatedFee * (discountRate / 100));
-    const finalAmount = proRatedFee - discountAmount;
+    const finalAmount = truncateToThousands(proRatedFee - discountAmount);
 
     return {
         proRatedFee: finalAmount,
@@ -139,7 +148,7 @@ function calculateSeasonRefund(params) {
         refundReason = '일할 환불 정책';
     }
 
-    const refundAmount = Math.floor(seasonFee * refundRate);
+    const refundAmount = truncateToThousands(seasonFee * refundRate);
     const usedAmount = seasonFee - refundAmount;
 
     return {
@@ -270,6 +279,7 @@ function previewSeasonTransition(student, season) {
 }
 
 module.exports = {
+    truncateToThousands,
     calculateProRatedFee,
     calculateSeasonRefund,
     countClassDays,
