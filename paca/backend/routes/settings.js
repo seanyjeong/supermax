@@ -105,10 +105,11 @@ router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
 
         if (salary_payment_day !== undefined) {
             const day = parseInt(salary_payment_day);
-            if (isNaN(day) || day < 1 || day > 31) {
+            // 0 = 말일, 1~31 = 해당 일자
+            if (isNaN(day) || day < 0 || day > 31) {
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: 'salary_payment_day must be between 1 and 31'
+                    message: 'salary_payment_day must be 0 (last day) or between 1 and 31'
                 });
             }
         }
