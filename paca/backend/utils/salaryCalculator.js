@@ -345,46 +345,14 @@ async function updateSalaryFromAttendance(db, instructorId, academyId, workDate,
             return null;
         }
 
-        // 설정에서 급여월 타입 가져오기 (당월/익월)
-        const [settingsRows] = await db.query(
-            'SELECT salary_month_type FROM academy_settings WHERE academy_id = ?',
-            [academyId]
-        );
-        const salaryMonthType = settingsRows.length > 0 && settingsRows[0].salary_month_type
-            ? settingsRows[0].salary_month_type
-            : 'next';
-
-        // work_date에서 년월 계산
+        // work_date에서 년월 계산 (year_month = 근무월)
         const workDateObj = new Date(workDate);
-        let salaryYear = workDateObj.getFullYear();
-        let salaryMonth = workDateObj.getMonth() + 1;
-
-        // 익월 정산인 경우
-        if (salaryMonthType === 'next') {
-            salaryMonth += 1;
-            if (salaryMonth > 12) {
-                salaryMonth = 1;
-                salaryYear += 1;
-            }
-        }
-
+        const salaryYear = workDateObj.getFullYear();
+        const salaryMonth = workDateObj.getMonth() + 1;
         const yearMonth = `${salaryYear}-${String(salaryMonth).padStart(2, '0')}`;
 
-        // 출근 기록 조회할 년월 계산
-        let attendanceYear, attendanceMonth;
-        if (salaryMonthType === 'next') {
-            attendanceMonth = salaryMonth - 1;
-            attendanceYear = salaryYear;
-            if (attendanceMonth < 1) {
-                attendanceMonth = 12;
-                attendanceYear -= 1;
-            }
-        } else {
-            attendanceYear = salaryYear;
-            attendanceMonth = salaryMonth;
-        }
-
-        const attendanceYearMonth = `${attendanceYear}-${String(attendanceMonth).padStart(2, '0')}`;
+        // 출근 기록 조회할 년월 = 근무월과 동일
+        const attendanceYearMonth = yearMonth;
 
         // 해당 월의 모든 출근 기록 조회
         const [monthlyAttendances] = await db.query(
