@@ -1804,9 +1804,9 @@ router.get('/date/:date/instructor-attendance', verifyToken, async (req, res) =>
 /**
  * POST /paca/schedules/date/:date/instructor-attendance
  * Record instructor attendance for a specific date (without schedule)
- * Access: owner, admin
+ * Access: owner, admin, staff (with schedules edit permission)
  */
-router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/date/:date/instructor-attendance', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const workDate = req.params.date;
     const connection = await db.getConnection();
 
@@ -1998,9 +1998,9 @@ router.get('/date/:date/instructor-schedules', verifyToken, checkPermission('sch
  * POST /paca/schedules/date/:date/instructor-schedules
  * 특정 날짜의 강사 근무 일정 저장 (전체 교체 방식)
  * Body: { schedules: [{ instructor_id, time_slot, scheduled_start_time?, scheduled_end_time? }] }
- * Access: owner, admin
+ * Access: owner, admin, staff (with schedules edit permission)
  */
-router.post('/date/:date/instructor-schedules', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/date/:date/instructor-schedules', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const workDate = req.params.date;
     const connection = await db.getConnection();
 
