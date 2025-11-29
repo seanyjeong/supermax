@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 /**
  * GET /paca/expenses
  * Get all expense records with filters
  * Access: owner, admin
  */
-router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/', verifyToken, checkPermission('expenses', 'view'), async (req, res) => {
     try {
         const { category, instructor_id, start_date, end_date, payment_method } = req.query;
 
@@ -86,7 +86,7 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
  * Get expense record by ID
  * Access: owner, admin
  */
-router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id', verifyToken, checkPermission('expenses', 'view'), async (req, res) => {
     const expenseId = parseInt(req.params.id);
 
     try {
@@ -126,7 +126,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Get monthly expense summary
  * Access: owner, admin
  */
-router.get('/summary/monthly', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/summary/monthly', verifyToken, checkPermission('expenses', 'view'), async (req, res) => {
     try {
         const { year, month } = req.query;
 
@@ -181,7 +181,7 @@ router.get('/summary/monthly', verifyToken, requireRole('owner', 'admin'), async
  * Get list of expense categories
  * Access: owner, admin
  */
-router.get('/category/list', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/category/list', verifyToken, checkPermission('expenses', 'view'), async (req, res) => {
     try {
         const [categories] = await db.query(
             `SELECT DISTINCT category
@@ -209,7 +209,7 @@ router.get('/category/list', verifyToken, requireRole('owner', 'admin'), async (
  * Create new expense record
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('expenses', 'edit'), async (req, res) => {
     try {
         const {
             expense_date,
@@ -322,7 +322,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Update expense record
  * Access: owner, admin
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req, res) => {
     const expenseId = parseInt(req.params.id);
 
     try {
@@ -467,7 +467,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Delete expense record
  * Access: owner, admin
  */
-router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req, res) => {
     const expenseId = parseInt(req.params.id);
 
     try {
