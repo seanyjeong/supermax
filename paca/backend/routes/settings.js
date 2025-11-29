@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 /**
  * GET /paca/settings
@@ -79,7 +79,7 @@ router.get('/', verifyToken, async (req, res) => {
  * Update academy settings
  * Access: owner, admin only
  */
-router.put('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/', verifyToken, checkPermission('settings', 'edit'), async (req, res) => {
     try {
         const {
             tuition_due_day,
@@ -362,7 +362,7 @@ router.get('/academy', verifyToken, async (req, res) => {
  * Update academy settings (학원 기본정보 + 학원비 설정)
  * Access: owner, admin only
  */
-router.put('/academy', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/academy', verifyToken, checkPermission('settings', 'edit'), async (req, res) => {
     try {
         const {
             academy_name,
@@ -557,7 +557,7 @@ router.get('/tuition-rates', verifyToken, async (req, res) => {
  * Update weekly tuition rates
  * Access: owner, admin only
  */
-router.put('/tuition-rates', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/tuition-rates', verifyToken, checkPermission('settings', 'edit'), async (req, res) => {
     try {
         const { tuition_rates } = req.body;
 
