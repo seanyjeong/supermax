@@ -6,9 +6,9 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 /**
  * GET /paca/reports/dashboard
  * Get dashboard summary with key metrics
- * Access: owner, admin
+ * Access: owner, admin, staff
  */
-router.get('/dashboard', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), async (req, res) => {
     try {
         const academyId = req.user.academyId;
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
