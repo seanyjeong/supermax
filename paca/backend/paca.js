@@ -58,7 +58,7 @@ if (process.env.NODE_ENV === 'development') {
 // Rate Limiting
 const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // limit each IP (기존 100 → 1000)
     standardHeaders: true,
     legacyHeaders: false,
     // nginx 프록시 뒤에서 X-Forwarded-For 검증 에러 방지
@@ -113,7 +113,6 @@ app.get('/paca', (req, res) => {
             salaries: '/paca/salaries',
             seasons: '/paca/seasons',
             schedules: '/paca/schedules',
-            classes: '/paca/classes',
             settings: '/paca/settings',
             performance: '/paca/performance',
             expenses: '/paca/expenses',
@@ -135,7 +134,6 @@ const settingRoutes = require('./routes/settings');
 const performanceRoutes = require('./routes/performance');
 const expenseRoutes = require('./routes/expenses');
 const reportRoutes = require('./routes/reports');
-const classRoutes = require('./routes/classes');
 
 // Register Routes
 app.use('/paca/auth', authRoutes);
@@ -150,7 +148,6 @@ app.use('/paca/settings', settingRoutes);
 app.use('/paca/performance', performanceRoutes);
 app.use('/paca/expenses', expenseRoutes);
 app.use('/paca/reports', reportRoutes);
-app.use('/paca/classes', classRoutes);
 
 // ==========================================
 // Error Handling
