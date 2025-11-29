@@ -55,8 +55,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
                 COALESCE(SUM(amount), 0) as amount
             FROM other_incomes
             WHERE academy_id = ?
-            AND DATE_FORMAT(income_date, '%Y-%m') = ?
-            AND deleted_at IS NULL`,
+            AND DATE_FORMAT(income_date, '%Y-%m') = ?`,
             [academyId, currentMonth]
         );
 
@@ -71,8 +70,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
                 COALESCE(SUM(amount), 0) as amount
             FROM expenses
             WHERE academy_id = ?
-            AND DATE_FORMAT(expense_date, '%Y-%m') = ?
-            AND deleted_at IS NULL`,
+            AND DATE_FORMAT(expense_date, '%Y-%m') = ?`,
             [academyId, currentMonth]
         );
 
