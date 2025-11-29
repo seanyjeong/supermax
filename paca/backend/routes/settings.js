@@ -602,4 +602,79 @@ router.put('/tuition-rates', verifyToken, requireRole('owner', 'admin'), async (
     }
 });
 
+/**
+ * POST /paca/settings/reset-database
+ * Reset all data except users, academies, academy_settings
+ * Access: owner only
+ */
+router.post('/reset-database', verifyToken, requireRole('owner'), async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        const { confirmation } = req.body;
+
+        // 확인 문자열 검증
+        if (confirmation !== '초기화') {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: '확인 문자열이 일치하지 않습니다. "초기화"를 입력해주세요.'
+            });
+        }
+
+        await connection.beginTransaction();
+
+        // FK 체크 비활성화
+        await connection.query('SET FOREIGN_KEY_CHECKS = 0');
+
+        // 삭제 대상 테이블 (FK 의존성 순서)
+        const tablesToTruncate = [
+            'student_payments',
+            'student_seasons',
+            'salary_records',
+            'instructor_attendance',
+            'overtime_approvals',
+            'instructor_schedules',
+            'schedules',
+            'expenses',
+            'student_performances',
+            'seasons',
+            'students',
+            'instructors'
+        ];
+
+        const results = [];
+
+        for (const table of tablesToTruncate) {
+            try {
+                await connection.query(`TRUNCATE TABLE ${table}`);
+                results.push({ table, status: 'success' });
+            } catch (err) {
+                // 테이블이 없을 수도 있음
+                results.push({ table, status: 'skipped', reason: err.message });
+            }
+        }
+
+        // FK 체크 다시 활성화
+        await connection.query('SET FOREIGN_KEY_CHECKS = 1');
+
+        await connection.commit();
+
+        console.log(`[DB Reset] Academy ${req.user.academyId} by user ${req.user.id}`);
+
+        res.json({
+            message: '데이터베이스가 초기화되었습니다.',
+            results
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error resetting database:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: '데이터베이스 초기화에 실패했습니다.'
+        });
+    } finally {
+        connection.release();
+    }
+});
+
 module.exports = router;
