@@ -147,7 +147,7 @@ router.post('/login', async (req, res) => {
         // Find user
         const [users] = await db.query(
             `SELECT id, email, password_hash, name, role, academy_id,
-             approval_status, is_active
+             approval_status, is_active, position, permissions
              FROM users
              WHERE email = ? AND deleted_at IS NULL`,
             [email]
@@ -208,6 +208,18 @@ router.post('/login', async (req, res) => {
             academy = academies[0] || null;
         }
 
+        // Parse permissions JSON
+        let permissions = {};
+        if (user.permissions) {
+            try {
+                permissions = typeof user.permissions === 'string'
+                    ? JSON.parse(user.permissions)
+                    : user.permissions;
+            } catch (e) {
+                console.error('Failed to parse permissions:', e);
+            }
+        }
+
         res.json({
             message: 'Login successful',
             token,
@@ -217,7 +229,9 @@ router.post('/login', async (req, res) => {
                 name: user.name,
                 role: user.role,
                 academyId: user.academy_id,
-                academy
+                academy,
+                position: user.position,
+                permissions: permissions
             }
         });
 
