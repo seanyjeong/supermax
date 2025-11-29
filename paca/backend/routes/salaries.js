@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 const { calculateInstructorSalary } = require('../utils/salaryCalculator');
 
 /**
@@ -9,7 +9,7 @@ const { calculateInstructorSalary } = require('../utils/salaryCalculator');
  * Get all salary records with filters
  * Access: owner, admin
  */
-router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/', verifyToken, checkPermission('salaries', 'view'), async (req, res) => {
     try {
         const { instructor_id, year, month, payment_status } = req.query;
 
@@ -73,7 +73,7 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
  * Get monthly work summary for salary calculation
  * Access: owner, admin
  */
-router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/work-summary/:instructorId/:yearMonth', verifyToken, checkPermission('salaries', 'view'), async (req, res) => {
     const instructorId = parseInt(req.params.instructorId);
     const yearMonth = req.params.yearMonth; // YYYY-MM format
 
@@ -199,7 +199,7 @@ router.get('/work-summary/:instructorId/:yearMonth', verifyToken, requireRole('o
  * Get salary record by ID with attendance details
  * Access: owner, admin
  */
-router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id', verifyToken, checkPermission('salaries', 'view'), async (req, res) => {
     const salaryId = parseInt(req.params.id);
 
     try {
@@ -321,7 +321,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Calculate salary for instructor
  * Access: owner, admin
  */
-router.post('/calculate', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/calculate', verifyToken, checkPermission('salaries', 'edit'), async (req, res) => {
     try {
         const { instructor_id, year, month, incentive_amount, total_deduction, work_data } = req.body;
 
@@ -378,7 +378,7 @@ router.post('/calculate', verifyToken, requireRole('owner', 'admin'), async (req
  * Create salary record
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('salaries', 'edit'), async (req, res) => {
     try {
         const {
             instructor_id,
