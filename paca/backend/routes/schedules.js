@@ -2141,7 +2141,7 @@ router.get('/instructor-schedules/month', verifyToken, checkPermission('schedule
             [req.user.academyId, yearMonth]
         );
 
-        // 출근한 강사 수 조회 (instructor_attendance에서 check_in_time이 있는 경우)
+        // 출근한 강사 수 조회 (attendance_status가 present, late, half_day인 경우)
         const [attendedCounts] = await db.query(
             `SELECT
                 ia.work_date,
@@ -2151,7 +2151,7 @@ router.get('/instructor-schedules/month', verifyToken, checkPermission('schedule
              JOIN instructors i ON ia.instructor_id = i.id
              WHERE i.academy_id = ?
              AND DATE_FORMAT(ia.work_date, '%Y-%m') = ?
-             AND ia.check_in_time IS NOT NULL
+             AND ia.attendance_status IN ('present', 'late', 'half_day')
              GROUP BY ia.work_date, ia.time_slot
              ORDER BY ia.work_date, ia.time_slot`,
             [req.user.academyId, yearMonth]
