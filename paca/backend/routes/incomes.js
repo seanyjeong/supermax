@@ -85,7 +85,7 @@ router.get('/', verifyToken, checkPermission('incomes', 'view'), async (req, res
         console.error('Error fetching incomes:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch income records'
+            message: '기타수입 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -125,19 +125,19 @@ router.get('/:id', verifyToken, checkPermission('incomes', 'view'), async (req, 
         if (incomes.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Income record not found'
+                message: '기타수입 내역을 찾을 수 없습니다.'
             });
         }
 
         res.json({
-            message: 'Income record retrieved successfully',
+            message: '기타수입 내역을 불러왔습니다.',
             income: incomes[0]
         });
     } catch (error) {
         console.error('Error fetching income:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch income record'
+            message: '기타수입 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -163,14 +163,14 @@ router.post('/', verifyToken, checkPermission('incomes', 'edit'), async (req, re
         if (!income_date || !amount) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'income_date and amount are required'
+                message: '필수 항목을 모두 입력해주세요. (날짜, 금액)'
             });
         }
 
         if (parseFloat(amount) <= 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Amount must be greater than 0'
+                message: '금액은 0원보다 커야 합니다.'
             });
         }
 
@@ -179,7 +179,7 @@ router.post('/', verifyToken, checkPermission('incomes', 'edit'), async (req, re
         if (category && !validCategories.includes(category)) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Invalid category'
+                message: '유효하지 않은 카테고리입니다.'
             });
         }
 
@@ -192,7 +192,7 @@ router.post('/', verifyToken, checkPermission('incomes', 'edit'), async (req, re
             if (students.length === 0) {
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: 'Student not found'
+                    message: '학생을 찾을 수 없습니다.'
                 });
             }
         }
@@ -224,14 +224,14 @@ router.post('/', verifyToken, checkPermission('incomes', 'edit'), async (req, re
         );
 
         res.status(201).json({
-            message: 'Income record created successfully',
+            message: '기타수입이 등록되었습니다.',
             income: newIncome[0]
         });
     } catch (error) {
         console.error('Error creating income:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to create income record'
+            message: '기타수입 등록에 실패했습니다.'
         });
     }
 });
@@ -254,7 +254,7 @@ router.put('/:id', verifyToken, checkPermission('incomes', 'edit'), async (req, 
         if (existing.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Income record not found'
+                message: '기타수입 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -284,7 +284,7 @@ router.put('/:id', verifyToken, checkPermission('incomes', 'edit'), async (req, 
             if (parseFloat(amount) <= 0) {
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: 'Amount must be greater than 0'
+                    message: '금액은 0원보다 커야 합니다.'
                 });
             }
             updates.push('amount = ?');
@@ -310,7 +310,7 @@ router.put('/:id', verifyToken, checkPermission('incomes', 'edit'), async (req, 
         if (updates.length === 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'No fields to update'
+                message: '수정할 항목이 없습니다.'
             });
         }
 
@@ -331,14 +331,14 @@ router.put('/:id', verifyToken, checkPermission('incomes', 'edit'), async (req, 
         );
 
         res.json({
-            message: 'Income record updated successfully',
+            message: '기타수입 내역이 수정되었습니다.',
             income: updated[0]
         });
     } catch (error) {
         console.error('Error updating income:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to update income record'
+            message: '기타수입 수정에 실패했습니다.'
         });
     }
 });
@@ -361,20 +361,20 @@ router.delete('/:id', verifyToken, checkPermission('incomes', 'edit'), async (re
         if (existing.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Income record not found'
+                message: '기타수입 내역을 찾을 수 없습니다.'
             });
         }
 
         await db.query('DELETE FROM other_incomes WHERE id = ?', [incomeId]);
 
         res.json({
-            message: 'Income record deleted successfully'
+            message: '기타수입 내역이 삭제되었습니다.'
         });
     } catch (error) {
         console.error('Error deleting income:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to delete income record'
+            message: '기타수입 삭제에 실패했습니다.'
         });
     }
 });
