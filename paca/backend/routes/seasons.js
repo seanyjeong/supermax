@@ -162,6 +162,64 @@ async function removeStudentFromRegularSchedules(studentId, academyId, seasonSta
     }
 }
 
+/**
+ * 시즌에 등록된 모든 학생을 스케줄에 자동 배정
+ * @param {number} seasonId - 시즌 ID
+ * @param {number} academyId - 학원 ID
+ */
+async function autoAssignAllSeasonStudentsToSchedules(seasonId, academyId) {
+    try {
+        // 시즌 정보 조회
+        const [seasons] = await db.query(
+            'SELECT * FROM seasons WHERE id = ? AND academy_id = ?',
+            [seasonId, academyId]
+        );
+
+        if (seasons.length === 0) {
+            console.log(`Season ${seasonId} not found`);
+            return { totalAssigned: 0, totalCreated: 0, studentsProcessed: 0 };
+        }
+
+        const season = seasons[0];
+
+        // 해당 시즌에 등록된 학생 조회 (취소되지 않은 학생만)
+        const [enrollments] = await db.query(
+            `SELECT ss.*, s.grade, s.student_type
+             FROM student_seasons ss
+             JOIN students s ON ss.student_id = s.id
+             WHERE ss.season_id = ?
+             AND ss.is_cancelled = 0
+             AND s.deleted_at IS NULL`,
+            [seasonId]
+        );
+
+        let totalAssigned = 0;
+        let totalCreated = 0;
+
+        for (const enrollment of enrollments) {
+            try {
+                const result = await autoAssignStudentToSeasonSchedules(
+                    enrollment.student_id,
+                    academyId,
+                    season,
+                    enrollment.grade,
+                    enrollment.student_type
+                );
+                totalAssigned += result.assigned;
+                totalCreated += result.created;
+            } catch (err) {
+                console.error(`Failed to assign student ${enrollment.student_id}:`, err);
+            }
+        }
+
+        console.log(`Season ${seasonId} auto-assigned: ${enrollments.length} students, ${totalAssigned} schedules (${totalCreated} new)`);
+        return { totalAssigned, totalCreated, studentsProcessed: enrollments.length };
+    } catch (error) {
+        console.error('Error in autoAssignAllSeasonStudentsToSchedules:', error);
+        throw error;
+    }
+}
+
 // ============================================================
 // API 라우트
 // ============================================================
@@ -841,6 +899,10 @@ router.put('/:id', verifyToken, checkPermission('seasons', 'edit'), async (req, 
         updates.push('updated_at = NOW()');
         params.push(seasonId);
 
+        const oldSeason = seasons[0];
+        const wasActive = oldSeason.status === 'active';
+        const willBeActive = status === 'active';
+
         await db.query(
             `UPDATE seasons SET ${updates.join(', ')} WHERE id = ?`,
             params
@@ -851,9 +913,17 @@ router.put('/:id', verifyToken, checkPermission('seasons', 'edit'), async (req, 
             [seasonId]
         );
 
+        // 시즌이 active로 변경되면 등록된 학생들을 스케줄에 자동 배정
+        let scheduleResult = null;
+        if (!wasActive && willBeActive) {
+            console.log(`Season ${seasonId} activated - auto-assigning students to schedules`);
+            scheduleResult = await autoAssignAllSeasonStudentsToSchedules(seasonId, req.user.academyId);
+        }
+
         res.json({
             message: 'Season updated successfully',
-            season: updated[0]
+            season: updated[0],
+            scheduleAssignment: scheduleResult
         });
     } catch (error) {
         console.error('Error updating season:', error);
@@ -1168,40 +1238,45 @@ router.post('/:id/enroll', verifyToken, checkPermission('seasons', 'edit'), asyn
         );
 
         // ============================================================
-        // 시즌 스케줄 자동 배치
+        // 시즌 스케줄 자동 배치 (시즌이 active 상태일 때만)
         // ============================================================
 
-        // 1. 기존 정규 스케줄에서 시즌 기간 동안 제거
         let removeResult = null;
-        try {
-            removeResult = await removeStudentFromRegularSchedules(
-                student_id,
-                req.user.academyId,
-                season.season_start_date,
-                season.season_end_date
-            );
-        } catch (removeError) {
-            console.error('Remove from regular schedules failed:', removeError);
-        }
-
-        // 2. 시즌 스케줄에 자동 배정
         let seasonAssignResult = null;
-        try {
-            // 학년 문자열 생성 (예: "고3", "N수" 등)
-            const studentGrade = student.grade || '';
 
-            // 고3/N수는 여러 시간대 지원
-            // parsedTimeSlots가 있으면 사용, 없으면 기본 로직 적용
-            seasonAssignResult = await autoAssignStudentToSeasonSchedules(
-                student_id,
-                req.user.academyId,
-                season,
-                studentGrade,
-                student.student_type,
-                parsedTimeSlots  // 사용자 지정 시간대 배열
-            );
-        } catch (assignError) {
-            console.error('Season auto-assign failed:', assignError);
+        if (season.status === 'active') {
+            // 1. 기존 정규 스케줄에서 시즌 기간 동안 제거
+            try {
+                removeResult = await removeStudentFromRegularSchedules(
+                    student_id,
+                    req.user.academyId,
+                    season.season_start_date,
+                    season.season_end_date
+                );
+            } catch (removeError) {
+                console.error('Remove from regular schedules failed:', removeError);
+            }
+
+            // 2. 시즌 스케줄에 자동 배정
+            try {
+                // 학년 문자열 생성 (예: "고3", "N수" 등)
+                const studentGrade = student.grade || '';
+
+                // 고3/N수는 여러 시간대 지원
+                // parsedTimeSlots가 있으면 사용, 없으면 기본 로직 적용
+                seasonAssignResult = await autoAssignStudentToSeasonSchedules(
+                    student_id,
+                    req.user.academyId,
+                    season,
+                    studentGrade,
+                    student.student_type,
+                    parsedTimeSlots  // 사용자 지정 시간대 배열
+                );
+            } catch (assignError) {
+                console.error('Season auto-assign failed:', assignError);
+            }
+        } else {
+            console.log(`Season ${seasonId} is not active (status: ${season.status}), skipping auto-assignment`);
         }
 
         // Get enrollment details
