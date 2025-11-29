@@ -7,7 +7,7 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 // 카테고리 라벨 (한글)
 const EXPENSE_CATEGORY_LABELS = {
@@ -97,7 +97,7 @@ function applyTotalRowStyle(row) {
  * GET /paca/exports/revenue
  * 수입 내역 엑셀 다운로드
  */
-router.get('/revenue', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/revenue', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { start_date, end_date, year, month } = req.query;
 
@@ -319,7 +319,7 @@ router.get('/revenue', verifyToken, requireRole('owner', 'admin'), async (req, r
  * GET /paca/exports/expenses
  * 지출 내역 엑셀 다운로드
  */
-router.get('/expenses', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/expenses', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { start_date, end_date, year, month } = req.query;
 
@@ -468,7 +468,7 @@ router.get('/expenses', verifyToken, requireRole('owner', 'admin'), async (req, 
  * GET /paca/exports/financial
  * 월별 재무 리포트 엑셀 다운로드
  */
-router.get('/financial', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/financial', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { year } = req.query;
         const targetYear = year || new Date().getFullYear();
@@ -686,7 +686,7 @@ router.get('/financial', verifyToken, requireRole('owner', 'admin'), async (req,
  * GET /paca/exports/payments
  * 미납/납부 내역 엑셀 다운로드
  */
-router.get('/payments', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/payments', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { status, year, month, start_date, end_date } = req.query;
 
@@ -857,7 +857,7 @@ router.get('/payments', verifyToken, requireRole('owner', 'admin'), async (req, 
  * GET /paca/exports/salaries
  * 급여 내역 엑셀 다운로드 (회사 스타일)
  */
-router.get('/salaries', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/salaries', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { year, month, payment_status } = req.query;
 
