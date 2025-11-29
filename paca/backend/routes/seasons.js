@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 const {
     calculateProRatedFee,
     calculateSeasonRefund,
@@ -247,7 +247,7 @@ router.get('/active', verifyToken, async (req, res) => {
  * Access: owner, admin
  * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
  */
-router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/enrollments/:enrollment_id/pay', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const enrollmentId = parseInt(req.params.enrollment_id);
 
     try {
@@ -355,7 +355,7 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
  * Access: owner, admin
  * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
  */
-router.put('/enrollments/:enrollment_id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/enrollments/:enrollment_id', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const enrollmentId = parseInt(req.params.enrollment_id);
 
     try {
@@ -462,7 +462,7 @@ router.put('/enrollments/:enrollment_id', verifyToken, requireRole('owner', 'adm
  * Access: owner, admin
  * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
  */
-router.post('/enrollments/:enrollment_id/cancel', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/enrollments/:enrollment_id/cancel', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const enrollmentId = parseInt(req.params.enrollment_id);
 
     try {
@@ -634,7 +634,7 @@ router.get('/:id', verifyToken, async (req, res) => {
  * Create new season
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     try {
         const {
             season_name,
@@ -742,7 +742,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Update season
  * Access: owner, admin
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
 
     try {
@@ -926,7 +926,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
  * Enroll student to season with prorated fee calculation
  * Access: owner, admin
  */
-router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/:id/enroll', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
 
     try {
@@ -1282,7 +1282,7 @@ router.get('/:id/students', verifyToken, async (req, res) => {
  * Cancel student enrollment from season
  * Access: owner, admin
  */
-router.delete('/:id/students/:student_id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id/students/:student_id', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
     const studentId = parseInt(req.params.student_id);
 
@@ -1397,7 +1397,7 @@ router.delete('/:id/students/:student_id', verifyToken, requireRole('owner', 'ad
  * Preview prorated fee calculation for student
  * Access: owner, admin
  */
-router.get('/:id/preview', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id/preview', verifyToken, checkPermission('seasons', 'edit'), async (req, res) => {
     const seasonId = parseInt(req.params.id);
 
     try {
