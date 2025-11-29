@@ -44,7 +44,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
             FROM student_payments
             WHERE academy_id = ?
             AND payment_status = 'paid'
-            AND DATE_FORMAT(paid_at, '%Y-%m') = ?`,
+            AND DATE_FORMAT(payment_date, '%Y-%m') = ?`,
             [academyId, currentMonth]
         );
 
@@ -85,7 +85,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
             FROM instructor_salaries
             WHERE academy_id = ?
             AND payment_status = 'paid'
-            AND DATE_FORMAT(paid_at, '%Y-%m') = ?`,
+            AND DATE_FORMAT(payment_date, '%Y-%m') = ?`,
             [academyId, currentMonth]
         );
 
