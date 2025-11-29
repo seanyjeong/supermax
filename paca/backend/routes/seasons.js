@@ -991,46 +991,62 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             });
         }
 
-        // Calculate prorated fee
-        const weeklyDays = parseWeeklyDays(student.class_days);
-        const nonSeasonEnd = new Date(season.non_season_end_date);
-        const proRatedMonth = `${nonSeasonEnd.getFullYear()}-${String(nonSeasonEnd.getMonth() + 1).padStart(2, '0')}`;
+        // Calculate prorated fee (비시즌 일할계산 - optional)
+        // 수업요일이 설정되어 있고 비시즌 종강일이 있을 때만 계산
+        let proRated = { proRatedFee: 0 };
+        let proRatedMonth = null;
 
-        const proRated = calculateProRatedFee({
-            monthlyFee: parseFloat(student.monthly_tuition) || 0,
-            weeklyDays,
-            nonSeasonEndDate: nonSeasonEnd,
-            discountRate: parseFloat(student.discount_rate) || 0
-        });
+        if (student.class_days && season.non_season_end_date) {
+            try {
+                const weeklyDays = parseWeeklyDays(student.class_days);
+                const nonSeasonEnd = new Date(season.non_season_end_date);
+                proRatedMonth = `${nonSeasonEnd.getFullYear()}-${String(nonSeasonEnd.getMonth() + 1).padStart(2, '0')}`;
+
+                proRated = calculateProRatedFee({
+                    monthlyFee: parseFloat(student.monthly_tuition) || 0,
+                    weeklyDays,
+                    nonSeasonEndDate: nonSeasonEnd,
+                    discountRate: parseFloat(student.discount_rate) || 0
+                });
+            } catch (proRateError) {
+                console.log('ProRated calculation skipped:', proRateError.message);
+            }
+        }
 
         // 시즌 중간 합류 시 일할계산
         const regDate = new Date(registration_date || new Date());
         const seasonStartDate = new Date(season.season_start_date);
         const seasonEndDate = new Date(season.season_end_date);
 
-        let baseSeasonFee = parseFloat(season_fee);
+        let baseSeasonFee = parseFloat(season_fee) || 0;
         let midSeasonProRated = null;
 
         // 등록일이 시즌 시작일 이후이면 일할계산
-        if (regDate > seasonStartDate) {
-            const operatingDays = typeof season.operating_days === 'string'
-                ? JSON.parse(season.operating_days)
-                : season.operating_days;
+        if (regDate > seasonStartDate && season.operating_days) {
+            try {
+                const operatingDays = typeof season.operating_days === 'string'
+                    ? JSON.parse(season.operating_days)
+                    : season.operating_days;
 
-            // 운영 요일을 숫자 배열로 변환
-            const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
-            const weeklyDaysForSeason = operatingDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
+                if (Array.isArray(operatingDays) && operatingDays.length > 0) {
+                    // 운영 요일을 숫자 배열로 변환
+                    const dayMap = { '일': 0, '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+                    const weeklyDaysForSeason = operatingDays.map(d => typeof d === 'string' ? dayMap[d] : d).filter(d => d !== undefined);
 
-            midSeasonProRated = calculateMidSeasonFee({
-                seasonFee: baseSeasonFee,
-                seasonStartDate: seasonStartDate,
-                seasonEndDate: seasonEndDate,
-                joinDate: regDate,
-                weeklyDays: weeklyDaysForSeason
-            });
+                    midSeasonProRated = calculateMidSeasonFee({
+                        seasonFee: baseSeasonFee,
+                        seasonStartDate: seasonStartDate,
+                        seasonEndDate: seasonEndDate,
+                        joinDate: regDate,
+                        weeklyDays: weeklyDaysForSeason
+                    });
 
-            // 일할계산된 시즌비로 대체
-            baseSeasonFee = midSeasonProRated.proRatedFee;
+                    // 일할계산된 시즌비로 대체
+                    baseSeasonFee = midSeasonProRated.proRatedFee;
+                }
+            } catch (midSeasonError) {
+                console.log('Mid-season prorated calculation skipped:', midSeasonError.message);
+            }
         }
 
         // Calculate discount for continuous enrollment
@@ -1209,9 +1225,11 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
         });
     } catch (error) {
         console.error('Error enrolling student:', error);
+        console.error('Request body:', req.body);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to enroll student'
+            message: error.message || 'Failed to enroll student',
+            details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
         });
     }
 });
