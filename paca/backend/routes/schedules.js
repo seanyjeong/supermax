@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 const { updateSalaryFromAttendance } = require('../utils/salaryCalculator');
 
 /**
@@ -1919,9 +1919,9 @@ router.post('/date/:date/instructor-attendance', verifyToken, requireRole('owner
 /**
  * GET /paca/schedules/date/:date/instructor-schedules
  * 특정 날짜의 강사 근무 일정 조회
- * Access: owner, admin
+ * Access: owner, admin, staff (with schedules view permission)
  */
-router.get('/date/:date/instructor-schedules', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/date/:date/instructor-schedules', verifyToken, checkPermission('schedules', 'view'), async (req, res) => {
     const workDate = req.params.date;
 
     try {
@@ -2112,9 +2112,9 @@ router.post('/date/:date/instructor-schedules', verifyToken, requireRole('owner'
  * 특정 월의 모든 강사 일정 조회 (캘린더용)
  * Query: year, month
  * Returns: 날짜별 슬롯별 배정 인원 + 출근 인원 (1/5 형식으로 표시 가능)
- * Access: owner, admin
+ * Access: owner, admin, staff (with schedules view permission)
  */
-router.get('/instructor-schedules/month', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/instructor-schedules/month', verifyToken, checkPermission('schedules', 'view'), async (req, res) => {
     const { year, month } = req.query;
 
     try {
