@@ -178,18 +178,21 @@ router.get('/slot', verifyToken, async (req, res) => {
         let students = [];
         if (schedule) {
             const [attendanceRecords] = await db.query(
-                `SELECT a.student_id, s.name as student_name, a.attendance_status,
-                        se.season_type, se.season_name
+                `SELECT DISTINCT a.student_id, s.name as student_name, a.attendance_status,
+                        (SELECT se2.season_type
+                         FROM student_seasons ss2
+                         JOIN seasons se2 ON ss2.season_id = se2.id
+                         WHERE ss2.student_id = s.id
+                         AND ss2.is_cancelled = 0
+                         AND ss2.payment_status != 'cancelled'
+                         AND se2.status = 'active'
+                         AND ? BETWEEN se2.season_start_date AND se2.non_season_end_date
+                         LIMIT 1) as season_type
                  FROM attendance a
                  JOIN students s ON a.student_id = s.id
-                 LEFT JOIN student_seasons ss ON ss.student_id = s.id
-                     AND ss.is_cancelled = 0
-                     AND ss.payment_status != 'cancelled'
-                 LEFT JOIN seasons se ON ss.season_id = se.id
-                     AND se.status = 'active'
-                     AND ? BETWEEN se.season_start_date AND se.non_season_end_date
                  WHERE a.class_schedule_id = ?
-                 ORDER BY se.season_type IS NOT NULL DESC, se.season_type, s.name`,
+                 AND s.deleted_at IS NULL
+                 ORDER BY season_type IS NOT NULL DESC, s.name`,
                 [date, schedule.id]
             );
             students = attendanceRecords;
