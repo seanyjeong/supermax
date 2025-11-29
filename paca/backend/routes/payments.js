@@ -587,6 +587,12 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
         );
 
         // Record in revenues table (optional - table may not exist)
+        // payment_type에 따라 적절한 카테고리와 설명 사용
+        const revenueCategory = payment.payment_type === 'season' ? 'season' : 'tuition';
+        const revenueDescription = payment.payment_type === 'season'
+            ? `시즌비 납부 (${payment.description || ''})`.trim()
+            : `수강료 납부 (결제ID: ${paymentId})`;
+
         try {
             await db.query(
                 `INSERT INTO revenues (
@@ -597,14 +603,15 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
                     payment_method,
                     student_id,
                     description
-                ) VALUES (?, 'tuition', ?, ?, ?, ?, ?)`,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                 [
                     payment.academy_id,
+                    revenueCategory,
                     paid_amount,
                     payment_date || new Date().toISOString().split('T')[0],
                     payment_method,
                     payment.student_id,
-                    `수강료 납부 (결제ID: ${paymentId})`
+                    revenueDescription
                 ]
             );
         } catch (revenueError) {
@@ -629,9 +636,12 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
         });
     } catch (error) {
         console.error('Error recording payment:', error);
+        console.error('Payment ID:', paymentId);
+        console.error('Request body:', req.body);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to record payment'
+            message: error.message || 'Failed to record payment',
+            details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
         });
     }
 });
