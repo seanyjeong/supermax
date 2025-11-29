@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 const { updateSalaryFromAttendance } = require('../utils/salaryCalculator');
 
 /**
@@ -81,9 +81,9 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
 /**
  * GET /paca/instructors/overtime/pending
  * Get all pending overtime approval requests
- * Access: owner, admin
+ * Access: owner, admin, staff (with instructors view permission)
  */
-router.get('/overtime/pending', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/overtime/pending', verifyToken, checkPermission('instructors', 'view'), async (req, res) => {
     try {
         const [requests] = await db.query(`
             SELECT
