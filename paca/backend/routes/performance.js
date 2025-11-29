@@ -66,7 +66,7 @@ router.get('/', verifyToken, async (req, res) => {
         console.error('Error fetching performance records:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch performance records'
+            message: '성적 기록을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -108,7 +108,7 @@ router.get('/:id', verifyToken, async (req, res) => {
         if (performances.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Performance record not found'
+                message: '성적 기록을 찾을 수 없습니다.'
             });
         }
 
@@ -117,7 +117,7 @@ router.get('/:id', verifyToken, async (req, res) => {
         console.error('Error fetching performance record:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch performance record'
+            message: '성적 기록을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -140,7 +140,7 @@ router.get('/student/:student_id', verifyToken, async (req, res) => {
         if (students.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Student not found'
+                message: '학생을 찾을 수 없습니다.'
             });
         }
 
@@ -162,7 +162,7 @@ router.get('/student/:student_id', verifyToken, async (req, res) => {
         );
 
         res.json({
-            message: `Found ${performances.length} performance records for ${students[0].name}`,
+            message: `${students[0].name} 학생의 성적 기록 ${performances.length}건을 불러왔습니다.`,
             student: students[0],
             performances
         });
@@ -170,7 +170,7 @@ router.get('/student/:student_id', verifyToken, async (req, res) => {
         console.error('Error fetching student performance records:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch student performance records'
+            message: '학생 성적 기록을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -194,7 +194,7 @@ router.post('/', verifyToken, async (req, res) => {
         if (!student_id || !record_date || !record_type) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: student_id, record_date, record_type'
+                message: '필수 항목을 모두 입력해주세요. (학생, 기록일, 기록유형)'
             });
         }
 
@@ -203,7 +203,7 @@ router.post('/', verifyToken, async (req, res) => {
         if (!validTypes.includes(record_type)) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: `Invalid record_type. Must be one of: ${validTypes.join(', ')}`
+                message: '유효하지 않은 기록유형입니다. (모의고사, 체력측정, 대회)'
             });
         }
 
@@ -216,7 +216,7 @@ router.post('/', verifyToken, async (req, res) => {
         if (students.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Student not found'
+                message: '학생을 찾을 수 없습니다.'
             });
         }
 
@@ -266,14 +266,14 @@ router.post('/', verifyToken, async (req, res) => {
         );
 
         res.status(201).json({
-            message: 'Performance record created successfully',
+            message: '성적 기록이 생성되었습니다.',
             performance: performances[0]
         });
     } catch (error) {
         console.error('Error creating performance record:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to create performance record'
+            message: '성적 기록 생성에 실패했습니다.'
         });
     }
 });
@@ -299,7 +299,7 @@ router.put('/:id', verifyToken, async (req, res) => {
         if (existing.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Performance record not found'
+                message: '성적 기록을 찾을 수 없습니다.'
             });
         }
 
@@ -316,7 +316,7 @@ router.put('/:id', verifyToken, async (req, res) => {
             if (!validTypes.includes(record_type)) {
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: `Invalid record_type. Must be one of: ${validTypes.join(', ')}`
+                    message: '유효하지 않은 기록유형입니다. (모의고사, 체력측정, 대회)'
                 });
             }
         }
@@ -357,7 +357,7 @@ router.put('/:id', verifyToken, async (req, res) => {
         if (updates.length === 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'No fields to update'
+                message: '수정할 항목이 없습니다.'
             });
         }
 
@@ -384,14 +384,14 @@ router.put('/:id', verifyToken, async (req, res) => {
         );
 
         res.json({
-            message: 'Performance record updated successfully',
+            message: '성적 기록이 수정되었습니다.',
             performance: performances[0]
         });
     } catch (error) {
         console.error('Error updating performance record:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to update performance record'
+            message: '성적 기록 수정에 실패했습니다.'
         });
     }
 });
@@ -417,7 +417,7 @@ router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (r
         if (existing.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Performance record not found'
+                message: '성적 기록을 찾을 수 없습니다.'
             });
         }
 
@@ -425,7 +425,7 @@ router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (r
         await db.query('DELETE FROM student_performance WHERE id = ?', [performanceId]);
 
         res.json({
-            message: 'Performance record deleted successfully',
+            message: '성적 기록이 삭제되었습니다.',
             performance: {
                 id: performanceId,
                 student_name: existing[0].student_name
@@ -435,7 +435,7 @@ router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (r
         console.error('Error deleting performance record:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to delete performance record'
+            message: '성적 기록 삭제에 실패했습니다.'
         });
     }
 });
