@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 /**
  * GET /paca/performance
@@ -401,7 +401,7 @@ router.put('/:id', verifyToken, async (req, res) => {
  * Delete performance record
  * Access: owner, admin
  */
-router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
     const performanceId = parseInt(req.params.id);
 
     try {
