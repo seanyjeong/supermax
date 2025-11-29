@@ -175,7 +175,7 @@ router.get('/', verifyToken, checkPermission('payments', 'view'), async (req, re
  * Get all unpaid/overdue payments
  * Access: owner, admin
  */
-router.get('/unpaid', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/unpaid', verifyToken, checkPermission('payments', 'view'), async (req, res) => {
     try {
         const [payments] = await db.query(
             `SELECT
@@ -220,7 +220,7 @@ router.get('/unpaid', verifyToken, requireRole('owner', 'admin'), async (req, re
  * Get payment by ID
  * Access: owner, admin
  */
-router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id', verifyToken, checkPermission('payments', 'view'), async (req, res) => {
     const paymentId = parseInt(req.params.id);
 
     try {
@@ -262,7 +262,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Create new payment record (charge)
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('payments', 'edit'), async (req, res) => {
     try {
         const {
             student_id,
@@ -365,7 +365,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Create monthly tuition charges for all active students
  * Access: owner, admin
  */
-router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), async (req, res) => {
     try {
         const { year, month, due_date } = req.body;
 
@@ -507,7 +507,7 @@ router.post('/bulk-monthly', verifyToken, requireRole('owner', 'admin'), async (
  * Record payment (full or partial)
  * Access: owner, admin
  */
-router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async (req, res) => {
     const paymentId = parseInt(req.params.id);
 
     try {
@@ -655,7 +655,7 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
  * Update payment record
  * Access: owner, admin
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('payments', 'edit'), async (req, res) => {
     const paymentId = parseInt(req.params.id);
 
     try {
@@ -836,7 +836,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
  * Get payment statistics summary
  * Access: owner, admin
  */
-router.get('/stats/summary', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/stats/summary', verifyToken, checkPermission('payments', 'view'), async (req, res) => {
     try {
         const { year, month } = req.query;
 
@@ -884,7 +884,7 @@ router.get('/stats/summary', verifyToken, requireRole('owner', 'admin'), async (
  * 등록일 기준 일할계산:
  * - 11/25 등록, 납부일 1일 → 11월: 25~30일 일할, 12월부터: 정상
  */
-router.post('/generate-prorated', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/generate-prorated', verifyToken, checkPermission('payments', 'edit'), async (req, res) => {
     try {
         const { student_id, enrollment_date } = req.body;
 
@@ -1062,7 +1062,7 @@ router.post('/generate-prorated', verifyToken, requireRole('owner', 'admin'), as
  * Generate next month's payment for a specific student
  * Access: owner, admin
  */
-router.post('/generate-monthly-for-student', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/generate-monthly-for-student', verifyToken, checkPermission('payments', 'edit'), async (req, res) => {
     try {
         const { student_id, year, month } = req.body;
 
