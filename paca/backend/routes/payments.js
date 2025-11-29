@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 const { truncateToThousands, calculateProRatedFee, parseWeeklyDays } = require('../utils/seasonCalculator');
 
 /**
@@ -101,9 +101,9 @@ async function calculateNonSeasonEndProrated(params) {
 /**
  * GET /paca/payments
  * Get all payment records with filters
- * Access: owner, admin
+ * Access: owner, admin, staff (with payments view permission)
  */
-router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/', verifyToken, checkPermission('payments', 'view'), async (req, res) => {
     try {
         const { student_id, payment_status, payment_type, year, month } = req.query;
 
@@ -635,12 +635,16 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
             payment: updated[0]
         });
     } catch (error) {
-        console.error('Error recording payment:', error);
+        console.error('=== Error recording payment ===');
+        console.error('Error:', error);
+        console.error('Error message:', error.message);
+        console.error('SQL State:', error.sqlState);
+        console.error('SQL Message:', error.sqlMessage);
         console.error('Payment ID:', paymentId);
         console.error('Request body:', req.body);
         res.status(500).json({
             error: 'Server Error',
-            message: error.message || 'Failed to record payment',
+            message: error.sqlMessage || error.message || 'Failed to record payment',
             details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
         });
     }
