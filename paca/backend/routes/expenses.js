@@ -76,7 +76,7 @@ router.get('/', verifyToken, checkPermission('expenses', 'view'), async (req, re
         console.error('Error fetching expenses:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch expense records'
+            message: '지출 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -107,7 +107,7 @@ router.get('/:id', verifyToken, checkPermission('expenses', 'view'), async (req,
         if (expenses.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Expense record not found'
+                message: '지출 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -116,7 +116,7 @@ router.get('/:id', verifyToken, checkPermission('expenses', 'view'), async (req,
         console.error('Error fetching expense:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch expense record'
+            message: '지출 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -133,7 +133,7 @@ router.get('/summary/monthly', verifyToken, checkPermission('expenses', 'view'),
         if (!year || !month) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'year and month are required'
+                message: '연도와 월을 입력해주세요.'
             });
         }
 
@@ -171,7 +171,7 @@ router.get('/summary/monthly', verifyToken, checkPermission('expenses', 'view'),
         console.error('Error fetching monthly expense summary:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch monthly expense summary'
+            message: '월별 지출 요약을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -199,7 +199,7 @@ router.get('/category/list', verifyToken, checkPermission('expenses', 'view'), a
         console.error('Error fetching expense categories:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch expense categories'
+            message: '지출 카테고리를 불러오는데 실패했습니다.'
         });
     }
 });
@@ -226,14 +226,14 @@ router.post('/', verifyToken, checkPermission('expenses', 'edit'), async (req, r
         if (!expense_date || !category || !amount) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: expense_date, category, amount'
+                message: '필수 항목을 모두 입력해주세요. (지출일, 카테고리, 금액)'
             });
         }
 
         if (amount <= 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Amount must be greater than 0'
+                message: '금액은 0원보다 커야 합니다.'
             });
         }
 
@@ -243,7 +243,7 @@ router.post('/', verifyToken, checkPermission('expenses', 'edit'), async (req, r
             if (!validMethods.includes(payment_method)) {
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: `Invalid payment_method. Must be one of: ${validMethods.join(', ')}`
+                    message: '유효하지 않은 결제방법입니다. (계좌이체, 카드, 현금, 기타)'
                 });
             }
         }
@@ -258,7 +258,7 @@ router.post('/', verifyToken, checkPermission('expenses', 'edit'), async (req, r
             if (instructors.length === 0) {
                 return res.status(404).json({
                     error: 'Not Found',
-                    message: 'Instructor not found'
+                    message: '강사를 찾을 수 없습니다.'
                 });
             }
         }
@@ -305,14 +305,14 @@ router.post('/', verifyToken, checkPermission('expenses', 'edit'), async (req, r
         );
 
         res.status(201).json({
-            message: 'Expense record created successfully',
+            message: '지출이 등록되었습니다.',
             expense: expenses[0]
         });
     } catch (error) {
         console.error('Error creating expense:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to create expense record'
+            message: '지출 등록에 실패했습니다.'
         });
     }
 });
@@ -335,7 +335,7 @@ router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req,
         if (existing.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Expense record not found'
+                message: '지출 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -354,7 +354,7 @@ router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req,
         if (amount !== undefined && amount <= 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Amount must be greater than 0'
+                message: '금액은 0원보다 커야 합니다.'
             });
         }
 
@@ -364,7 +364,7 @@ router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req,
             if (!validMethods.includes(payment_method)) {
                 return res.status(400).json({
                     error: 'Validation Error',
-                    message: `Invalid payment_method. Must be one of: ${validMethods.join(', ')}`
+                    message: '유효하지 않은 결제방법입니다. (계좌이체, 카드, 현금, 기타)'
                 });
             }
         }
@@ -379,7 +379,7 @@ router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req,
             if (instructors.length === 0) {
                 return res.status(404).json({
                     error: 'Not Found',
-                    message: 'Instructor not found'
+                    message: '강사를 찾을 수 없습니다.'
                 });
             }
         }
@@ -424,7 +424,7 @@ router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req,
         if (updates.length === 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'No fields to update'
+                message: '수정할 항목이 없습니다.'
             });
         }
 
@@ -450,14 +450,14 @@ router.put('/:id', verifyToken, checkPermission('expenses', 'edit'), async (req,
         );
 
         res.json({
-            message: 'Expense record updated successfully',
+            message: '지출 내역이 수정되었습니다.',
             expense: expenses[0]
         });
     } catch (error) {
         console.error('Error updating expense:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to update expense record'
+            message: '지출 내역 수정에 실패했습니다.'
         });
     }
 });
@@ -482,7 +482,7 @@ router.delete('/:id', verifyToken, checkPermission('expenses', 'edit'), async (r
         if (existing.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Expense record not found'
+                message: '지출 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -490,7 +490,7 @@ router.delete('/:id', verifyToken, checkPermission('expenses', 'edit'), async (r
         await db.query('DELETE FROM expenses WHERE id = ?', [expenseId]);
 
         res.json({
-            message: 'Expense record deleted successfully',
+            message: '지출 내역이 삭제되었습니다.',
             expense: {
                 id: expenseId,
                 category: existing[0].category,
@@ -501,7 +501,7 @@ router.delete('/:id', verifyToken, checkPermission('expenses', 'edit'), async (r
         console.error('Error deleting expense:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to delete expense record'
+            message: '지출 내역 삭제에 실패했습니다.'
         });
     }
 });
