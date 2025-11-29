@@ -44,7 +44,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
             FROM student_payments
             WHERE academy_id = ?
             AND payment_status = 'paid'
-            AND DATE_FORMAT(payment_date, '%Y-%m') = ?`,
+            AND DATE_FORMAT(paid_date, '%Y-%m') = ?`,
             [academyId, currentMonth]
         );
 
@@ -64,8 +64,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
         const totalRevenueCount = parseInt(paymentRevenue[0].count) + parseInt(otherIncome[0].count);
         const totalRevenueAmount = parseFloat(paymentRevenue[0].amount) + parseFloat(otherIncome[0].amount);
 
-        // Get current month expenses (일반지출 + 급여)
-        // 1. 일반 지출
+        // Get current month expenses (일반지출 + 급여 - expenses 테이블에 급여도 포함됨)
         const [expenseStats] = await db.query(
             `SELECT
                 COUNT(*) as count,
@@ -77,21 +76,9 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
             [academyId, currentMonth]
         );
 
-        // 2. 급여 지출 (instructor_salaries에서 paid된 금액)
-        const [salaryExpense] = await db.query(
-            `SELECT
-                COUNT(*) as count,
-                COALESCE(SUM(total_amount), 0) as amount
-            FROM instructor_salaries
-            WHERE academy_id = ?
-            AND payment_status = 'paid'
-            AND DATE_FORMAT(payment_date, '%Y-%m') = ?`,
-            [academyId, currentMonth]
-        );
-
-        // 총 지출 합산
-        const totalExpenseCount = parseInt(expenseStats[0].count) + parseInt(salaryExpense[0].count);
-        const totalExpenseAmount = parseFloat(expenseStats[0].amount) + parseFloat(salaryExpense[0].amount);
+        // 총 지출
+        const totalExpenseCount = parseInt(expenseStats[0].count);
+        const totalExpenseAmount = parseFloat(expenseStats[0].amount);
 
         // Get unpaid/overdue payments
         const [unpaidStats] = await db.query(
