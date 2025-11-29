@@ -136,6 +136,7 @@ const performanceRoutes = require('./routes/performance');
 const expenseRoutes = require('./routes/expenses');
 const incomeRoutes = require('./routes/incomes');
 const reportRoutes = require('./routes/reports');
+const exportRoutes = require('./routes/exports');
 
 // Register Routes
 app.use('/paca/auth', authRoutes);
@@ -151,6 +152,7 @@ app.use('/paca/performance', performanceRoutes);
 app.use('/paca/expenses', expenseRoutes);
 app.use('/paca/incomes', incomeRoutes);
 app.use('/paca/reports', reportRoutes);
+app.use('/paca/exports', exportRoutes);
 
 // ==========================================
 // Error Handling
