@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 /**
  * GET /paca/reports/dashboard
@@ -126,7 +126,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
  * Get monthly financial report (revenue, expenses, net income)
  * Access: owner, admin
  */
-router.get('/financial/monthly', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/financial/monthly', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { year, month } = req.query;
 
@@ -224,7 +224,7 @@ router.get('/financial/monthly', verifyToken, requireRole('owner', 'admin'), asy
  * Get yearly financial trend (monthly breakdown)
  * Access: owner, admin
  */
-router.get('/financial/yearly', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/financial/yearly', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { year } = req.query;
 
@@ -322,7 +322,7 @@ router.get('/financial/yearly', verifyToken, requireRole('owner', 'admin'), asyn
  * Get student statistics
  * Access: owner, admin
  */
-router.get('/students', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/students', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const academyId = req.user.academyId;
 
@@ -386,7 +386,7 @@ router.get('/students', verifyToken, requireRole('owner', 'admin'), async (req, 
  * Get instructor statistics
  * Access: owner, admin
  */
-router.get('/instructors', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/instructors', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const academyId = req.user.academyId;
 
@@ -445,7 +445,7 @@ router.get('/instructors', verifyToken, requireRole('owner', 'admin'), async (re
  * Get attendance statistics
  * Access: owner, admin
  */
-router.get('/attendance', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/attendance', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const { start_date, end_date } = req.query;
         const academyId = req.user.academyId;
@@ -543,7 +543,7 @@ router.get('/attendance', verifyToken, requireRole('owner', 'admin'), async (req
  * Get unpaid/overdue payment summary
  * Access: owner, admin
  */
-router.get('/payments/unpaid', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/payments/unpaid', verifyToken, checkPermission('reports', 'view'), async (req, res) => {
     try {
         const academyId = req.user.academyId;
 
