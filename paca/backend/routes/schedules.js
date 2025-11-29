@@ -25,7 +25,9 @@ router.get('/', verifyToken, async (req, res) => {
                 cs.notes,
                 cs.created_at,
                 i.name AS instructor_name,
-                (SELECT COUNT(*) FROM attendance a WHERE a.class_schedule_id = cs.id) AS student_count
+                (SELECT COUNT(DISTINCT a.student_id) FROM attendance a
+                 JOIN students s ON a.student_id = s.id AND s.deleted_at IS NULL
+                 WHERE a.class_schedule_id = cs.id) AS student_count
             FROM class_schedules cs
             LEFT JOIN instructors i ON cs.instructor_id = i.id
             WHERE cs.academy_id = ?
