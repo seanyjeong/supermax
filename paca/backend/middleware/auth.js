@@ -29,7 +29,7 @@ const verifyToken = async (req, res, next) => {
 
         // Check if user still exists and is active
         const [users] = await db.query(
-            'SELECT id, email, name, role, academy_id, is_active, approval_status FROM users WHERE id = ? AND deleted_at IS NULL',
+            'SELECT id, email, name, role, academy_id, is_active, approval_status, position, permissions, instructor_id FROM users WHERE id = ? AND deleted_at IS NULL',
             [decoded.userId]
         );
 
@@ -58,13 +58,28 @@ const verifyToken = async (req, res, next) => {
             });
         }
 
+        // Parse permissions JSON
+        let permissions = {};
+        if (user.permissions) {
+            try {
+                permissions = typeof user.permissions === 'string'
+                    ? JSON.parse(user.permissions)
+                    : user.permissions;
+            } catch (e) {
+                console.error('Failed to parse permissions:', e);
+            }
+        }
+
         // Attach user to request
         req.user = {
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
-            academyId: user.academy_id
+            academyId: user.academy_id,
+            position: user.position,
+            permissions: permissions,
+            instructorId: user.instructor_id
         };
 
         next();
@@ -145,6 +160,44 @@ const checkAcademyAccess = async (req, res, next) => {
 };
 
 /**
+ * Check if user has permission for specific page and action
+ * Usage: checkPermission('students', 'edit')
+ */
+const checkPermission = (page, action) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({
+                error: 'Unauthorized',
+                message: 'Authentication required'
+            });
+        }
+
+        // owner는 모든 권한
+        if (req.user.role === 'owner') {
+            return next();
+        }
+
+        // admin(시스템 관리자)도 모든 권한
+        if (req.user.role === 'admin') {
+            return next();
+        }
+
+        // staff는 permissions 체크
+        const permissions = req.user.permissions || {};
+        const pagePermission = permissions[page] || { view: false, edit: false };
+
+        if (!pagePermission[action]) {
+            return res.status(403).json({
+                error: 'Permission Denied',
+                message: `${page} 페이지 ${action} 권한이 없습니다.`
+            });
+        }
+
+        next();
+    };
+};
+
+/**
  * Generate JWT Token
  */
 const generateToken = (userId, expiresIn = '24h') => {
@@ -159,5 +212,6 @@ module.exports = {
     verifyToken,
     requireRole,
     checkAcademyAccess,
+    checkPermission,
     generateToken
 };
