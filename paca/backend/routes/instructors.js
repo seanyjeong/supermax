@@ -9,7 +9,7 @@ const { updateSalaryFromAttendance } = require('../utils/salaryCalculator');
  * Get all instructors with optional filters
  * Access: owner, admin
  */
-router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/', verifyToken, checkPermission('instructors', 'view'), async (req, res) => {
     try {
         const { status, salary_type, instructor_type, search } = req.query;
 
@@ -116,7 +116,7 @@ router.get('/overtime/pending', verifyToken, checkPermission('overtime_approval'
  * Get overtime approval history
  * Access: owner, admin
  */
-router.get('/overtime/history', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/overtime/history', verifyToken, checkPermission('instructors', 'view'), async (req, res) => {
     const { year, month, instructor_id } = req.query;
 
     try {
@@ -166,7 +166,7 @@ router.get('/overtime/history', verifyToken, requireRole('owner', 'admin'), asyn
  * Approve or reject overtime request
  * Access: owner, admin
  */
-router.put('/overtime/:approvalId/approve', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/overtime/:approvalId/approve', verifyToken, checkPermission('overtime_approval', 'edit'), async (req, res) => {
     const approvalId = parseInt(req.params.approvalId);
 
     try {
@@ -229,7 +229,7 @@ router.put('/overtime/:approvalId/approve', verifyToken, requireRole('owner', 'a
  * Verify admin password for approval operations
  * Access: owner, admin
  */
-router.post('/verify-admin-password', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/verify-admin-password', verifyToken, checkPermission('instructors', 'edit'), async (req, res) => {
     try {
         const { password } = req.body;
 
@@ -286,7 +286,7 @@ router.post('/verify-admin-password', verifyToken, requireRole('owner', 'admin')
  * Get instructor by ID with attendance and salary records
  * Access: owner, admin
  */
-router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id', verifyToken, checkPermission('instructors', 'view'), async (req, res) => {
     const instructorId = parseInt(req.params.id);
 
     try {
@@ -368,7 +368,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Create new instructor
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('instructors', 'edit'), async (req, res) => {
     try {
         const {
             name,
@@ -524,7 +524,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Update instructor
  * Access: owner, admin
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('instructors', 'edit'), async (req, res) => {
     const instructorId = parseInt(req.params.id);
 
     try {
@@ -689,7 +689,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Soft delete instructor
  * Access: owner, admin
  */
-router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('instructors', 'edit'), async (req, res) => {
     const instructorId = parseInt(req.params.id);
 
     try {
@@ -829,7 +829,7 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
  * Get instructor attendance records
  * Access: owner, admin
  */
-router.get('/:id/attendance', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id/attendance', verifyToken, checkPermission('instructors', 'view'), async (req, res) => {
     const instructorId = parseInt(req.params.id);
     const { year, month } = req.query;
 
@@ -877,7 +877,7 @@ router.get('/:id/attendance', verifyToken, requireRole('owner', 'admin'), async 
  * Create overtime approval request
  * Access: owner, admin
  */
-router.post('/:id/overtime', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/:id/overtime', verifyToken, checkPermission('overtime_approval', 'edit'), async (req, res) => {
     const instructorId = parseInt(req.params.id);
 
     try {
