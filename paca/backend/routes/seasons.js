@@ -338,10 +338,13 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
             enrollment: updated[0]
         });
     } catch (error) {
-        console.error('Error recording payment:', error);
+        console.error('Error recording season payment:', error);
+        console.error('Enrollment ID:', enrollmentId);
+        console.error('Request body:', req.body);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to record payment'
+            message: error.message || 'Failed to record payment',
+            details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
         });
     }
 });
