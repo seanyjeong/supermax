@@ -1065,6 +1065,11 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             }
         }
 
+        // NaN 안전 검사 - 모든 금액 값이 유효한지 확인
+        if (isNaN(baseSeasonFee)) baseSeasonFee = parseFloat(season_fee) || 0;
+        if (isNaN(finalSeasonFee)) finalSeasonFee = baseSeasonFee;
+        if (isNaN(discountAmount)) discountAmount = 0;
+
         // Validate time_slots if provided
         const validTimeSlots = ['morning', 'afternoon', 'evening'];
         let parsedTimeSlots = null;
@@ -1100,16 +1105,16 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
             [
                 student_id,
                 seasonId,
-                finalSeasonFee,
+                finalSeasonFee || 0,  // NaN 방지
                 registration_date || new Date().toISOString().split('T')[0],
                 after_season_action || 'regular',
                 proRatedMonth,
-                proRated.proRatedFee,
-                JSON.stringify(proRated),
+                proRated?.proRatedFee || 0,  // NaN 방지
+                JSON.stringify(proRated || { proRatedFee: 0 }),
                 is_continuous || false,
                 previous_season_id || null,
                 discountType,
-                discountAmount,
+                discountAmount || 0,  // NaN 방지
                 parsedTimeSlots ? JSON.stringify(parsedTimeSlots) : null
             ]
         );
@@ -1153,9 +1158,9 @@ router.post('/:id/enroll', verifyToken, requireRole('owner', 'admin'), async (re
                 student_id,
                 req.user.academyId,
                 yearMonth,
-                parseFloat(season_fee),  // 원래 시즌비 (일할 전)
-                discountAmount + (midSeasonProRated ? midSeasonProRated.discount : 0),  // 총 할인액 (연속등록 + 일할)
-                finalSeasonFee,  // 최종 금액
+                parseFloat(season_fee) || 0,  // 원래 시즌비 (일할 전) - NaN 방지
+                discountAmount + (midSeasonProRated?.discount || 0),  // 총 할인액 (연속등록 + 일할) - NaN 방지
+                finalSeasonFee || 0,  // 최종 금액 - NaN 방지
                 actualDueDate.toISOString().split('T')[0],
                 seasonFeeDescription,
                 req.user.userId
