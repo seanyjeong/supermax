@@ -160,6 +160,34 @@ const checkAcademyAccess = async (req, res, next) => {
 };
 
 /**
+ * 페이지 이름을 한글로 변환
+ */
+const PAGE_LABELS = {
+    students: '학생 관리',
+    instructors: '강사 관리',
+    payments: '학원비',
+    salaries: '급여 관리',
+    schedules: '스케줄',
+    reports: '리포트',
+    expenses: '지출 관리',
+    incomes: '기타수입',
+    seasons: '시즌 관리',
+    settings: '설정',
+    staff: '직원 관리',
+    dashboard_finance: '대시보드 매출',
+    dashboard_unpaid: '대시보드 미수금',
+    overtime_approval: '초과근무 승인'
+};
+
+/**
+ * 액션을 한글로 변환
+ */
+const ACTION_LABELS = {
+    view: '조회',
+    edit: '수정'
+};
+
+/**
  * Check if user has permission for specific page and action
  * Usage: checkPermission('students', 'edit')
  */
@@ -168,7 +196,7 @@ const checkPermission = (page, action) => {
         if (!req.user) {
             return res.status(401).json({
                 error: 'Unauthorized',
-                message: 'Authentication required'
+                message: '로그인이 필요합니다.'
             });
         }
 
@@ -187,9 +215,12 @@ const checkPermission = (page, action) => {
         const pagePermission = permissions[page] || { view: false, edit: false };
 
         if (!pagePermission[action]) {
+            const pageLabel = PAGE_LABELS[page] || page;
+            const actionLabel = ACTION_LABELS[action] || action;
             return res.status(403).json({
                 error: 'Permission Denied',
-                message: `${page} 페이지 ${action} 권한이 없습니다.`
+                message: `${pageLabel} ${actionLabel} 권한이 없습니다.`,
+                permission_required: { page, action }
             });
         }
 
