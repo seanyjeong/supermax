@@ -186,7 +186,7 @@ router.get('/slot', verifyToken, async (req, res) => {
                          AND ss2.is_cancelled = 0
                          AND ss2.payment_status != 'cancelled'
                          AND se2.status = 'active'
-                         AND ? BETWEEN se2.season_start_date AND se2.non_season_end_date
+                         AND ? BETWEEN se2.season_start_date AND se2.season_end_date
                          LIMIT 1) as season_type
                  FROM attendance a
                  JOIN students s ON a.student_id = s.id
