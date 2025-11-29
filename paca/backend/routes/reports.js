@@ -35,27 +35,63 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
             [academyId]
         );
 
-        // Get current month revenue
-        const [revenueStats] = await db.query(
+        // Get current month revenue (학원비 + 기타수입)
+        // 1. 학원비 (student_payments에서 paid된 금액)
+        const [paymentRevenue] = await db.query(
             `SELECT
-                COUNT(*) as revenue_count,
-                COALESCE(SUM(amount), 0) as total_revenue
-            FROM revenues
+                COUNT(*) as count,
+                COALESCE(SUM(COALESCE(paid_amount, final_amount)), 0) as amount
+            FROM student_payments
             WHERE academy_id = ?
-            AND DATE_FORMAT(revenue_date, '%Y-%m') = ?`,
+            AND payment_status = 'paid'
+            AND DATE_FORMAT(paid_at, '%Y-%m') = ?`,
             [academyId, currentMonth]
         );
 
-        // Get current month expenses
-        const [expenseStats] = await db.query(
+        // 2. 기타수입 (other_incomes 테이블)
+        const [otherIncome] = await db.query(
             `SELECT
-                COUNT(*) as expense_count,
-                COALESCE(SUM(amount), 0) as total_expenses
-            FROM expenses
+                COUNT(*) as count,
+                COALESCE(SUM(amount), 0) as amount
+            FROM other_incomes
             WHERE academy_id = ?
-            AND DATE_FORMAT(expense_date, '%Y-%m') = ?`,
+            AND DATE_FORMAT(income_date, '%Y-%m') = ?
+            AND deleted_at IS NULL`,
             [academyId, currentMonth]
         );
+
+        // 총 수입 합산
+        const totalRevenueCount = parseInt(paymentRevenue[0].count) + parseInt(otherIncome[0].count);
+        const totalRevenueAmount = parseFloat(paymentRevenue[0].amount) + parseFloat(otherIncome[0].amount);
+
+        // Get current month expenses (일반지출 + 급여)
+        // 1. 일반 지출
+        const [expenseStats] = await db.query(
+            `SELECT
+                COUNT(*) as count,
+                COALESCE(SUM(amount), 0) as amount
+            FROM expenses
+            WHERE academy_id = ?
+            AND DATE_FORMAT(expense_date, '%Y-%m') = ?
+            AND deleted_at IS NULL`,
+            [academyId, currentMonth]
+        );
+
+        // 2. 급여 지출 (instructor_salaries에서 paid된 금액)
+        const [salaryExpense] = await db.query(
+            `SELECT
+                COUNT(*) as count,
+                COALESCE(SUM(total_amount), 0) as amount
+            FROM instructor_salaries
+            WHERE academy_id = ?
+            AND payment_status = 'paid'
+            AND DATE_FORMAT(paid_at, '%Y-%m') = ?`,
+            [academyId, currentMonth]
+        );
+
+        // 총 지출 합산
+        const totalExpenseCount = parseInt(expenseStats[0].count) + parseInt(salaryExpense[0].count);
+        const totalExpenseAmount = parseFloat(expenseStats[0].amount) + parseFloat(salaryExpense[0].amount);
 
         // Get unpaid/overdue payments
         const [unpaidStats] = await db.query(
@@ -69,7 +105,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
         );
 
         // Calculate net income
-        const netIncome = parseFloat(revenueStats[0].total_revenue) - parseFloat(expenseStats[0].total_expenses);
+        const netIncome = totalRevenueAmount - totalExpenseAmount;
 
         res.json({
             students: studentStats[0],
@@ -77,12 +113,12 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
             current_month: {
                 month: currentMonth,
                 revenue: {
-                    count: revenueStats[0].revenue_count,
-                    amount: parseFloat(revenueStats[0].total_revenue)
+                    count: totalRevenueCount,
+                    amount: totalRevenueAmount
                 },
                 expenses: {
-                    count: expenseStats[0].expense_count,
-                    amount: parseFloat(expenseStats[0].total_expenses)
+                    count: totalExpenseCount,
+                    amount: totalExpenseAmount
                 },
                 net_income: netIncome
             },
