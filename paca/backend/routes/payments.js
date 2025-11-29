@@ -165,7 +165,7 @@ router.get('/', verifyToken, checkPermission('payments', 'view'), async (req, re
         console.error('Error fetching payments:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch payment records'
+            message: '납부 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -210,7 +210,7 @@ router.get('/unpaid', verifyToken, checkPermission('payments', 'view'), async (r
         console.error('Error fetching unpaid payments:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch unpaid payments'
+            message: '미납 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -241,7 +241,7 @@ router.get('/:id', verifyToken, checkPermission('payments', 'view'), async (req,
         if (payments.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Payment record not found'
+                message: '납부 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -252,7 +252,7 @@ router.get('/:id', verifyToken, checkPermission('payments', 'view'), async (req,
         console.error('Error fetching payment:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch payment record'
+            message: '납부 내역을 불러오는데 실패했습니다.'
         });
     }
 });
@@ -280,7 +280,7 @@ router.post('/', verifyToken, checkPermission('payments', 'edit'), async (req, r
         if (!student_id || !payment_type || !base_amount || !due_date || !year_month) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: student_id, payment_type, base_amount, due_date, year_month'
+                message: '필수 항목을 모두 입력해주세요. (학생, 결제유형, 금액, 납부기한, 청구월)'
             });
         }
 
@@ -293,7 +293,7 @@ router.post('/', verifyToken, checkPermission('payments', 'edit'), async (req, r
         if (students.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Student not found'
+                message: '학생을 찾을 수 없습니다.'
             });
         }
 
@@ -348,14 +348,14 @@ router.post('/', verifyToken, checkPermission('payments', 'edit'), async (req, r
         );
 
         res.status(201).json({
-            message: 'Payment record created successfully',
+            message: '납부 내역이 생성되었습니다.',
             payment: payments[0]
         });
     } catch (error) {
         console.error('Error creating payment:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to create payment record'
+            message: '납부 내역 생성에 실패했습니다.'
         });
     }
 });
@@ -372,7 +372,7 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
         if (!year || !month || !due_date) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: year, month, due_date'
+                message: '필수 항목을 모두 입력해주세요. (연도, 월, 납부기한)'
             });
         }
 
@@ -393,7 +393,7 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
 
         if (students.length === 0) {
             return res.json({
-                message: 'No active students found',
+                message: '활성 상태인 학생이 없습니다.',
                 created: 0
             });
         }
@@ -412,7 +412,7 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
         if (existing[0].count > 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: `Monthly charges for ${year}-${month} already exist`
+                message: `${year}년 ${month}월 학원비가 이미 생성되어 있습니다.`
             });
         }
 
@@ -485,7 +485,7 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
         }
 
         res.json({
-            message: `Successfully created ${created} monthly payment charges` +
+            message: `${created}명의 학원비가 생성되었습니다.` +
                 (withNonSeasonProrated > 0 ? ` (비시즌 종강 일할 포함: ${withNonSeasonProrated}명)` : ''),
             created,
             withNonSeasonProrated,
@@ -497,7 +497,7 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
         console.error('Error creating bulk monthly charges:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to create bulk monthly charges'
+            message: '학원비 일괄 생성에 실패했습니다.'
         });
     }
 });
@@ -516,7 +516,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         if (!paid_amount || !payment_method) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: paid_amount, payment_method'
+                message: '필수 항목을 모두 입력해주세요. (납부금액, 결제방법)'
             });
         }
 
@@ -531,7 +531,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         if (payments.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Payment record not found'
+                message: '납부 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -541,7 +541,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         if (payment.payment_status === 'paid') {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Payment already completed'
+                message: '이미 완납된 내역입니다.'
             });
         }
 
@@ -554,7 +554,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         if (parseFloat(paid_amount) <= 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'paid_amount must be greater than 0'
+                message: '납부 금액은 0원보다 커야 합니다.'
             });
         }
 
@@ -631,7 +631,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         );
 
         res.json({
-            message: 'Payment recorded successfully',
+            message: '납부가 기록되었습니다.',
             payment: updated[0]
         });
     } catch (error) {
@@ -644,7 +644,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         console.error('Request body:', req.body);
         res.status(500).json({
             error: 'Server Error',
-            message: error.sqlMessage || error.message || 'Failed to record payment',
+            message: '납부 기록에 실패했습니다.',
             details: process.env.NODE_ENV === 'development' ? error.toString() : undefined
         });
     }
@@ -671,14 +671,14 @@ router.put('/:id', verifyToken, checkPermission('payments', 'edit'), async (req,
         if (payments.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Payment record not found'
+                message: '납부 내역을 찾을 수 없습니다.'
             });
         }
 
         if (payments[0].academy_id !== req.user.academyId) {
             return res.status(403).json({
                 error: 'Forbidden',
-                message: 'Access denied'
+                message: '접근 권한이 없습니다.'
             });
         }
 
@@ -750,7 +750,7 @@ router.put('/:id', verifyToken, checkPermission('payments', 'edit'), async (req,
         if (updates.length === 0) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'No fields to update'
+                message: '수정할 항목이 없습니다.'
             });
         }
 
@@ -775,14 +775,14 @@ router.put('/:id', verifyToken, checkPermission('payments', 'edit'), async (req,
         );
 
         res.json({
-            message: 'Payment record updated successfully',
+            message: '납부 내역이 수정되었습니다.',
             payment: updated[0]
         });
     } catch (error) {
         console.error('Error updating payment:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to update payment record'
+            message: '납부 내역 수정에 실패했습니다.'
         });
     }
 });
@@ -808,7 +808,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
         if (payments.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Payment record not found'
+                message: '납부 내역을 찾을 수 없습니다.'
             });
         }
 
@@ -816,7 +816,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
         await db.query('DELETE FROM student_payments WHERE id = ?', [paymentId]);
 
         res.json({
-            message: 'Payment record deleted successfully',
+            message: '납부 내역이 삭제되었습니다.',
             payment: {
                 id: paymentId,
                 student_name: payments[0].student_name
@@ -826,7 +826,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
         console.error('Error deleting payment:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to delete payment record'
+            message: '납부 내역 삭제에 실패했습니다.'
         });
     }
 });
@@ -864,14 +864,14 @@ router.get('/stats/summary', verifyToken, checkPermission('payments', 'view'), a
         );
 
         res.json({
-            message: 'Payment statistics retrieved successfully',
+            message: '납부 통계를 불러왔습니다.',
             stats: stats[0]
         });
     } catch (error) {
         console.error('Error fetching payment stats:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to fetch payment statistics'
+            message: '납부 통계를 불러오는데 실패했습니다.'
         });
     }
 });
@@ -891,7 +891,7 @@ router.post('/generate-prorated', verifyToken, checkPermission('payments', 'edit
         if (!student_id) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required field: student_id'
+                message: '학생을 선택해주세요.'
             });
         }
 
@@ -911,7 +911,7 @@ router.post('/generate-prorated', verifyToken, checkPermission('payments', 'edit
         if (students.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Student not found'
+                message: '학생을 찾을 수 없습니다.'
             });
         }
 
@@ -1044,7 +1044,7 @@ router.post('/generate-prorated', verifyToken, checkPermission('payments', 'edit
         );
 
         res.status(201).json({
-            message: 'Prorated payment generated successfully',
+            message: '일할계산 납부건이 생성되었습니다.',
             payment: created[0],
             proration: prorationDetails
         });
@@ -1052,7 +1052,7 @@ router.post('/generate-prorated', verifyToken, checkPermission('payments', 'edit
         console.error('Error generating prorated payment:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to generate prorated payment'
+            message: '일할계산 납부건 생성에 실패했습니다.'
         });
     }
 });
@@ -1069,7 +1069,7 @@ router.post('/generate-monthly-for-student', verifyToken, checkPermission('payme
         if (!student_id || !year || !month) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: 'Required fields: student_id, year, month'
+                message: '필수 항목을 모두 입력해주세요. (학생, 연도, 월)'
             });
         }
 
@@ -1089,7 +1089,7 @@ router.post('/generate-monthly-for-student', verifyToken, checkPermission('payme
         if (students.length === 0) {
             return res.status(404).json({
                 error: 'Not Found',
-                message: 'Student not found'
+                message: '학생을 찾을 수 없습니다.'
             });
         }
 
@@ -1175,8 +1175,8 @@ router.post('/generate-monthly-for-student', verifyToken, checkPermission('payme
 
         res.status(201).json({
             message: nonSeasonProratedInfo
-                ? 'Monthly payment generated successfully (비시즌 종강 일할 포함)'
-                : 'Monthly payment generated successfully',
+                ? '월 납부건이 생성되었습니다. (비시즌 종강 일할 포함)'
+                : '월 납부건이 생성되었습니다.',
             payment: created[0],
             nonSeasonProrated: nonSeasonProratedInfo
         });
@@ -1184,7 +1184,7 @@ router.post('/generate-monthly-for-student', verifyToken, checkPermission('payme
         console.error('Error generating monthly payment:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to generate monthly payment'
+            message: '월 납부건 생성에 실패했습니다.'
         });
     }
 });
