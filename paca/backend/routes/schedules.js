@@ -229,7 +229,7 @@ router.get('/slot', verifyToken, async (req, res) => {
  * POST /paca/schedules/slot/student
  * 학생을 특정 슬롯에 추가
  */
-router.post('/slot/student', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/slot/student', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     try {
         const { date, time_slot, student_id } = req.body;
 
@@ -295,7 +295,7 @@ router.post('/slot/student', verifyToken, requireRole('owner', 'admin'), async (
  * DELETE /paca/schedules/slot/student
  * 학생을 특정 슬롯에서 제거
  */
-router.delete('/slot/student', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/slot/student', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     try {
         const { date, time_slot, student_id } = req.query;
 
@@ -341,7 +341,7 @@ router.delete('/slot/student', verifyToken, requireRole('owner', 'admin'), async
  * POST /paca/schedules/slot/move
  * 학생을 다른 슬롯으로 이동
  */
-router.post('/slot/move', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/slot/move', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     try {
         const { date, from_slot, to_slot, student_id } = req.body;
 
@@ -451,7 +451,7 @@ router.get('/:id', verifyToken, async (req, res) => {
  * 시즌 기반, 반 기반, 또는 학생 수업요일 기반으로 생성 가능
  * Access: owner, admin only
  */
-router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/bulk', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const connection = await db.getConnection();
 
     try {
@@ -749,7 +749,7 @@ router.post('/bulk', verifyToken, requireRole('owner', 'admin'), async (req, res
  * instructor_id는 선택사항 (나중에 배정 가능)
  * Access: owner, admin only
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     try {
         const { class_date, time_slot, instructor_id, title, content, notes } = req.body;
 
@@ -844,7 +844,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Assign instructor to a schedule (강사 배정)
  * Access: owner, admin only
  */
-router.put('/:id/assign-instructor', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id/assign-instructor', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const scheduleId = parseInt(req.params.id);
 
     try {
@@ -932,7 +932,7 @@ router.put('/:id/assign-instructor', verifyToken, requireRole('owner', 'admin'),
  * Update class schedule
  * Access: owner, admin only
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const scheduleId = parseInt(req.params.id);
 
     try {
@@ -1044,7 +1044,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Delete class schedule
  * Access: owner, admin only
  */
-router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const scheduleId = parseInt(req.params.id);
 
     try {
@@ -1538,7 +1538,7 @@ router.get('/:id/instructor-attendance', verifyToken, async (req, res) => {
  * Record instructor attendance for a schedule
  * Access: owner, admin
  */
-router.post('/:id/instructor-attendance', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/:id/instructor-attendance', verifyToken, checkPermission('schedules', 'edit'), async (req, res) => {
     const scheduleId = parseInt(req.params.id);
     const connection = await db.getConnection();
 
