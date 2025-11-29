@@ -545,26 +545,31 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
             });
         }
 
-        // Calculate total due amount
+        // Calculate amounts
         const totalDue = parseFloat(payment.final_amount);
+        const currentPaidAmount = parseFloat(payment.paid_amount) || 0;
+        const newPaidAmount = currentPaidAmount + parseFloat(paid_amount);
 
-        // Determine payment status based on paid_amount
-        let paymentStatus;
-        if (parseFloat(paid_amount) >= totalDue) {
-            paymentStatus = 'paid';
-        } else if (parseFloat(paid_amount) > 0) {
-            paymentStatus = 'partial';
-        } else {
+        // Validate paid_amount
+        if (parseFloat(paid_amount) <= 0) {
             return res.status(400).json({
                 error: 'Validation Error',
                 message: 'paid_amount must be greater than 0'
             });
         }
 
-        // Update payment record
+        // Determine payment status based on total paid amount
+        let paymentStatus;
+        if (newPaidAmount >= totalDue) {
+            paymentStatus = 'paid';
+        } else {
+            paymentStatus = 'partial';
+        }
+
         await db.query(
             `UPDATE student_payments
             SET
+                paid_amount = ?,
                 payment_status = ?,
                 payment_method = ?,
                 paid_date = ?,
@@ -572,6 +577,7 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
                 updated_at = NOW()
             WHERE id = ?`,
             [
+                newPaidAmount,
                 paymentStatus,
                 payment_method,
                 payment_date || new Date().toISOString().split('T')[0],
@@ -580,26 +586,30 @@ router.post('/:id/pay', verifyToken, requireRole('owner', 'admin'), async (req, 
             ]
         );
 
-        // Record in revenues table
-        await db.query(
-            `INSERT INTO revenues (
-                academy_id,
-                category,
-                amount,
-                revenue_date,
-                payment_method,
-                student_id,
-                description
-            ) VALUES (?, 'tuition', ?, ?, ?, ?, ?)`,
-            [
-                payment.academy_id,
-                paid_amount,
-                payment_date || new Date().toISOString().split('T')[0],
-                payment_method,
-                payment.student_id,
-                `수강료 납부 (결제ID: ${paymentId})`
-            ]
-        );
+        // Record in revenues table (optional - table may not exist)
+        try {
+            await db.query(
+                `INSERT INTO revenues (
+                    academy_id,
+                    category,
+                    amount,
+                    revenue_date,
+                    payment_method,
+                    student_id,
+                    description
+                ) VALUES (?, 'tuition', ?, ?, ?, ?, ?)`,
+                [
+                    payment.academy_id,
+                    paid_amount,
+                    payment_date || new Date().toISOString().split('T')[0],
+                    payment_method,
+                    payment.student_id,
+                    `수강료 납부 (결제ID: ${paymentId})`
+                ]
+            );
+        } catch (revenueError) {
+            console.log('Revenue table insert skipped:', revenueError.message);
+        }
 
         // Fetch updated payment
         const [updated] = await db.query(
