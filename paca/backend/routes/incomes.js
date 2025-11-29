@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 // 카테고리 한글 매핑
 const CATEGORY_LABELS = {
@@ -18,7 +18,7 @@ const CATEGORY_LABELS = {
  * Get all other income records with filters
  * Access: owner, admin
  */
-router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/', verifyToken, checkPermission('incomes', 'view'), async (req, res) => {
     try {
         const { category, student_id, start_date, end_date, payment_method } = req.query;
 
@@ -95,7 +95,7 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
  * Get category labels
  * Access: owner, admin
  */
-router.get('/categories', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/categories', verifyToken, checkPermission('incomes', 'view'), async (req, res) => {
     res.json({
         categories: CATEGORY_LABELS
     });
@@ -106,7 +106,7 @@ router.get('/categories', verifyToken, requireRole('owner', 'admin'), async (req
  * Get income record by ID
  * Access: owner, admin
  */
-router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.get('/:id', verifyToken, checkPermission('incomes', 'view'), async (req, res) => {
     const incomeId = parseInt(req.params.id);
 
     try {
@@ -147,7 +147,7 @@ router.get('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Create new income record
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('incomes', 'edit'), async (req, res) => {
     try {
         const {
             income_date,
@@ -241,7 +241,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Update income record
  * Access: owner, admin
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('incomes', 'edit'), async (req, res) => {
     const incomeId = parseInt(req.params.id);
 
     try {
@@ -348,7 +348,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Delete income record
  * Access: owner, admin
  */
-router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('incomes', 'edit'), async (req, res) => {
     const incomeId = parseInt(req.params.id);
 
     try {
