@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, requireRole, checkPermission } = require('../middleware/auth');
 
 /**
  * 학생을 해당 월의 스케줄에 자동 배정
@@ -331,7 +331,7 @@ router.get('/:id', verifyToken, async (req, res) => {
  * Create new student
  * Access: owner, admin
  */
-router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
     try {
         const {
             student_number,
@@ -620,7 +620,7 @@ router.post('/', verifyToken, requireRole('owner', 'admin'), async (req, res) =>
  * Update student
  * Access: owner, admin
  */
-router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
     const studentId = parseInt(req.params.id);
 
     try {
@@ -855,7 +855,7 @@ router.put('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) 
  * Soft delete student
  * Access: owner, admin
  */
-router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
     const studentId = parseInt(req.params.id);
 
     try {
@@ -899,7 +899,7 @@ router.delete('/:id', verifyToken, requireRole('owner', 'admin'), async (req, re
  * Bulk upgrade student grades (진급 처리)
  * Access: owner, admin
  */
-router.post('/grade-upgrade', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+router.post('/grade-upgrade', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
     try {
         const { upgrades } = req.body;
 
