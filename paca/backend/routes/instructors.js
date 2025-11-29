@@ -81,9 +81,9 @@ router.get('/', verifyToken, requireRole('owner', 'admin'), async (req, res) => 
 /**
  * GET /paca/instructors/overtime/pending
  * Get all pending overtime approval requests
- * Access: owner, admin, staff (with instructors view permission)
+ * Access: owner, admin, staff (with overtime_approval view permission)
  */
-router.get('/overtime/pending', verifyToken, checkPermission('instructors', 'view'), async (req, res) => {
+router.get('/overtime/pending', verifyToken, checkPermission('overtime_approval', 'view'), async (req, res) => {
     try {
         const [requests] = await db.query(`
             SELECT
