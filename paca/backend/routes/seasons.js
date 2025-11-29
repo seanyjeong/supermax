@@ -350,6 +350,113 @@ router.post('/enrollments/:enrollment_id/pay', verifyToken, requireRole('owner',
 });
 
 /**
+ * PUT /paca/seasons/enrollments/:enrollment_id
+ * Update season enrollment (registration date, season fee, discount)
+ * Access: owner, admin
+ * NOTE: 이 라우트는 /:id 보다 먼저 정의되어야 함
+ */
+router.put('/enrollments/:enrollment_id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
+    const enrollmentId = parseInt(req.params.enrollment_id);
+
+    try {
+        const { registration_date, season_fee, discount_amount, discount_reason } = req.body;
+
+        // Get enrollment
+        const [enrollments] = await db.query(
+            `SELECT
+                ss.*,
+                s.academy_id,
+                s.name as student_name,
+                se.season_name
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.id = ?`,
+            [enrollmentId]
+        );
+
+        if (enrollments.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Enrollment not found'
+            });
+        }
+
+        const enrollment = enrollments[0];
+
+        if (enrollment.academy_id !== req.user.academyId) {
+            return res.status(403).json({
+                error: 'Forbidden',
+                message: 'Access denied'
+            });
+        }
+
+        // Build update query dynamically
+        const updates = [];
+        const params = [];
+
+        if (registration_date !== undefined) {
+            updates.push('registration_date = ?');
+            params.push(registration_date);
+        }
+
+        if (season_fee !== undefined) {
+            updates.push('season_fee = ?');
+            params.push(season_fee);
+        }
+
+        if (discount_amount !== undefined) {
+            updates.push('discount_amount = ?');
+            params.push(discount_amount);
+        }
+
+        if (discount_reason !== undefined) {
+            updates.push('discount_type = ?');
+            params.push(discount_reason ? 'custom' : 'none');
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: 'No fields to update'
+            });
+        }
+
+        updates.push('updated_at = NOW()');
+        params.push(enrollmentId);
+
+        await db.query(
+            `UPDATE student_seasons SET ${updates.join(', ')} WHERE id = ?`,
+            params
+        );
+
+        // Get updated record
+        const [updated] = await db.query(
+            `SELECT
+                ss.*,
+                s.name as student_name,
+                se.season_name
+            FROM student_seasons ss
+            JOIN students s ON ss.student_id = s.id
+            JOIN seasons se ON ss.season_id = se.id
+            WHERE ss.id = ?`,
+            [enrollmentId]
+        );
+
+        res.json({
+            message: 'Season enrollment updated successfully',
+            enrollment: updated[0]
+        });
+    } catch (error) {
+        console.error('Error updating enrollment:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: error.message || 'Failed to update enrollment'
+        });
+    }
+});
+
+/**
  * POST /paca/seasons/enrollments/:enrollment_id/cancel
  * Cancel season enrollment (refund calculation)
  * Access: owner, admin
