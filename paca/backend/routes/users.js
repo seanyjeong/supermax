@@ -6,9 +6,9 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 /**
  * GET /paca/users/pending
  * Get all pending users waiting for approval
- * Access: owner only
+ * Access: owner, admin
  */
-router.get('/pending', verifyToken, requireRole('owner'), async (req, res) => {
+router.get('/pending', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     try {
         const [users] = await db.query(
             `SELECT
@@ -43,9 +43,9 @@ router.get('/pending', verifyToken, requireRole('owner'), async (req, res) => {
 /**
  * POST /paca/users/approve/:id
  * Approve a pending user
- * Access: owner only
+ * Access: owner, admin
  */
-router.post('/approve/:id', verifyToken, requireRole('owner'), async (req, res) => {
+router.post('/approve/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const userId = parseInt(req.params.id);
 
     try {
@@ -98,9 +98,9 @@ router.post('/approve/:id', verifyToken, requireRole('owner'), async (req, res) 
 /**
  * POST /paca/users/reject/:id
  * Reject a pending user
- * Access: owner only
+ * Access: owner, admin
  */
-router.post('/reject/:id', verifyToken, requireRole('owner'), async (req, res) => {
+router.post('/reject/:id', verifyToken, requireRole('owner', 'admin'), async (req, res) => {
     const userId = parseInt(req.params.id);
 
     try {
