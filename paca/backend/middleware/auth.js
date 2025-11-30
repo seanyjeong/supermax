@@ -118,7 +118,10 @@ const requireRole = (...roles) => {
             });
         }
 
+        console.log(`[requireRole] User: ${req.user.email}, Role: "${req.user.role}", Required: ${roles.join(' or ')}`);
+
         if (!roles.includes(req.user.role)) {
+            console.log(`[requireRole] ACCESS DENIED - User role "${req.user.role}" not in [${roles.join(', ')}]`);
             return res.status(403).json({
                 error: 'Forbidden',
                 message: `Required role: ${roles.join(' or ')}`
