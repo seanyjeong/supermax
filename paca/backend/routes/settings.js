@@ -636,6 +636,8 @@ router.post('/reset-database', verifyToken, requireRole('owner'), async (req, re
             'instructor_schedules',
             'schedules',
             'expenses',
+            'other_incomes',
+            'revenues',
             'student_performances',
             'seasons',
             'students',
