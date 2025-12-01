@@ -340,11 +340,6 @@ async function updateSalaryFromAttendance(db, instructorId, academyId, workDate,
 
         const instructor = instructors[0];
 
-        // 시급제 또는 타임제가 아니면 스킵
-        if (!['hourly', 'per_class'].includes(instructor.salary_type)) {
-            return null;
-        }
-
         // work_date에서 년월 계산 (year_month = 근무월)
         const workDateObj = new Date(workDate);
         const salaryYear = workDateObj.getFullYear();
@@ -402,6 +397,16 @@ async function updateSalaryFromAttendance(db, instructorId, academyId, workDate,
             baseAmount = (morningClasses * morningRate) +
                         (afternoonClasses * afternoonRate) +
                         (eveningClasses * eveningRate);
+        } else if (instructor.salary_type === 'monthly') {
+            // 월급제: 기본 월급 적용 (출근 기록과 무관)
+            baseAmount = parseFloat(instructor.base_salary) || 0;
+
+            // 출근 기록은 참고용으로만 집계
+            for (const att of monthlyAttendances) {
+                if (att.time_slot === 'morning') morningClasses++;
+                else if (att.time_slot === 'afternoon') afternoonClasses++;
+                else if (att.time_slot === 'evening') eveningClasses++;
+            }
         }
 
         // 세금 계산
