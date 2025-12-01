@@ -67,14 +67,15 @@ async function generateMonthlyPayments() {
             for (const student of students) {
                 // 이미 해당 월 학원비가 있는지 확인
                 const [existing] = await db.query(`
-                    SELECT id FROM student_payments
+                    SELECT id, payment_status FROM student_payments
                     WHERE student_id = ?
                     AND \`year_month\` = ?
                     AND payment_type = 'monthly'
                 `, [student.id, yearMonth]);
 
-                if (existing.length > 0) {
-                    console.log(`[PaymentScheduler] Payment already exists for student ${student.id} (${student.name}) - ${yearMonth}`);
+                // 이미 납부 완료된 건은 건너뛰기
+                if (existing.length > 0 && existing[0].payment_status === 'paid') {
+                    console.log(`[PaymentScheduler] Payment already paid for student ${student.id} (${student.name}) - ${yearMonth}`);
                     continue;
                 }
 
@@ -137,39 +138,66 @@ async function generateMonthlyPayments() {
                     ? `${currentMonth}월 학원비 (이월 차감 적용)`
                     : `${currentMonth}월 학원비`;
 
-                await db.query(`
-                    INSERT INTO student_payments (
-                        student_id,
-                        academy_id,
-                        \`year_month\`,
-                        payment_type,
-                        base_amount,
-                        discount_amount,
-                        additional_amount,
-                        carryover_amount,
-                        rest_credit_id,
-                        final_amount,
-                        due_date,
-                        payment_status,
+                // 기존 미납 학원비가 있으면 업데이트, 없으면 생성
+                if (existing.length > 0) {
+                    await db.query(`
+                        UPDATE student_payments SET
+                            base_amount = ?,
+                            discount_amount = ?,
+                            carryover_amount = ?,
+                            rest_credit_id = ?,
+                            final_amount = ?,
+                            due_date = ?,
+                            description = ?,
+                            notes = ?,
+                            updated_at = NOW()
+                        WHERE id = ?
+                    `, [
+                        baseAmount,
+                        discountAmount,
+                        carryoverAmount,
+                        restCreditId,
+                        finalAmount,
+                        dueDate.toISOString().split('T')[0],
+                        description,
+                        notes,
+                        existing[0].id
+                    ]);
+                    console.log(`[PaymentScheduler] Updated payment for student ${student.id} (${student.name}) - ${yearMonth}`);
+                } else {
+                    await db.query(`
+                        INSERT INTO student_payments (
+                            student_id,
+                            academy_id,
+                            \`year_month\`,
+                            payment_type,
+                            base_amount,
+                            discount_amount,
+                            additional_amount,
+                            carryover_amount,
+                            rest_credit_id,
+                            final_amount,
+                            due_date,
+                            payment_status,
+                            description,
+                            notes
+                        ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, ?, ?, 'pending', ?, ?)
+                    `, [
+                        student.id,
+                        academy.academy_id,
+                        yearMonth,
+                        baseAmount,
+                        discountAmount,
+                        carryoverAmount,
+                        restCreditId,
+                        finalAmount,
+                        dueDate.toISOString().split('T')[0],
                         description,
                         notes
-                    ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, ?, ?, ?, 'pending', ?, ?)
-                `, [
-                    student.id,
-                    academy.academy_id,
-                    yearMonth,
-                    baseAmount,
-                    discountAmount,
-                    carryoverAmount,
-                    restCreditId,
-                    finalAmount,
-                    dueDate.toISOString().split('T')[0],
-                    description,
-                    notes
-                ]);
-
-                console.log(`[PaymentScheduler] Generated payment for student ${student.id} (${student.name}) - ${yearMonth}`);
-                totalGenerated++;
+                    ]);
+                    console.log(`[PaymentScheduler] Generated payment for student ${student.id} (${student.name}) - ${yearMonth}`);
+                    totalGenerated++;
+                }
             }
         }
 
