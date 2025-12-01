@@ -394,30 +394,15 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
         if (students.length === 0) {
             return res.json({
                 message: '활성 상태인 학생이 없습니다.',
-                created: 0
+                created: 0,
+                updated: 0
             });
         }
 
-        // Check if charges already exist for this month
-        const [existing] = await db.query(
-            `SELECT COUNT(*) as count
-            FROM student_payments p
-            JOIN students s ON p.student_id = s.id
-            WHERE s.academy_id = ?
-            AND p.payment_type = 'monthly'
-            AND DATE_FORMAT(p.due_date, '%Y-%m') = ?`,
-            [req.user.academyId, `${year}-${String(month).padStart(2, '0')}`]
-        );
-
-        if (existing[0].count > 0) {
-            return res.status(400).json({
-                error: 'Validation Error',
-                message: `${year}년 ${month}월 학원비가 이미 생성되어 있습니다.`
-            });
-        }
-
-        // Create payment records for all students
+        // Create or update payment records for all students
         let created = 0;
+        let updated = 0;
+        let skipped = 0;
         let withNonSeasonProrated = 0;
         let withCarryover = 0;
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
@@ -496,48 +481,108 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
 
             const finalAmount = truncateToThousands(baseAmount - discount + additionalAmount - carryoverAmount);
 
-            await db.query(
-                `INSERT INTO student_payments (
-                    student_id,
-                    academy_id,
-                    \`year_month\`,
-                    payment_type,
-                    base_amount,
-                    discount_amount,
-                    additional_amount,
-                    carryover_amount,
-                    rest_credit_id,
-                    final_amount,
-                    due_date,
-                    payment_status,
-                    description,
-                    notes,
-                    recorded_by
-                ) VALUES (?, ?, ?, 'monthly', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
-                [
-                    student.id,
-                    req.user.academyId,
-                    yearMonth,
-                    baseAmount,
-                    discount,
-                    additionalAmount,
-                    carryoverAmount,
-                    restCreditId,
-                    finalAmount,
-                    due_date,
-                    description,
-                    notes,
-                    req.user.userId
-                ]
+            // 해당 학생의 기존 학원비 확인
+            const [existingPayment] = await db.query(
+                `SELECT id, payment_status, paid_amount FROM student_payments
+                 WHERE student_id = ? AND academy_id = ? AND \`year_month\` = ? AND payment_type = 'monthly'`,
+                [student.id, req.user.academyId, yearMonth]
             );
-            created++;
+
+            if (existingPayment.length > 0) {
+                const existing = existingPayment[0];
+
+                // 이미 납부 완료된 건은 건너뛰기
+                if (existing.payment_status === 'paid') {
+                    skipped++;
+                    continue;
+                }
+
+                // 기존 학원비 업데이트 (금액 변경사항 반영)
+                await db.query(
+                    `UPDATE student_payments SET
+                        base_amount = ?,
+                        discount_amount = ?,
+                        additional_amount = ?,
+                        carryover_amount = ?,
+                        rest_credit_id = ?,
+                        final_amount = ?,
+                        due_date = ?,
+                        description = ?,
+                        notes = ?,
+                        updated_at = NOW()
+                     WHERE id = ?`,
+                    [
+                        baseAmount,
+                        discount,
+                        additionalAmount,
+                        carryoverAmount,
+                        restCreditId,
+                        finalAmount,
+                        due_date,
+                        description,
+                        notes,
+                        existing.id
+                    ]
+                );
+                updated++;
+            } else {
+                // 새로 생성
+                await db.query(
+                    `INSERT INTO student_payments (
+                        student_id,
+                        academy_id,
+                        \`year_month\`,
+                        payment_type,
+                        base_amount,
+                        discount_amount,
+                        additional_amount,
+                        carryover_amount,
+                        rest_credit_id,
+                        final_amount,
+                        due_date,
+                        payment_status,
+                        description,
+                        notes,
+                        recorded_by
+                    ) VALUES (?, ?, ?, 'monthly', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+                    [
+                        student.id,
+                        req.user.academyId,
+                        yearMonth,
+                        baseAmount,
+                        discount,
+                        additionalAmount,
+                        carryoverAmount,
+                        restCreditId,
+                        finalAmount,
+                        due_date,
+                        description,
+                        notes,
+                        req.user.userId
+                    ]
+                );
+                created++;
+            }
         }
 
+        // 결과 메시지 생성
+        const messageParts = [];
+        if (created > 0) messageParts.push(`${created}명 생성`);
+        if (updated > 0) messageParts.push(`${updated}명 업데이트`);
+        if (skipped > 0) messageParts.push(`${skipped}명 건너뜀(납부완료)`);
+
+        let message = messageParts.length > 0
+            ? `학원비 처리 완료: ${messageParts.join(', ')}`
+            : '처리할 학원비가 없습니다.';
+
+        if (withNonSeasonProrated > 0) message += ` (비시즌 종강 일할 포함: ${withNonSeasonProrated}명)`;
+        if (withCarryover > 0) message += ` (이월 차감 적용: ${withCarryover}명)`;
+
         res.json({
-            message: `${created}명의 학원비가 생성되었습니다.` +
-                (withNonSeasonProrated > 0 ? ` (비시즌 종강 일할 포함: ${withNonSeasonProrated}명)` : '') +
-                (withCarryover > 0 ? ` (이월 차감 적용: ${withCarryover}명)` : ''),
+            message,
             created,
+            updated,
+            skipped,
             withNonSeasonProrated,
             withCarryover,
             year,
