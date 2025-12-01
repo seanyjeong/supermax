@@ -1322,16 +1322,20 @@ router.post('/:id/rest', verifyToken, checkPermission('students', 'edit'), async
 /**
  * POST /paca/students/:id/resume
  * 학생 휴식 복귀 처리
+ * - 복귀 시 해당 월 학원비가 없으면 일할계산하여 자동 생성
  * Access: owner, admin
  */
 router.post('/:id/resume', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
     const studentId = parseInt(req.params.id);
 
     try {
-        // 학생 존재 확인
+        // 학생 존재 확인 (수강료 정보 포함)
         const [students] = await db.query(
-            `SELECT id, name, status, class_days FROM students
-             WHERE id = ? AND academy_id = ? AND deleted_at IS NULL`,
+            `SELECT s.id, s.name, s.status, s.class_days, s.monthly_tuition, s.discount_rate,
+                    COALESCE(s.payment_due_day, ast.tuition_due_day, 5) as due_day
+             FROM students s
+             LEFT JOIN academy_settings ast ON s.academy_id = ast.academy_id
+             WHERE s.id = ? AND s.academy_id = ? AND s.deleted_at IS NULL`,
             [studentId, req.user.academyId]
         );
 
@@ -1387,6 +1391,98 @@ router.post('/:id/resume', verifyToken, checkPermission('students', 'edit'), asy
             }
         }
 
+        // 복귀 시 해당 월 학원비 자동 생성 (일할계산)
+        let paymentCreated = null;
+        try {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth() + 1;
+            const currentDay = today.getDate();
+            const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+
+            // 이미 해당 월 학원비가 있는지 확인
+            const [existingPayment] = await db.query(
+                `SELECT id FROM student_payments
+                 WHERE student_id = ? AND academy_id = ? AND \`year_month\` = ? AND payment_type = 'monthly'`,
+                [studentId, req.user.academyId, yearMonth]
+            );
+
+            if (existingPayment.length === 0 && student.monthly_tuition > 0) {
+                // 일할계산: 복귀일부터 말일까지
+                const lastDayOfMonth = new Date(year, month, 0).getDate();
+                const remainingDays = lastDayOfMonth - currentDay + 1;
+
+                // 수업 요일 기준 일할 계산
+                const dayNameToNum = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6, '일': 0 };
+                const classDayNums = classDays.map(d => dayNameToNum[d]).filter(d => d !== undefined);
+
+                let totalClassDays = 0;
+                let remainingClassDays = 0;
+
+                for (let day = 1; day <= lastDayOfMonth; day++) {
+                    const date = new Date(year, month - 1, day);
+                    const dayOfWeek = date.getDay();
+                    if (classDayNums.length === 0 || classDayNums.includes(dayOfWeek)) {
+                        totalClassDays++;
+                        if (day >= currentDay) {
+                            remainingClassDays++;
+                        }
+                    }
+                }
+
+                const baseAmount = parseFloat(student.monthly_tuition);
+                const discountRate = parseFloat(student.discount_rate) || 0;
+
+                // 일할 금액 계산
+                let proRatedAmount = baseAmount;
+                if (totalClassDays > 0 && currentDay > 1) {
+                    proRatedAmount = Math.floor((baseAmount * remainingClassDays / totalClassDays) / 1000) * 1000;
+                }
+
+                const discountAmount = Math.floor((proRatedAmount * discountRate / 100) / 1000) * 1000;
+                const finalAmount = proRatedAmount - discountAmount;
+
+                // 납부기한: 복귀일 + 7일
+                const dueDate = new Date(today);
+                dueDate.setDate(dueDate.getDate() + 7);
+
+                const description = `${month}월 학원비 (${currentDay}일 복귀, 일할계산)`;
+                const notes = `복귀일: ${currentDay}일, 남은 수업일: ${remainingClassDays}/${totalClassDays}일\n` +
+                              `계산: ${baseAmount.toLocaleString()}원 × (${remainingClassDays}/${totalClassDays}) = ${proRatedAmount.toLocaleString()}원`;
+
+                const [result] = await db.query(
+                    `INSERT INTO student_payments (
+                        student_id, academy_id, \`year_month\`, payment_type,
+                        base_amount, discount_amount, additional_amount, final_amount,
+                        is_prorated, due_date, payment_status, description, notes, recorded_by
+                    ) VALUES (?, ?, ?, 'monthly', ?, ?, 0, ?, 1, ?, 'pending', ?, ?, ?)`,
+                    [
+                        studentId,
+                        req.user.academyId,
+                        yearMonth,
+                        proRatedAmount,
+                        discountAmount,
+                        finalAmount,
+                        dueDate.toISOString().split('T')[0],
+                        description,
+                        notes,
+                        req.user.userId
+                    ]
+                );
+
+                paymentCreated = {
+                    id: result.insertId,
+                    yearMonth,
+                    baseAmount: proRatedAmount,
+                    finalAmount,
+                    remainingClassDays,
+                    totalClassDays
+                };
+            }
+        } catch (paymentError) {
+            console.error('Auto payment creation failed:', paymentError);
+        }
+
         // 업데이트된 학생 정보 조회
         const [updatedStudents] = await db.query(
             'SELECT * FROM students WHERE id = ?',
@@ -1394,9 +1490,12 @@ router.post('/:id/resume', verifyToken, checkPermission('students', 'edit'), asy
         );
 
         res.json({
-            message: '복귀 처리가 완료되었습니다.',
+            message: paymentCreated
+                ? `복귀 처리가 완료되었습니다. ${paymentCreated.yearMonth} 학원비 ${paymentCreated.finalAmount.toLocaleString()}원이 생성되었습니다.`
+                : '복귀 처리가 완료되었습니다.',
             student: updatedStudents[0],
-            scheduleAssigned: reassignResult
+            scheduleAssigned: reassignResult,
+            paymentCreated
         });
     } catch (error) {
         console.error('Error resuming student:', error);
