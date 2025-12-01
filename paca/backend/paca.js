@@ -55,19 +55,19 @@ if (process.env.NODE_ENV === 'development') {
     app.use(morgan('combined'));
 }
 
-// Rate Limiting
-const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10000, // limit each IP (기존 100 → 1000)
-    standardHeaders: true,
-    legacyHeaders: false,
-    // nginx 프록시 뒤에서 X-Forwarded-For 검증 에러 방지
-    validate: {
-        trustProxy: false,
-        xForwardedForHeader: false
-    }
-});
-app.use('/paca', limiter);
+// // Rate Limiting
+// const limiter = rateLimit({
+//     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+//     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 10000, // limit each IP (기존 100 → 1000)
+//     standardHeaders: true,
+//     legacyHeaders: false,
+//     // nginx 프록시 뒤에서 X-Forwarded-For 검증 에러 방지
+//     validate: {
+//         trustProxy: false,
+//         xForwardedForHeader: false
+//     }
+// });
+// app.use('/paca', limiter);
 
 // ==========================================
 // Database Connection
@@ -248,4 +248,5 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
+
 
