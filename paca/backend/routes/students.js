@@ -196,6 +196,9 @@ router.get('/', verifyToken, async (req, res) => {
                 s.payment_due_day,
                 s.enrollment_date,
                 s.status,
+                s.rest_start_date,
+                s.rest_end_date,
+                s.rest_reason,
                 s.created_at
             FROM students s
             WHERE s.academy_id = ?
@@ -663,7 +666,10 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             enrollment_date,
             address,
             notes,
-            status
+            status,
+            rest_start_date,
+            rest_end_date,
+            rest_reason
         } = req.body;
 
         // Validate student_type
@@ -785,6 +791,25 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
         if (status !== undefined) {
             updates.push('status = ?');
             params.push(status);
+
+            // 상태가 paused가 아니면 휴식 관련 필드 초기화
+            if (status !== 'paused') {
+                updates.push('rest_start_date = NULL');
+                updates.push('rest_end_date = NULL');
+                updates.push('rest_reason = NULL');
+            }
+        }
+        if (rest_start_date !== undefined) {
+            updates.push('rest_start_date = ?');
+            params.push(rest_start_date || null);
+        }
+        if (rest_end_date !== undefined) {
+            updates.push('rest_end_date = ?');
+            params.push(rest_end_date || null);
+        }
+        if (rest_reason !== undefined) {
+            updates.push('rest_reason = ?');
+            params.push(rest_reason || null);
         }
 
         if (updates.length === 0) {
@@ -1127,6 +1152,307 @@ router.get('/search', verifyToken, async (req, res) => {
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to search students'
+        });
+    }
+});
+
+/**
+ * POST /paca/students/:id/rest
+ * 학생 휴식 처리 (이월/환불 크레딧 생성)
+ * Access: owner, admin
+ */
+router.post('/:id/rest', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
+    const studentId = parseInt(req.params.id);
+    const connection = await db.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        // 1. 학생 존재 확인 및 현재 정보 조회
+        const [students] = await connection.query(
+            `SELECT id, name, monthly_tuition, discount_rate, status, academy_id
+             FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL`,
+            [studentId, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        const student = students[0];
+
+        const {
+            rest_start_date,
+            rest_end_date,
+            rest_reason,
+            credit_type,  // 'carryover' | 'refund' | 'none'
+            source_payment_id  // 이미 납부한 학원비 ID (선택)
+        } = req.body;
+
+        // 2. 필수 필드 검증
+        if (!rest_start_date) {
+            await connection.rollback();
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: '휴식 시작일은 필수입니다.'
+            });
+        }
+
+        // 3. 학생 상태를 paused로 변경하고 휴식 정보 저장
+        await connection.query(
+            `UPDATE students SET
+                status = 'paused',
+                rest_start_date = ?,
+                rest_end_date = ?,
+                rest_reason = ?,
+                updated_at = NOW()
+             WHERE id = ?`,
+            [rest_start_date, rest_end_date || null, rest_reason || null, studentId]
+        );
+
+        let restCredit = null;
+
+        // 4. 이월/환불 크레딧 처리
+        if (credit_type && credit_type !== 'none') {
+            // 휴식 기간 계산
+            const startDate = new Date(rest_start_date);
+            let endDate;
+
+            if (rest_end_date) {
+                endDate = new Date(rest_end_date);
+            } else {
+                // 무기한인 경우 해당 월 말일까지로 계산
+                endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+            }
+
+            // 해당 월 내 휴식 일수 계산
+            const year = startDate.getFullYear();
+            const month = startDate.getMonth();
+            const monthStart = new Date(year, month, 1);
+            const monthEnd = new Date(year, month + 1, 0);
+            const daysInMonth = monthEnd.getDate();
+
+            const effectiveStart = startDate > monthStart ? startDate : monthStart;
+            const effectiveEnd = endDate < monthEnd ? endDate : monthEnd;
+            const restDays = Math.ceil((effectiveEnd - effectiveStart) / (1000 * 60 * 60 * 24)) + 1;
+
+            // 일할 금액 계산
+            const monthlyTuition = parseFloat(student.monthly_tuition) || 0;
+            const dailyRate = monthlyTuition / daysInMonth;
+            const creditAmount = Math.floor((dailyRate * restDays) / 1000) * 1000;  // 천원 단위 절삭
+
+            if (creditAmount > 0) {
+                // 휴식 크레딧 생성
+                const [creditResult] = await connection.query(
+                    `INSERT INTO rest_credits (
+                        student_id,
+                        academy_id,
+                        source_payment_id,
+                        rest_start_date,
+                        rest_end_date,
+                        rest_days,
+                        credit_amount,
+                        remaining_amount,
+                        credit_type,
+                        status,
+                        notes
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+                    [
+                        studentId,
+                        req.user.academyId,
+                        source_payment_id || null,
+                        rest_start_date,
+                        rest_end_date || effectiveEnd.toISOString().split('T')[0],
+                        restDays,
+                        creditAmount,
+                        creditAmount,  // remaining_amount = credit_amount 초기값
+                        credit_type,
+                        `휴식 기간: ${rest_start_date} ~ ${rest_end_date || '무기한'}, 사유: ${rest_reason || '없음'}`
+                    ]
+                );
+
+                const [credits] = await connection.query(
+                    'SELECT * FROM rest_credits WHERE id = ?',
+                    [creditResult.insertId]
+                );
+                restCredit = credits[0];
+            }
+        }
+
+        // 5. 오늘 이후 미출석 스케줄 삭제 (휴식 시작일 기준)
+        await connection.query(
+            `DELETE a FROM attendance a
+             JOIN class_schedules cs ON a.class_schedule_id = cs.id
+             WHERE a.student_id = ?
+             AND cs.academy_id = ?
+             AND cs.class_date >= ?
+             AND a.attendance_status IS NULL`,
+            [studentId, req.user.academyId, rest_start_date]
+        );
+
+        await connection.commit();
+
+        // 업데이트된 학생 정보 조회
+        const [updatedStudents] = await db.query(
+            'SELECT * FROM students WHERE id = ?',
+            [studentId]
+        );
+
+        res.json({
+            message: '휴식 처리가 완료되었습니다.',
+            student: updatedStudents[0],
+            restCredit
+        });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error processing rest:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to process rest'
+        });
+    } finally {
+        connection.release();
+    }
+});
+
+/**
+ * POST /paca/students/:id/resume
+ * 학생 휴식 복귀 처리
+ * Access: owner, admin
+ */
+router.post('/:id/resume', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
+    const studentId = parseInt(req.params.id);
+
+    try {
+        // 학생 존재 확인
+        const [students] = await db.query(
+            `SELECT id, name, status, class_days FROM students
+             WHERE id = ? AND academy_id = ? AND deleted_at IS NULL`,
+            [studentId, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        const student = students[0];
+
+        if (student.status !== 'paused') {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: '휴식 상태인 학생만 복귀할 수 있습니다.'
+            });
+        }
+
+        // 상태를 active로 변경하고 휴식 정보 초기화
+        await db.query(
+            `UPDATE students SET
+                status = 'active',
+                rest_start_date = NULL,
+                rest_end_date = NULL,
+                rest_reason = NULL,
+                updated_at = NOW()
+             WHERE id = ?`,
+            [studentId]
+        );
+
+        // class_days가 있으면 오늘부터 스케줄 재배정
+        const classDays = student.class_days
+            ? (typeof student.class_days === 'string'
+                ? JSON.parse(student.class_days)
+                : student.class_days)
+            : [];
+
+        let reassignResult = null;
+        if (classDays.length > 0) {
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                reassignResult = await autoAssignStudentToSchedules(
+                    db,
+                    studentId,
+                    req.user.academyId,
+                    classDays,
+                    today,
+                    'evening'
+                );
+            } catch (assignError) {
+                console.error('Auto-assign failed:', assignError);
+            }
+        }
+
+        // 업데이트된 학생 정보 조회
+        const [updatedStudents] = await db.query(
+            'SELECT * FROM students WHERE id = ?',
+            [studentId]
+        );
+
+        res.json({
+            message: '복귀 처리가 완료되었습니다.',
+            student: updatedStudents[0],
+            scheduleAssigned: reassignResult
+        });
+    } catch (error) {
+        console.error('Error resuming student:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to resume student'
+        });
+    }
+});
+
+/**
+ * GET /paca/students/:id/rest-credits
+ * 학생의 휴식 크레딧 내역 조회
+ * Access: owner, admin, teacher
+ */
+router.get('/:id/rest-credits', verifyToken, async (req, res) => {
+    const studentId = parseInt(req.params.id);
+
+    try {
+        // 학생 존재 확인
+        const [students] = await db.query(
+            'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            [studentId, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        // 휴식 크레딧 내역 조회
+        const [credits] = await db.query(
+            `SELECT * FROM rest_credits
+             WHERE student_id = ?
+             ORDER BY created_at DESC`,
+            [studentId]
+        );
+
+        // 미적용 크레딧 합계
+        const pendingTotal = credits
+            .filter(c => c.status === 'pending' || c.status === 'partial')
+            .reduce((sum, c) => sum + (c.remaining_amount || 0), 0);
+
+        res.json({
+            message: `Found ${credits.length} rest credits`,
+            student: students[0],
+            credits,
+            pendingTotal
+        });
+    } catch (error) {
+        console.error('Error fetching rest credits:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to fetch rest credits'
         });
     }
 });
