@@ -419,6 +419,7 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
         // Create payment records for all students
         let created = 0;
         let withNonSeasonProrated = 0;
+        let withCarryover = 0;
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
         for (const student of students) {
@@ -449,7 +450,51 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
                 console.error(`Failed to calculate non-season prorated for student ${student.id}:`, err);
             }
 
-            const finalAmount = truncateToThousands(baseAmount - discount + additionalAmount);
+            // 휴식 이월 크레딧 확인 및 적용
+            let carryoverAmount = 0;
+            let restCreditId = null;
+            try {
+                const [pendingCredits] = await db.query(
+                    `SELECT id, remaining_amount FROM rest_credits
+                     WHERE student_id = ?
+                     AND academy_id = ?
+                     AND credit_type = 'carryover'
+                     AND status IN ('pending', 'partial')
+                     AND remaining_amount > 0
+                     ORDER BY created_at ASC`,
+                    [student.id, req.user.academyId]
+                );
+
+                if (pendingCredits.length > 0) {
+                    const credit = pendingCredits[0];
+                    const amountBeforeCarryover = baseAmount - discount + additionalAmount;
+
+                    // 이월 금액이 청구 금액보다 크면 청구 금액만큼만 차감
+                    carryoverAmount = Math.min(credit.remaining_amount, amountBeforeCarryover);
+                    restCreditId = credit.id;
+
+                    // 크레딧 잔액 업데이트
+                    const newRemaining = credit.remaining_amount - carryoverAmount;
+                    const newStatus = newRemaining <= 0 ? 'applied' : 'partial';
+
+                    await db.query(
+                        `UPDATE rest_credits SET
+                            remaining_amount = ?,
+                            status = ?,
+                            processed_at = NOW()
+                         WHERE id = ?`,
+                        [newRemaining, newStatus, credit.id]
+                    );
+
+                    notes = (notes || '') + `\n[이월 차감] 휴식 크레딧 ${carryoverAmount.toLocaleString()}원 차감`;
+                    description += ' (이월 차감 적용)';
+                    withCarryover++;
+                }
+            } catch (err) {
+                console.error(`Failed to apply carryover credit for student ${student.id}:`, err);
+            }
+
+            const finalAmount = truncateToThousands(baseAmount - discount + additionalAmount - carryoverAmount);
 
             await db.query(
                 `INSERT INTO student_payments (
@@ -460,13 +505,15 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
                     base_amount,
                     discount_amount,
                     additional_amount,
+                    carryover_amount,
+                    rest_credit_id,
                     final_amount,
                     due_date,
                     payment_status,
                     description,
                     notes,
                     recorded_by
-                ) VALUES (?, ?, ?, 'monthly', ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+                ) VALUES (?, ?, ?, 'monthly', ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
                 [
                     student.id,
                     req.user.academyId,
@@ -474,6 +521,8 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
                     baseAmount,
                     discount,
                     additionalAmount,
+                    carryoverAmount,
+                    restCreditId,
                     finalAmount,
                     due_date,
                     description,
@@ -486,9 +535,11 @@ router.post('/bulk-monthly', verifyToken, checkPermission('payments', 'edit'), a
 
         res.json({
             message: `${created}명의 학원비가 생성되었습니다.` +
-                (withNonSeasonProrated > 0 ? ` (비시즌 종강 일할 포함: ${withNonSeasonProrated}명)` : ''),
+                (withNonSeasonProrated > 0 ? ` (비시즌 종강 일할 포함: ${withNonSeasonProrated}명)` : '') +
+                (withCarryover > 0 ? ` (이월 차감 적용: ${withCarryover}명)` : ''),
             created,
             withNonSeasonProrated,
+            withCarryover,
             year,
             month,
             due_date
