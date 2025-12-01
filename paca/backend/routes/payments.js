@@ -646,8 +646,16 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
         const currentPaidAmount = parseFloat(payment.paid_amount) || 0;
         const newPaidAmount = currentPaidAmount + parseFloat(paid_amount);
 
-        // Validate paid_amount
-        if (parseFloat(paid_amount) <= 0) {
+        // 0원 청구 건은 0원으로 납부 처리 허용 (100% 할인 등)
+        if (parseFloat(paid_amount) < 0) {
+            return res.status(400).json({
+                error: 'Validation Error',
+                message: '납부 금액은 0원 이상이어야 합니다.'
+            });
+        }
+
+        // 0원이 아닌데 0원 납부하려는 경우만 차단
+        if (parseFloat(paid_amount) === 0 && totalDue > 0) {
             return res.status(400).json({
                 error: 'Validation Error',
                 message: '납부 금액은 0원보다 커야 합니다.'
