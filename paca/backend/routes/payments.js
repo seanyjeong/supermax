@@ -609,7 +609,7 @@ router.post('/:id/pay', verifyToken, checkPermission('payments', 'edit'), async 
     try {
         const { paid_amount, payment_method, payment_date, notes } = req.body;
 
-        if (!paid_amount || !payment_method) {
+        if (paid_amount === undefined || paid_amount === null || !payment_method) {
             return res.status(400).json({
                 error: 'Validation Error',
                 message: '필수 항목을 모두 입력해주세요. (납부금액, 결제방법)'
