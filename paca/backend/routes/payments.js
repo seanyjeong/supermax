@@ -153,7 +153,8 @@ router.get('/', verifyToken, checkPermission('payments', 'view'), async (req, re
             params.push(`${year}-${String(month).padStart(2, '0')}`);
         }
 
-        query += ' ORDER BY p.due_date DESC';
+        // 미납/부분납 먼저, 완납은 맨 뒤로 정렬
+        query += ' ORDER BY CASE WHEN p.payment_status = \'paid\' THEN 1 ELSE 0 END, p.due_date DESC';
 
         const [payments] = await db.query(query, params);
 
