@@ -408,6 +408,24 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
             }
         }
 
+        // Check for duplicate student (same name + phone + school)
+        const [duplicateStudent] = await db.query(
+            `SELECT id, name, phone, school FROM students
+             WHERE academy_id = ?
+             AND name = ?
+             AND phone = ?
+             AND (school = ? OR (school IS NULL AND ? IS NULL))
+             AND deleted_at IS NULL`,
+            [req.user.academyId, name, phone, school || null, school || null]
+        );
+
+        if (duplicateStudent.length > 0) {
+            return res.status(400).json({
+                error: 'Duplicate Error',
+                message: `이미 등록된 학생입니다. (이름: ${name}, 전화: ${phone}, 학교: ${school || '미입력'})`
+            });
+        }
+
         // Generate student number if not provided
         let finalStudentNumber = student_number;
         if (!finalStudentNumber) {
