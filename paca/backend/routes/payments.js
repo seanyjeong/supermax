@@ -113,6 +113,7 @@ router.get('/', verifyToken, checkPermission('payments', 'view'), async (req, re
                 p.student_id,
                 s.name as student_name,
                 s.student_number,
+                s.grade,
                 p.year_month,
                 p.payment_type,
                 p.base_amount,
