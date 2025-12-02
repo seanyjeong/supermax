@@ -6,12 +6,30 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+const N8N_API_KEY = process.env.N8N_API_KEY || 'paca-n8n-api-key-2024';
 
 /**
- * Verify JWT Token
+ * Verify JWT Token or N8N API Key
  */
 const verifyToken = async (req, res, next) => {
     try {
+        // Check for N8N API Key first
+        const apiKey = req.headers['x-api-key'];
+        if (apiKey && apiKey === N8N_API_KEY) {
+            // N8N 서비스 계정으로 처리 (academy_id는 쿼리에서 받음)
+            req.user = {
+                id: 0,
+                email: 'n8n@system',
+                name: 'N8N Service',
+                role: 'admin',
+                academyId: req.query.academy_id || req.body.academy_id || null,
+                position: 'system',
+                permissions: {},
+                isServiceAccount: true
+            };
+            return next();
+        }
+
         // Get token from header
         const authHeader = req.headers.authorization;
 
