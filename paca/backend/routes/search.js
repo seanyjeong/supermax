@@ -53,7 +53,7 @@ router.get('/', verifyToken, async (req, res) => {
         // 강사 검색 (이름, 전화번호)
         const [instructors] = await db.query(
             `SELECT
-                id, name, phone, specialization, status,
+                id, name, phone, status,
                 'instructor' as type
             FROM instructors
             WHERE academy_id = ?
@@ -81,7 +81,7 @@ router.get('/', verifyToken, async (req, res) => {
                 id: i.id,
                 type: 'instructor',
                 name: i.name,
-                subtext: i.specialization || '강사',
+                subtext: '강사',
                 phone: i.phone,
                 status: i.status
             }))
