@@ -909,8 +909,7 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // 관련 데이터 삭제 (스케줄, 출석, 학원비, 성적 등)
-            await connection.query('DELETE FROM class_schedules WHERE student_id = ?', [studentId]);
+            // 관련 데이터 삭제 (출석, 학원비, 성적 등)
             await connection.query('DELETE FROM attendance WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_payments WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_performance WHERE student_id = ?', [studentId]);
