@@ -1044,6 +1044,146 @@ router.post('/grade-upgrade', verifyToken, checkPermission('students', 'edit'), 
 });
 
 /**
+ * POST /paca/students/auto-promote
+ * 학년 자동 진급 (3월 신학기)
+ * Access: owner only
+ *
+ * 진급 규칙:
+ * - 중1 → 중2, 중2 → 중3, 중3 → 고1
+ * - 고1 → 고2, 고2 → 고3, 고3 → N수
+ * - N수 → N수 (유지)
+ *
+ * Body (선택):
+ * - dry_run: true면 실제 변경 없이 미리보기만
+ * - graduate_student_ids: 고3 중 졸업 처리할 학생 ID 배열 (status를 'graduated'로 변경)
+ */
+router.post('/auto-promote', verifyToken, requireRole('owner'), async (req, res) => {
+    try {
+        const { dry_run = false, graduate_student_ids = [] } = req.body;
+        const academyId = req.user.academyId;
+
+        // 학년 진급 매핑
+        const GRADE_PROMOTION_MAP = {
+            '중1': '중2',
+            '중2': '중3',
+            '중3': '고1',
+            '고1': '고2',
+            '고2': '고3',
+            '고3': 'N수',
+            'N수': 'N수'
+        };
+
+        // 해당 학원의 active 학생 조회
+        const [students] = await db.query(`
+            SELECT id, name, grade, status
+            FROM students
+            WHERE academy_id = ?
+              AND deleted_at IS NULL
+              AND status = 'active'
+              AND grade IS NOT NULL
+            ORDER BY grade
+        `, [academyId]);
+
+        if (students.length === 0) {
+            return res.json({
+                message: '진급 대상 학생이 없습니다',
+                promoted: 0,
+                graduated: 0,
+                details: []
+            });
+        }
+
+        const promotionDetails = [];
+        let promotedCount = 0;
+        let graduatedCount = 0;
+
+        const connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            for (const student of students) {
+                const currentGrade = student.grade;
+                const newGrade = GRADE_PROMOTION_MAP[currentGrade];
+
+                // 졸업 처리 대상인지 확인 (고3 학생 중)
+                const shouldGraduate = currentGrade === '고3' &&
+                    graduate_student_ids.includes(student.id);
+
+                if (shouldGraduate) {
+                    // 졸업 처리
+                    if (!dry_run) {
+                        await connection.query(
+                            `UPDATE students SET status = 'graduated', updated_at = NOW() WHERE id = ?`,
+                            [student.id]
+                        );
+                    }
+                    promotionDetails.push({
+                        studentId: student.id,
+                        name: student.name,
+                        from: currentGrade,
+                        to: '졸업',
+                        action: 'graduated'
+                    });
+                    graduatedCount++;
+                } else if (newGrade && currentGrade !== newGrade) {
+                    // 진급 처리
+                    if (!dry_run) {
+                        await connection.query(
+                            `UPDATE students SET grade = ?, updated_at = NOW() WHERE id = ?`,
+                            [newGrade, student.id]
+                        );
+                    }
+                    promotionDetails.push({
+                        studentId: student.id,
+                        name: student.name,
+                        from: currentGrade,
+                        to: newGrade,
+                        action: 'promoted'
+                    });
+                    promotedCount++;
+                }
+            }
+
+            if (!dry_run) {
+                await connection.commit();
+            } else {
+                await connection.rollback();
+            }
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
+
+        // 진급 요약
+        const summary = {};
+        promotionDetails.forEach(d => {
+            const key = `${d.from} → ${d.to}`;
+            summary[key] = (summary[key] || 0) + 1;
+        });
+
+        res.json({
+            message: dry_run
+                ? `진급 미리보기: ${promotedCount}명 진급, ${graduatedCount}명 졸업 예정`
+                : `진급 완료: ${promotedCount}명 진급, ${graduatedCount}명 졸업 처리`,
+            dry_run,
+            promoted: promotedCount,
+            graduated: graduatedCount,
+            summary,
+            details: promotionDetails
+        });
+
+    } catch (error) {
+        console.error('Auto-promote error:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to auto-promote students'
+        });
+    }
+});
+
+/**
  * GET /paca/students/:id/seasons
  * Get student's season enrollment history
  * Access: owner, admin, teacher

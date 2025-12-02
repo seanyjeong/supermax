@@ -221,6 +221,7 @@ app.use((err, req, res, next) => {
 // ==========================================
 const { initScheduler } = require('./scheduler/paymentScheduler');
 const { initNotificationScheduler } = require('./scheduler/notificationScheduler');
+const { initGradePromotionScheduler } = require('./scheduler/gradePromotionScheduler');
 
 // ==========================================
 // Start Server
@@ -238,6 +239,7 @@ app.listen(PORT, () => {
     // 스케줄러 초기화
     initScheduler();
     initNotificationScheduler();
+    initGradePromotionScheduler();
 });
 
 // Graceful Shutdown
