@@ -339,6 +339,7 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
         const {
             student_number,
             name,
+            gender,
             student_type,
             phone,
             parent_phone,
@@ -433,6 +434,7 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
                 academy_id,
                 student_number,
                 name,
+                gender,
                 student_type,
                 phone,
                 parent_phone,
@@ -450,11 +452,12 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
                 address,
                 notes,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 req.user.academyId,
                 finalStudentNumber,
                 name,
+                gender || null,
                 student_type || 'exam',
                 phone,
                 parent_phone,
@@ -650,6 +653,7 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
         const {
             student_number,
             name,
+            gender,
             student_type,
             phone,
             parent_phone,
@@ -723,6 +727,10 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
         if (name !== undefined) {
             updates.push('name = ?');
             params.push(name);
+        }
+        if (gender !== undefined) {
+            updates.push('gender = ?');
+            params.push(gender);
         }
         if (student_type !== undefined) {
             updates.push('student_type = ?');
