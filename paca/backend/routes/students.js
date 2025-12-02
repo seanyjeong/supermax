@@ -941,7 +941,8 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
         console.error('Error deleting student:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: 'Failed to delete student'
+            message: 'Failed to delete student: ' + (error.message || 'Unknown error'),
+            detail: error.sqlMessage || null
         });
     }
 });
