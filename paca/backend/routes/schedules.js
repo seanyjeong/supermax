@@ -478,7 +478,7 @@ router.post('/bulk', verifyToken, checkPermission('schedules', 'edit'), async (r
 
         let targetDates = [];
         let scheduleTitle = title || '수업';
-        let useTimeSlot = time_slot || 'afternoon';
+        let useTimeSlot = time_slot || 'evening';
         let useClassId = class_id || null;
         let useSeasonId = null;
         let useTargetGrade = null;
@@ -611,7 +611,7 @@ router.post('/bulk', verifyToken, checkPermission('schedules', 'edit'), async (r
             }
 
             scheduleTitle = title || `${month}월 수업`;
-            useTimeSlot = time_slot || 'afternoon';
+            useTimeSlot = time_slot || 'evening';
 
             // 해당 월의 수업요일에 맞는 날짜들 계산
             const firstDay = new Date(year, month - 1, 1);
@@ -654,11 +654,11 @@ router.post('/bulk', verifyToken, checkPermission('schedules', 'edit'), async (r
 
                 const classInfo = classes[0];
                 scheduleTitle = title || classInfo.class_name;
-                useTimeSlot = time_slot || classInfo.default_time_slot || 'afternoon';
+                useTimeSlot = time_slot || classInfo.default_time_slot || 'evening';
             } else {
                 // 반 없이 요일 기반으로 생성
                 scheduleTitle = title || `${month}월 수업`;
-                useTimeSlot = time_slot || 'afternoon';
+                useTimeSlot = time_slot || 'evening';
             }
 
             // 해당 월의 요일에 맞는 날짜들 계산
