@@ -909,11 +909,13 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
         await connection.beginTransaction();
 
         try {
-            // 관련 데이터 삭제 (출석, 학원비, 성적 등)
+            // 관련 데이터 삭제 (스케줄, 출석, 학원비, 성적 등)
+            await connection.query('DELETE FROM schedules WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM attendance WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_payments WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_performance WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM season_students WHERE student_id = ?', [studentId]);
+            await connection.query('DELETE FROM student_seasons WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM rest_credits WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM notification_logs WHERE student_id = ?', [studentId]);
 
