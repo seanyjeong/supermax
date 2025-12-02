@@ -885,16 +885,16 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
 
 /**
  * DELETE /paca/students/:id
- * Soft delete student
- * Access: owner, admin
+ * Hard delete student (완전 삭제)
+ * Access: owner only
  */
-router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
+router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
     const studentId = parseInt(req.params.id);
 
     try {
         // Check if student exists
         const [students] = await db.query(
-            'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            'SELECT id, name FROM students WHERE id = ? AND academy_id = ?',
             [studentId, req.user.academyId]
         );
 
@@ -905,14 +905,31 @@ router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (r
             });
         }
 
-        // Soft delete
-        await db.query(
-            'UPDATE students SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?',
-            [studentId]
-        );
+        const connection = await db.getConnection();
+        await connection.beginTransaction();
+
+        try {
+            // 관련 데이터 삭제 (출석, 학원비, 성적 등)
+            await connection.query('DELETE FROM attendance WHERE student_id = ?', [studentId]);
+            await connection.query('DELETE FROM student_payments WHERE student_id = ?', [studentId]);
+            await connection.query('DELETE FROM student_performance WHERE student_id = ?', [studentId]);
+            await connection.query('DELETE FROM season_students WHERE student_id = ?', [studentId]);
+            await connection.query('DELETE FROM rest_credits WHERE student_id = ?', [studentId]);
+            await connection.query('DELETE FROM notification_logs WHERE student_id = ?', [studentId]);
+
+            // 학생 삭제
+            await connection.query('DELETE FROM students WHERE id = ?', [studentId]);
+
+            await connection.commit();
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
 
         res.json({
-            message: 'Student deleted successfully',
+            message: 'Student deleted permanently',
             student: {
                 id: studentId,
                 name: students[0].name
@@ -923,6 +940,75 @@ router.delete('/:id', verifyToken, checkPermission('students', 'edit'), async (r
         res.status(500).json({
             error: 'Server Error',
             message: 'Failed to delete student'
+        });
+    }
+});
+
+/**
+ * POST /paca/students/:id/withdraw
+ * 퇴원 처리
+ * Access: owner, admin
+ */
+router.post('/:id/withdraw', verifyToken, checkPermission('students', 'edit'), async (req, res) => {
+    const studentId = parseInt(req.params.id);
+    const { reason, withdrawal_date } = req.body;
+
+    try {
+        // Check if student exists
+        const [students] = await db.query(
+            'SELECT id, name, status FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            [studentId, req.user.academyId]
+        );
+
+        if (students.length === 0) {
+            return res.status(404).json({
+                error: 'Not Found',
+                message: 'Student not found'
+            });
+        }
+
+        if (students[0].status === 'withdrawn') {
+            return res.status(400).json({
+                error: 'Bad Request',
+                message: '이미 퇴원 처리된 학생입니다'
+            });
+        }
+
+        // 퇴원 처리
+        await db.query(
+            `UPDATE students
+             SET status = 'withdrawn',
+                 withdrawal_date = ?,
+                 withdrawal_reason = ?,
+                 updated_at = NOW()
+             WHERE id = ?`,
+            [withdrawal_date || new Date().toISOString().split('T')[0], reason || null, studentId]
+        );
+
+        // 미래 스케줄에서 제거 (오늘 이후)
+        const today = new Date().toISOString().split('T')[0];
+        await db.query(
+            `DELETE a FROM attendance a
+             JOIN class_schedules cs ON a.class_schedule_id = cs.id
+             WHERE a.student_id = ? AND cs.class_date > ? AND a.attendance_status IS NULL`,
+            [studentId, today]
+        );
+
+        res.json({
+            message: '퇴원 처리되었습니다',
+            student: {
+                id: studentId,
+                name: students[0].name,
+                status: 'withdrawn',
+                withdrawal_date: withdrawal_date || today,
+                withdrawal_reason: reason
+            }
+        });
+    } catch (error) {
+        console.error('Error withdrawing student:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: 'Failed to withdraw student'
         });
     }
 });
