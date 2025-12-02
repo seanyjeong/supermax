@@ -42,7 +42,8 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
                     template_content: '',
                     is_enabled: false,
                     auto_send_day: 0,
-                    auto_send_days: ''
+                    auto_send_days: '',
+                    auto_send_hour: 9
                 }
             });
         }
@@ -87,7 +88,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             template_content,
             is_enabled,
             auto_send_day,
-            auto_send_days
+            auto_send_days,
+            auto_send_hour
         } = req.body;
 
         // 기존 설정 확인
@@ -109,8 +111,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             await db.query(
                 `INSERT INTO notification_settings
                 (academy_id, naver_access_key, naver_secret_key, naver_service_id, sms_service_id,
-                 kakao_channel_id, template_code, template_content, is_enabled, auto_send_day, auto_send_days)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 kakao_channel_id, template_code, template_content, is_enabled, auto_send_day, auto_send_days, auto_send_hour)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     naver_access_key || null,
@@ -122,7 +124,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_content || null,
                     is_enabled || false,
                     auto_send_day || 0,
-                    auto_send_days || ''
+                    auto_send_days || '',
+                    auto_send_hour ?? 9
                 ]
             );
         } else {
@@ -138,7 +141,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_content = ?,
                     is_enabled = ?,
                     auto_send_day = ?,
-                    auto_send_days = ?
+                    auto_send_days = ?,
+                    auto_send_hour = ?
                 WHERE academy_id = ?`,
                 [
                     naver_access_key || null,
@@ -151,6 +155,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     is_enabled || false,
                     auto_send_day || 0,
                     auto_send_days || '',
+                    auto_send_hour ?? 9,
                     req.user.academyId
                 ]
             );

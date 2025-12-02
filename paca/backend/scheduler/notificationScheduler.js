@@ -20,26 +20,28 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'paca-notification-secret-k
 async function sendScheduledNotifications() {
     const today = new Date();
     const currentDay = today.getDate();
+    const currentHour = today.getHours();
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth() + 1;
 
-    console.log(`[NotificationScheduler] 자동 발송 체크 시작: ${currentYear}-${currentMonth}-${currentDay}`);
+    console.log(`[NotificationScheduler] 자동 발송 체크 시작: ${currentYear}-${currentMonth}-${currentDay} ${currentHour}시`);
 
     try {
-        // 오늘 날짜에 자동 발송 설정된 학원 조회
+        // 오늘 날짜 + 현재 시간에 자동 발송 설정된 학원 조회
         // auto_send_days: 콤마로 구분된 날짜 목록 (예: "5,15,25")
-        // FIND_IN_SET으로 현재 날짜가 포함되어 있는지 확인
+        // auto_send_hour: 발송 시간 (0-23, 기본값 9)
         const [academies] = await db.query(
             `SELECT ns.*, a.name AS academy_name, a.phone AS academy_phone
              FROM notification_settings ns
              JOIN academies a ON ns.academy_id = a.id
              WHERE ns.is_enabled = TRUE
-               AND (ns.auto_send_day = ? OR FIND_IN_SET(?, ns.auto_send_days) > 0)`,
-            [currentDay, currentDay.toString()]
+               AND (ns.auto_send_day = ? OR FIND_IN_SET(?, ns.auto_send_days) > 0)
+               AND COALESCE(ns.auto_send_hour, 9) = ?`,
+            [currentDay, currentDay.toString(), currentHour]
         );
 
         if (academies.length === 0) {
-            console.log(`[NotificationScheduler] 오늘(${currentDay}일) 자동 발송 설정된 학원 없음`);
+            console.log(`[NotificationScheduler] ${currentDay}일 ${currentHour}시에 발송 설정된 학원 없음`);
             return;
         }
 
@@ -191,11 +193,12 @@ async function sendNotificationsForAcademy(settings, year, month) {
 
 /**
  * 스케줄러 초기화
- * 매일 오전 9시에 실행 (한국 시간 기준)
+ * 매시간 정각에 실행 (한국 시간 기준)
+ * 각 학원의 auto_send_hour 설정에 따라 발송
  */
 function initNotificationScheduler() {
-    // 매일 오전 9시 실행 (0 9 * * *)
-    cron.schedule('0 9 * * *', async () => {
+    // 매시간 정각 실행 (0 * * * *)
+    cron.schedule('0 * * * *', async () => {
         console.log('[NotificationScheduler] 스케줄 작업 시작...');
         await sendScheduledNotifications();
     }, {
@@ -203,7 +206,7 @@ function initNotificationScheduler() {
         timezone: 'Asia/Seoul'
     });
 
-    console.log('📨 알림톡 자동 발송 스케줄러 초기화 완료 (매일 오전 9시)');
+    console.log('📨 알림톡 자동 발송 스케줄러 초기화 완료 (매시간 정각 체크)');
 }
 
 module.exports = {
