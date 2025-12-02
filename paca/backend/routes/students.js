@@ -913,7 +913,6 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
             await connection.query('DELETE FROM attendance WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_payments WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_performance WHERE student_id = ?', [studentId]);
-            await connection.query('DELETE FROM season_students WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM student_seasons WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM rest_credits WHERE student_id = ?', [studentId]);
             await connection.query('DELETE FROM notification_logs WHERE student_id = ?', [studentId]);
