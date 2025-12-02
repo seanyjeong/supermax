@@ -117,7 +117,8 @@ app.get('/paca', (req, res) => {
             expenses: '/paca/expenses',
             incomes: '/paca/incomes',
             reports: '/paca/reports',
-            staff: '/paca/staff'
+            staff: '/paca/staff',
+            notifications: '/paca/notifications'
         }
     });
 });
@@ -140,6 +141,7 @@ const exportRoutes = require('./routes/exports');
 const staffRoutes = require('./routes/staff');
 const onboardingRoutes = require('./routes/onboarding');
 const searchRoutes = require('./routes/search');
+const notificationRoutes = require('./routes/notifications');
 
 // Register Routes
 app.use('/paca/auth', authRoutes);
@@ -159,6 +161,7 @@ app.use('/paca/exports', exportRoutes);
 app.use('/paca/staff', staffRoutes);
 app.use('/paca/onboarding', onboardingRoutes);
 app.use('/paca/search', searchRoutes);
+app.use('/paca/notifications', notificationRoutes);
 
 // ==========================================
 // Error Handling
@@ -215,6 +218,7 @@ app.use((err, req, res, next) => {
 // Scheduler
 // ==========================================
 const { initScheduler } = require('./scheduler/paymentScheduler');
+const { initNotificationScheduler } = require('./scheduler/notificationScheduler');
 
 // ==========================================
 // Start Server
@@ -231,6 +235,7 @@ app.listen(PORT, () => {
 
     // 스케줄러 초기화
     initScheduler();
+    initNotificationScheduler();
 });
 
 // Graceful Shutdown
