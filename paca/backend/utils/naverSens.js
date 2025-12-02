@@ -207,11 +207,91 @@ function isValidPhoneNumber(phone) {
     return /^01[0-9]{8,9}$/.test(cleaned);
 }
 
+/**
+ * SMS 발송
+ * @param {Object} settings - API 설정 (access_key, secret_key, service_id)
+ * @param {string} from - 발신번호 (SENS에 등록된 번호)
+ * @param {Array} recipients - 수신자 목록 [{phone}]
+ * @param {string} content - 문자 내용
+ * @param {string} type - SMS (80bytes), LMS (2000bytes)
+ * @returns {Object} - 발송 결과
+ */
+async function sendSMS(settings, from, recipients, content, type = 'SMS') {
+    const {
+        naver_access_key: accessKey,
+        naver_secret_key: secretKey,
+        naver_service_id: serviceId
+    } = settings;
+
+    if (!accessKey || !secretKey || !serviceId) {
+        throw new Error('SMS 설정이 완료되지 않았습니다. API 키를 확인해주세요.');
+    }
+
+    if (!from) {
+        throw new Error('발신번호가 설정되지 않았습니다. 학원 설정에서 전화번호를 확인해주세요.');
+    }
+
+    const timestamp = Date.now().toString();
+    const uri = `/sms/v2/services/${serviceId}/messages`;
+    const signature = generateSignature('POST', uri, timestamp, accessKey, secretKey);
+
+    // 메시지 구성
+    const messages = recipients.map(r => ({
+        to: r.phone.replace(/^0/, '').replace(/-/g, '')  // 010-1234-5678 -> 1012345678
+    }));
+
+    // 80바이트 초과시 자동으로 LMS로 변경
+    const contentBytes = Buffer.byteLength(content, 'utf8');
+    const messageType = contentBytes > 80 ? 'LMS' : (type || 'SMS');
+
+    const body = {
+        type: messageType,
+        contentType: 'COMM',  // 일반 메시지
+        countryCode: '82',
+        from: from.replace(/-/g, ''),  // 발신번호 (하이픈 제거)
+        content: content,
+        messages: messages
+    };
+
+    try {
+        const response = await axios.post(
+            `${SENS_API_URL}${uri}`,
+            body,
+            {
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'x-ncp-apigw-timestamp': timestamp,
+                    'x-ncp-iam-access-key': accessKey,
+                    'x-ncp-apigw-signature-v2': signature
+                }
+            }
+        );
+
+        return {
+            success: true,
+            requestId: response.data.requestId,
+            requestTime: response.data.requestTime,
+            statusCode: response.data.statusCode,
+            statusName: response.data.statusName,
+            messageType: messageType
+        };
+    } catch (error) {
+        console.error('SMS 발송 오류:', error.response?.data || error.message);
+
+        return {
+            success: false,
+            error: error.response?.data?.error || error.message,
+            statusCode: error.response?.status || 500
+        };
+    }
+}
+
 module.exports = {
     generateSignature,
     encryptApiKey,
     decryptApiKey,
     sendAlimtalk,
+    sendSMS,
     replaceTemplateVariables,
     createUnpaidNotificationMessage,
     isValidPhoneNumber

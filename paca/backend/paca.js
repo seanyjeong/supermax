@@ -142,6 +142,7 @@ const staffRoutes = require('./routes/staff');
 const onboardingRoutes = require('./routes/onboarding');
 const searchRoutes = require('./routes/search');
 const notificationRoutes = require('./routes/notifications');
+const smsRoutes = require('./routes/sms');
 
 // Register Routes
 app.use('/paca/auth', authRoutes);
@@ -162,6 +163,7 @@ app.use('/paca/staff', staffRoutes);
 app.use('/paca/onboarding', onboardingRoutes);
 app.use('/paca/search', searchRoutes);
 app.use('/paca/notifications', notificationRoutes);
+app.use('/paca/sms', smsRoutes);
 
 // ==========================================
 // Error Handling
