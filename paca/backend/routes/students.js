@@ -910,12 +910,24 @@ router.delete('/:id', verifyToken, requireRole('owner'), async (req, res) => {
 
         try {
             // 관련 데이터 삭제 (출석, 학원비, 성적 등)
-            await connection.query('DELETE FROM attendance WHERE student_id = ?', [studentId]);
-            await connection.query('DELETE FROM student_payments WHERE student_id = ?', [studentId]);
-            await connection.query('DELETE FROM student_performance WHERE student_id = ?', [studentId]);
-            await connection.query('DELETE FROM student_seasons WHERE student_id = ?', [studentId]);
-            await connection.query('DELETE FROM rest_credits WHERE student_id = ?', [studentId]);
-            await connection.query('DELETE FROM notification_logs WHERE student_id = ?', [studentId]);
+            // 테이블 존재 여부와 관계없이 에러 무시하고 삭제 시도
+            const tablesToDelete = [
+                'attendance',
+                'student_payments',
+                'student_performance',
+                'student_seasons',
+                'rest_credits',
+                'notification_logs'
+            ];
+
+            for (const table of tablesToDelete) {
+                try {
+                    await connection.query(`DELETE FROM ${table} WHERE student_id = ?`, [studentId]);
+                } catch (tableErr) {
+                    // 테이블이 없거나 컬럼이 없으면 무시
+                    console.log(`Skip delete from ${table}: ${tableErr.message}`);
+                }
+            }
 
             // 학생 삭제
             await connection.query('DELETE FROM students WHERE id = ?', [studentId]);
