@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS notification_settings (
 
     -- 템플릿 코드 (Naver에서 승인받은)
     template_code VARCHAR(50),
+    template_content TEXT,  -- 템플릿 본문 내용
 
     -- 알림 설정
     is_enabled BOOLEAN DEFAULT FALSE,

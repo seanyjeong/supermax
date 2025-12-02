@@ -160,20 +160,27 @@ function replaceTemplateVariables(template, variables) {
  * @param {Object} payment - 학원비 정보
  * @param {Object} student - 학생 정보
  * @param {Object} academy - 학원 정보
+ * @param {string} customTemplate - 사용자 정의 템플릿 (선택)
  * @returns {Object} - {content, variables}
  */
-function createUnpaidNotificationMessage(payment, student, academy) {
+function createUnpaidNotificationMessage(payment, student, academy, customTemplate) {
+    // 변수 매핑 (다양한 변수명 지원)
     const variables = {
-        '학원명': academy.name || '',
+        // 학생 관련
+        '이름': student.name || '',
         '학생명': student.name || '',
+        // 학원 관련
+        '학원명': academy.name || '',
+        '학원전화': academy.phone || '',
+        // 납부 관련
         '월': payment.month || '',
         '금액': payment.amount ? payment.amount.toLocaleString() : '0',
-        '납부기한': payment.due_date || '',
-        '학원전화': academy.phone || ''
+        '날짜': payment.due_date || '',
+        '납부기한': payment.due_date || ''
     };
 
-    // 기본 템플릿 (실제로는 Naver에서 승인받은 템플릿 사용)
-    const defaultTemplate = `[#{학원명}] 학원비 납부 안내
+    // 사용자 정의 템플릿이 있으면 사용, 없으면 기본 템플릿
+    const template = customTemplate || `[#{학원명}] 학원비 납부 안내
 
 안녕하세요, #{학생명} 학부모님.
 
@@ -186,7 +193,7 @@ function createUnpaidNotificationMessage(payment, student, academy) {
 ※ 이미 납부하셨다면 이 메시지는 무시해주세요.`;
 
     return {
-        content: replaceTemplateVariables(defaultTemplate, variables),
+        content: replaceTemplateVariables(template, variables),
         variables
     };
 }

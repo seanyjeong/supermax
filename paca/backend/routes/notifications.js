@@ -38,6 +38,7 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
                     naver_service_id: '',
                     kakao_channel_id: '',
                     template_code: '',
+                    template_content: '',
                     is_enabled: false,
                     auto_send_day: 0
                 }
@@ -80,6 +81,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             naver_service_id,
             kakao_channel_id,
             template_code,
+            template_content,
             is_enabled,
             auto_send_day
         } = req.body;
@@ -103,8 +105,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             await db.query(
                 `INSERT INTO notification_settings
                 (academy_id, naver_access_key, naver_secret_key, naver_service_id,
-                 kakao_channel_id, template_code, is_enabled, auto_send_day)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                 kakao_channel_id, template_code, template_content, is_enabled, auto_send_day)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     naver_access_key || null,
@@ -112,6 +114,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     naver_service_id || null,
                     kakao_channel_id || null,
                     template_code || null,
+                    template_content || null,
                     is_enabled || false,
                     auto_send_day || 0
                 ]
@@ -125,6 +128,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     naver_service_id = ?,
                     kakao_channel_id = ?,
                     template_code = ?,
+                    template_content = ?,
                     is_enabled = ?,
                     auto_send_day = ?
                 WHERE academy_id = ?`,
@@ -134,6 +138,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     naver_service_id || null,
                     kakao_channel_id || null,
                     template_code || null,
+                    template_content || null,
                     is_enabled || false,
                     auto_send_day || 0,
                     req.user.academyId
@@ -203,7 +208,8 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
         const testMessage = createUnpaidNotificationMessage(
             { month: '12', amount: 300000, due_date: '2024-12-10' },
             { name: '테스트학생' },
-            { name: academy[0]?.name || '테스트학원', phone: academy[0]?.phone || '02-1234-5678' }
+            { name: academy[0]?.name || '테스트학원', phone: academy[0]?.phone || '02-1234-5678' },
+            setting.template_content  // 사용자 정의 템플릿
         );
 
         const result = await sendAlimtalk(
@@ -350,7 +356,8 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
                     due_date: p.due_date ? new Date(p.due_date).toLocaleDateString('ko-KR') : ''
                 },
                 { name: p.student_name },
-                { name: academy[0]?.name || '', phone: academy[0]?.phone || '' }
+                { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
+                setting.template_content  // 사용자 정의 템플릿
             );
 
             return {
@@ -504,7 +511,8 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
                 due_date: payment.due_date ? new Date(payment.due_date).toLocaleDateString('ko-KR') : ''
             },
             { name: payment.student_name },
-            { name: academy[0]?.name || '', phone: academy[0]?.phone || '' }
+            { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
+            setting.template_content  // 사용자 정의 템플릿
         );
 
         // 발송

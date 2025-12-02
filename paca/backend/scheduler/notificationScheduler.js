@@ -114,7 +114,8 @@ async function sendNotificationsForAcademy(settings, year, month) {
                 due_date: p.due_date ? new Date(p.due_date).toLocaleDateString('ko-KR') : ''
             },
             { name: p.student_name },
-            { name: settings.academy_name || '', phone: settings.academy_phone || '' }
+            { name: settings.academy_name || '', phone: settings.academy_phone || '' },
+            settings.template_content  // 사용자 정의 템플릿
         );
 
         return {
