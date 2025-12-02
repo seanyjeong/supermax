@@ -425,6 +425,34 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
             });
         }
 
+        // Check for same name (warning only, not blocking)
+        const [sameNameStudent] = await db.query(
+            `SELECT id, name, phone, gender FROM students
+             WHERE academy_id = ?
+             AND name = ?
+             AND deleted_at IS NULL`,
+            [req.user.academyId, name]
+        );
+
+        // 같은 이름 + 같은 성별인데, 전화번호가 다른 경우 경고
+        const confirmForce = req.body.confirm_force;
+        if (sameNameStudent.length > 0 && !confirmForce) {
+            const existingStudent = sameNameStudent[0];
+            // 같은 성별인 경우만 경고 (성별이 없으면 무조건 경고)
+            if (!gender || !existingStudent.gender || gender === existingStudent.gender) {
+                return res.status(409).json({
+                    error: 'Same Name Warning',
+                    code: 'SAME_NAME_EXISTS',
+                    message: `같은 이름의 학생이 이미 존재합니다.`,
+                    existingStudent: {
+                        name: existingStudent.name,
+                        phone: existingStudent.phone,
+                        gender: existingStudent.gender
+                    }
+                });
+            }
+        }
+
         // Generate student number if not provided
         let finalStudentNumber = student_number;
         if (!finalStudentNumber) {
