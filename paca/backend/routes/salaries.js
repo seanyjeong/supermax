@@ -576,9 +576,9 @@ router.put('/:id', verifyToken, requireRole('owner'), async (req, res) => {
     const salaryId = parseInt(req.params.id);
 
     try {
-        // Verify exists and belongs to academy
+        // Verify exists and belongs to academy (급여 정보도 함께 가져옴)
         const [salaries] = await db.query(
-            `SELECT s.id, i.academy_id
+            `SELECT s.id, s.base_amount, s.incentive_amount, s.total_deduction, s.tax_amount, i.academy_id
             FROM salary_records s
             JOIN instructors i ON s.instructor_id = i.id
             WHERE s.id = ?`,
