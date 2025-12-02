@@ -17,6 +17,8 @@ router.get('/', verifyToken, async (req, res) => {
     try {
         const { q } = req.query;
 
+        console.log('[Search] Query:', q, 'User:', req.user?.userId, 'AcademyId:', req.user?.academyId);
+
         if (!q || q.trim().length < 1) {
             return res.json({
                 message: '검색어를 입력해주세요.',
@@ -26,6 +28,8 @@ router.get('/', verifyToken, async (req, res) => {
 
         const searchTerm = `%${q.trim()}%`;
         const academyId = req.user.academyId;
+
+        console.log('[Search] SearchTerm:', searchTerm, 'AcademyId:', academyId);
 
         // 학생 검색 (이름, 학번, 전화번호, 부모 전화번호)
         const [students] = await db.query(
@@ -89,10 +93,11 @@ router.get('/', verifyToken, async (req, res) => {
             results
         });
     } catch (error) {
-        console.error('Error searching:', error);
+        console.error('[Search] Error:', error.message, error.stack);
         res.status(500).json({
             error: 'Server Error',
-            message: '검색에 실패했습니다.'
+            message: '검색에 실패했습니다.',
+            debug: error.message
         });
     }
 });
