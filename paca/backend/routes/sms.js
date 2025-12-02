@@ -40,11 +40,19 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
         if (settings.length === 0) {
             return res.status(400).json({
                 error: 'Configuration Error',
-                message: '알림톡 설정을 먼저 완료해주세요. (설정 > 알림톡 설정)'
+                message: 'SMS 설정을 먼저 완료해주세요. (설정 > 알림톡 및 SMS 설정)'
             });
         }
 
         const setting = settings[0];
+
+        if (!setting.sms_service_id) {
+            return res.status(400).json({
+                error: 'Configuration Error',
+                message: 'SMS Service ID가 설정되지 않았습니다. (설정 > 알림톡 및 SMS 설정)'
+            });
+        }
+
         const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
 
         if (!decryptedSecret) {
@@ -145,7 +153,7 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
                 {
                     naver_access_key: setting.naver_access_key,
                     naver_secret_key: decryptedSecret,
-                    naver_service_id: setting.naver_service_id
+                    naver_service_id: setting.sms_service_id  // SMS 전용 Service ID 사용
                 },
                 fromPhone,
                 batch,

@@ -36,6 +36,7 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
                     naver_access_key: '',
                     naver_secret_key: '',
                     naver_service_id: '',
+                    sms_service_id: '',
                     kakao_channel_id: '',
                     template_code: '',
                     template_content: '',
@@ -80,6 +81,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             naver_access_key,
             naver_secret_key,
             naver_service_id,
+            sms_service_id,
             kakao_channel_id,
             template_code,
             template_content,
@@ -106,14 +108,15 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             // 신규 생성
             await db.query(
                 `INSERT INTO notification_settings
-                (academy_id, naver_access_key, naver_secret_key, naver_service_id,
+                (academy_id, naver_access_key, naver_secret_key, naver_service_id, sms_service_id,
                  kakao_channel_id, template_code, template_content, is_enabled, auto_send_day, auto_send_days)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     naver_access_key || null,
                     encryptedSecret,
                     naver_service_id || null,
+                    sms_service_id || null,
                     kakao_channel_id || null,
                     template_code || null,
                     template_content || null,
@@ -129,6 +132,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     naver_access_key = ?,
                     naver_secret_key = ?,
                     naver_service_id = ?,
+                    sms_service_id = ?,
                     kakao_channel_id = ?,
                     template_code = ?,
                     template_content = ?,
@@ -140,6 +144,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     naver_access_key || null,
                     encryptedSecret,
                     naver_service_id || null,
+                    sms_service_id || null,
                     kakao_channel_id || null,
                     template_code || null,
                     template_content || null,
