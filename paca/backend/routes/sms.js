@@ -145,6 +145,7 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
         const batchSize = 100;
         let sentCount = 0;
         let failedCount = 0;
+        let lastError = null;
 
         for (let i = 0; i < recipients.length; i += batchSize) {
             const batch = recipients.slice(i, i + batchSize);
@@ -159,6 +160,11 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
                 batch,
                 content
             );
+
+            // 에러 메시지 저장 (마지막 에러)
+            if (!result.success) {
+                lastError = result.error;
+            }
 
             // 로그 기록
             for (const recipient of batch) {
@@ -189,6 +195,23 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
             }
         }
 
+        // 모든 발송이 실패한 경우 에러 메시지 표시
+        if (sentCount === 0 && failedCount > 0 && lastError) {
+            // SENS 에러 메시지를 사용자 친화적으로 변환
+            let userMessage = lastError;
+
+            if (lastError.includes("'from' is not an authenticated") || lastError.includes("not an authenticated tel")) {
+                userMessage = '발신번호가 Naver Cloud SENS에 등록되어 있지 않습니다. SENS 콘솔 > SMS > 발신번호 관리에서 학원 전화번호를 먼저 등록해주세요.';
+            } else if (lastError.includes('serviceId')) {
+                userMessage = 'SMS Service ID가 올바르지 않습니다. 설정 > 알림톡 및 SMS 설정에서 확인해주세요.';
+            }
+
+            return res.status(400).json({
+                error: 'SMS Error',
+                message: userMessage
+            });
+        }
+
         res.json({
             message: `문자 발송 완료: ${sentCount}명 성공, ${failedCount}명 실패`,
             sent: sentCount,
@@ -197,9 +220,22 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
         });
     } catch (error) {
         console.error('SMS 발송 오류:', error);
+
+        // SENS 에러 메시지를 사용자 친화적으로 변환
+        let userMessage = 'SMS 발송에 실패했습니다.';
+        const errorMsg = error.message || '';
+
+        if (errorMsg.includes("'from' is not an authenticated")) {
+            userMessage = '발신번호가 Naver Cloud SENS에 등록되어 있지 않습니다. SENS 콘솔 > SMS > 발신번호 관리에서 학원 전화번호를 먼저 등록해주세요.';
+        } else if (errorMsg.includes('serviceId')) {
+            userMessage = 'SMS Service ID가 올바르지 않습니다. 설정 > 알림톡 및 SMS 설정에서 확인해주세요.';
+        } else if (errorMsg.includes('access key') || errorMsg.includes('secret key')) {
+            userMessage = 'API 인증에 실패했습니다. Access Key와 Secret Key를 확인해주세요.';
+        }
+
         res.status(500).json({
             error: 'Server Error',
-            message: error.message || 'SMS 발송에 실패했습니다.'
+            message: userMessage
         });
     }
 });
