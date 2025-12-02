@@ -628,6 +628,21 @@ router.put('/:id', verifyToken, requireRole('owner'), async (req, res) => {
             });
         }
 
+        // 인센티브나 공제액이 변경되면 실수령액 재계산
+        if (incentive_amount !== undefined || total_deduction !== undefined) {
+            // 기존 급여 정보 가져오기
+            const currentSalary = salaries[0];
+            const newIncentive = incentive_amount !== undefined ? parseFloat(incentive_amount) : parseFloat(currentSalary.incentive_amount) || 0;
+            const newDeduction = total_deduction !== undefined ? parseFloat(total_deduction) : parseFloat(currentSalary.total_deduction) || 0;
+            const baseAmount = parseFloat(currentSalary.base_amount) || 0;
+            const taxAmount = parseFloat(currentSalary.tax_amount) || 0;
+
+            // 실수령액 = 기본급 + 인센티브 - 공제액 - 세금
+            const netSalary = baseAmount + newIncentive - newDeduction - taxAmount;
+            updates.push('net_salary = ?');
+            params.push(netSalary);
+        }
+
         updates.push('updated_at = NOW()');
         params.push(salaryId);
 

@@ -374,6 +374,7 @@ router.post('/', verifyToken, checkPermission('instructors', 'edit'), async (req
             name,
             phone,
             email,
+            resident_number,  // 주민번호 (세무용)
             hire_date,
             salary_type,
             instructor_type,  // 'teacher' | 'assistant'
@@ -464,6 +465,7 @@ router.post('/', verifyToken, checkPermission('instructors', 'edit'), async (req
                 name,
                 phone,
                 email,
+                resident_number,
                 hire_date,
                 salary_type,
                 instructor_type,
@@ -478,12 +480,13 @@ router.post('/', verifyToken, checkPermission('instructors', 'edit'), async (req
                 work_start_time,
                 work_end_time,
                 status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
             [
                 req.user.academyId,
                 name,
                 phone,
                 email || null,
+                resident_number || null,
                 hire_date || new Date().toISOString().split('T')[0],
                 salary_type,
                 finalInstructorType,
@@ -545,6 +548,7 @@ router.put('/:id', verifyToken, checkPermission('instructors', 'edit'), async (r
             name,
             phone,
             email,
+            resident_number,  // 주민번호 (세무용)
             hire_date,
             salary_type,
             instructor_type,  // 'teacher' | 'assistant'
@@ -592,6 +596,10 @@ router.put('/:id', verifyToken, checkPermission('instructors', 'edit'), async (r
         if (email !== undefined) {
             updates.push('email = ?');
             params.push(email);
+        }
+        if (resident_number !== undefined) {
+            updates.push('resident_number = ?');
+            params.push(resident_number || null);
         }
         if (hire_date !== undefined) {
             updates.push('hire_date = ?');
