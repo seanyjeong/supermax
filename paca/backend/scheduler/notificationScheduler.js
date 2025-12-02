@@ -27,13 +27,15 @@ async function sendScheduledNotifications() {
 
     try {
         // 오늘 날짜에 자동 발송 설정된 학원 조회
+        // auto_send_days: 콤마로 구분된 날짜 목록 (예: "5,15,25")
+        // FIND_IN_SET으로 현재 날짜가 포함되어 있는지 확인
         const [academies] = await db.query(
             `SELECT ns.*, a.name AS academy_name, a.phone AS academy_phone
              FROM notification_settings ns
              JOIN academies a ON ns.academy_id = a.id
              WHERE ns.is_enabled = TRUE
-               AND ns.auto_send_day = ?`,
-            [currentDay]
+               AND (ns.auto_send_day = ? OR FIND_IN_SET(?, ns.auto_send_days) > 0)`,
+            [currentDay, currentDay.toString()]
         );
 
         if (academies.length === 0) {
@@ -69,7 +71,7 @@ async function sendNotificationsForAcademy(settings, year, month) {
         return;
     }
 
-    // 미납자 조회
+    // 미납자 조회 (학부모 또는 학생 전화가 있는 경우)
     const [unpaidPayments] = await db.query(
         `SELECT
             p.id AS payment_id,
@@ -77,7 +79,8 @@ async function sendNotificationsForAcademy(settings, year, month) {
             p.due_date,
             s.id AS student_id,
             s.name AS student_name,
-            s.parent_phone
+            s.parent_phone,
+            s.phone AS student_phone
         FROM student_payments p
         JOIN students s ON p.student_id = s.id
         WHERE p.academy_id = ?
@@ -85,7 +88,7 @@ async function sendNotificationsForAcademy(settings, year, month) {
             AND p.month = ?
             AND p.payment_status IN ('pending', 'partial')
             AND s.status = 'active'
-            AND s.parent_phone IS NOT NULL
+            AND (s.parent_phone IS NOT NULL OR s.phone IS NOT NULL)
             AND s.deleted_at IS NULL`,
         [academyId, year, month]
     );
@@ -95,8 +98,13 @@ async function sendNotificationsForAcademy(settings, year, month) {
         return;
     }
 
-    // 유효한 전화번호만 필터링
-    const validRecipients = unpaidPayments.filter(p => isValidPhoneNumber(p.parent_phone));
+    // 유효한 전화번호 필터링 (학부모 전화 우선, 없으면 학생 전화)
+    const validRecipients = unpaidPayments
+        .map(p => {
+            const phone = isValidPhoneNumber(p.parent_phone) ? p.parent_phone : p.student_phone;
+            return { ...p, effectivePhone: phone };
+        })
+        .filter(p => isValidPhoneNumber(p.effectivePhone));
 
     if (validRecipients.length === 0) {
         console.log(`[NotificationScheduler] 학원 ID ${academyId}: 유효한 전화번호 없음`);
@@ -119,7 +127,7 @@ async function sendNotificationsForAcademy(settings, year, month) {
         );
 
         return {
-            phone: p.parent_phone,
+            phone: p.effectivePhone,  // 학부모 또는 학생 전화
             content: msg.content,
             variables: msg.variables,
             studentId: p.student_id,

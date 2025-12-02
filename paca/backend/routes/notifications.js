@@ -40,7 +40,8 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
                     template_code: '',
                     template_content: '',
                     is_enabled: false,
-                    auto_send_day: 0
+                    auto_send_day: 0,
+                    auto_send_days: ''
                 }
             });
         }
@@ -83,7 +84,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             template_code,
             template_content,
             is_enabled,
-            auto_send_day
+            auto_send_day,
+            auto_send_days
         } = req.body;
 
         // 기존 설정 확인
@@ -105,8 +107,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             await db.query(
                 `INSERT INTO notification_settings
                 (academy_id, naver_access_key, naver_secret_key, naver_service_id,
-                 kakao_channel_id, template_code, template_content, is_enabled, auto_send_day)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 kakao_channel_id, template_code, template_content, is_enabled, auto_send_day, auto_send_days)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     naver_access_key || null,
@@ -116,7 +118,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_code || null,
                     template_content || null,
                     is_enabled || false,
-                    auto_send_day || 0
+                    auto_send_day || 0,
+                    auto_send_days || ''
                 ]
             );
         } else {
@@ -130,7 +133,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_code = ?,
                     template_content = ?,
                     is_enabled = ?,
-                    auto_send_day = ?
+                    auto_send_day = ?,
+                    auto_send_days = ?
                 WHERE academy_id = ?`,
                 [
                     naver_access_key || null,
@@ -141,6 +145,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_content || null,
                     is_enabled || false,
                     auto_send_day || 0,
+                    auto_send_days || '',
                     req.user.academyId
                 ]
             );
@@ -307,7 +312,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             [req.user.academyId]
         );
 
-        // 미납자 조회
+        // 미납자 조회 (학부모 전화 또는 학생 전화가 있는 경우)
         const [unpaidPayments] = await db.query(
             `SELECT
                 p.id AS payment_id,
@@ -315,7 +320,8 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
                 p.due_date,
                 s.id AS student_id,
                 s.name AS student_name,
-                s.parent_phone
+                s.parent_phone,
+                s.phone AS student_phone
             FROM student_payments p
             JOIN students s ON p.student_id = s.id
             WHERE p.academy_id = ?
@@ -323,7 +329,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
                 AND p.month = ?
                 AND p.payment_status IN ('pending', 'partial')
                 AND s.status = 'active'
-                AND s.parent_phone IS NOT NULL
+                AND (s.parent_phone IS NOT NULL OR s.phone IS NOT NULL)
                 AND s.deleted_at IS NULL`,
             [req.user.academyId, year, month]
         );
@@ -336,8 +342,14 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             });
         }
 
-        // 유효한 전화번호만 필터링
-        const validRecipients = unpaidPayments.filter(p => isValidPhoneNumber(p.parent_phone));
+        // 유효한 전화번호 필터링 (학부모 전화 우선, 없으면 학생 전화)
+        const validRecipients = unpaidPayments
+            .map(p => {
+                // 학부모 전화 우선, 없으면 학생 전화 사용
+                const phone = isValidPhoneNumber(p.parent_phone) ? p.parent_phone : p.student_phone;
+                return { ...p, effectivePhone: phone };
+            })
+            .filter(p => isValidPhoneNumber(p.effectivePhone));
 
         if (validRecipients.length === 0) {
             return res.json({
@@ -361,7 +373,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             );
 
             return {
-                phone: p.parent_phone,
+                phone: p.effectivePhone,  // 학부모 또는 학생 전화
                 content: msg.content,
                 variables: msg.variables,
                 studentId: p.student_id,
@@ -474,7 +486,8 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
                 p.due_date,
                 s.id AS student_id,
                 s.name AS student_name,
-                s.parent_phone
+                s.parent_phone,
+                s.phone AS student_phone
             FROM student_payments p
             JOIN students s ON p.student_id = s.id
             WHERE p.id = ? AND p.academy_id = ?`,
@@ -490,10 +503,15 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
 
         const payment = payments[0];
 
-        if (!isValidPhoneNumber(payment.parent_phone)) {
+        // 학부모 전화 우선, 없으면 학생 전화 사용
+        const effectivePhone = isValidPhoneNumber(payment.parent_phone)
+            ? payment.parent_phone
+            : payment.student_phone;
+
+        if (!isValidPhoneNumber(effectivePhone)) {
             return res.status(400).json({
                 error: 'Validation Error',
-                message: '학부모 전화번호가 유효하지 않습니다.'
+                message: '학부모 또는 학생의 유효한 전화번호가 없습니다.'
             });
         }
 
@@ -525,7 +543,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             },
             setting.template_code,
             [{
-                phone: payment.parent_phone,
+                phone: effectivePhone,  // 학부모 또는 학생 전화
                 content: msg.content,
                 variables: msg.variables
             }]
@@ -543,7 +561,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
                 payment.student_id,
                 payment.payment_id,
                 payment.student_name,
-                payment.parent_phone,
+                effectivePhone,  // 실제 발송된 전화번호
                 'alimtalk',
                 setting.template_code,
                 msg.content,
@@ -555,7 +573,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
 
         if (result.success) {
             res.json({
-                message: `${payment.student_name} 학부모님께 알림이 발송되었습니다.`,
+                message: `${payment.student_name} 학생에게 알림이 발송되었습니다.`,
                 success: true,
                 requestId: result.requestId
             });
