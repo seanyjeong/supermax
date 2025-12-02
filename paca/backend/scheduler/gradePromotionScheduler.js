@@ -48,7 +48,7 @@ async function promoteStudentGrades(isDryRun = false) {
     // }
 
     try {
-        // 모든 학원의 active 학생 조회
+        // 모든 학원의 active/paused 학생 조회 (graduated 제외)
         const [students] = await db.query(`
             SELECT
                 s.id,
@@ -58,7 +58,7 @@ async function promoteStudentGrades(isDryRun = false) {
                 s.status
             FROM students s
             WHERE s.deleted_at IS NULL
-              AND s.status = 'active'
+              AND s.status IN ('active', 'paused')
               AND s.grade IS NOT NULL
             ORDER BY s.academy_id, s.grade
         `);

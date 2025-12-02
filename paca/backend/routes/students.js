@@ -1073,13 +1073,13 @@ router.post('/auto-promote', verifyToken, requireRole('owner'), async (req, res)
             'N수': 'N수'
         };
 
-        // 해당 학원의 active 학생 조회
+        // 해당 학원의 active/paused 학생 조회 (graduated 제외)
         const [students] = await db.query(`
             SELECT id, name, grade, status
             FROM students
             WHERE academy_id = ?
               AND deleted_at IS NULL
-              AND status = 'active'
+              AND status IN ('active', 'paused')
               AND grade IS NOT NULL
             ORDER BY grade
         `, [academyId]);
