@@ -890,7 +890,7 @@ router.get('/salaries', verifyToken, checkPermission('reports', 'view'), async (
                 s.id,
                 s.year_month,
                 i.name as instructor_name,
-                i.instructor_type,
+                i.resident_number,
                 s.base_amount,
                 s.incentive_amount,
                 s.total_deduction,
@@ -943,7 +943,7 @@ router.get('/salaries', verifyToken, checkPermission('reports', 'view'), async (
 
         // ========== 컬럼 헤더 ==========
         const headerRow = sheet.getRow(5);
-        const headers = ['월', '이름', '구분', '기본급', '인센티브', '공제액', '세금', '실수령액'];
+        const headers = ['월', '이름', '주민번호', '기본급', '인센티브', '공제액', '세금', '실수령액'];
         headers.forEach((header, index) => {
             const cell = headerRow.getCell(index + 1);
             cell.value = header;
@@ -966,18 +966,12 @@ router.get('/salaries', verifyToken, checkPermission('reports', 'view'), async (
         // 컬럼 너비 설정
         sheet.getColumn(1).width = 12;  // 월
         sheet.getColumn(2).width = 15;  // 이름
-        sheet.getColumn(3).width = 10;  // 구분
+        sheet.getColumn(3).width = 18;  // 주민번호
         sheet.getColumn(4).width = 14;  // 기본급
         sheet.getColumn(5).width = 14;  // 인센티브
         sheet.getColumn(6).width = 14;  // 공제액
         sheet.getColumn(7).width = 14;  // 세금
         sheet.getColumn(8).width = 15;  // 실수령액
-
-        const INSTRUCTOR_TYPE_LABELS = {
-            full_time: '정규직',
-            part_time: '파트타임',
-            freelance: '프리랜서'
-        };
 
         // ========== 데이터 행 ==========
         let totalBase = 0, totalIncentive = 0, totalDeduction = 0, totalTax = 0, totalNet = 0;
@@ -1002,7 +996,7 @@ router.get('/salaries', verifyToken, checkPermission('reports', 'view'), async (
             const [y, m] = salary.year_month.split('-');
             row.getCell(1).value = `${y}년 ${parseInt(m)}월`;
             row.getCell(2).value = salary.instructor_name;
-            row.getCell(3).value = INSTRUCTOR_TYPE_LABELS[salary.instructor_type] || salary.instructor_type;
+            row.getCell(3).value = salary.resident_number || '-';
             row.getCell(4).value = baseAmount;
             row.getCell(5).value = incentiveAmount;
             row.getCell(6).value = totalDeductionAmt;
