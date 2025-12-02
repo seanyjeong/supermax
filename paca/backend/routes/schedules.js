@@ -2231,6 +2231,7 @@ router.post('/fix-all', verifyToken, requireRole('owner'), async (req, res) => {
         };
 
         // 1. 잘못된 스케줄 조회 (일반 학생의 morning/afternoon 또는 요일 불일치)
+        // 11월 1일부터 모든 날짜 대상 (과거 포함)
         const [wrongSchedules] = await connection.query(`
             SELECT
                 a.id as attendance_id,
@@ -2247,7 +2248,7 @@ router.post('/fix-all', verifyToken, requireRole('owner'), async (req, res) => {
             JOIN students s ON a.student_id = s.id
             LEFT JOIN student_seasons ss ON s.id = ss.student_id AND ss.is_cancelled = 0
             WHERE cs.academy_id = ?
-            AND cs.class_date >= CURDATE()
+            AND cs.class_date >= '2025-11-01'
             AND s.status = 'active'
             AND s.deleted_at IS NULL
             AND ss.id IS NULL
@@ -2271,13 +2272,13 @@ router.post('/fix-all', verifyToken, requireRole('owner'), async (req, res) => {
             results.deleted_attendance = deleteResult.affectedRows;
         }
 
-        // 3. 빈 스케줄 삭제
+        // 3. 빈 스케줄 삭제 (11월 1일 이후)
         const [emptyScheduleResult] = await connection.query(`
             DELETE cs FROM class_schedules cs
             LEFT JOIN attendance a ON cs.id = a.class_schedule_id
             WHERE cs.academy_id = ?
             AND a.id IS NULL
-            AND cs.class_date >= CURDATE()
+            AND cs.class_date >= '2025-11-01'
         `, [req.user.academyId]);
         results.deleted_empty_schedules = emptyScheduleResult.affectedRows;
 
@@ -2296,6 +2297,12 @@ router.post('/fix-all', verifyToken, requireRole('owner'), async (req, res) => {
 
         results.details.push(`재배정 대상 학생: ${activeStudents.length}명`);
 
+        // 11월과 12월 모두 재배정 (2025년)
+        const monthsToProcess = [
+            { year: 2025, month: 10 },  // 11월 (0-indexed)
+            { year: 2025, month: 11 }   // 12월
+        ];
+
         for (const student of activeStudents) {
             const classDays = typeof student.class_days === 'string'
                 ? JSON.parse(student.class_days)
@@ -2303,51 +2310,51 @@ router.post('/fix-all', verifyToken, requireRole('owner'), async (req, res) => {
 
             if (!Array.isArray(classDays) || classDays.length === 0) continue;
 
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = today.getMonth();
-            const lastDay = new Date(year, month + 1, 0).getDate();
+            for (const { year, month } of monthsToProcess) {
+                const firstDay = 1;
+                const lastDay = new Date(year, month + 1, 0).getDate();
 
-            for (let day = today.getDate(); day <= lastDay; day++) {
-                const currentDate = new Date(year, month, day);
-                const dayOfWeek = currentDate.getDay();
+                for (let day = firstDay; day <= lastDay; day++) {
+                    const currentDate = new Date(year, month, day);
+                    const dayOfWeek = currentDate.getDay();
 
-                if (classDays.includes(dayOfWeek)) {
-                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    if (classDays.includes(dayOfWeek)) {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-                    // evening 스케줄 조회 또는 생성
-                    let [schedules] = await connection.query(
-                        `SELECT id FROM class_schedules
-                         WHERE academy_id = ? AND class_date = ? AND time_slot = 'evening'`,
-                        [student.academy_id, dateStr]
-                    );
-
-                    let scheduleId;
-                    if (schedules.length === 0) {
-                        const [result] = await connection.query(
-                            `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
-                             VALUES (?, ?, 'evening', false)`,
+                        // evening 스케줄 조회 또는 생성
+                        let [schedules] = await connection.query(
+                            `SELECT id FROM class_schedules
+                             WHERE academy_id = ? AND class_date = ? AND time_slot = 'evening'`,
                             [student.academy_id, dateStr]
                         );
-                        scheduleId = result.insertId;
-                        results.created_schedules++;
-                    } else {
-                        scheduleId = schedules[0].id;
-                    }
 
-                    // 이미 배정되어 있는지 확인
-                    const [existing] = await connection.query(
-                        `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
-                        [scheduleId, student.id]
-                    );
+                        let scheduleId;
+                        if (schedules.length === 0) {
+                            const [result] = await connection.query(
+                                `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                                 VALUES (?, ?, 'evening', false)`,
+                                [student.academy_id, dateStr]
+                            );
+                            scheduleId = result.insertId;
+                            results.created_schedules++;
+                        } else {
+                            scheduleId = schedules[0].id;
+                        }
 
-                    if (existing.length === 0) {
-                        await connection.query(
-                            `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
-                             VALUES (?, ?, NULL)`,
+                        // 이미 배정되어 있는지 확인
+                        const [existing] = await connection.query(
+                            `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
                             [scheduleId, student.id]
                         );
-                        results.assigned_attendance++;
+
+                        if (existing.length === 0) {
+                            await connection.query(
+                                `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                                 VALUES (?, ?, NULL)`,
+                                [scheduleId, student.id]
+                            );
+                            results.assigned_attendance++;
+                        }
                     }
                 }
             }
