@@ -2211,4 +2211,163 @@ router.get('/instructor-schedules/month', verifyToken, checkPermission('schedule
     }
 });
 
+/**
+ * POST /paca/schedules/fix-all
+ * 잘못된 스케줄 일괄 정리 (owner 전용)
+ * - morning/afternoon 시간대 스케줄 삭제 (시즌 학생 제외)
+ * - 수업요일 불일치 스케줄 삭제
+ * - evening 시간대로 재배정
+ */
+router.post('/fix-all', verifyToken, requireRole('owner'), async (req, res) => {
+    const connection = await db.getConnection();
+
+    try {
+        const results = {
+            deleted_attendance: 0,
+            deleted_empty_schedules: 0,
+            created_schedules: 0,
+            assigned_attendance: 0,
+            details: []
+        };
+
+        // 1. 잘못된 스케줄 조회 (일반 학생의 morning/afternoon 또는 요일 불일치)
+        const [wrongSchedules] = await connection.query(`
+            SELECT
+                a.id as attendance_id,
+                a.student_id,
+                s.name as student_name,
+                s.grade,
+                s.class_days,
+                cs.id as schedule_id,
+                cs.class_date,
+                cs.time_slot,
+                DAYOFWEEK(cs.class_date) - 1 as day_of_week
+            FROM attendance a
+            JOIN class_schedules cs ON a.class_schedule_id = cs.id
+            JOIN students s ON a.student_id = s.id
+            LEFT JOIN student_seasons ss ON s.id = ss.student_id AND ss.is_cancelled = 0
+            WHERE cs.academy_id = ?
+            AND cs.class_date >= CURDATE()
+            AND s.status = 'active'
+            AND s.deleted_at IS NULL
+            AND ss.id IS NULL
+            AND a.attendance_status IS NULL
+            AND (
+                cs.time_slot IN ('morning', 'afternoon')
+                OR NOT JSON_CONTAINS(COALESCE(s.class_days, '[]'), CAST(DAYOFWEEK(cs.class_date) - 1 AS CHAR))
+            )
+            ORDER BY s.name, cs.class_date
+        `, [req.user.academyId]);
+
+        results.details.push(`발견된 잘못된 스케줄: ${wrongSchedules.length}개`);
+
+        // 2. 잘못된 출석 기록 삭제
+        if (wrongSchedules.length > 0) {
+            const attendanceIds = wrongSchedules.map(w => w.attendance_id);
+            const [deleteResult] = await connection.query(
+                `DELETE FROM attendance WHERE id IN (?)`,
+                [attendanceIds]
+            );
+            results.deleted_attendance = deleteResult.affectedRows;
+        }
+
+        // 3. 빈 스케줄 삭제
+        const [emptyScheduleResult] = await connection.query(`
+            DELETE cs FROM class_schedules cs
+            LEFT JOIN attendance a ON cs.id = a.class_schedule_id
+            WHERE cs.academy_id = ?
+            AND a.id IS NULL
+            AND cs.class_date >= CURDATE()
+        `, [req.user.academyId]);
+        results.deleted_empty_schedules = emptyScheduleResult.affectedRows;
+
+        // 4. 올바른 스케줄로 재배정
+        const [activeStudents] = await connection.query(`
+            SELECT s.id, s.name, s.academy_id, s.class_days
+            FROM students s
+            LEFT JOIN student_seasons ss ON s.id = ss.student_id AND ss.is_cancelled = 0
+            WHERE s.academy_id = ?
+            AND s.status = 'active'
+            AND s.deleted_at IS NULL
+            AND s.class_days IS NOT NULL
+            AND s.class_days != '[]'
+            AND ss.id IS NULL
+        `, [req.user.academyId]);
+
+        results.details.push(`재배정 대상 학생: ${activeStudents.length}명`);
+
+        for (const student of activeStudents) {
+            const classDays = typeof student.class_days === 'string'
+                ? JSON.parse(student.class_days)
+                : student.class_days;
+
+            if (!Array.isArray(classDays) || classDays.length === 0) continue;
+
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = today.getMonth();
+            const lastDay = new Date(year, month + 1, 0).getDate();
+
+            for (let day = today.getDate(); day <= lastDay; day++) {
+                const currentDate = new Date(year, month, day);
+                const dayOfWeek = currentDate.getDay();
+
+                if (classDays.includes(dayOfWeek)) {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                    // evening 스케줄 조회 또는 생성
+                    let [schedules] = await connection.query(
+                        `SELECT id FROM class_schedules
+                         WHERE academy_id = ? AND class_date = ? AND time_slot = 'evening'`,
+                        [student.academy_id, dateStr]
+                    );
+
+                    let scheduleId;
+                    if (schedules.length === 0) {
+                        const [result] = await connection.query(
+                            `INSERT INTO class_schedules (academy_id, class_date, time_slot, attendance_taken)
+                             VALUES (?, ?, 'evening', false)`,
+                            [student.academy_id, dateStr]
+                        );
+                        scheduleId = result.insertId;
+                        results.created_schedules++;
+                    } else {
+                        scheduleId = schedules[0].id;
+                    }
+
+                    // 이미 배정되어 있는지 확인
+                    const [existing] = await connection.query(
+                        `SELECT id FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
+                        [scheduleId, student.id]
+                    );
+
+                    if (existing.length === 0) {
+                        await connection.query(
+                            `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                             VALUES (?, ?, NULL)`,
+                            [scheduleId, student.id]
+                        );
+                        results.assigned_attendance++;
+                    }
+                }
+            }
+        }
+
+        connection.release();
+
+        res.json({
+            message: '스케줄 정리 완료',
+            results
+        });
+
+    } catch (error) {
+        connection.release();
+        console.error('Error fixing schedules:', error);
+        res.status(500).json({
+            error: 'Server Error',
+            message: error.message || 'Failed to fix schedules'
+        });
+    }
+});
+
 module.exports = router;
