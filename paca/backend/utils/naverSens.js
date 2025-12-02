@@ -286,12 +286,103 @@ async function sendSMS(settings, from, recipients, content, type = 'SMS') {
     }
 }
 
+/**
+ * MMS 발송 (이미지 첨부)
+ * @param {Object} settings - API 설정 (access_key, secret_key, service_id)
+ * @param {string} from - 발신번호 (SENS에 등록된 번호)
+ * @param {Array} recipients - 수신자 목록 [{phone}]
+ * @param {string} content - 문자 내용
+ * @param {Array} images - 이미지 배열 [{name: 'image.jpg', data: 'base64string'}] (최대 3장)
+ * @returns {Object} - 발송 결과
+ */
+async function sendMMS(settings, from, recipients, content, images = []) {
+    const {
+        naver_access_key: accessKey,
+        naver_secret_key: secretKey,
+        naver_service_id: serviceId
+    } = settings;
+
+    if (!accessKey || !secretKey || !serviceId) {
+        throw new Error('SMS 설정이 완료되지 않았습니다. API 키를 확인해주세요.');
+    }
+
+    if (!from) {
+        throw new Error('발신번호가 설정되지 않았습니다. 학원 설정에서 전화번호를 확인해주세요.');
+    }
+
+    if (!images || images.length === 0) {
+        throw new Error('MMS는 이미지가 필요합니다.');
+    }
+
+    if (images.length > 3) {
+        throw new Error('이미지는 최대 3장까지 첨부 가능합니다.');
+    }
+
+    const timestamp = Date.now().toString();
+    const uri = `/sms/v2/services/${serviceId}/messages`;
+    const signature = generateSignature('POST', uri, timestamp, accessKey, secretKey);
+
+    // 메시지 구성
+    const messages = recipients.map(r => ({
+        to: r.phone.replace(/^0/, '').replace(/-/g, '')  // 010-1234-5678 -> 1012345678
+    }));
+
+    // 이미지 파일 구성
+    const files = images.map(img => ({
+        name: img.name,
+        body: img.data  // base64 인코딩된 이미지
+    }));
+
+    const body = {
+        type: 'MMS',
+        contentType: 'COMM',  // 일반 메시지
+        countryCode: '82',
+        from: from.replace(/-/g, ''),  // 발신번호 (하이픈 제거)
+        content: content,
+        messages: messages,
+        files: files
+    };
+
+    try {
+        const response = await axios.post(
+            `${SENS_API_URL}${uri}`,
+            body,
+            {
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    'x-ncp-apigw-timestamp': timestamp,
+                    'x-ncp-iam-access-key': accessKey,
+                    'x-ncp-apigw-signature-v2': signature
+                }
+            }
+        );
+
+        return {
+            success: true,
+            requestId: response.data.requestId,
+            requestTime: response.data.requestTime,
+            statusCode: response.data.statusCode,
+            statusName: response.data.statusName,
+            messageType: 'MMS'
+        };
+    } catch (error) {
+        console.error('MMS 발송 오류:', error.response?.data || error.message);
+
+        return {
+            success: false,
+            error: error.response?.data?.error || error.response?.data?.errorMessage || error.message,
+            statusCode: error.response?.status || 500
+        };
+    }
+}
+
 module.exports = {
     generateSignature,
     encryptApiKey,
     decryptApiKey,
     sendAlimtalk,
     sendSMS,
+    sendMMS,
     replaceTemplateVariables,
     createUnpaidNotificationMessage,
     isValidPhoneNumber

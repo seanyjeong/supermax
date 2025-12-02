@@ -10,6 +10,7 @@ const { verifyToken, checkPermission } = require('../middleware/auth');
 const {
     decryptApiKey,
     sendSMS,
+    sendMMS,
     isValidPhoneNumber
 } = require('../utils/naverSens');
 
@@ -17,12 +18,18 @@ const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'paca-notification-secret-k
 
 /**
  * POST /paca/sms/send
- * SMS 발송
- * body: { target: 'all' | 'students' | 'parents' | 'custom', content, customPhones?: [] }
+ * SMS/MMS 발송
+ * body: {
+ *   target: 'all' | 'students' | 'parents' | 'custom',
+ *   content,
+ *   customPhones?: [],
+ *   images?: [{name, data}],
+ *   gradeFilter?: 'all' | 'junior' | 'senior'  // 학년 필터 (선행반/3학년)
+ * }
  */
 router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (req, res) => {
     try {
-        const { target, content, customPhones } = req.body;
+        const { target, content, customPhones, images, gradeFilter = 'all' } = req.body;
 
         if (!content || content.trim().length === 0) {
             return res.status(400).json({
@@ -92,14 +99,25 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
                     s.id,
                     s.name,
                     s.phone AS student_phone,
-                    s.parent_phone
+                    s.parent_phone,
+                    s.grade
                 FROM students s
                 WHERE s.academy_id = ?
                   AND s.status = 'active'
                   AND s.deleted_at IS NULL
             `;
+            const queryParams = [req.user.academyId];
 
-            const [students] = await db.query(query, [req.user.academyId]);
+            // 학년 필터 적용
+            if (gradeFilter === 'junior') {
+                // 선행반: 중학생 + 고1 + 고2
+                query += ` AND s.grade IN ('중1', '중2', '중3', '고1', '고2')`;
+            } else if (gradeFilter === 'senior') {
+                // 3학년반: 고3 + N수
+                query += ` AND s.grade IN ('고3', 'N수')`;
+            }
+
+            const [students] = await db.query(query, queryParams);
 
             if (target === 'all') {
                 // 모두: 학부모 전화 우선, 없으면 학생 전화
@@ -141,25 +159,70 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
             });
         }
 
-        // SMS 발송 (배치로 처리, 최대 100명씩)
+        // 이미지가 있으면 MMS, 없으면 SMS/LMS
+        const isMMS = images && images.length > 0;
+
+        // MMS 이미지 검증
+        if (isMMS) {
+            if (images.length > 3) {
+                return res.status(400).json({
+                    error: 'Validation Error',
+                    message: '이미지는 최대 3장까지 첨부 가능합니다.'
+                });
+            }
+            // 이미지 형식 검증
+            const allowedTypes = ['jpg', 'jpeg', 'png'];
+            for (const img of images) {
+                const ext = img.name.split('.').pop().toLowerCase();
+                if (!allowedTypes.includes(ext)) {
+                    return res.status(400).json({
+                        error: 'Validation Error',
+                        message: '이미지는 JPG, PNG 형식만 가능합니다.'
+                    });
+                }
+            }
+        }
+
+        // SMS/MMS 발송 (배치로 처리, 최대 100명씩)
         const batchSize = 100;
         let sentCount = 0;
         let failedCount = 0;
         let lastError = null;
+        let messageType = isMMS ? 'MMS' : 'SMS';
 
         for (let i = 0; i < recipients.length; i += batchSize) {
             const batch = recipients.slice(i, i + batchSize);
 
-            const result = await sendSMS(
-                {
-                    naver_access_key: setting.naver_access_key,
-                    naver_secret_key: decryptedSecret,
-                    naver_service_id: setting.sms_service_id  // SMS 전용 Service ID 사용
-                },
-                fromPhone,
-                batch,
-                content
-            );
+            let result;
+            if (isMMS) {
+                // MMS 발송
+                result = await sendMMS(
+                    {
+                        naver_access_key: setting.naver_access_key,
+                        naver_secret_key: decryptedSecret,
+                        naver_service_id: setting.sms_service_id
+                    },
+                    fromPhone,
+                    batch,
+                    content,
+                    images
+                );
+            } else {
+                // SMS/LMS 발송
+                result = await sendSMS(
+                    {
+                        naver_access_key: setting.naver_access_key,
+                        naver_secret_key: decryptedSecret,
+                        naver_service_id: setting.sms_service_id
+                    },
+                    fromPhone,
+                    batch,
+                    content
+                );
+                if (result.messageType) {
+                    messageType = result.messageType;  // SMS or LMS
+                }
+            }
 
             // 에러 메시지 저장 (마지막 에러)
             if (!result.success) {
@@ -179,7 +242,7 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
                         recipient.studentId || null,
                         recipient.name,
                         recipient.phone,
-                        'sms',
+                        messageType.toLowerCase(),  // sms, lms, mms
                         content,
                         result.success ? 'sent' : 'failed',
                         result.requestId || null,
@@ -243,20 +306,32 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
 /**
  * GET /paca/sms/recipients-count
  * 대상별 수신자 수 조회
+ * query: { gradeFilter?: 'all' | 'junior' | 'senior' }
  */
 router.get('/recipients-count', verifyToken, async (req, res) => {
     try {
+        const { gradeFilter = 'all' } = req.query;
+
         // 활성 학생 목록 조회
-        const [students] = await db.query(
-            `SELECT
+        let query = `
+            SELECT
                 s.phone AS student_phone,
-                s.parent_phone
+                s.parent_phone,
+                s.grade
             FROM students s
             WHERE s.academy_id = ?
               AND s.status = 'active'
-              AND s.deleted_at IS NULL`,
-            [req.user.academyId]
-        );
+              AND s.deleted_at IS NULL
+        `;
+
+        // 학년 필터 적용
+        if (gradeFilter === 'junior') {
+            query += ` AND s.grade IN ('중1', '중2', '중3', '고1', '고2')`;
+        } else if (gradeFilter === 'senior') {
+            query += ` AND s.grade IN ('고3', 'N수')`;
+        }
+
+        const [students] = await db.query(query, [req.user.academyId]);
 
         // 각 카테고리별 유효한 전화번호 수 계산
         const studentPhones = new Set();
@@ -294,24 +369,24 @@ router.get('/recipients-count', verifyToken, async (req, res) => {
 
 /**
  * GET /paca/sms/logs
- * SMS 발송 내역 조회
+ * SMS/LMS/MMS 발송 내역 조회
  */
 router.get('/logs', verifyToken, async (req, res) => {
     try {
         const { page = 1, limit = 20 } = req.query;
         const offset = (page - 1) * limit;
 
-        // 총 개수
+        // 총 개수 (sms, lms, mms 포함)
         const [countResult] = await db.query(
             `SELECT COUNT(*) AS total FROM notification_logs
-             WHERE academy_id = ? AND message_type = 'sms'`,
+             WHERE academy_id = ? AND message_type IN ('sms', 'lms', 'mms')`,
             [req.user.academyId]
         );
 
         // 로그 목록
         const [logs] = await db.query(
             `SELECT * FROM notification_logs
-             WHERE academy_id = ? AND message_type = 'sms'
+             WHERE academy_id = ? AND message_type IN ('sms', 'lms', 'mms')
              ORDER BY created_at DESC
              LIMIT ? OFFSET ?`,
             [req.user.academyId, parseInt(limit), offset]
