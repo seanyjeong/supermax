@@ -174,11 +174,12 @@ router.get('/slot', verifyToken, async (req, res) => {
 
         const schedule = schedules[0] || null;
 
-        // 스케줄이 있으면 배정된 학생 조회 (시즌 정보 포함)
+        // 스케줄이 있으면 배정된 학생 조회 (시즌 정보, 체험생 정보 포함)
         let students = [];
         if (schedule) {
             const [attendanceRecords] = await db.query(
                 `SELECT DISTINCT a.student_id, s.name as student_name, a.attendance_status,
+                        s.is_trial, s.trial_remaining,
                         (SELECT se2.season_type
                          FROM student_seasons ss2
                          JOIN seasons se2 ON ss2.season_id = se2.id
