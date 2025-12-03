@@ -13,6 +13,10 @@ const {
     sendMMS,
     isValidPhoneNumber
 } = require('../utils/naverSens');
+const {
+    sendSMSSolapi,
+    sendMMSSolapi
+} = require('../utils/solapi');
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 if (!ENCRYPTION_KEY) {
@@ -55,37 +59,62 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
         }
 
         const setting = settings[0];
+        const serviceType = setting.service_type || 'sens';
 
-        if (!setting.sms_service_id) {
-            return res.status(400).json({
-                error: 'Configuration Error',
-                message: 'SMS Service ID가 설정되지 않았습니다. (설정 > 알림톡 및 SMS 설정)'
-            });
+        // 서비스별 설정 검증
+        let decryptedSecret = null;
+        let fromPhone = null;
+
+        if (serviceType === 'solapi') {
+            // 솔라피 설정 검증
+            if (!setting.solapi_api_key || !setting.solapi_api_secret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: '솔라피 API 설정이 완료되지 않았습니다. (설정 > 알림톡 및 SMS 설정)'
+                });
+            }
+            decryptedSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
+            if (!decryptedSecret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: '솔라피 API Secret이 올바르지 않습니다.'
+                });
+            }
+            fromPhone = setting.solapi_sender_phone;
+            if (!fromPhone) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: '솔라피 발신번호가 설정되지 않았습니다. (설정 > 알림톡 및 SMS 설정)'
+                });
+            }
+        } else {
+            // SENS 설정 검증
+            if (!setting.sms_service_id) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: 'SMS Service ID가 설정되지 않았습니다. (설정 > 알림톡 및 SMS 설정)'
+                });
+            }
+            decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
+            if (!decryptedSecret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: 'API Secret Key가 올바르지 않습니다.'
+                });
+            }
+            // 학원 정보에서 발신번호 가져오기
+            const [academy] = await db.query(
+                'SELECT phone FROM academies WHERE id = ?',
+                [req.user.academyId]
+            );
+            if (!academy[0]?.phone) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: '학원 전화번호가 설정되지 않았습니다. 설정 > 학원 기본 정보에서 전화번호를 입력해주세요.'
+                });
+            }
+            fromPhone = academy[0].phone;
         }
-
-        const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
-
-        if (!decryptedSecret) {
-            return res.status(400).json({
-                error: 'Configuration Error',
-                message: 'API Secret Key가 올바르지 않습니다.'
-            });
-        }
-
-        // 학원 정보에서 발신번호 가져오기
-        const [academy] = await db.query(
-            'SELECT phone FROM academies WHERE id = ?',
-            [req.user.academyId]
-        );
-
-        if (!academy[0]?.phone) {
-            return res.status(400).json({
-                error: 'Configuration Error',
-                message: '학원 전화번호가 설정되지 않았습니다. 설정 > 학원 기본 정보에서 전화번호를 입력해주세요.'
-            });
-        }
-
-        const fromPhone = academy[0].phone;
 
         // 수신자 목록 조회
         let recipients = [];
@@ -197,33 +226,62 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
             const batch = recipients.slice(i, i + batchSize);
 
             let result;
-            if (isMMS) {
-                // MMS 발송
-                result = await sendMMS(
-                    {
-                        naver_access_key: setting.naver_access_key,
-                        naver_secret_key: decryptedSecret,
-                        naver_service_id: setting.sms_service_id
-                    },
-                    fromPhone,
-                    batch,
-                    content,
-                    images
-                );
-            } else {
-                // SMS/LMS 발송
-                result = await sendSMS(
-                    {
-                        naver_access_key: setting.naver_access_key,
-                        naver_secret_key: decryptedSecret,
-                        naver_service_id: setting.sms_service_id
-                    },
-                    fromPhone,
-                    batch,
-                    content
-                );
+
+            if (serviceType === 'solapi') {
+                // 솔라피 발송
+                if (isMMS) {
+                    result = await sendMMSSolapi(
+                        {
+                            solapi_api_key: setting.solapi_api_key,
+                            solapi_api_secret: decryptedSecret,
+                            solapi_sender_phone: fromPhone
+                        },
+                        batch,
+                        content,
+                        images
+                    );
+                } else {
+                    result = await sendSMSSolapi(
+                        {
+                            solapi_api_key: setting.solapi_api_key,
+                            solapi_api_secret: decryptedSecret,
+                            solapi_sender_phone: fromPhone
+                        },
+                        batch,
+                        content
+                    );
+                }
                 if (result.messageType) {
-                    messageType = result.messageType;  // SMS or LMS
+                    messageType = result.messageType;
+                }
+            } else {
+                // SENS 발송
+                if (isMMS) {
+                    result = await sendMMS(
+                        {
+                            naver_access_key: setting.naver_access_key,
+                            naver_secret_key: decryptedSecret,
+                            naver_service_id: setting.sms_service_id
+                        },
+                        fromPhone,
+                        batch,
+                        content,
+                        images
+                    );
+                } else {
+                    result = await sendSMS(
+                        {
+                            naver_access_key: setting.naver_access_key,
+                            naver_secret_key: decryptedSecret,
+                            naver_service_id: setting.sms_service_id
+                        },
+                        fromPhone,
+                        batch,
+                        content
+                    );
+                    if (result.messageType) {
+                        messageType = result.messageType;  // SMS or LMS
+                    }
                 }
             }
 
