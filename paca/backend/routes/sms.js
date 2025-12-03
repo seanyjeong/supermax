@@ -220,7 +220,7 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
         let sentCount = 0;
         let failedCount = 0;
         let lastError = null;
-        let messageType = isMMS ? 'MMS' : 'SMS';
+        let messageType = isMMS ? 'mms' : 'sms';
 
         for (let i = 0; i < recipients.length; i += batchSize) {
             const batch = recipients.slice(i, i + batchSize);
@@ -252,7 +252,7 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
                     );
                 }
                 if (result.messageType) {
-                    messageType = result.messageType;
+                    messageType = result.messageType.toLowerCase();
                 }
             } else {
                 // SENS 발송
@@ -280,7 +280,7 @@ router.post('/send', verifyToken, checkPermission('settings', 'edit'), async (re
                         content
                     );
                     if (result.messageType) {
-                        messageType = result.messageType;  // SMS or LMS
+                        messageType = result.messageType.toLowerCase();  // sms or lms
                     }
                 }
             }
