@@ -656,8 +656,11 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
         // 자동 스케줄 배정
         let autoAssignResult = null;
 
+        console.log('[Student Create] is_trial:', is_trial, 'trial_dates:', trial_dates);
+
         if (is_trial && trial_dates && trial_dates.length > 0) {
             // 체험생: trial_dates에 지정된 날짜들에 배정
+            console.log('[Trial] Starting schedule assignment for', trial_dates.length, 'dates');
             try {
                 let trialAssigned = 0;
                 for (const trialDate of trial_dates) {
@@ -694,6 +697,7 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
                     trialAssigned++;
                 }
                 autoAssignResult = { assigned: trialAssigned, created: 0 };
+                console.log('[Trial] Assigned', trialAssigned, 'schedules');
             } catch (assignError) {
                 console.error('Trial schedule assign failed:', assignError);
             }
@@ -784,7 +788,11 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             status,
             rest_start_date,
             rest_end_date,
-            rest_reason
+            rest_reason,
+            // 체험생 관련 필드
+            is_trial,
+            trial_remaining,
+            trial_dates
         } = req.body;
 
         // Validate student_type
@@ -930,6 +938,19 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             updates.push('rest_reason = ?');
             params.push(rest_reason || null);
         }
+        // 체험생 관련 필드
+        if (is_trial !== undefined) {
+            updates.push('is_trial = ?');
+            params.push(is_trial);
+        }
+        if (trial_remaining !== undefined) {
+            updates.push('trial_remaining = ?');
+            params.push(trial_remaining);
+        }
+        if (trial_dates !== undefined) {
+            updates.push('trial_dates = ?');
+            params.push(JSON.stringify(trial_dates));
+        }
 
         if (updates.length === 0) {
             return res.status(400).json({
@@ -980,10 +1001,63 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             }
         }
 
+        // 체험생 trial_dates가 변경되었으면 스케줄 재배정
+        let trialAssignResult = null;
+        if (is_trial && trial_dates !== undefined && trial_dates.length > 0) {
+            try {
+                // 기존 미출석 스케줄 삭제
+                await db.query(
+                    `DELETE a FROM attendance a
+                     JOIN class_schedules cs ON a.class_schedule_id = cs.id
+                     WHERE a.student_id = ?
+                     AND cs.academy_id = ?
+                     AND a.attendance_status IS NULL`,
+                    [studentId, req.user.academyId]
+                );
+
+                // 새 스케줄 배정
+                let trialAssigned = 0;
+                for (const trialDate of trial_dates) {
+                    const { date, time_slot } = trialDate;
+                    if (!date || !time_slot) continue;
+
+                    let [schedules] = await db.query(
+                        `SELECT id FROM class_schedules
+                         WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+                        [req.user.academyId, date, time_slot]
+                    );
+
+                    let scheduleId;
+                    if (schedules.length === 0) {
+                        const [createResult] = await db.query(
+                            `INSERT INTO class_schedules (academy_id, class_date, time_slot)
+                             VALUES (?, ?, ?)`,
+                            [req.user.academyId, date, time_slot]
+                        );
+                        scheduleId = createResult.insertId;
+                    } else {
+                        scheduleId = schedules[0].id;
+                    }
+
+                    await db.query(
+                        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+                         VALUES (?, ?, NULL)
+                         ON DUPLICATE KEY UPDATE attendance_status = attendance_status`,
+                        [scheduleId, studentId]
+                    );
+                    trialAssigned++;
+                }
+                trialAssignResult = { assigned: trialAssigned };
+            } catch (trialError) {
+                console.error('Trial schedule reassign failed:', trialError);
+            }
+        }
+
         res.json({
             message: 'Student updated successfully',
             student: updatedStudents[0],
-            scheduleReassigned: reassignResult
+            scheduleReassigned: reassignResult,
+            trialScheduleAssigned: trialAssignResult
         });
     } catch (error) {
         console.error('Error updating student:', error);
