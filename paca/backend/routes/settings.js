@@ -308,6 +308,9 @@ router.get('/academy', verifyToken, async (req, res) => {
             address: academy.address || '',
             business_number: academy.business_number || '',
             tuition_due_day: 5,  // 기본값
+            morning_class_time: '09:30-12:00',  // 기본값
+            afternoon_class_time: '14:00-18:00',  // 기본값
+            evening_class_time: '18:30-21:00',  // 기본값
             exam_tuition: { ...defaultTuition },
             adult_tuition: { ...defaultTuition },
             season_fees: { ...defaultSeasonFees },
@@ -320,6 +323,17 @@ router.get('/academy', verifyToken, async (req, res) => {
             // tuition_due_day
             if (dbSettings.tuition_due_day) {
                 settings.tuition_due_day = dbSettings.tuition_due_day;
+            }
+
+            // 시간대 설정
+            if (dbSettings.morning_class_time) {
+                settings.morning_class_time = dbSettings.morning_class_time;
+            }
+            if (dbSettings.afternoon_class_time) {
+                settings.afternoon_class_time = dbSettings.afternoon_class_time;
+            }
+            if (dbSettings.evening_class_time) {
+                settings.evening_class_time = dbSettings.evening_class_time;
             }
 
             // JSON 필드 파싱
