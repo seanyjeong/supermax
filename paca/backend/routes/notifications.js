@@ -323,10 +323,11 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
         );
 
         // 미납자 조회 (학부모 전화 또는 학생 전화가 있는 경우)
+        const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
         const [unpaidPayments] = await db.query(
             `SELECT
                 p.id AS payment_id,
-                p.amount,
+                p.final_amount AS amount,
                 p.due_date,
                 s.id AS student_id,
                 s.name AS student_name,
@@ -335,13 +336,12 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             FROM student_payments p
             JOIN students s ON p.student_id = s.id
             WHERE p.academy_id = ?
-                AND p.year = ?
-                AND p.month = ?
+                AND p.year_month = ?
                 AND p.payment_status IN ('pending', 'partial')
                 AND s.status = 'active'
                 AND (s.parent_phone IS NOT NULL OR s.phone IS NOT NULL)
                 AND s.deleted_at IS NULL`,
-            [req.user.academyId, year, month]
+            [req.user.academyId, yearMonth]
         );
 
         if (unpaidPayments.length === 0) {
@@ -491,8 +491,8 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
         const [payments] = await db.query(
             `SELECT
                 p.id AS payment_id,
-                p.amount,
-                p.month,
+                p.final_amount AS amount,
+                p.year_month,
                 p.due_date,
                 s.id AS student_id,
                 s.name AS student_name,
@@ -531,10 +531,11 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             [req.user.academyId]
         );
 
-        // 메시지 생성
+        // 메시지 생성 (year_month에서 월 추출: "2025-12" -> "12")
+        const monthFromYearMonth = payment.year_month ? payment.year_month.split('-')[1] : '';
         const msg = createUnpaidNotificationMessage(
             {
-                month: payment.month.toString(),
+                month: monthFromYearMonth,
                 amount: payment.amount,
                 due_date: payment.due_date ? new Date(payment.due_date).toLocaleDateString('ko-KR') : ''
             },
