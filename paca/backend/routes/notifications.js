@@ -270,16 +270,14 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
         const setting = settings[0];
         const serviceType = setting.service_type || 'sens';
 
-        // 학원 정보 조회 (납부일 포함)
+        // 학원 정보 조회
         const [academy] = await db.query(
-            'SELECT name, phone, tuition_due_day FROM academies WHERE id = ?',
+            'SELECT name, phone FROM academies WHERE id = ?',
             [req.user.academyId]
         );
 
-        // 납부일 문자열 생성
-        const dueDayText = academy[0]?.tuition_due_day
-            ? `매월 ${academy[0].tuition_due_day}일`
-            : '매월 5일';
+        // 납부일 문자열 생성 (기본값: 매월 5일)
+        const dueDayText = '매월 5일';
 
         let result;
         let templateCode;
@@ -442,16 +440,14 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             }
         }
 
-        // 학원 정보 (납부일 포함)
+        // 학원 정보
         const [academy] = await db.query(
-            'SELECT name, phone, tuition_due_day FROM academies WHERE id = ?',
+            'SELECT name, phone FROM academies WHERE id = ?',
             [req.user.academyId]
         );
 
-        // 납부일 문자열 생성 (예: "매월 5일", "매월 10일")
-        const dueDayText = academy[0]?.tuition_due_day
-            ? `매월 ${academy[0].tuition_due_day}일`
-            : '';
+        // 납부일 문자열 생성 (기본값: 매월 5일)
+        const dueDayText = '매월 5일';
 
         // 미납자 조회 (학부모 전화 또는 학생 전화가 있는 경우)
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
@@ -680,16 +676,14 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             });
         }
 
-        // 학원 정보 (납부일 포함)
+        // 학원 정보
         const [academy] = await db.query(
-            'SELECT name, phone, tuition_due_day FROM academies WHERE id = ?',
+            'SELECT name, phone FROM academies WHERE id = ?',
             [req.user.academyId]
         );
 
-        // 납부일 문자열 생성
-        const dueDayText = academy[0]?.tuition_due_day
-            ? `매월 ${academy[0].tuition_due_day}일`
-            : '';
+        // 납부일 문자열 생성 (기본값: 매월 5일)
+        const dueDayText = '매월 5일';
 
         // 서비스 타입에 따라 템플릿 선택
         const templateContent = serviceType === 'solapi'
