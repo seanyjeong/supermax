@@ -1404,7 +1404,7 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
 
             // Verify student exists and belongs to academy
             const [students] = await connection.query(
-                'SELECT id, name FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+                'SELECT id, name, is_trial, trial_remaining FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
                 [student_id, req.user.academyId]
             );
 
@@ -1416,6 +1416,16 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                     message: `Student with ID ${student_id} not found`
                 });
             }
+
+            const student = students[0];
+
+            // 기존 출석 상태 확인 (이미 출석 처리된 경우 중복 차감 방지)
+            const [existingAttendance] = await connection.query(
+                `SELECT attendance_status FROM attendance WHERE class_schedule_id = ? AND student_id = ?`,
+                [scheduleId, student_id]
+            );
+            const wasAlreadyPresent = existingAttendance.length > 0 &&
+                ['present', 'late'].includes(existingAttendance[0].attendance_status);
 
             // UPSERT attendance record with makeup_date
             await connection.query(
@@ -1431,12 +1441,25 @@ router.post('/:id/attendance', verifyToken, async (req, res) => {
                 [scheduleId, student_id, attendance_status, attendance_status === 'makeup' ? makeup_date : null, notes || null, req.user.id]
             );
 
+            // 체험생이고 출석(present) 또는 지각(late)인 경우 trial_remaining 차감
+            const isAttended = ['present', 'late'].includes(attendance_status);
+            if (student.is_trial && isAttended && !wasAlreadyPresent && student.trial_remaining > 0) {
+                await connection.query(
+                    'UPDATE students SET trial_remaining = trial_remaining - 1 WHERE id = ?',
+                    [student_id]
+                );
+            }
+
             processedRecords.push({
                 student_id,
-                student_name: students[0].name,
+                student_name: student.name,
                 attendance_status,
                 makeup_date: attendance_status === 'makeup' ? makeup_date : null,
-                notes: notes || ''
+                notes: notes || '',
+                is_trial: student.is_trial,
+                trial_remaining: student.is_trial && isAttended && !wasAlreadyPresent
+                    ? student.trial_remaining - 1
+                    : student.trial_remaining
             });
         }
 

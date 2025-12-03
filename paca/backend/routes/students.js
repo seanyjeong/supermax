@@ -174,7 +174,7 @@ async function reassignStudentSchedules(dbConn, studentId, academyId, oldClassDa
  */
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { grade, student_type, admission_type, status, search } = req.query;
+        const { grade, student_type, admission_type, status, search, is_trial } = req.query;
 
         let query = `
             SELECT
@@ -199,6 +199,9 @@ router.get('/', verifyToken, async (req, res) => {
                 s.rest_start_date,
                 s.rest_end_date,
                 s.rest_reason,
+                s.is_trial,
+                s.trial_remaining,
+                s.trial_dates,
                 s.created_at
             FROM students s
             WHERE s.academy_id = ?
@@ -206,6 +209,14 @@ router.get('/', verifyToken, async (req, res) => {
         `;
 
         const params = [req.user.academyId];
+
+        // 체험생 필터
+        if (is_trial === 'true') {
+            query += ' AND s.is_trial = TRUE';
+        } else if (is_trial === 'false') {
+            query += ' AND (s.is_trial = FALSE OR s.is_trial IS NULL)';
+        }
+        // is_trial 파라미터가 없으면 모든 학생 반환
 
         if (grade) {
             query += ' AND s.grade = ?';
@@ -355,7 +366,11 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
             payment_due_day,
             enrollment_date,
             address,
-            notes
+            notes,
+            // 체험생 관련 필드
+            is_trial,
+            trial_remaining,
+            trial_dates
         } = req.body;
 
         // Validation
@@ -496,8 +511,11 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
                 enrollment_date,
                 address,
                 notes,
-                status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+                status,
+                is_trial,
+                trial_remaining,
+                trial_dates
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
             [
                 req.user.academyId,
                 finalStudentNumber,
@@ -512,13 +530,16 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
                 admission_type || 'regular',
                 JSON.stringify(class_days || []),
                 weekly_count || 0,
-                monthly_tuition || 0,
+                is_trial ? 0 : (monthly_tuition || 0),  // 체험생은 학원비 0
                 discount_rate || 0,
                 discount_reason || null,
                 payment_due_day || null,
                 enrollment_date || new Date().toISOString().split('T')[0],
                 address || null,
-                notes || null
+                notes || null,
+                is_trial ? true : false,
+                is_trial ? (trial_remaining || 2) : null,
+                is_trial ? JSON.stringify(trial_dates || []) : null
             ]
         );
 
@@ -530,9 +551,9 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
 
         const createdStudent = students[0];
 
-        // 첫 달 학원비 자동 생성 (일할계산)
+        // 첫 달 학원비 자동 생성 (일할계산) - 체험생은 제외
         let firstPayment = null;
-        if (monthly_tuition && monthly_tuition > 0) {
+        if (!is_trial && monthly_tuition && monthly_tuition > 0) {
             const enrollDate = new Date(enrollment_date || new Date().toISOString().split('T')[0]);
             const year = enrollDate.getFullYear();
             const month = enrollDate.getMonth() + 1;
@@ -632,27 +653,72 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
             firstPayment = payments[0];
         }
 
-        // 자동 스케줄 배정 (등록일 이후 해당 월의 수업에 배정)
+        // 자동 스케줄 배정
         let autoAssignResult = null;
-        const parsedClassDays = class_days || [];
-        if (parsedClassDays.length > 0) {
+
+        if (is_trial && trial_dates && trial_dates.length > 0) {
+            // 체험생: trial_dates에 지정된 날짜들에 배정
             try {
-                autoAssignResult = await autoAssignStudentToSchedules(
-                    db,
-                    result.insertId,
-                    req.user.academyId,
-                    parsedClassDays,
-                    enrollment_date || new Date().toISOString().split('T')[0],
-                    'evening'  // 기본 시간대: 저녁
-                );
+                let trialAssigned = 0;
+                for (const trialDate of trial_dates) {
+                    const { date, time_slot } = trialDate;
+                    if (!date || !time_slot) continue;
+
+                    // 해당 날짜의 스케줄 찾기 또는 생성
+                    let [schedules] = await db.query(
+                        `SELECT id FROM class_schedules
+                         WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+                        [req.user.academyId, date, time_slot]
+                    );
+
+                    let scheduleId;
+                    if (schedules.length === 0) {
+                        // 스케줄 없으면 생성
+                        const [createResult] = await db.query(
+                            `INSERT INTO class_schedules (academy_id, class_date, time_slot)
+                             VALUES (?, ?, ?)`,
+                            [req.user.academyId, date, time_slot]
+                        );
+                        scheduleId = createResult.insertId;
+                    } else {
+                        scheduleId = schedules[0].id;
+                    }
+
+                    // 출석 레코드 생성
+                    await db.query(
+                        `INSERT INTO attendance (schedule_id, student_id, attendance_status)
+                         VALUES (?, ?, NULL)
+                         ON DUPLICATE KEY UPDATE attendance_status = attendance_status`,
+                        [scheduleId, result.insertId]
+                    );
+                    trialAssigned++;
+                }
+                autoAssignResult = { assigned: trialAssigned, created: 0 };
             } catch (assignError) {
-                console.error('Auto-assign failed:', assignError);
-                // 배정 실패해도 학생 생성은 성공으로 처리
+                console.error('Trial schedule assign failed:', assignError);
+            }
+        } else if (!is_trial) {
+            // 정식 학생: 기존 로직 (등록일 이후 해당 월의 수업에 배정)
+            const parsedClassDays = class_days || [];
+            if (parsedClassDays.length > 0) {
+                try {
+                    autoAssignResult = await autoAssignStudentToSchedules(
+                        db,
+                        result.insertId,
+                        req.user.academyId,
+                        parsedClassDays,
+                        enrollment_date || new Date().toISOString().split('T')[0],
+                        'evening'  // 기본 시간대: 저녁
+                    );
+                } catch (assignError) {
+                    console.error('Auto-assign failed:', assignError);
+                    // 배정 실패해도 학생 생성은 성공으로 처리
+                }
             }
         }
 
         res.status(201).json({
-            message: 'Student created successfully',
+            message: is_trial ? 'Trial student created successfully' : 'Student created successfully',
             student: createdStudent,
             firstPayment,
             autoAssigned: autoAssignResult
