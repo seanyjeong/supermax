@@ -745,9 +745,9 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
     const studentId = parseInt(req.params.id);
 
     try {
-        // Check if student exists and get current class_days
+        // Check if student exists and get current class_days, status
         const [students] = await db.query(
-            'SELECT id, class_days FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
+            'SELECT id, class_days, status FROM students WHERE id = ? AND academy_id = ? AND deleted_at IS NULL',
             [studentId, req.user.academyId]
         );
 
@@ -758,7 +758,8 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             });
         }
 
-        // 기존 class_days 파싱
+        // 기존 class_days, status 파싱
+        const oldStatus = students[0].status;
         const oldClassDays = students[0].class_days
             ? (typeof students[0].class_days === 'string'
                 ? JSON.parse(students[0].class_days)
@@ -1053,11 +1054,140 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             }
         }
 
+        // 휴원 처리 (active → paused) 시 학원비 조정
+        let paymentAdjustment = null;
+        if (status === 'paused' && oldStatus === 'active') {
+            try {
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const currentMonth = now.getMonth() + 1;
+
+                // 학생의 주간 수업 횟수 (weekly_count) 가져오기
+                const studentData = updatedStudents[0];
+                const weeklyCount = studentData.weekly_count || 2;
+                const monthlyTotal = weeklyCount * 4; // 월 총 수업 횟수
+                const monthlyTuition = studentData.monthly_tuition || 0;
+
+                // 이번 달 출석 횟수 조회
+                const [attendanceCount] = await db.query(
+                    `SELECT COUNT(*) as count FROM attendance a
+                     JOIN class_schedules cs ON a.class_schedule_id = cs.id
+                     WHERE a.student_id = ?
+                     AND cs.academy_id = ?
+                     AND YEAR(cs.class_date) = ?
+                     AND MONTH(cs.class_date) = ?
+                     AND a.attendance_status IN ('present', 'late')`,
+                    [studentId, req.user.academyId, currentYear, currentMonth]
+                );
+                const attendedCount = attendanceCount[0].count;
+
+                // 이번 달 학원비 조회
+                const [currentPayment] = await db.query(
+                    `SELECT id, amount, status, paid_amount FROM payments
+                     WHERE student_id = ?
+                     AND academy_id = ?
+                     AND year = ?
+                     AND month = ?`,
+                    [studentId, req.user.academyId, currentYear, currentMonth]
+                );
+
+                if (currentPayment.length > 0) {
+                    const payment = currentPayment[0];
+                    const proratedAmount = Math.floor((monthlyTuition * attendedCount / monthlyTotal) / 1000) * 1000;
+
+                    if (payment.status === 'paid') {
+                        // 납부 완료 상태: 남은 수업 횟수만큼 이월 크레딧 생성
+                        const remainingCount = monthlyTotal - attendedCount;
+                        const creditAmount = Math.floor((monthlyTuition * remainingCount / monthlyTotal) / 1000) * 1000;
+
+                        if (creditAmount > 0) {
+                            await db.query(
+                                `INSERT INTO rest_credits (student_id, academy_id, original_amount, remaining_amount, reason, created_at)
+                                 VALUES (?, ?, ?, ?, ?, NOW())`,
+                                [studentId, req.user.academyId, creditAmount, creditAmount,
+                                 `${currentYear}년 ${currentMonth}월 휴원 이월 (${remainingCount}/${monthlyTotal}회)`]
+                            );
+                            paymentAdjustment = {
+                                type: 'credit',
+                                message: `납부완료 학원비 이월: ${creditAmount.toLocaleString()}원 (${remainingCount}회분)`,
+                                creditAmount
+                            };
+                        }
+                    } else {
+                        // 미납 상태: 출석 횟수만큼 일할계산으로 금액 수정
+                        if (attendedCount === 0) {
+                            // 수업 안 받았으면 학원비 삭제
+                            await db.query(
+                                'DELETE FROM payments WHERE id = ?',
+                                [payment.id]
+                            );
+                            paymentAdjustment = {
+                                type: 'deleted',
+                                message: '수업 미진행으로 학원비 삭제됨'
+                            };
+                        } else {
+                            // 출석한 만큼만 금액 수정
+                            await db.query(
+                                `UPDATE payments SET amount = ?, description = ?, updated_at = NOW()
+                                 WHERE id = ?`,
+                                [proratedAmount,
+                                 `${currentYear}년 ${currentMonth}월 수강료 (휴원 일할: ${attendedCount}/${monthlyTotal}회)`,
+                                 payment.id]
+                            );
+                            paymentAdjustment = {
+                                type: 'prorated',
+                                message: `일할계산 적용: ${proratedAmount.toLocaleString()}원 (${attendedCount}/${monthlyTotal}회)`,
+                                originalAmount: payment.amount,
+                                proratedAmount
+                            };
+                        }
+                    }
+                }
+            } catch (paymentError) {
+                console.error('Payment adjustment failed:', paymentError);
+            }
+        }
+
+        // 퇴원 처리 (→ withdrawn) 시 미납 학원비 삭제
+        let withdrawalInfo = null;
+        if (status === 'withdrawn') {
+            try {
+                // 미납 학원비 확인
+                const [unpaidPayments] = await db.query(
+                    `SELECT id, year, month, amount FROM payments
+                     WHERE student_id = ?
+                     AND academy_id = ?
+                     AND status != 'paid'`,
+                    [studentId, req.user.academyId]
+                );
+
+                if (unpaidPayments.length > 0) {
+                    const totalUnpaid = unpaidPayments.reduce((sum, p) => sum + p.amount, 0);
+
+                    // 미납 학원비 삭제
+                    await db.query(
+                        `DELETE FROM payments WHERE student_id = ? AND academy_id = ? AND status != 'paid'`,
+                        [studentId, req.user.academyId]
+                    );
+
+                    withdrawalInfo = {
+                        deletedPayments: unpaidPayments.length,
+                        totalUnpaidAmount: totalUnpaid,
+                        message: `미납 학원비 ${unpaidPayments.length}건 (${totalUnpaid.toLocaleString()}원) 삭제됨`
+                    };
+                }
+            } catch (withdrawError) {
+                console.error('Withdrawal payment cleanup failed:', withdrawError);
+            }
+        }
+
         res.json({
             message: 'Student updated successfully',
             student: updatedStudents[0],
             scheduleReassigned: reassignResult,
-            trialScheduleAssigned: trialAssignResult
+            trialScheduleAssigned: trialAssignResult,
+            paymentAdjustment,
+            withdrawalInfo
         });
     } catch (error) {
         console.error('Error updating student:', error);
