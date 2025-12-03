@@ -23,11 +23,11 @@ const pool = mysql.createPool({
 // Test connection on startup
 pool.getConnection()
     .then(connection => {
-        console.log('Database connection pool created');
         connection.release();
     })
     .catch(err => {
-        console.error('Error creating database connection pool:', err.message);
+        // DB 연결 실패 시 프로세스 종료
+        process.exit(1);
     });
 
 module.exports = pool;

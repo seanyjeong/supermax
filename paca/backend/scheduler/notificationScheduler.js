@@ -12,7 +12,7 @@ const {
     isValidPhoneNumber
 } = require('../utils/naverSens');
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'paca-notification-secret-key-2024';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
 
 /**
  * 미납 알림 자동 발송 작업

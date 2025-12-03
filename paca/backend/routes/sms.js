@@ -14,7 +14,10 @@ const {
     isValidPhoneNumber
 } = require('../utils/naverSens');
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'paca-notification-secret-key-2024';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+    console.warn('[sms] ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+}
 
 /**
  * POST /paca/sms/send

@@ -15,8 +15,11 @@ const {
     isValidPhoneNumber
 } = require('../utils/naverSens');
 
-// 암호화 키 (환경변수에서 가져오거나 기본값 사용)
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'paca-notification-secret-key-2024';
+// 암호화 키 (환경변수에서 가져옴)
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+    console.warn('[notifications] ENCRYPTION_KEY 환경변수가 설정되지 않았습니다.');
+}
 
 /**
  * GET /paca/notifications/settings

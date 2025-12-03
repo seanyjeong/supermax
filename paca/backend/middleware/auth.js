@@ -5,7 +5,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'jeong-paca-secret';
 const N8N_API_KEY = process.env.N8N_API_KEY || 'paca-n8n-api-key-2024';
 
 /**
@@ -84,7 +84,7 @@ const verifyToken = async (req, res, next) => {
                     ? JSON.parse(user.permissions)
                     : user.permissions;
             } catch (e) {
-                console.error('Failed to parse permissions:', e);
+                // Failed to parse permissions
             }
         }
 
@@ -116,7 +116,6 @@ const verifyToken = async (req, res, next) => {
             });
         }
 
-        console.error('Auth middleware error:', error);
         return res.status(500).json({
             error: 'Internal Server Error',
             message: 'Authentication error'
@@ -136,10 +135,7 @@ const requireRole = (...roles) => {
             });
         }
 
-        console.log(`[requireRole] User: ${req.user.email}, Role: "${req.user.role}", Required: ${roles.join(' or ')}`);
-
         if (!roles.includes(req.user.role)) {
-            console.log(`[requireRole] ACCESS DENIED - User role "${req.user.role}" not in [${roles.join(', ')}]`);
             return res.status(403).json({
                 error: 'Forbidden',
                 message: `Required role: ${roles.join(' or ')}`
@@ -172,7 +168,6 @@ const checkAcademyAccess = async (req, res, next) => {
 
         next();
     } catch (error) {
-        console.error('Academy access check error:', error);
         return res.status(500).json({
             error: 'Internal Server Error',
             message: 'Access check error'
