@@ -74,10 +74,11 @@ async function sendNotificationsForAcademy(settings, year, month) {
     }
 
     // 미납자 조회 (학부모 또는 학생 전화가 있는 경우)
+    const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
     const [unpaidPayments] = await db.query(
         `SELECT
             p.id AS payment_id,
-            p.amount,
+            p.final_amount AS amount,
             p.due_date,
             s.id AS student_id,
             s.name AS student_name,
@@ -86,13 +87,12 @@ async function sendNotificationsForAcademy(settings, year, month) {
         FROM student_payments p
         JOIN students s ON p.student_id = s.id
         WHERE p.academy_id = ?
-            AND p.year = ?
-            AND p.month = ?
+            AND p.year_month = ?
             AND p.payment_status IN ('pending', 'partial')
             AND s.status = 'active'
             AND (s.parent_phone IS NOT NULL OR s.phone IS NOT NULL)
             AND s.deleted_at IS NULL`,
-        [academyId, year, month]
+        [academyId, yearMonth]
     );
 
     if (unpaidPayments.length === 0) {
