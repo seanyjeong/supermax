@@ -213,15 +213,20 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
             });
         }
 
-        // 학원 정보 조회
+        // 학원 정보 조회 (납부일 포함)
         const [academy] = await db.query(
-            'SELECT name, phone FROM academies WHERE id = ?',
+            'SELECT name, phone, tuition_due_day FROM academies WHERE id = ?',
             [req.user.academyId]
         );
 
+        // 납부일 문자열 생성
+        const dueDayText = academy[0]?.tuition_due_day
+            ? `매월 ${academy[0].tuition_due_day}일`
+            : '매월 5일';
+
         // 테스트 메시지 발송
         const testMessage = createUnpaidNotificationMessage(
-            { month: '12', amount: 300000, due_date: '2024-12-10' },
+            { month: '12', amount: 300000, due_date: dueDayText },
             { name: '테스트학생' },
             { name: academy[0]?.name || '테스트학원', phone: academy[0]?.phone || '02-1234-5678' },
             setting.template_content  // 사용자 정의 템플릿
@@ -316,11 +321,16 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             });
         }
 
-        // 학원 정보
+        // 학원 정보 (납부일 포함)
         const [academy] = await db.query(
-            'SELECT name, phone FROM academies WHERE id = ?',
+            'SELECT name, phone, tuition_due_day FROM academies WHERE id = ?',
             [req.user.academyId]
         );
+
+        // 납부일 문자열 생성 (예: "매월 5일", "매월 10일")
+        const dueDayText = academy[0]?.tuition_due_day
+            ? `매월 ${academy[0].tuition_due_day}일`
+            : '';
 
         // 미납자 조회 (학부모 전화 또는 학생 전화가 있는 경우)
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
@@ -375,7 +385,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
                 {
                     month: month.toString(),
                     amount: p.amount,
-                    due_date: p.due_date ? new Date(p.due_date).toLocaleDateString('ko-KR') : ''
+                    due_date: dueDayText  // 학원 설정의 납부일 사용
                 },
                 { name: p.student_name },
                 { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
@@ -525,11 +535,16 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             });
         }
 
-        // 학원 정보
+        // 학원 정보 (납부일 포함)
         const [academy] = await db.query(
-            'SELECT name, phone FROM academies WHERE id = ?',
+            'SELECT name, phone, tuition_due_day FROM academies WHERE id = ?',
             [req.user.academyId]
         );
+
+        // 납부일 문자열 생성
+        const dueDayText = academy[0]?.tuition_due_day
+            ? `매월 ${academy[0].tuition_due_day}일`
+            : '';
 
         // 메시지 생성 (year_month에서 월 추출: "2025-12" -> "12")
         const monthFromYearMonth = payment.year_month ? payment.year_month.split('-')[1] : '';
@@ -537,7 +552,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             {
                 month: monthFromYearMonth,
                 amount: payment.amount,
-                due_date: payment.due_date ? new Date(payment.due_date).toLocaleDateString('ko-KR') : ''
+                due_date: dueDayText  // 학원 설정의 납부일 사용
             },
             { name: payment.student_name },
             { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
