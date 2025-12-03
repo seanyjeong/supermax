@@ -181,7 +181,7 @@ router.get('/slot', verifyToken, async (req, res) => {
         let students = [];
         if (schedule) {
             const [attendanceRecords] = await db.query(
-                `SELECT DISTINCT a.student_id, s.name as student_name, a.attendance_status,
+                `SELECT DISTINCT a.student_id, s.name as student_name, s.grade, a.attendance_status,
                         s.is_trial, s.trial_remaining,
                         (SELECT se2.season_type
                          FROM student_seasons ss2
