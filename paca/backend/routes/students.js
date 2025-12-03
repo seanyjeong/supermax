@@ -686,7 +686,7 @@ router.post('/', verifyToken, checkPermission('students', 'edit'), async (req, r
 
                     // 출석 레코드 생성
                     await db.query(
-                        `INSERT INTO attendance (schedule_id, student_id, attendance_status)
+                        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
                          VALUES (?, ?, NULL)
                          ON DUPLICATE KEY UPDATE attendance_status = attendance_status`,
                         [scheduleId, result.insertId]
