@@ -230,6 +230,7 @@ router.get('/unpaid-today', verifyToken, async (req, res) => {
         const dayOfWeek = today.getDay();
         const year = today.getFullYear();
         const month = today.getMonth() + 1;
+        const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
 
         const [payments] = await db.query(
             `SELECT
@@ -254,13 +255,12 @@ router.get('/unpaid-today', verifyToken, async (req, res) => {
             JOIN students s ON p.student_id = s.id
             WHERE p.academy_id = ?
             AND p.payment_status IN ('pending', 'partial')
-            AND p.year = ?
-            AND p.month = ?
+            AND p.year_month = ?
             AND s.status = 'active'
             AND s.deleted_at IS NULL
             AND JSON_CONTAINS(COALESCE(s.class_days, '[]'), ?)
             ORDER BY s.name ASC`,
-            [req.user.academyId, year, month, JSON.stringify(dayOfWeek)]
+            [req.user.academyId, yearMonth, JSON.stringify(dayOfWeek)]
         );
 
         res.json({
