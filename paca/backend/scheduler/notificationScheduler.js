@@ -31,9 +31,11 @@ async function sendScheduledNotifications() {
         // auto_send_days: 콤마로 구분된 날짜 목록 (예: "5,15,25")
         // auto_send_hour: 발송 시간 (0-23, 기본값 9)
         const [academies] = await db.query(
-            `SELECT ns.*, a.name AS academy_name, a.phone AS academy_phone
+            `SELECT ns.*, a.name AS academy_name, a.phone AS academy_phone,
+                    COALESCE(ast.tuition_due_day, 1) AS tuition_due_day
              FROM notification_settings ns
              JOIN academies a ON ns.academy_id = a.id
+             LEFT JOIN academy_settings ast ON ns.academy_id = ast.academy_id
              WHERE ns.is_enabled = TRUE
                AND (ns.auto_send_day = ? OR FIND_IN_SET(?, ns.auto_send_days) > 0)
                AND COALESCE(ns.auto_send_hour, 9) = ?`,
@@ -115,13 +117,17 @@ async function sendNotificationsForAcademy(settings, year, month) {
 
     console.log(`[NotificationScheduler] 학원 ID ${academyId}: ${validRecipients.length}명 발송 시작`);
 
+    // 납부일 문자열 생성
+    const dueDay = settings.tuition_due_day || 1;
+    const dueDayText = `매월 ${dueDay}일`;
+
     // 메시지 준비
     const recipients = validRecipients.map(p => {
         const msg = createUnpaidNotificationMessage(
             {
                 month: month.toString(),
                 amount: p.amount,
-                due_date: p.due_date ? new Date(p.due_date).toLocaleDateString('ko-KR') : ''
+                due_date: dueDayText
             },
             { name: p.student_name },
             { name: settings.academy_name || '', phone: settings.academy_phone || '' },

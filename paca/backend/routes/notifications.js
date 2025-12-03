@@ -55,6 +55,7 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
                     template_code: '',
                     template_content: '',
                     is_enabled: false,
+                    solapi_enabled: false,
                     auto_send_day: 0,
                     auto_send_days: '',
                     auto_send_hour: 9
@@ -121,6 +122,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             solapi_template_content,
             // 공통 설정
             is_enabled,
+            solapi_enabled,
             auto_send_day,
             auto_send_days,
             auto_send_hour
@@ -155,8 +157,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                 (academy_id, service_type,
                  naver_access_key, naver_secret_key, naver_service_id, sms_service_id, kakao_channel_id,
                  solapi_api_key, solapi_api_secret, solapi_pfid, solapi_sender_phone, solapi_template_id, solapi_template_content,
-                 template_code, template_content, is_enabled, auto_send_day, auto_send_days, auto_send_hour)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 template_code, template_content, is_enabled, solapi_enabled, auto_send_day, auto_send_days, auto_send_hour)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     service_type || 'sens',
@@ -174,6 +176,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_code || null,
                     template_content || null,
                     is_enabled || false,
+                    solapi_enabled || false,
                     auto_send_day || 0,
                     auto_send_days || '',
                     auto_send_hour ?? 9
@@ -198,6 +201,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_code = ?,
                     template_content = ?,
                     is_enabled = ?,
+                    solapi_enabled = ?,
                     auto_send_day = ?,
                     auto_send_days = ?,
                     auto_send_hour = ?
@@ -218,6 +222,7 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_code || null,
                     template_content || null,
                     is_enabled || false,
+                    solapi_enabled || false,
                     auto_send_day || 0,
                     auto_send_days || '',
                     auto_send_hour ?? 9,
@@ -270,14 +275,18 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
         const setting = settings[0];
         const serviceType = setting.service_type || 'sens';
 
-        // 학원 정보 조회
+        // 학원 정보 + 설정 조회 (납부일 포함)
         const [academy] = await db.query(
-            'SELECT name, phone FROM academies WHERE id = ?',
+            `SELECT a.name, a.phone, COALESCE(s.tuition_due_day, 1) as tuition_due_day
+             FROM academies a
+             LEFT JOIN academy_settings s ON a.id = s.academy_id
+             WHERE a.id = ?`,
             [req.user.academyId]
         );
 
-        // 납부일 문자열 생성 (기본값: 매월 5일)
-        const dueDayText = '매월 5일';
+        // 납부일 문자열 생성
+        const dueDay = academy[0]?.tuition_due_day || 1;
+        const dueDayText = `매월 ${dueDay}일`;
 
         let result;
         let templateCode;
@@ -440,14 +449,18 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             }
         }
 
-        // 학원 정보
+        // 학원 정보 + 설정 조회 (납부일 포함)
         const [academy] = await db.query(
-            'SELECT name, phone FROM academies WHERE id = ?',
+            `SELECT a.name, a.phone, COALESCE(s.tuition_due_day, 1) as tuition_due_day
+             FROM academies a
+             LEFT JOIN academy_settings s ON a.id = s.academy_id
+             WHERE a.id = ?`,
             [req.user.academyId]
         );
 
-        // 납부일 문자열 생성 (기본값: 매월 5일)
-        const dueDayText = '매월 5일';
+        // 납부일 문자열 생성
+        const dueDay = academy[0]?.tuition_due_day || 1;
+        const dueDayText = `매월 ${dueDay}일`;
 
         // 미납자 조회 (학부모 전화 또는 학생 전화가 있는 경우)
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
@@ -676,14 +689,18 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             });
         }
 
-        // 학원 정보
+        // 학원 정보 + 설정 조회 (납부일 포함)
         const [academy] = await db.query(
-            'SELECT name, phone FROM academies WHERE id = ?',
+            `SELECT a.name, a.phone, COALESCE(s.tuition_due_day, 1) as tuition_due_day
+             FROM academies a
+             LEFT JOIN academy_settings s ON a.id = s.academy_id
+             WHERE a.id = ?`,
             [req.user.academyId]
         );
 
-        // 납부일 문자열 생성 (기본값: 매월 5일)
-        const dueDayText = '매월 5일';
+        // 납부일 문자열 생성
+        const dueDay = academy[0]?.tuition_due_day || 1;
+        const dueDayText = `매월 ${dueDay}일`;
 
         // 서비스 타입에 따라 템플릿 선택
         const templateContent = serviceType === 'solapi'
