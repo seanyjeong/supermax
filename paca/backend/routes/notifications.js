@@ -14,6 +14,10 @@ const {
     createUnpaidNotificationMessage,
     isValidPhoneNumber
 } = require('../utils/naverSens');
+const {
+    sendAlimtalkSolapi,
+    getBalanceSolapi
+} = require('../utils/solapi');
 
 // 암호화 키 (환경변수에서 가져옴)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
@@ -36,11 +40,18 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
             return res.json({
                 message: '알림 설정이 없습니다.',
                 settings: {
+                    service_type: 'sens',
                     naver_access_key: '',
                     naver_secret_key: '',
                     naver_service_id: '',
                     sms_service_id: '',
                     kakao_channel_id: '',
+                    // 솔라피 설정
+                    solapi_api_key: '',
+                    solapi_api_secret: '',
+                    solapi_pfid: '',
+                    solapi_sender_phone: '',
+                    // 공통 설정
                     template_code: '',
                     template_content: '',
                     is_enabled: false,
@@ -53,9 +64,17 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
 
         // Secret Key 마스킹 (앞 4자리만 표시)
         const setting = settings[0];
+
+        // SENS Secret Key 마스킹
         const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
         const maskedSecret = decryptedSecret
             ? decryptedSecret.substring(0, 4) + '****'
+            : '';
+
+        // 솔라피 API Secret 마스킹
+        const decryptedSolapiSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
+        const maskedSolapiSecret = decryptedSolapiSecret
+            ? decryptedSolapiSecret.substring(0, 4) + '****'
             : '';
 
         res.json({
@@ -63,7 +82,9 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
             settings: {
                 ...setting,
                 naver_secret_key: maskedSecret,
-                has_secret_key: !!setting.naver_secret_key
+                has_secret_key: !!setting.naver_secret_key,
+                solapi_api_secret: maskedSolapiSecret,
+                has_solapi_secret: !!setting.solapi_api_secret
             }
         });
     } catch (error) {
@@ -82,6 +103,8 @@ router.get('/settings', verifyToken, checkPermission('settings', 'view'), async 
 router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async (req, res) => {
     try {
         const {
+            service_type,
+            // SENS 설정
             naver_access_key,
             naver_secret_key,
             naver_service_id,
@@ -89,6 +112,14 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             kakao_channel_id,
             template_code,
             template_content,
+            // 솔라피 설정
+            solapi_api_key,
+            solapi_api_secret,
+            solapi_pfid,
+            solapi_sender_phone,
+            solapi_template_id,
+            solapi_template_content,
+            // 공통 설정
             is_enabled,
             auto_send_day,
             auto_send_days,
@@ -97,11 +128,11 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
 
         // 기존 설정 확인
         const [existing] = await db.query(
-            'SELECT id, naver_secret_key FROM notification_settings WHERE academy_id = ?',
+            'SELECT id, naver_secret_key, solapi_api_secret FROM notification_settings WHERE academy_id = ?',
             [req.user.academyId]
         );
 
-        // Secret Key 처리 (새로 입력된 경우에만 암호화)
+        // SENS Secret Key 처리 (새로 입력된 경우에만 암호화)
         let encryptedSecret = null;
         if (naver_secret_key && !naver_secret_key.includes('****')) {
             encryptedSecret = encryptApiKey(naver_secret_key, ENCRYPTION_KEY);
@@ -109,20 +140,37 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             encryptedSecret = existing[0].naver_secret_key;
         }
 
+        // 솔라피 API Secret 처리 (새로 입력된 경우에만 암호화)
+        let encryptedSolapiSecret = null;
+        if (solapi_api_secret && !solapi_api_secret.includes('****')) {
+            encryptedSolapiSecret = encryptApiKey(solapi_api_secret, ENCRYPTION_KEY);
+        } else if (existing.length > 0) {
+            encryptedSolapiSecret = existing[0].solapi_api_secret;
+        }
+
         if (existing.length === 0) {
             // 신규 생성
             await db.query(
                 `INSERT INTO notification_settings
-                (academy_id, naver_access_key, naver_secret_key, naver_service_id, sms_service_id,
-                 kakao_channel_id, template_code, template_content, is_enabled, auto_send_day, auto_send_days, auto_send_hour)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                (academy_id, service_type,
+                 naver_access_key, naver_secret_key, naver_service_id, sms_service_id, kakao_channel_id,
+                 solapi_api_key, solapi_api_secret, solapi_pfid, solapi_sender_phone, solapi_template_id, solapi_template_content,
+                 template_code, template_content, is_enabled, auto_send_day, auto_send_days, auto_send_hour)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
+                    service_type || 'sens',
                     naver_access_key || null,
                     encryptedSecret,
                     naver_service_id || null,
                     sms_service_id || null,
                     kakao_channel_id || null,
+                    solapi_api_key || null,
+                    encryptedSolapiSecret,
+                    solapi_pfid || null,
+                    solapi_sender_phone || null,
+                    solapi_template_id || null,
+                    solapi_template_content || null,
                     template_code || null,
                     template_content || null,
                     is_enabled || false,
@@ -135,11 +183,18 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             // 업데이트
             await db.query(
                 `UPDATE notification_settings SET
+                    service_type = ?,
                     naver_access_key = ?,
                     naver_secret_key = ?,
                     naver_service_id = ?,
                     sms_service_id = ?,
                     kakao_channel_id = ?,
+                    solapi_api_key = ?,
+                    solapi_api_secret = ?,
+                    solapi_pfid = ?,
+                    solapi_sender_phone = ?,
+                    solapi_template_id = ?,
+                    solapi_template_content = ?,
                     template_code = ?,
                     template_content = ?,
                     is_enabled = ?,
@@ -148,11 +203,18 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     auto_send_hour = ?
                 WHERE academy_id = ?`,
                 [
+                    service_type || 'sens',
                     naver_access_key || null,
                     encryptedSecret,
                     naver_service_id || null,
                     sms_service_id || null,
                     kakao_channel_id || null,
+                    solapi_api_key || null,
+                    encryptedSolapiSecret,
+                    solapi_pfid || null,
+                    solapi_sender_phone || null,
+                    solapi_template_id || null,
+                    solapi_template_content || null,
                     template_code || null,
                     template_content || null,
                     is_enabled || false,
@@ -206,15 +268,7 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
         }
 
         const setting = settings[0];
-
-        // Secret Key 복호화
-        const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
-        if (!decryptedSecret) {
-            return res.status(400).json({
-                error: 'Configuration Error',
-                message: 'API Secret Key가 올바르지 않습니다.'
-            });
-        }
+        const serviceType = setting.service_type || 'sens';
 
         // 학원 정보 조회 (납부일 포함)
         const [academy] = await db.query(
@@ -227,24 +281,73 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
             ? `매월 ${academy[0].tuition_due_day}일`
             : '매월 5일';
 
-        // 테스트 메시지 발송
-        const testMessage = createUnpaidNotificationMessage(
-            { month: '12', amount: 300000, due_date: dueDayText },
-            { name: '테스트학생' },
-            { name: academy[0]?.name || '테스트학원', phone: academy[0]?.phone || '02-1234-5678' },
-            setting.template_content  // 사용자 정의 템플릿
-        );
+        let result;
+        let templateCode;
+        let messageContent;
 
-        const result = await sendAlimtalk(
-            {
-                naver_access_key: setting.naver_access_key,
-                naver_secret_key: decryptedSecret,
-                naver_service_id: setting.naver_service_id,
-                kakao_channel_id: setting.kakao_channel_id
-            },
-            setting.template_code,
-            [{ phone, content: testMessage.content, variables: testMessage.variables }]
-        );
+        if (serviceType === 'solapi') {
+            // 솔라피 발송
+            const decryptedSolapiSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
+            if (!decryptedSolapiSecret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: '솔라피 API Secret이 올바르지 않습니다.'
+                });
+            }
+
+            // 테스트 메시지 생성 (솔라피 템플릿 사용)
+            const testMessage = createUnpaidNotificationMessage(
+                { month: '12', amount: 300000, due_date: dueDayText },
+                { name: '테스트학생' },
+                { name: academy[0]?.name || '테스트학원', phone: academy[0]?.phone || '02-1234-5678' },
+                setting.solapi_template_content || setting.template_content
+            );
+
+            templateCode = setting.solapi_template_id;
+            messageContent = testMessage.content;
+
+            result = await sendAlimtalkSolapi(
+                {
+                    solapi_api_key: setting.solapi_api_key,
+                    solapi_api_secret: decryptedSolapiSecret,
+                    solapi_pfid: setting.solapi_pfid,
+                    solapi_sender_phone: setting.solapi_sender_phone
+                },
+                setting.solapi_template_id,
+                [{ phone, variables: testMessage.variables }]
+            );
+        } else {
+            // SENS 발송 (기존 로직)
+            const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
+            if (!decryptedSecret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: 'API Secret Key가 올바르지 않습니다.'
+                });
+            }
+
+            // 테스트 메시지 발송
+            const testMessage = createUnpaidNotificationMessage(
+                { month: '12', amount: 300000, due_date: dueDayText },
+                { name: '테스트학생' },
+                { name: academy[0]?.name || '테스트학원', phone: academy[0]?.phone || '02-1234-5678' },
+                setting.template_content
+            );
+
+            templateCode = setting.template_code;
+            messageContent = testMessage.content;
+
+            result = await sendAlimtalk(
+                {
+                    naver_access_key: setting.naver_access_key,
+                    naver_secret_key: decryptedSecret,
+                    naver_service_id: setting.naver_service_id,
+                    kakao_channel_id: setting.kakao_channel_id
+                },
+                setting.template_code,
+                [{ phone, content: testMessage.content, variables: testMessage.variables }]
+            );
+        }
 
         if (result.success) {
             // 로그 기록
@@ -258,17 +361,17 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
                     '테스트',
                     phone,
                     'alimtalk',
-                    setting.template_code,
-                    testMessage.content,
+                    templateCode,
+                    messageContent,
                     'sent',
-                    result.requestId
+                    result.requestId || result.groupId
                 ]
             );
 
             res.json({
-                message: '테스트 메시지가 발송되었습니다.',
+                message: `테스트 메시지가 발송되었습니다. (${serviceType === 'solapi' ? '솔라피' : 'SENS'})`,
                 success: true,
-                requestId: result.requestId
+                requestId: result.requestId || result.groupId
             });
         } else {
             res.status(400).json({
@@ -315,13 +418,28 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
         }
 
         const setting = settings[0];
-        const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
+        const serviceType = setting.service_type || 'sens';
 
-        if (!decryptedSecret) {
-            return res.status(400).json({
-                error: 'Configuration Error',
-                message: 'API Secret Key가 올바르지 않습니다.'
-            });
+        // 서비스 타입에 따라 Secret Key 복호화
+        let decryptedSecret = null;
+        let decryptedSolapiSecret = null;
+
+        if (serviceType === 'solapi') {
+            decryptedSolapiSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
+            if (!decryptedSolapiSecret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: '솔라피 API Secret이 올바르지 않습니다.'
+                });
+            }
+        } else {
+            decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
+            if (!decryptedSecret) {
+                return res.status(400).json({
+                    error: 'Configuration Error',
+                    message: 'API Secret Key가 올바르지 않습니다.'
+                });
+            }
         }
 
         // 학원 정보 (납부일 포함)
@@ -382,6 +500,14 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
             });
         }
 
+        // 서비스 타입에 따라 템플릿 선택
+        const templateContent = serviceType === 'solapi'
+            ? (setting.solapi_template_content || setting.template_content)
+            : setting.template_content;
+        const templateCode = serviceType === 'solapi'
+            ? setting.solapi_template_id
+            : setting.template_code;
+
         // 메시지 준비
         const recipients = validRecipients.map(p => {
             const msg = createUnpaidNotificationMessage(
@@ -392,7 +518,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
                 },
                 { name: p.student_name },
                 { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
-                setting.template_content  // 사용자 정의 템플릿
+                templateContent
             );
 
             return {
@@ -413,16 +539,32 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
         for (let i = 0; i < recipients.length; i += batchSize) {
             const batch = recipients.slice(i, i + batchSize);
 
-            const result = await sendAlimtalk(
-                {
-                    naver_access_key: setting.naver_access_key,
-                    naver_secret_key: decryptedSecret,
-                    naver_service_id: setting.naver_service_id,
-                    kakao_channel_id: setting.kakao_channel_id
-                },
-                setting.template_code,
-                batch
-            );
+            let result;
+            if (serviceType === 'solapi') {
+                // 솔라피 발송
+                result = await sendAlimtalkSolapi(
+                    {
+                        solapi_api_key: setting.solapi_api_key,
+                        solapi_api_secret: decryptedSolapiSecret,
+                        solapi_pfid: setting.solapi_pfid,
+                        solapi_sender_phone: setting.solapi_sender_phone
+                    },
+                    templateCode,
+                    batch
+                );
+            } else {
+                // SENS 발송
+                result = await sendAlimtalk(
+                    {
+                        naver_access_key: setting.naver_access_key,
+                        naver_secret_key: decryptedSecret,
+                        naver_service_id: setting.naver_service_id,
+                        kakao_channel_id: setting.kakao_channel_id
+                    },
+                    templateCode,
+                    batch
+                );
+            }
 
             // 로그 기록
             for (const recipient of batch) {
@@ -439,10 +581,10 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
                         recipient.studentName,
                         recipient.phone,
                         'alimtalk',
-                        setting.template_code,
+                        templateCode,
                         recipient.content,
                         result.success ? 'sent' : 'failed',
-                        result.requestId || null,
+                        result.requestId || result.groupId || null,
                         result.success ? null : (result.error || 'Unknown error')
                     ]
                 );
@@ -456,7 +598,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
         }
 
         res.json({
-            message: `알림 발송 완료: ${sentCount}명 성공, ${failedCount}명 실패`,
+            message: `알림 발송 완료 (${serviceType === 'solapi' ? '솔라피' : 'SENS'}): ${sentCount}명 성공, ${failedCount}명 실패`,
             sent: sentCount,
             failed: failedCount
         });
@@ -498,7 +640,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
         }
 
         const setting = settings[0];
-        const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
+        const serviceType = setting.service_type || 'sens';
 
         // 학원비 및 학생 정보 조회
         const [payments] = await db.query(
@@ -549,6 +691,14 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             ? `매월 ${academy[0].tuition_due_day}일`
             : '';
 
+        // 서비스 타입에 따라 템플릿 선택
+        const templateContent = serviceType === 'solapi'
+            ? (setting.solapi_template_content || setting.template_content)
+            : setting.template_content;
+        const templateCode = serviceType === 'solapi'
+            ? setting.solapi_template_id
+            : setting.template_code;
+
         // 메시지 생성 (year_month에서 월 추출: "2025-12" -> "12")
         const monthFromYearMonth = payment.year_month ? payment.year_month.split('-')[1] : '';
         const msg = createUnpaidNotificationMessage(
@@ -559,24 +709,40 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
             },
             { name: payment.student_name },
             { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
-            setting.template_content  // 사용자 정의 템플릿
+            templateContent
         );
 
-        // 발송
-        const result = await sendAlimtalk(
-            {
-                naver_access_key: setting.naver_access_key,
-                naver_secret_key: decryptedSecret,
-                naver_service_id: setting.naver_service_id,
-                kakao_channel_id: setting.kakao_channel_id
-            },
-            setting.template_code,
-            [{
-                phone: effectivePhone,  // 학부모 또는 학생 전화
-                content: msg.content,
-                variables: msg.variables
-            }]
-        );
+        // 서비스 타입에 따라 발송
+        let result;
+        if (serviceType === 'solapi') {
+            const decryptedSolapiSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
+            result = await sendAlimtalkSolapi(
+                {
+                    solapi_api_key: setting.solapi_api_key,
+                    solapi_api_secret: decryptedSolapiSecret,
+                    solapi_pfid: setting.solapi_pfid,
+                    solapi_sender_phone: setting.solapi_sender_phone
+                },
+                templateCode,
+                [{ phone: effectivePhone, variables: msg.variables }]
+            );
+        } else {
+            const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
+            result = await sendAlimtalk(
+                {
+                    naver_access_key: setting.naver_access_key,
+                    naver_secret_key: decryptedSecret,
+                    naver_service_id: setting.naver_service_id,
+                    kakao_channel_id: setting.kakao_channel_id
+                },
+                templateCode,
+                [{
+                    phone: effectivePhone,
+                    content: msg.content,
+                    variables: msg.variables
+                }]
+            );
+        }
 
         // 로그 기록
         await db.query(
@@ -590,12 +756,12 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
                 payment.student_id,
                 payment.payment_id,
                 payment.student_name,
-                effectivePhone,  // 실제 발송된 전화번호
+                effectivePhone,
                 'alimtalk',
-                setting.template_code,
+                templateCode,
                 msg.content,
                 result.success ? 'sent' : 'failed',
-                result.requestId || null,
+                result.requestId || result.groupId || null,
                 result.success ? null : (result.error || 'Unknown error')
             ]
         );
