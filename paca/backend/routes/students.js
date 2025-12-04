@@ -1181,13 +1181,40 @@ router.put('/:id', verifyToken, checkPermission('students', 'edit'), async (req,
             }
         }
 
+        // 휴원 처리 (→ paused) 시 미래 스케줄에서 제거
+        let pauseInfo = null;
+        if (status === 'paused' && oldStatus !== 'paused') {
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const [deleteResult] = await db.query(
+                    `DELETE a FROM attendance a
+                     JOIN class_schedules cs ON a.class_schedule_id = cs.id
+                     WHERE a.student_id = ?
+                     AND cs.academy_id = ?
+                     AND cs.class_date > ?
+                     AND a.attendance_status IS NULL`,
+                    [studentId, req.user.academyId, today]
+                );
+
+                if (deleteResult.affectedRows > 0) {
+                    pauseInfo = {
+                        deletedSchedules: deleteResult.affectedRows,
+                        message: `미래 스케줄 ${deleteResult.affectedRows}건 삭제됨`
+                    };
+                }
+            } catch (pauseError) {
+                console.error('Pause schedule cleanup failed:', pauseError);
+            }
+        }
+
         res.json({
             message: 'Student updated successfully',
             student: updatedStudents[0],
             scheduleReassigned: reassignResult,
             trialScheduleAssigned: trialAssignResult,
             paymentAdjustment,
-            withdrawalInfo
+            withdrawalInfo,
+            pauseInfo
         });
     } catch (error) {
         console.error('Error updating student:', error);
