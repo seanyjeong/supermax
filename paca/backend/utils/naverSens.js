@@ -174,7 +174,7 @@ function createUnpaidNotificationMessage(payment, student, academy, customTempla
         '학원전화': academy.phone || '',
         // 납부 관련
         '월': payment.month || '',
-        '금액': payment.amount ? payment.amount.toLocaleString() : '0',
+        '교육비': payment.amount ? payment.amount.toLocaleString() : '0',
         '날짜': payment.due_date || '',
         '납부기한': payment.due_date || ''
     };
@@ -184,7 +184,7 @@ function createUnpaidNotificationMessage(payment, student, academy, customTempla
 
 안녕하세요, #{학생명} 학부모님.
 
-#{월}월 학원비 #{금액}원이 아직 납부되지 않았습니다.
+#{월}월 학원비 #{교육비}원이 아직 납부되지 않았습니다.
 
 납부기한: #{납부기한}
 
