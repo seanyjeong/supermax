@@ -286,7 +286,7 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
 
         // 납부일 문자열 생성
         const dueDay = academy[0]?.tuition_due_day || 1;
-        const dueDayText = `매월 ${dueDay}일`;
+        const dueDayText = `${dueDay}일`;
 
         let result;
         let templateCode;
@@ -460,7 +460,7 @@ router.post('/send-unpaid', verifyToken, checkPermission('settings', 'edit'), as
 
         // 납부일 문자열 생성
         const dueDay = academy[0]?.tuition_due_day || 1;
-        const dueDayText = `매월 ${dueDay}일`;
+        const dueDayText = `${dueDay}일`;
 
         // 미납자 조회 (학부모 전화 또는 학생 전화가 있는 경우)
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
@@ -700,7 +700,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
 
         // 납부일 문자열 생성
         const dueDay = academy[0]?.tuition_due_day || 1;
-        const dueDayText = `매월 ${dueDay}일`;
+        const dueDayText = `${dueDay}일`;
 
         // 서비스 타입에 따라 템플릿 선택
         const templateContent = serviceType === 'solapi'
