@@ -864,191 +864,215 @@ router.get('/logs', verifyToken, checkPermission('settings', 'view'), async (req
 });
 
 /**
- * POST /paca/notifications/send-unpaid-today
- * 오늘 수업 있는 미납자에게 알림톡 발송 (n8n 스케줄용)
+ * POST /paca/notifications/send-unpaid-today-auto
+ * 솔라피 자동발송 - 현재 시간에 발송 설정된 모든 학원 처리 (n8n 매시간 호출)
  * Access: n8n service account (X-API-Key 인증)
  */
-router.post('/send-unpaid-today', verifyToken, async (req, res) => {
+router.post('/send-unpaid-today-auto', verifyToken, async (req, res) => {
     try {
-        const academyId = req.query.academy_id || req.user.academyId;
-
-        // 설정 조회
-        const [settings] = await db.query(
-            'SELECT * FROM notification_settings WHERE academy_id = ? AND solapi_enabled = 1',
-            [academyId]
-        );
-
-        if (settings.length === 0) {
-            return res.json({
-                message: '솔라피 알림 설정이 비활성화되어 있습니다.',
-                sent: 0,
-                skipped: true
-            });
-        }
-
-        const setting = settings[0];
-
-        // 솔라피 Secret 복호화
-        const decryptedSolapiSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
-        if (!decryptedSolapiSecret) {
-            return res.status(400).json({
-                error: 'Configuration Error',
-                message: '솔라피 API Secret이 올바르지 않습니다.'
-            });
-        }
-
-        // 오늘 요일 (0=일, 1=월, ..., 6=토)
-        const today = new Date();
-        const dayOfWeek = today.getDay();
-        const year = today.getFullYear();
-        const month = today.getMonth() + 1;
+        // 현재 시간 (한국 시간)
+        const now = new Date();
+        const koreaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+        const currentHour = koreaTime.getHours();
+        const dayOfWeek = koreaTime.getDay();
+        const year = koreaTime.getFullYear();
+        const month = koreaTime.getMonth() + 1;
         const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+        const dayNames = ['일','월','화','수','목','금','토'];
 
-        // 오늘 수업이 있는 미납자 조회
-        const [unpaidPayments] = await db.query(
-            `SELECT
-                p.id AS payment_id,
-                p.final_amount AS amount,
-                p.due_date,
-                p.year_month,
-                s.id AS student_id,
-                s.name AS student_name,
-                s.parent_phone,
-                s.phone AS student_phone,
-                s.class_days
-            FROM student_payments p
-            JOIN students s ON p.student_id = s.id
-            WHERE p.academy_id = ?
-            AND p.payment_status IN ('pending', 'partial')
-            AND p.year_month = ?
-            AND s.status = 'active'
-            AND s.deleted_at IS NULL
-            AND JSON_CONTAINS(COALESCE(s.class_days, '[]'), ?)
-            AND (s.parent_phone IS NOT NULL OR s.phone IS NOT NULL)
-            ORDER BY s.name ASC`,
-            [academyId, yearMonth, JSON.stringify(dayOfWeek)]
+        // 현재 시간에 발송 설정된 학원들 조회
+        const [academySettings] = await db.query(
+            `SELECT ns.*, a.name as academy_name, a.phone as academy_phone,
+                    COALESCE(ast.tuition_due_day, 1) as tuition_due_day
+             FROM notification_settings ns
+             JOIN academies a ON ns.academy_id = a.id
+             LEFT JOIN academy_settings ast ON ns.academy_id = ast.academy_id
+             WHERE ns.solapi_enabled = 1
+             AND ns.solapi_auto_enabled = 1
+             AND ns.solapi_auto_hour = ?`,
+            [currentHour]
         );
 
-        if (unpaidPayments.length === 0) {
+        if (academySettings.length === 0) {
             return res.json({
-                message: `오늘(${['일','월','화','수','목','금','토'][dayOfWeek]}요일) 수업 있는 미납자가 없습니다.`,
-                sent: 0,
-                day_name: ['일','월','화','수','목','금','토'][dayOfWeek]
+                message: `${currentHour}시에 발송 설정된 학원이 없습니다.`,
+                current_hour: currentHour,
+                academies_processed: 0
             });
         }
 
-        // 학원 정보 + 설정 조회 (납부일 포함)
-        const [academy] = await db.query(
-            `SELECT a.name, a.phone, COALESCE(s.tuition_due_day, 1) as tuition_due_day
-             FROM academies a
-             LEFT JOIN academy_settings s ON a.id = s.academy_id
-             WHERE a.id = ?`,
-            [academyId]
-        );
+        const results = [];
 
-        const dueDay = academy[0]?.tuition_due_day || 1;
-        const dueDayText = `${dueDay}일`;
-
-        // 유효한 전화번호 필터링
-        const validRecipients = unpaidPayments
-            .map(p => {
-                const phone = isValidPhoneNumber(p.parent_phone) ? p.parent_phone : p.student_phone;
-                return { ...p, effectivePhone: phone };
-            })
-            .filter(p => isValidPhoneNumber(p.effectivePhone));
-
-        if (validRecipients.length === 0) {
-            return res.json({
-                message: '유효한 전화번호가 있는 미납자가 없습니다.',
+        // 각 학원별로 처리
+        for (const setting of academySettings) {
+            const academyId = setting.academy_id;
+            const academyResult = {
+                academy_id: academyId,
+                academy_name: setting.academy_name,
                 sent: 0,
-                total_unpaid: unpaidPayments.length
-            });
-        }
-
-        // 메시지 준비
-        const templateContent = setting.solapi_template_content || setting.template_content;
-        const templateCode = setting.solapi_template_id;
-
-        const recipients = validRecipients.map(p => {
-            const monthFromYearMonth = p.year_month ? p.year_month.split('-')[1] : month.toString();
-            const msg = createUnpaidNotificationMessage(
-                {
-                    month: monthFromYearMonth,
-                    amount: p.amount,
-                    due_date: dueDayText
-                },
-                { name: p.student_name },
-                { name: academy[0]?.name || '', phone: academy[0]?.phone || '' },
-                templateContent
-            );
-
-            return {
-                phone: p.effectivePhone,
-                content: msg.content,
-                studentId: p.student_id,
-                paymentId: p.payment_id,
-                studentName: p.student_name
+                failed: 0,
+                skipped: false,
+                error: null
             };
-        });
 
-        // 솔라피 알림톡 발송
-        const result = await sendAlimtalkSolapi(
-            {
-                solapi_api_key: setting.solapi_api_key,
-                solapi_api_secret: decryptedSolapiSecret,
-                solapi_pfid: setting.solapi_pfid,
-                solapi_sender_phone: setting.solapi_sender_phone
-            },
-            templateCode,
-            recipients
-        );
+            try {
+                // 솔라피 Secret 복호화
+                const decryptedSolapiSecret = decryptApiKey(setting.solapi_api_secret, ENCRYPTION_KEY);
+                if (!decryptedSolapiSecret) {
+                    academyResult.skipped = true;
+                    academyResult.error = '솔라피 API Secret 복호화 실패';
+                    results.push(academyResult);
+                    continue;
+                }
 
-        // 로그 기록
-        let sentCount = 0;
-        let failedCount = 0;
+                // 오늘 수업이 있는 미납자 조회
+                const [unpaidPayments] = await db.query(
+                    `SELECT
+                        p.id AS payment_id,
+                        p.final_amount AS amount,
+                        p.due_date,
+                        p.year_month,
+                        s.id AS student_id,
+                        s.name AS student_name,
+                        s.parent_phone,
+                        s.phone AS student_phone,
+                        s.class_days
+                    FROM student_payments p
+                    JOIN students s ON p.student_id = s.id
+                    WHERE p.academy_id = ?
+                    AND p.payment_status IN ('pending', 'partial')
+                    AND p.year_month = ?
+                    AND s.status = 'active'
+                    AND s.deleted_at IS NULL
+                    AND JSON_CONTAINS(COALESCE(s.class_days, '[]'), ?)
+                    AND (s.parent_phone IS NOT NULL OR s.phone IS NOT NULL)
+                    ORDER BY s.name ASC`,
+                    [academyId, yearMonth, JSON.stringify(dayOfWeek)]
+                );
 
-        for (const recipient of recipients) {
-            await db.query(
-                `INSERT INTO notification_logs
-                (academy_id, student_id, payment_id, recipient_name, recipient_phone,
-                 message_type, template_code, message_content, status, request_id,
-                 error_message, sent_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
-                [
-                    academyId,
-                    recipient.studentId,
-                    recipient.paymentId,
-                    recipient.studentName,
-                    recipient.phone,
-                    'alimtalk',
+                if (unpaidPayments.length === 0) {
+                    academyResult.skipped = true;
+                    academyResult.error = '오늘 수업 있는 미납자 없음';
+                    results.push(academyResult);
+                    continue;
+                }
+
+                const dueDay = setting.tuition_due_day || 1;
+                const dueDayText = `${dueDay}일`;
+
+                // 유효한 전화번호 필터링
+                const validRecipients = unpaidPayments
+                    .map(p => {
+                        const phone = isValidPhoneNumber(p.parent_phone) ? p.parent_phone : p.student_phone;
+                        return { ...p, effectivePhone: phone };
+                    })
+                    .filter(p => isValidPhoneNumber(p.effectivePhone));
+
+                if (validRecipients.length === 0) {
+                    academyResult.skipped = true;
+                    academyResult.error = '유효한 전화번호 없음';
+                    results.push(academyResult);
+                    continue;
+                }
+
+                // 메시지 준비 (학원별 템플릿 사용)
+                const templateContent = setting.solapi_template_content || setting.template_content;
+                const templateCode = setting.solapi_template_id;
+
+                const recipients = validRecipients.map(p => {
+                    const monthFromYearMonth = p.year_month ? p.year_month.split('-')[1] : month.toString();
+                    const msg = createUnpaidNotificationMessage(
+                        {
+                            month: monthFromYearMonth,
+                            amount: p.amount,
+                            due_date: dueDayText
+                        },
+                        { name: p.student_name },
+                        { name: setting.academy_name || '', phone: setting.academy_phone || '' },
+                        templateContent
+                    );
+
+                    return {
+                        phone: p.effectivePhone,
+                        content: msg.content,
+                        studentId: p.student_id,
+                        paymentId: p.payment_id,
+                        studentName: p.student_name
+                    };
+                });
+
+                // 솔라피 알림톡 발송 (학원별 API 키 사용)
+                const result = await sendAlimtalkSolapi(
+                    {
+                        solapi_api_key: setting.solapi_api_key,
+                        solapi_api_secret: decryptedSolapiSecret,
+                        solapi_pfid: setting.solapi_pfid,
+                        solapi_sender_phone: setting.solapi_sender_phone
+                    },
                     templateCode,
-                    recipient.content,
-                    result.success ? 'sent' : 'failed',
-                    result.groupId || null,
-                    result.success ? null : (result.error || 'Unknown error')
-                ]
-            );
+                    recipients
+                );
 
-            if (result.success) {
-                sentCount++;
-            } else {
-                failedCount++;
+                // 로그 기록
+                for (const recipient of recipients) {
+                    await db.query(
+                        `INSERT INTO notification_logs
+                        (academy_id, student_id, payment_id, recipient_name, recipient_phone,
+                         message_type, template_code, message_content, status, request_id,
+                         error_message, sent_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                        [
+                            academyId,
+                            recipient.studentId,
+                            recipient.paymentId,
+                            recipient.studentName,
+                            recipient.phone,
+                            'alimtalk',
+                            templateCode,
+                            recipient.content,
+                            result.success ? 'sent' : 'failed',
+                            result.groupId || null,
+                            result.success ? null : (result.error || 'Unknown error')
+                        ]
+                    );
+
+                    if (result.success) {
+                        academyResult.sent++;
+                    } else {
+                        academyResult.failed++;
+                    }
+                }
+
+                if (!result.success) {
+                    academyResult.error = result.error;
+                }
+
+            } catch (academyError) {
+                academyResult.error = academyError.message;
+                academyResult.failed = 1;
             }
+
+            results.push(academyResult);
         }
+
+        const totalSent = results.reduce((sum, r) => sum + r.sent, 0);
+        const totalFailed = results.reduce((sum, r) => sum + r.failed, 0);
 
         res.json({
-            message: `오늘(${['일','월','화','수','목','금','토'][dayOfWeek]}요일) 수업 미납자 알림 발송 완료`,
-            date: today.toISOString().split('T')[0],
-            day_name: ['일','월','화','수','목','금','토'][dayOfWeek],
-            sent: sentCount,
-            failed: failedCount,
-            recipients: recipients.map(r => ({ name: r.studentName, phone: r.phone.replace(/(\d{3})(\d{4})(\d{4})/, '$1-****-$3') }))
+            message: `${currentHour}시 솔라피 자동발송 완료 (${dayNames[dayOfWeek]}요일)`,
+            date: koreaTime.toISOString().split('T')[0],
+            current_hour: currentHour,
+            day_name: dayNames[dayOfWeek],
+            academies_processed: academySettings.length,
+            total_sent: totalSent,
+            total_failed: totalFailed,
+            results: results
         });
     } catch (error) {
-        console.error('오늘 미납자 알림 발송 오류:', error);
+        console.error('솔라피 자동발송 오류:', error);
         res.status(500).json({
             error: 'Server Error',
-            message: '알림 발송에 실패했습니다.',
+            message: '자동발송 처리에 실패했습니다.',
             details: error.message
         });
     }
