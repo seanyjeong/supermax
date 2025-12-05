@@ -63,13 +63,14 @@ async function sendAlimtalkSolapi(settings, templateId, recipients) {
     const headers = getSolapiAuthHeader(apiKey, apiSecret);
 
     // 메시지 구성
+    // 솔라피는 variables가 아니라 text에 변수가 치환된 전체 내용을 보내야 함
     const messages = recipients.map(r => ({
         to: r.phone.replace(/-/g, ''),  // 010-1234-5678 -> 01012345678
         from: settings.solapi_sender_phone?.replace(/-/g, '') || '',  // 발신번호
+        text: r.content || '',  // 변수가 치환된 전체 메시지 내용
         kakaoOptions: {
             pfId: pfId,
-            templateId: templateId,
-            variables: r.variables || {}  // 템플릿 변수
+            templateId: templateId
         }
     }));
 

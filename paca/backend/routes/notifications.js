@@ -321,7 +321,7 @@ router.post('/test', verifyToken, checkPermission('settings', 'edit'), async (re
                     solapi_sender_phone: setting.solapi_sender_phone
                 },
                 setting.solapi_template_id,
-                [{ phone, variables: testMessage.variables }]
+                [{ phone, content: testMessage.content }]
             );
         } else {
             // SENS 발송 (기존 로직)
@@ -735,7 +735,7 @@ router.post('/send-individual', verifyToken, checkPermission('settings', 'edit')
                     solapi_sender_phone: setting.solapi_sender_phone
                 },
                 templateCode,
-                [{ phone: effectivePhone, variables: msg.variables }]
+                [{ phone: effectivePhone, content: msg.content }]
             );
         } else {
             const decryptedSecret = decryptApiKey(setting.naver_secret_key, ENCRYPTION_KEY);
