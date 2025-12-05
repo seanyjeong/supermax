@@ -123,6 +123,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
             // 공통 설정
             is_enabled,
             solapi_enabled,
+            solapi_auto_enabled,
+            solapi_auto_hour,
             auto_send_day,
             auto_send_days,
             auto_send_hour
@@ -157,8 +159,9 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                 (academy_id, service_type,
                  naver_access_key, naver_secret_key, naver_service_id, sms_service_id, kakao_channel_id,
                  solapi_api_key, solapi_api_secret, solapi_pfid, solapi_sender_phone, solapi_template_id, solapi_template_content,
-                 template_code, template_content, is_enabled, solapi_enabled, auto_send_day, auto_send_days, auto_send_hour)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 template_code, template_content, is_enabled, solapi_enabled, solapi_auto_enabled, solapi_auto_hour,
+                 auto_send_day, auto_send_days, auto_send_hour)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     req.user.academyId,
                     service_type || 'sens',
@@ -177,6 +180,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_content || null,
                     is_enabled || false,
                     solapi_enabled || false,
+                    solapi_auto_enabled || false,
+                    solapi_auto_hour ?? 10,
                     auto_send_day || 0,
                     auto_send_days || '',
                     auto_send_hour ?? 9
@@ -202,6 +207,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_content = ?,
                     is_enabled = ?,
                     solapi_enabled = ?,
+                    solapi_auto_enabled = ?,
+                    solapi_auto_hour = ?,
                     auto_send_day = ?,
                     auto_send_days = ?,
                     auto_send_hour = ?
@@ -223,6 +230,8 @@ router.put('/settings', verifyToken, checkPermission('settings', 'edit'), async 
                     template_content || null,
                     is_enabled || false,
                     solapi_enabled || false,
+                    solapi_auto_enabled || false,
+                    solapi_auto_hour ?? 10,
                     auto_send_day || 0,
                     auto_send_days || '',
                     auto_send_hour ?? 9,
