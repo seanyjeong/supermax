@@ -85,11 +85,33 @@ router.get('/', verifyToken, async (req, res) => {
     );
 
     res.json({
-      consultations: consultations.map(c => ({
-        ...c,
-        academicScores: c.academic_scores ? JSON.parse(c.academic_scores) : null,
-        referralSources: c.referral_sources ? JSON.parse(c.referral_sources) : null
-      })),
+      consultations: consultations.map(c => {
+        // JSON 필드가 이미 객체일 수도 있고 문자열일 수도 있음
+        let academicScores = null;
+        let referralSources = null;
+
+        try {
+          academicScores = c.academic_scores
+            ? (typeof c.academic_scores === 'string' ? JSON.parse(c.academic_scores) : c.academic_scores)
+            : null;
+        } catch (e) {
+          console.error('academic_scores 파싱 오류:', e);
+        }
+
+        try {
+          referralSources = c.referral_sources
+            ? (typeof c.referral_sources === 'string' ? JSON.parse(c.referral_sources) : c.referral_sources)
+            : null;
+        } catch (e) {
+          console.error('referral_sources 파싱 오류:', e);
+        }
+
+        return {
+          ...c,
+          academicScores,
+          referralSources
+        };
+      }),
       pagination: {
         total,
         page: parseInt(page),
@@ -127,10 +149,30 @@ router.get('/:id', verifyToken, async (req, res) => {
 
     const consultation = consultations[0];
 
+    // JSON 필드 파싱 (이미 객체일 수도 있음)
+    let academicScores = null;
+    let referralSources = null;
+
+    try {
+      academicScores = consultation.academic_scores
+        ? (typeof consultation.academic_scores === 'string' ? JSON.parse(consultation.academic_scores) : consultation.academic_scores)
+        : null;
+    } catch (e) {
+      console.error('academic_scores 파싱 오류:', e);
+    }
+
+    try {
+      referralSources = consultation.referral_sources
+        ? (typeof consultation.referral_sources === 'string' ? JSON.parse(consultation.referral_sources) : consultation.referral_sources)
+        : null;
+    } catch (e) {
+      console.error('referral_sources 파싱 오류:', e);
+    }
+
     res.json({
       ...consultation,
-      academicScores: consultation.academic_scores ? JSON.parse(consultation.academic_scores) : null,
-      referralSources: consultation.referral_sources ? JSON.parse(consultation.referral_sources) : null
+      academicScores,
+      referralSources
     });
   } catch (error) {
     console.error('상담 상세 조회 오류:', error);
