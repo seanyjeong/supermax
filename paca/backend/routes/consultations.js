@@ -203,10 +203,21 @@ router.get('/:id', verifyToken, async (req, res) => {
       console.error('referral_sources 파싱 오류:', e);
     }
 
+    // checklist JSON 파싱
+    let checklist = null;
+    try {
+      checklist = consultation.checklist
+        ? (typeof consultation.checklist === 'string' ? JSON.parse(consultation.checklist) : consultation.checklist)
+        : null;
+    } catch (e) {
+      console.error('checklist 파싱 오류:', e);
+    }
+
     res.json({
       ...consultation,
       academicScores,
-      referralSources
+      referralSources,
+      checklist
     });
   } catch (error) {
     console.error('상담 상세 조회 오류:', error);
@@ -410,7 +421,7 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const academyId = req.user.academy_id;
-    const { trialDates } = req.body; // [{ date, timeSlot }, { date, timeSlot }]
+    const { trialDates, studentPhone } = req.body; // [{ date, timeSlot }, { date, timeSlot }]
 
     // 필수 검증
     if (!trialDates || !Array.isArray(trialDates) || trialDates.length !== 2) {
@@ -441,18 +452,20 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
       attended: false
     }));
 
-    // 체험 학생 등록
-    const phone = consultation.parent_phone;
+    // 체험 학생 등록 (학생 전화번호 우선, 없으면 학부모 전화번호)
+    const phone = studentPhone || consultation.parent_phone;
+    const parentPhone = consultation.parent_phone;
     const [studentResult] = await db.query(
       `INSERT INTO students (
-        academy_id, name, grade, phone, status,
+        academy_id, name, grade, phone, parent_phone, status,
         is_trial, trial_remaining, trial_dates, created_at
-      ) VALUES (?, ?, ?, ?, 'active', 1, 2, ?, NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, 'active', 1, 2, ?, NOW())`,
       [
         academyId,
         consultation.student_name,
         consultation.student_grade,
         phone,
+        parentPhone,
         JSON.stringify(trialDatesJson)
       ]
     );
