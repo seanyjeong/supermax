@@ -423,9 +423,9 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
     const academyId = req.user.academy_id;
     const { trialDates, studentPhone } = req.body; // [{ date, timeSlot }, { date, timeSlot }]
 
-    // 필수 검증
-    if (!trialDates || !Array.isArray(trialDates) || trialDates.length !== 2) {
-      return res.status(400).json({ error: '체험 일정 2개를 선택해주세요.' });
+    // 필수 검증 (최소 1개 이상)
+    if (!trialDates || !Array.isArray(trialDates) || trialDates.length < 1) {
+      return res.status(400).json({ error: '최소 1개의 체험 일정을 선택해주세요.' });
     }
 
     // 상담 정보 조회
