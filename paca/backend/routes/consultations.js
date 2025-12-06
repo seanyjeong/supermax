@@ -442,7 +442,7 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
     }));
 
     // 체험 학생 등록
-    const phone = consultation.student_phone || consultation.parent_phone;
+    const phone = consultation.parent_phone;
     const [studentResult] = await db.query(
       `INSERT INTO students (
         academy_id, name, grade, phone, status,
