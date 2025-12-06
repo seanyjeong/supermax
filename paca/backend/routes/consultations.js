@@ -445,10 +445,10 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
       return res.status(400).json({ error: '이미 학생으로 등록되어 있습니다.' });
     }
 
-    // trial_dates JSON 구조
+    // trial_dates JSON 구조 (time_slot 키 사용 - students.js와 통일)
     const trialDatesJson = trialDates.map(d => ({
       date: d.date,
-      timeSlot: d.timeSlot,
+      time_slot: d.timeSlot,
       attended: false
     }));
 
@@ -459,18 +459,51 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
       `INSERT INTO students (
         academy_id, name, grade, phone, parent_phone, status,
         is_trial, trial_remaining, trial_dates, class_days, monthly_tuition, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'active', 1, 2, ?, '[]', 0, NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, 'active', 1, ?, ?, '[]', 0, NOW())`,
       [
         academyId,
         consultation.student_name,
         consultation.student_grade,
         phone,
         parentPhone,
+        trialDates.length,  // 체험 횟수 = 선택한 일정 수
         JSON.stringify(trialDatesJson)
       ]
     );
 
     const studentId = studentResult.insertId;
+
+    // 체험 일정을 스케줄에 자동 배정
+    for (const trialDate of trialDatesJson) {
+      const { date, time_slot } = trialDate;
+      if (!date || !time_slot) continue;
+
+      // 해당 날짜의 스케줄 찾기 또는 생성
+      let [schedules] = await db.query(
+        `SELECT id FROM class_schedules WHERE academy_id = ? AND class_date = ? AND time_slot = ?`,
+        [academyId, date, time_slot]
+      );
+
+      let scheduleId;
+      if (schedules.length === 0) {
+        // 스케줄 없으면 생성
+        const [createResult] = await db.query(
+          `INSERT INTO class_schedules (academy_id, class_date, time_slot) VALUES (?, ?, ?)`,
+          [academyId, date, time_slot]
+        );
+        scheduleId = createResult.insertId;
+      } else {
+        scheduleId = schedules[0].id;
+      }
+
+      // 출석 레코드 생성
+      await db.query(
+        `INSERT INTO attendance (class_schedule_id, student_id, attendance_status)
+         VALUES (?, ?, NULL)
+         ON DUPLICATE KEY UPDATE attendance_status = attendance_status`,
+        [scheduleId, studentId]
+      );
+    }
 
     // 상담 상태 업데이트 (completed + 학생 연결)
     await db.query(
