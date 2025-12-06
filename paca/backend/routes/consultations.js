@@ -129,6 +129,40 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+// GET /paca/consultations/booked-times - 특정 날짜의 예약된 시간 목록 조회
+// 주의: /:id 보다 먼저 정의해야 함!
+router.get('/booked-times', verifyToken, async (req, res) => {
+  try {
+    const academyId = req.user.academy_id;
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ error: '날짜가 필요합니다.' });
+    }
+
+    // 해당 날짜의 취소/노쇼가 아닌 상담 시간 목록 조회
+    const [consultations] = await db.query(
+      `SELECT preferred_time
+       FROM consultations
+       WHERE academy_id = ?
+         AND preferred_date = ?
+         AND status NOT IN ('cancelled', 'no_show')
+       ORDER BY preferred_time`,
+      [academyId, date]
+    );
+
+    // HH:MM 형식으로 반환
+    const bookedTimes = consultations.map(c =>
+      c.preferred_time.substring(0, 5)
+    );
+
+    res.json({ date, bookedTimes });
+  } catch (error) {
+    console.error('예약 시간 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // GET /paca/consultations/:id - 상담 상세 조회
 router.get('/:id', verifyToken, async (req, res) => {
   try {
@@ -268,39 +302,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
     res.json({ message: '상담 신청이 삭제되었습니다.' });
   } catch (error) {
     console.error('상담 삭제 오류:', error);
-    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
-  }
-});
-
-// GET /paca/consultations/booked-times - 특정 날짜의 예약된 시간 목록 조회
-router.get('/booked-times', verifyToken, async (req, res) => {
-  try {
-    const academyId = req.user.academy_id;
-    const { date } = req.query;
-
-    if (!date) {
-      return res.status(400).json({ error: '날짜가 필요합니다.' });
-    }
-
-    // 해당 날짜의 취소/노쇼가 아닌 상담 시간 목록 조회
-    const [consultations] = await db.query(
-      `SELECT preferred_time
-       FROM consultations
-       WHERE academy_id = ?
-         AND preferred_date = ?
-         AND status NOT IN ('cancelled', 'no_show')
-       ORDER BY preferred_time`,
-      [academyId, date]
-    );
-
-    // HH:MM 형식으로 반환
-    const bookedTimes = consultations.map(c =>
-      c.preferred_time.substring(0, 5)
-    );
-
-    res.json({ date, bookedTimes });
-  } catch (error) {
-    console.error('예약 시간 조회 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });
