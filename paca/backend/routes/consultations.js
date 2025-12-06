@@ -272,6 +272,39 @@ router.delete('/:id', verifyToken, async (req, res) => {
   }
 });
 
+// GET /paca/consultations/booked-times - 특정 날짜의 예약된 시간 목록 조회
+router.get('/booked-times', verifyToken, async (req, res) => {
+  try {
+    const academyId = req.user.academy_id;
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({ error: '날짜가 필요합니다.' });
+    }
+
+    // 해당 날짜의 취소/노쇼가 아닌 상담 시간 목록 조회
+    const [consultations] = await db.query(
+      `SELECT preferred_time
+       FROM consultations
+       WHERE academy_id = ?
+         AND preferred_date = ?
+         AND status NOT IN ('cancelled', 'no_show')
+       ORDER BY preferred_time`,
+      [academyId, date]
+    );
+
+    // HH:MM 형식으로 반환
+    const bookedTimes = consultations.map(c =>
+      c.preferred_time.substring(0, 5)
+    );
+
+    res.json({ date, bookedTimes });
+  } catch (error) {
+    console.error('예약 시간 조회 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // POST /paca/consultations/direct - 관리자가 직접 상담 등록
 router.post('/direct', verifyToken, async (req, res) => {
   try {
@@ -281,6 +314,21 @@ router.post('/direct', verifyToken, async (req, res) => {
     // 필수 필드 검증
     if (!studentName || !phone || !grade || !preferredDate || !preferredTime) {
       return res.status(400).json({ error: '학생명, 전화번호, 학년, 상담일시는 필수입니다.' });
+    }
+
+    // 중복 시간 체크
+    const timeToCheck = preferredTime.length === 5 ? preferredTime + ':00' : preferredTime;
+    const [existing] = await db.query(
+      `SELECT id FROM consultations
+       WHERE academy_id = ?
+         AND preferred_date = ?
+         AND preferred_time = ?
+         AND status NOT IN ('cancelled', 'no_show')`,
+      [academyId, preferredDate, timeToCheck]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ error: '해당 시간에 이미 상담이 예약되어 있습니다.' });
     }
 
     // 상담 등록 (관리자 등록이므로 바로 confirmed 상태)
