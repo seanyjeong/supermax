@@ -180,12 +180,12 @@ router.get('/:id', verifyToken, async (req, res) => {
   }
 });
 
-// PUT /paca/consultations/:id - 상담 수정 (상태, 메모)
+// PUT /paca/consultations/:id - 상담 수정 (상태, 메모, 체크리스트)
 router.put('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
     const academyId = req.user.academy_id;
-    const { status, adminNotes, preferredDate, preferredTime } = req.body;
+    const { status, adminNotes, preferredDate, preferredTime, checklist, consultationMemo } = req.body;
 
     // 기존 상담 확인
     const [existing] = await db.query(
@@ -218,6 +218,18 @@ router.put('/:id', verifyToken, async (req, res) => {
     if (preferredTime) {
       updates.push('preferred_time = ?');
       params.push(preferredTime + ':00');
+    }
+
+    // 체크리스트 업데이트
+    if (checklist !== undefined) {
+      updates.push('checklist = ?');
+      params.push(JSON.stringify(checklist));
+    }
+
+    // 상담 메모 업데이트
+    if (consultationMemo !== undefined) {
+      updates.push('consultation_memo = ?');
+      params.push(consultationMemo);
     }
 
     if (updates.length === 0) {
@@ -260,6 +272,45 @@ router.delete('/:id', verifyToken, async (req, res) => {
   }
 });
 
+// POST /paca/consultations/direct - 관리자가 직접 상담 등록
+router.post('/direct', verifyToken, async (req, res) => {
+  try {
+    const academyId = req.user.academy_id;
+    const { studentName, phone, grade, preferredDate, preferredTime, notes } = req.body;
+
+    // 필수 필드 검증
+    if (!studentName || !phone || !grade || !preferredDate || !preferredTime) {
+      return res.status(400).json({ error: '학생명, 전화번호, 학년, 상담일시는 필수입니다.' });
+    }
+
+    // 상담 등록 (관리자 등록이므로 바로 confirmed 상태)
+    const [result] = await db.query(
+      `INSERT INTO consultations (
+        academy_id, consultation_type, student_name, student_phone, student_grade,
+        preferred_date, preferred_time, status, admin_notes,
+        checklist, consultation_memo, created_at
+      ) VALUES (?, 'new_registration', ?, ?, ?, ?, ?, 'confirmed', ?, '[]', '', NOW())`,
+      [
+        academyId,
+        studentName,
+        phone,
+        grade,
+        preferredDate,
+        preferredTime + ':00',
+        notes || null
+      ]
+    );
+
+    res.status(201).json({
+      message: '상담이 등록되었습니다.',
+      id: result.insertId
+    });
+  } catch (error) {
+    console.error('직접 상담 등록 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
 // POST /paca/consultations/:id/link-student - 기존 학생과 연결
 router.post('/:id/link-student', verifyToken, async (req, res) => {
   try {
@@ -298,6 +349,77 @@ router.post('/:id/link-student', verifyToken, async (req, res) => {
     });
   } catch (error) {
     console.error('학생 연결 오류:', error);
+    res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// POST /paca/consultations/:id/convert-to-trial - 상담 완료 → 체험 학생 등록
+router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const academyId = req.user.academy_id;
+    const { trialDates } = req.body; // [{ date, timeSlot }, { date, timeSlot }]
+
+    // 필수 검증
+    if (!trialDates || !Array.isArray(trialDates) || trialDates.length !== 2) {
+      return res.status(400).json({ error: '체험 일정 2개를 선택해주세요.' });
+    }
+
+    // 상담 정보 조회
+    const [consultations] = await db.query(
+      'SELECT * FROM consultations WHERE id = ? AND academy_id = ?',
+      [id, academyId]
+    );
+
+    if (consultations.length === 0) {
+      return res.status(404).json({ error: '상담 신청을 찾을 수 없습니다.' });
+    }
+
+    const consultation = consultations[0];
+
+    // 이미 체험 학생으로 연결되어 있는지 확인
+    if (consultation.linked_student_id) {
+      return res.status(400).json({ error: '이미 학생으로 등록되어 있습니다.' });
+    }
+
+    // trial_dates JSON 구조
+    const trialDatesJson = trialDates.map(d => ({
+      date: d.date,
+      timeSlot: d.timeSlot,
+      attended: false
+    }));
+
+    // 체험 학생 등록
+    const phone = consultation.student_phone || consultation.parent_phone;
+    const [studentResult] = await db.query(
+      `INSERT INTO students (
+        academy_id, name, grade, phone, status,
+        is_trial, trial_remaining, trial_dates, created_at
+      ) VALUES (?, ?, ?, ?, 'active', 1, 2, ?, NOW())`,
+      [
+        academyId,
+        consultation.student_name,
+        consultation.student_grade,
+        phone,
+        JSON.stringify(trialDatesJson)
+      ]
+    );
+
+    const studentId = studentResult.insertId;
+
+    // 상담 상태 업데이트 (completed + 학생 연결)
+    await db.query(
+      `UPDATE consultations SET status = 'completed', linked_student_id = ? WHERE id = ?`,
+      [studentId, id]
+    );
+
+    res.json({
+      message: '체험 학생으로 등록되었습니다.',
+      studentId,
+      trialDates: trialDatesJson
+    });
+  } catch (error) {
+    console.error('체험 학생 등록 오류:', error);
     res.status(500).json({ error: '서버 오류가 발생했습니다.' });
   }
 });
