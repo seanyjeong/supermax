@@ -143,6 +143,8 @@ const onboardingRoutes = require('./routes/onboarding');
 const searchRoutes = require('./routes/search');
 const notificationRoutes = require('./routes/notifications');
 const smsRoutes = require('./routes/sms');
+const publicRoutes = require('./routes/public');
+const consultationRoutes = require('./routes/consultations');
 
 // Register Routes
 app.use('/paca/auth', authRoutes);
@@ -164,6 +166,8 @@ app.use('/paca/onboarding', onboardingRoutes);
 app.use('/paca/search', searchRoutes);
 app.use('/paca/notifications', notificationRoutes);
 app.use('/paca/sms', smsRoutes);
+app.use('/paca/public', publicRoutes);
+app.use('/paca/consultations', consultationRoutes);
 
 // ==========================================
 // Error Handling
