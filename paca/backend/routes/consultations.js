@@ -284,16 +284,19 @@ router.post('/direct', verifyToken, async (req, res) => {
     }
 
     // 상담 등록 (관리자 등록이므로 바로 confirmed 상태)
+    // parent_name, parent_phone은 NOT NULL이라 학생 정보로 대체
     const [result] = await db.query(
       `INSERT INTO consultations (
-        academy_id, consultation_type, student_name, student_phone, student_grade,
+        academy_id, consultation_type, parent_name, parent_phone,
+        student_name, student_grade,
         preferred_date, preferred_time, status, admin_notes,
         checklist, consultation_memo, created_at
-      ) VALUES (?, 'new_registration', ?, ?, ?, ?, ?, 'confirmed', ?, '[]', '', NOW())`,
+      ) VALUES (?, 'new_registration', ?, ?, ?, ?, ?, ?, 'confirmed', ?, NULL, NULL, NOW())`,
       [
         academyId,
+        studentName,  // parent_name에 학생명
+        phone,        // parent_phone에 전화번호
         studentName,
-        phone,
         grade,
         preferredDate,
         preferredTime + ':00',
