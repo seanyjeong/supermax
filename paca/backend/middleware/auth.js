@@ -17,12 +17,14 @@ const verifyToken = async (req, res, next) => {
         const apiKey = req.headers['x-api-key'];
         if (apiKey && apiKey === N8N_API_KEY) {
             // N8N 서비스 계정으로 처리 (academy_id는 쿼리에서 받음)
+            const academyId = req.query.academy_id || req.body.academy_id || null;
             req.user = {
                 id: 0,
                 email: 'n8n@system',
                 name: 'N8N Service',
                 role: 'admin',
-                academy_id: req.query.academy_id || req.body.academy_id || null,
+                academyId: academyId,
+                academy_id: academyId, // 호환성 위해 둘 다 설정
                 position: 'system',
                 permissions: {},
                 isServiceAccount: true
@@ -95,6 +97,7 @@ const verifyToken = async (req, res, next) => {
             name: user.name,
             role: user.role,
             academyId: user.academy_id,
+            academy_id: user.academy_id, // 호환성 위해 둘 다 설정
             position: user.position,
             permissions: permissions,
             instructorId: user.instructor_id
