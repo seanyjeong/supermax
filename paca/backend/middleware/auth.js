@@ -22,7 +22,7 @@ const verifyToken = async (req, res, next) => {
                 email: 'n8n@system',
                 name: 'N8N Service',
                 role: 'admin',
-                academyId: req.query.academy_id || req.body.academy_id || null,
+                academy_id: req.query.academy_id || req.body.academy_id || null,
                 position: 'system',
                 permissions: {},
                 isServiceAccount: true
