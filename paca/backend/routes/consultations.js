@@ -458,8 +458,8 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
     const [studentResult] = await db.query(
       `INSERT INTO students (
         academy_id, name, grade, phone, parent_phone, status,
-        is_trial, trial_remaining, trial_dates, created_at
-      ) VALUES (?, ?, ?, ?, ?, 'active', 1, 2, ?, NOW())`,
+        is_trial, trial_remaining, trial_dates, class_days, monthly_tuition, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'active', 1, 2, ?, '[]', 0, NOW())`,
       [
         academyId,
         consultation.student_name,
