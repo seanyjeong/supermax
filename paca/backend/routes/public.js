@@ -223,21 +223,41 @@ router.post('/consultation/:slug/apply', async (req, res) => {
       parentName,
       parentPhone,
       studentName,
+      studentPhone,
       studentGrade,
       studentSchool,
       academicScores,
+      mockTestGrades,
+      schoolGradeAvg,
+      admissionType,
       targetSchool,
       referrerStudent,
+      referralSource,
       referralSources,
       inquiryContent,
       preferredDate,
       preferredTime
     } = req.body;
 
-    // 필수 필드 검증
-    if (!parentName || !parentPhone || !studentName || !studentGrade || !preferredDate || !preferredTime) {
-      return res.status(400).json({ error: '필수 정보를 모두 입력해주세요.' });
+    // 필수 필드 검증 (학생 이름, 연락처, 학년, 학교, 일정)
+    if (!studentName) {
+      return res.status(400).json({ error: '학생 이름을 입력해주세요.' });
     }
+    if (!studentPhone && !parentPhone) {
+      return res.status(400).json({ error: '연락처를 입력해주세요.' });
+    }
+    if (!studentGrade) {
+      return res.status(400).json({ error: '학년을 선택해주세요.' });
+    }
+    if (!studentSchool) {
+      return res.status(400).json({ error: '학교를 입력해주세요.' });
+    }
+    if (!preferredDate || !preferredTime) {
+      return res.status(400).json({ error: '상담 일정을 선택해주세요.' });
+    }
+
+    // 연락처: studentPhone 우선, 없으면 parentPhone 사용
+    const contactPhone = studentPhone || parentPhone;
 
     // 학원 정보 조회
     const [academies] = await db.query(
@@ -283,10 +303,21 @@ router.post('/consultation/:slug/apply', async (req, res) => {
        WHERE academy_id = ? AND (phone = ? OR parent_phone = ?)
        AND status = 'active' AND deleted_at IS NULL
        LIMIT 1`,
-      [academy.id, parentPhone, parentPhone]
+      [academy.id, contactPhone, contactPhone]
     );
 
     const linkedStudentId = existingStudents.length > 0 ? existingStudents[0].id : null;
+
+    // 성적 정보 통합 (academicScores에 모의고사, 내신, 입시유형 포함)
+    const fullAcademicScores = {
+      ...academicScores,
+      mockTestGrades: mockTestGrades || null,
+      schoolGradeAvg: schoolGradeAvg || null,
+      admissionType: admissionType || null
+    };
+
+    // referralSource를 referralSources 배열로 변환 (단일값 -> 배열)
+    const referralSourcesArray = referralSource ? [referralSource] : (referralSources || null);
 
     // 상담 신청 저장
     const [result] = await db.query(
@@ -302,15 +333,15 @@ router.post('/consultation/:slug/apply', async (req, res) => {
       [
         academy.id,
         consultationType || 'new_registration',
-        parentName,
-        parentPhone,
+        parentName || studentName, // 학부모 이름이 없으면 학생 이름 사용
+        contactPhone,
         studentName,
         studentGrade,
         studentSchool || null,
-        academicScores ? JSON.stringify(academicScores) : null,
+        JSON.stringify(fullAcademicScores),
         targetSchool || null,
         referrerStudent || null,
-        referralSources ? JSON.stringify(referralSources) : null,
+        referralSourcesArray ? JSON.stringify(referralSourcesArray) : null,
         inquiryContent || null,
         preferredDate,
         preferredTime + ':00',
