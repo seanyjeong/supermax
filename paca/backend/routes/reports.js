@@ -13,7 +13,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
         const academyId = req.user.academyId;
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 
-        // Get student counts
+        // Get student counts (체험생 제외)
         const [studentStats] = await db.query(
             `SELECT
                 COUNT(*) as total_students,
@@ -21,7 +21,7 @@ router.get('/dashboard', verifyToken, requireRole('owner', 'admin', 'staff'), as
                 SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as paused_students,
                 SUM(CASE WHEN status = 'withdrawn' THEN 1 ELSE 0 END) as withdrawn_students
             FROM students
-            WHERE academy_id = ? AND deleted_at IS NULL`,
+            WHERE academy_id = ? AND deleted_at IS NULL AND (is_trial = 0 OR is_trial IS NULL)`,
             [academyId]
         );
 

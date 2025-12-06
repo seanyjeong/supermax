@@ -445,10 +445,13 @@ router.post('/:id/convert-to-trial', verifyToken, async (req, res) => {
       return res.status(400).json({ error: '이미 학생으로 등록되어 있습니다.' });
     }
 
+    // 시간대 한글 → 영어 변환
+    const timeSlotMap = { '오전': 'morning', '오후': 'afternoon', '저녁': 'evening' };
+
     // trial_dates JSON 구조 (time_slot 키 사용 - students.js와 통일)
     const trialDatesJson = trialDates.map(d => ({
       date: d.date,
-      time_slot: d.timeSlot,
+      time_slot: timeSlotMap[d.timeSlot] || d.timeSlot,
       attended: false
     }));
 
