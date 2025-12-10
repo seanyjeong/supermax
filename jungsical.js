@@ -461,7 +461,7 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
           // (mathSubject 변수는 이 함수 상단 282라인 근처에 이미 정의되어 있음)
           ctx.math_bonus_pct_10 = 0; // 기본값 0
           
-          if (mathSubject === '미적분' || mathSubject === '기하') {
+          if (/미적분|기하/.test(mathSubject)) {
             ctx.math_bonus_pct_10 = (ctx.math_pct || 0) * 0.1;
           }
         // ▲▲▲ [요청 추가] 끝 ▲▲▲
