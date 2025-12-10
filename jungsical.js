@@ -379,6 +379,15 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   // 상위 3개 '평균' (0~100점)
   ctx.top3_avg_pct_kme_inqAvg = top3_sum / 3.0;
 // ▲▲▲ [신규 추가] 끝 ▲▲▲
+
+          // ▼▼▼ [요청 추가] 미적분/기하 선택 시 수학 백분위의 10% 보너스 변수 ▼▼▼
+          // (mathSubject 변수는 이 함수 상단 282라인 근처에 이미 정의되어 있음)
+          ctx.math_bonus_pct_10 = 0; // 기본값 0
+          
+          if (/미적분|기하/.test(mathSubject)) {
+            ctx.math_bonus_pct_10 = (ctx.math_pct || 0) * 0.1;
+          }
+        // ▲▲▲ [요청 추가] 끝 ▲▲▲
    // ▼▼▼ [청주대용] 국, 수+미적분/기하가산점, 영, 탐(평균) 4개 중 상위 3개 '평균' ▼▼▼
     const items_pct_kme_inqAvg_with_mathBonus = [
       Number(ctx.kor_pct || 0),                                    // 1. 국어
@@ -457,14 +466,7 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
 // ▲▲▲ [신규 추가] 끝 ▲▲▲
 // ... (기존 ctx.max_kor_math_pct = ... 계산 끝난 후)
 
-        // ▼▼▼ [요청 추가] 미적분/기하 선택 시 수학 백분위의 10% 보너스 변수 ▼▼▼
-          // (mathSubject 변수는 이 함수 상단 282라인 근처에 이미 정의되어 있음)
-          ctx.math_bonus_pct_10 = 0; // 기본값 0
-          
-          if (/미적분|기하/.test(mathSubject)) {
-            ctx.math_bonus_pct_10 = (ctx.math_pct || 0) * 0.1;
-          }
-        // ▲▲▲ [요청 추가] 끝 ▲▲▲
+
 
         
    const items_pct = [
