@@ -379,6 +379,23 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
   // 상위 3개 '평균' (0~100점)
   ctx.top3_avg_pct_kme_inqAvg = top3_sum / 3.0;
 // ▲▲▲ [신규 추가] 끝 ▲▲▲
+   // ▼▼▼ [청주대용] 국, 수+미적분/기하가산점, 영, 탐(평균) 4개 중 상위 3개 '평균' ▼▼▼
+    const items_pct_kme_inqAvg_with_mathBonus = [
+      Number(ctx.kor_pct || 0),                                    // 1. 국어
+      Number(ctx.math_pct || 0) + Number(ctx.math_bonus_pct_10 || 0), // 2. 수학 + 미적분/기하
+   10% 가산점
+      Number(ctx.inq_avg2_percentile || 0),                        // 3. 탐구 (2과목 평균)
+      Number(ctx.eng_grade_score || 0)                             // 4. 영어 (등급 환산점수)
+    ];
+
+    items_pct_kme_inqAvg_with_mathBonus.sort((a,b) => b - a);
+
+    const top3_sum_with_mathBonus = (items_pct_kme_inqAvg_with_mathBonus[0] || 0) +
+                                    (items_pct_kme_inqAvg_with_mathBonus[1] || 0) +
+                                    (items_pct_kme_inqAvg_with_mathBonus[2] || 0);
+
+    ctx.top3_avg_pct_kme_inqAvg_mathBonus = top3_sum_with_mathBonus / 3.0;
+    // ▲▲▲ [청주대용] 끝 ▲▲▲
   
   // ▼▼▼ [신규 추가] 수학/영어(환산백분위) 중 상위 1개 (택1) ▼▼▼
   ctx.top1_math_or_eng_pct = Math.max(
