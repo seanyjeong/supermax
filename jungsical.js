@@ -383,7 +383,6 @@ ctx.ratio_inq  = Number(F['탐구'] || 0);
     const items_pct_kme_inqAvg_with_mathBonus = [
       Number(ctx.kor_pct || 0),                                    // 1. 국어
       Number(ctx.math_pct || 0) + Number(ctx.math_bonus_pct_10 || 0), // 2. 수학 + 미적분/기하
-   10% 가산점
       Number(ctx.inq_avg2_percentile || 0),                        // 3. 탐구 (2과목 평균)
       Number(ctx.eng_grade_score || 0)                             // 4. 영어 (등급 환산점수)
     ];
