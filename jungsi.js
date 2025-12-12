@@ -7516,10 +7516,10 @@ app.get('/jungsi/university-applicants/:U_ID/:year', async (req, res) => {
     try {
       // 1. 대학 정보 조회 (정시기본 테이블 사용)
       const [universityRows] = await connection.query(`
-        SELECT U_ID, 대학명 as university_name, 학과명 as major, 군 as gun
-        FROM 정시기본
-        WHERE U_ID = ? AND 학년도 = ?
-      `, [U_ID, year]);
+          SELECT U_ID, 대학명 as university_name, 학과명 as major, 군 as gun, 모집정원 as quota
+          FROM 정시기본
+          WHERE U_ID = ? AND 학년도 = ?
+        `, [U_ID, year]);
 
       if (universityRows.length === 0) {
         return res.status(404).json({
@@ -7627,17 +7627,18 @@ app.get('/jungsi/university-applicants/:U_ID/:year', async (req, res) => {
         min_score: scores.length > 0 ? Math.min(...scores) : 0
       };
 
-      res.json({
-        success: true,
-        university: {
-          U_ID: university.U_ID,
-          university_name: university.university_name,
-          major: university.major,
-          gun: university.gun
-        },
-        applicants,
-        stats
-      });
+        res.json({
+          success: true,
+          university: {
+            U_ID: university.U_ID,
+            university_name: university.university_name,
+            major: university.major,
+            gun: university.gun,
+            quota: university.quota || 0  // 모집인원
+          },
+          applicants,
+          stats
+        });
 
     } finally {
       connection.release();
