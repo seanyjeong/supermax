@@ -7676,13 +7676,11 @@ app.get('/jungsi/university-final-applicants/:U_ID/:year', async (req, res) => {
     const connection = await db.getConnection();
 
     try {
-      // 1. 대학 정보 조회 (정시기본 테이블 + 모집인원)
+      // 1. 대학 정보 조회 (정시기본 테이블)
       const [universityRows] = await connection.query(`
-        SELECT jb.U_ID, jb.대학명 as university_name, jb.학과명 as major, jb.군 as gun,
-               jr.모집인원 as quota
-        FROM 정시기본 jb
-        LEFT JOIN 정시반영비율 jr ON jb.U_ID = jr.U_ID AND jb.학년도 = jr.학년도
-        WHERE jb.U_ID = ? AND jb.학년도 = ?
+        SELECT U_ID, 대학명 as university_name, 학과명 as major, 군 as gun, 모집정원 as quota
+        FROM 정시기본
+        WHERE U_ID = ? AND 학년도 = ?
       `, [U_ID, year]);
 
       if (universityRows.length === 0) {
