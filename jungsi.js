@@ -7743,7 +7743,7 @@ app.get('/jungsi/university-final-applicants/:U_ID/:year', async (req, res) => {
         WHERE fa.학년도 = ?
           AND fa.대학학과_ID = ?
           ${branchCondition}
-        ORDER BY COALESCE(fa.지원_총점, fa.지원_수능점수, 0) DESC, b.student_name
+        ORDER BY COALESCE(NULLIF(fa.지원_총점, 0), NULLIF(fa.지원_수능점수, 0), 0) DESC, b.student_name
       `, queryParams);
 
       // 3. 데이터 가공
