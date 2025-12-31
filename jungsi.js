@@ -2126,7 +2126,7 @@ app.get('/jungsi/final-apply/:student_id/:year', authMiddleware, async (req, res
 app.post('/jungsi/final-apply/set', authMiddleware, async (req, res) => {
     const {
         학생_ID, 학년도, 모집군, 대학학과_ID,
-        지원_내신점수, 지원_실기기록, 지원_실기총점, 지원_실기상세,
+        지원_수능점수, 지원_내신점수, 지원_실기기록, 지원_실기총점, 지원_실기상세, 지원_총점,
         결과_1단계, 결과_최초, 결과_최종, 최종등록_여부, 메모
     } = req.body;
     const { branch } = req.user;
@@ -2146,24 +2146,46 @@ app.post('/jungsi/final-apply/set', authMiddleware, async (req, res) => {
             return res.status(403).json({ success: false, message: '저장 권한이 없는 학생입니다.' });
         }
 
+        // 수능점수/총점이 안 넘어왔으면 상담목록에서 가져오기
+        let finalSuneungScore = 지원_수능점수;
+        let finalTotalScore = 지원_총점;
+
+        if (finalSuneungScore === undefined || finalSuneungScore === null || finalTotalScore === undefined || finalTotalScore === null) {
+            const [counselData] = await db.query(
+                `SELECT 상담_수능점수, 상담_계산총점 FROM 정시_상담목록
+                 WHERE 학생_ID = ? AND 학년도 = ? AND 대학학과_ID = ?`,
+                [학생_ID, 학년도, 대학학과_ID]
+            );
+            if (counselData.length > 0) {
+                if (finalSuneungScore === undefined || finalSuneungScore === null) {
+                    finalSuneungScore = counselData[0].상담_수능점수;
+                }
+                if (finalTotalScore === undefined || finalTotalScore === null) {
+                    finalTotalScore = counselData[0].상담_계산총점;
+                }
+            }
+        }
+
         // Upsert 실행
         const sql = `
             INSERT INTO 정시_최종지원
-                (학생_ID, 학년도, 모집군, 대학학과_ID, 지원_내신점수, 지원_실기기록, 지원_실기총점, 지원_실기상세,
+                (학생_ID, 학년도, 모집군, 대학학과_ID, 지원_수능점수, 지원_내신점수, 지원_실기기록, 지원_실기총점, 지원_실기상세, 지원_총점,
                  결과_1단계, 결과_최초, 결과_최종, 최종등록_여부, 메모)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
-                대학학과_ID = VALUES(대학학과_ID), 지원_내신점수 = VALUES(지원_내신점수),
+                대학학과_ID = VALUES(대학학과_ID), 지원_수능점수 = VALUES(지원_수능점수), 지원_내신점수 = VALUES(지원_내신점수),
                 지원_실기기록 = VALUES(지원_실기기록), 지원_실기총점 = VALUES(지원_실기총점), 지원_실기상세 = VALUES(지원_실기상세),
-                결과_1단계 = VALUES(결과_1단계), 결과_최초 = VALUES(결과_최초), 결과_최종 = VALUES(결과_최종),
+                지원_총점 = VALUES(지원_총점), 결과_1단계 = VALUES(결과_1단계), 결과_최초 = VALUES(결과_최초), 결과_최종 = VALUES(결과_최종),
                 최종등록_여부 = VALUES(최종등록_여부), 메모 = VALUES(메모), 수정일시 = CURRENT_TIMESTAMP
         `;
         const params = [
             학생_ID, 학년도, 모집군, 대학학과_ID,
+            finalSuneungScore === undefined || finalSuneungScore === null ? null : Number(finalSuneungScore),
             지원_내신점수 === undefined || 지원_내신점수 === null ? null : Number(지원_내신점수),
             지원_실기기록 === undefined || 지원_실기기록 === null || Object.keys(지원_실기기록).length === 0 ? null : JSON.stringify(지원_실기기록),
             지원_실기총점 === undefined || 지원_실기총점 === null ? null : Number(지원_실기총점),
             지원_실기상세 === undefined || 지원_실기상세 === null ? null : JSON.stringify(지원_실기상세),
+            finalTotalScore === undefined || finalTotalScore === null ? null : Number(finalTotalScore),
             결과_1단계 === undefined || 결과_1단계 === null ? '해당없음' : String(결과_1단계),
             결과_최초 === undefined || 결과_최초 === null ? '미정' : String(결과_최초),
             결과_최종 === undefined || 결과_최종 === null ? '미정' : String(결과_최종),
@@ -7722,9 +7744,11 @@ app.get('/jungsi/university-final-applicants/:U_ID/:year', async (req, res) => {
           s.탐구2_백분위 as inquiry2_percentile,
           s.탐구2_등급 as inquiry2_grade,
           fa.모집군 as gun,
+          fa.지원_수능점수 as suneung_score,
           fa.지원_내신점수 as naeshin_score,
           fa.지원_실기기록 as practical_records_json,
           fa.지원_실기총점 as practical_score,
+          fa.지원_총점 as total_score,
           fa.결과_1단계 as result_1st,
           fa.결과_최초 as result_first,
           fa.결과_최종 as result_final,
@@ -7735,7 +7759,7 @@ app.get('/jungsi/university-final-applicants/:U_ID/:year', async (req, res) => {
         WHERE fa.학년도 = ?
           AND fa.대학학과_ID = ?
           ${branchCondition}
-        ORDER BY b.student_name
+        ORDER BY fa.지원_총점 DESC, b.student_name
       `, queryParams);
 
       // 3. 데이터 가공
@@ -7772,9 +7796,11 @@ app.get('/jungsi/university-final-applicants/:U_ID/:year', async (req, res) => {
           inquiry2_standard: student.inquiry2_standard,
           inquiry2_percentile: student.inquiry2_percentile,
           inquiry2_grade: student.inquiry2_grade,
+          suneung_score: parseFloat(student.suneung_score) || 0,
           naeshin_score: parseFloat(student.naeshin_score) || 0,
           practical_score: parseFloat(student.practical_score) || 0,
           practical_records: practicalRecords,
+          total_score: parseFloat(student.total_score) || 0,
           gun: student.gun,
           result_1st: student.result_1st,
           result_first: student.result_first,
