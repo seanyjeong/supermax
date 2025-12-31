@@ -2146,25 +2146,9 @@ app.post('/jungsi/final-apply/set', authMiddleware, async (req, res) => {
             return res.status(403).json({ success: false, message: '저장 권한이 없는 학생입니다.' });
         }
 
-        // 수능점수/총점이 안 넘어왔으면 상담목록에서 가져오기
-        let finalSuneungScore = 지원_수능점수;
-        let finalTotalScore = 지원_총점;
-
-        if (finalSuneungScore === undefined || finalSuneungScore === null || finalTotalScore === undefined || finalTotalScore === null) {
-            const [counselData] = await db.query(
-                `SELECT 상담_수능점수, 상담_계산총점 FROM 정시_상담목록
-                 WHERE 학생_ID = ? AND 학년도 = ? AND 대학학과_ID = ?`,
-                [학생_ID, 학년도, 대학학과_ID]
-            );
-            if (counselData.length > 0) {
-                if (finalSuneungScore === undefined || finalSuneungScore === null) {
-                    finalSuneungScore = counselData[0].상담_수능점수;
-                }
-                if (finalTotalScore === undefined || finalTotalScore === null) {
-                    finalTotalScore = counselData[0].상담_계산총점;
-                }
-            }
-        }
+        // 프론트에서 보낸 값만 사용 (상담목록 fallback 제거)
+        const finalSuneungScore = 지원_수능점수;
+        const finalTotalScore = 지원_총점;
 
         // Upsert 실행
         const sql = `
