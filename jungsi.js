@@ -7655,6 +7655,169 @@ app.get('/jungsi/university-applicants/:U_ID/:year', async (req, res) => {
   }
 });
 
+
+// =============================================
+// ⭐️ [신규] 실제지원정보 - 학교별 지원자 조회 API
+// (정시_최종지원 테이블 사용)
+// =============================================
+app.get('/jungsi/university-final-applicants/:U_ID/:year', async (req, res) => {
+  try {
+    const { U_ID, year } = req.params;
+    const userBranch = req.decoded?.branch;
+    const isAdmin = req.decoded?.userid === 'admin';
+
+    if (!U_ID || !year) {
+      return res.status(400).json({
+        success: false,
+        message: 'U_ID와 학년도를 입력하세요.'
+      });
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+      // 1. 대학 정보 조회 (정시기본 테이블 + 모집인원)
+      const [universityRows] = await connection.query(`
+        SELECT jb.U_ID, jb.대학명 as university_name, jb.학과명 as major, jb.군 as gun,
+               jr.모집인원 as quota
+        FROM 정시기본 jb
+        LEFT JOIN 정시반영비율 jr ON jb.U_ID = jr.U_ID AND jb.학년도 = jr.학년도
+        WHERE jb.U_ID = ? AND jb.학년도 = ?
+      `, [U_ID, year]);
+
+      if (universityRows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: '해당 대학 정보를 찾을 수 없습니다.'
+        });
+      }
+
+      const university = universityRows[0];
+
+      // 2. 해당 대학에 실제 지원한 학생 목록 조회 (정시_최종지원 테이블 사용)
+      let branchCondition = '';
+      let queryParams = [year, U_ID];
+
+      if (!isAdmin && userBranch) {
+        branchCondition = 'AND b.branch_name = ?';
+        queryParams.push(userBranch);
+      }
+
+      const [applicantsRows] = await connection.query(`
+        SELECT DISTINCT
+          b.student_id,
+          b.student_name as name,
+          b.school_name,
+          b.branch_name as branch,
+          s.국어_표준점수 as korean_standard,
+          s.국어_백분위 as korean_percentile,
+          s.국어_등급 as korean_grade,
+          s.수학_표준점수 as math_standard,
+          s.수학_백분위 as math_percentile,
+          s.수학_등급 as math_grade,
+          s.영어_등급 as english_grade,
+          s.한국사_등급 as korean_history_grade,
+          s.탐구1_표준점수 as inquiry1_standard,
+          s.탐구1_백분위 as inquiry1_percentile,
+          s.탐구1_등급 as inquiry1_grade,
+          s.탐구2_표준점수 as inquiry2_standard,
+          s.탐구2_백분위 as inquiry2_percentile,
+          s.탐구2_등급 as inquiry2_grade,
+          fa.모집군 as gun,
+          fa.지원_내신점수 as naeshin_score,
+          fa.지원_실기기록 as practical_records_json,
+          fa.지원_실기총점 as practical_score,
+          fa.결과_1단계 as result_1st,
+          fa.결과_최초 as result_first,
+          fa.결과_최종 as result_final,
+          fa.최종등록_여부 as registered
+        FROM 정시_최종지원 fa
+        INNER JOIN 학생기본정보 b ON fa.학생_ID = b.student_id AND fa.학년도 = b.학년도
+        LEFT JOIN 학생수능성적 s ON b.student_id = s.student_id AND b.학년도 = s.학년도
+        WHERE fa.학년도 = ?
+          AND fa.대학학과_ID = ?
+          ${branchCondition}
+        ORDER BY b.student_name
+      `, queryParams);
+
+      // 3. 데이터 가공
+      const applicants = applicantsRows.map(student => {
+        // JSON 형식의 실기 기록 파싱
+        let practicalRecords = null;
+        if (student.practical_records_json) {
+          try {
+            practicalRecords = typeof student.practical_records_json === 'string'
+              ? JSON.parse(student.practical_records_json)
+              : student.practical_records_json;
+          } catch (e) {
+            console.error('실기 기록 JSON 파싱 오류:', e);
+            practicalRecords = null;
+          }
+        }
+
+        return {
+          student_id: student.student_id,
+          name: student.name,
+          school_name: student.school_name,
+          branch: student.branch,
+          korean_standard: student.korean_standard,
+          korean_percentile: student.korean_percentile,
+          korean_grade: student.korean_grade,
+          math_standard: student.math_standard,
+          math_percentile: student.math_percentile,
+          math_grade: student.math_grade,
+          english_grade: student.english_grade,
+          korean_history_grade: student.korean_history_grade,
+          inquiry1_standard: student.inquiry1_standard,
+          inquiry1_percentile: student.inquiry1_percentile,
+          inquiry1_grade: student.inquiry1_grade,
+          inquiry2_standard: student.inquiry2_standard,
+          inquiry2_percentile: student.inquiry2_percentile,
+          inquiry2_grade: student.inquiry2_grade,
+          naeshin_score: parseFloat(student.naeshin_score) || 0,
+          practical_score: parseFloat(student.practical_score) || 0,
+          practical_records: practicalRecords,
+          gun: student.gun,
+          result_1st: student.result_1st,
+          result_first: student.result_first,
+          result_final: student.result_final,
+          registered: student.registered
+        };
+      });
+
+      // 4. 통계 계산
+      const stats = {
+        total_count: applicants.length
+      };
+
+      res.json({
+        success: true,
+        university: {
+          U_ID: university.U_ID,
+          university_name: university.university_name,
+          major: university.major,
+          gun: university.gun,
+          quota: university.quota || 0
+        },
+        applicants,
+        stats
+      });
+
+    } finally {
+      connection.release();
+    }
+
+  } catch (error) {
+    console.error('학교별 실제지원자 조회 오류:', error);
+    console.error('에러 스택:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: '학교별 실제지원자 조회 중 오류가 발생했습니다.',
+      error: error.message
+    });
+  }
+});
+
 // =============================================
 // 학생 레벨 시스템 API
 // =============================================
